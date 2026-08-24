@@ -1,4 +1,5 @@
-import { createRequire } from "node:module";
+// @ts-expect-error which does not ship types
+import whichLib from "which";
 import { existsSync } from "node:fs";
 import { execCommand } from "../utils/spawn.js";
 import { isWindowsCommandScript } from "../utils/windows-command.js";
@@ -8,8 +9,7 @@ export { quoteWindowsArgument, quoteWindowsCommand } from "../utils/windows-comm
 
 type Which = (command: string, options: { all: true }) => Promise<string[]>;
 
-const require = createRequire(import.meta.url);
-const which = require("which") as Which;
+const which = whichLib as unknown as Which;
 const PROBE_TIMEOUT_MS = 2000;
 
 function hasPathSeparator(value: string): boolean {
