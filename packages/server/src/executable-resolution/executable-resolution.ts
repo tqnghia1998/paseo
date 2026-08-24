@@ -1,4 +1,5 @@
-import { createRequire } from "node:module";
+// @ts-expect-error which does not ship types
+import whichLib from "which";
 import { existsSync } from "node:fs";
 import type { ProcessEnvRecord } from "../server/paseo-env.js";
 import { execCommand } from "../utils/spawn.js";
@@ -9,8 +10,7 @@ type Which = (
   options: { all: true; path?: string; pathExt?: string },
 ) => Promise<string[]>;
 
-const require = createRequire(import.meta.url);
-const which = require("which") as Which;
+const which = whichLib as unknown as Which;
 const PROBE_TIMEOUT_MS = 2000;
 
 function hasPathSeparator(value: string): boolean {
