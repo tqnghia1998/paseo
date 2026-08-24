@@ -9,7 +9,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Disable unneeded features for embedded mode
-process.env.PASEO_SPEECH_PROVIDER_LOCAL = "false";
+process.env.PASEO_DICTATION_ENABLED = "false";
+process.env.PASEO_VOICE_MODE_ENABLED = "false";
 process.env.PASEO_AUTH_REQUIRED = "false";
 process.env.PASEO_RELAY_ENABLED = "false";
 
@@ -74,8 +75,9 @@ const config = loadConfig(home, {
   },
   env: {
     PASEO_AUTH_REQUIRED: "false",
+    PASEO_DICTATION_ENABLED: "false",
     PASEO_RELAY_ENABLED: "false",
-    PASEO_SPEECH_PROVIDER_LOCAL: "false",
+    PASEO_VOICE_MODE_ENABLED: "false",
     ...(fs.existsSync(webUiDist) ? { PASEO_WEB_UI_DIST_DIR: webUiDist } : {}),
   },
 });
