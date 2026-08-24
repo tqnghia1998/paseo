@@ -8,6 +8,7 @@ import {
   type WorkspaceTabPlacement,
 } from "@/stores/workspace-layout-store";
 import { getPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
+import { usePanelStore } from "@/stores/panel-store";
 import { workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 
@@ -24,6 +25,7 @@ export interface OpenPreferredWorkspaceTargetInput extends OpenWorkspaceTargetIn
   isCompact: boolean;
   source: OpenInSidePaneSource;
   preferences: OpenInSidePanePreferences;
+  isFocusModeEnabled?: boolean;
 }
 
 interface OpenWorkspaceTargetAtLocationInput extends OpenWorkspaceTargetInput {
@@ -36,6 +38,10 @@ interface OpenPreferredWorkspacePreviewInput extends OpenPreferredWorkspaceTarge
   workspaceId: string;
   explorerSidebarPaneId: string | null;
   lastMainPaneId: string | null;
+}
+
+function isFocusModeEnabled(input: Pick<OpenPreferredWorkspaceTargetInput, "isFocusModeEnabled">) {
+  return input.isFocusModeEnabled ?? usePanelStore.getState().desktop.focusModeEnabled;
 }
 
 function resolveMainPane(input: {
@@ -88,7 +94,8 @@ export function openPreferredWorkspaceTarget(
     isCompact: input.isCompact,
     workspaceKey: input.workspaceKey,
     target: input.target,
-    location: input.preferences[input.source] ? "side" : "main",
+    location:
+      !isFocusModeEnabled(input) && input.preferences[input.source] ? "side" : "main",
     parentTabId: input.parentTabId,
   });
 }
@@ -138,7 +145,7 @@ export function openPreferredWorkspacePreview(
     lastMainPaneId: input.lastMainPaneId,
   });
   const destinationPaneId =
-    !input.isCompact && input.preferences[input.source]
+    !input.isCompact && !isFocusModeEnabled(input) && input.preferences[input.source]
       ? store.ensureSidePane(input.workspaceKey)
       : mainPane?.id;
   if (!destinationPaneId) return null;
