@@ -11,6 +11,7 @@ import {
   type WorkspaceTabPlacement,
 } from "@/stores/workspace-layout-store";
 import { getPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
+import { usePanelStore } from "@/stores/panel-store";
 import { workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 
@@ -26,6 +27,7 @@ interface OpenWorkspaceTargetInput {
 export interface OpenPreferredWorkspaceTargetInput extends OpenWorkspaceTargetInput {
   source: OpenInSidePaneSource;
   preferences: OpenInSidePanePreferences;
+  isFocusModeEnabled?: boolean;
 }
 
 interface OpenWorkspaceTargetAtLocationInput extends OpenWorkspaceTargetInput {
@@ -42,6 +44,10 @@ interface OpenPreferredWorkspacePreviewInput extends OpenPreferredWorkspaceTarge
 /** A side pane exists only where the workspace renders split panes. */
 function canOpenBeside(): boolean {
   return useWorkspaceLayoutStore.getState().layoutMode === "split-panes";
+}
+
+function isFocusModeEnabled(input: Pick<OpenPreferredWorkspaceTargetInput, "isFocusModeEnabled">) {
+  return input.isFocusModeEnabled ?? usePanelStore.getState().desktop.focusModeEnabled;
 }
 
 function resolveMainPane(input: {
@@ -93,7 +99,8 @@ export function openPreferredWorkspaceTarget(
   return openWorkspaceTargetAtLocation({
     workspaceKey: input.workspaceKey,
     target: input.target,
-    location: input.preferences[input.source] ? "side" : "main",
+    location:
+      !isFocusModeEnabled(input) && input.preferences[input.source] ? "side" : "main",
     parentTabId: input.parentTabId,
   });
 }
@@ -156,7 +163,7 @@ export function openPreferredWorkspacePreview(
     lastMainPaneId: input.lastMainPaneId,
   });
   const destinationPaneId =
-    canOpenBeside() && input.preferences[input.source]
+    canOpenBeside() && !isFocusModeEnabled(input) && input.preferences[input.source]
       ? store.ensureSidePane(input.workspaceKey)
       : mainPane?.id;
   if (!destinationPaneId) return null;
