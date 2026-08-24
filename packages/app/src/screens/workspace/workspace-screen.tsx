@@ -1676,15 +1676,17 @@ function WorkspaceScreenContent({
         return;
       }
       const target = createWorkspaceFileTabTarget(normalizedLocation);
-      const tabId = parentTabId
-        ? revealWorkspaceChildTab(persistenceKey, target, parentTabId, FOCUSED_PANE_PLACEMENT)
-        : openWorkspaceTabFocused(persistenceKey, target, FOCUSED_PANE_PLACEMENT);
+      const tabId =
+        !isFocusModeEnabled && parentTabId
+          ? revealWorkspaceChildTab(persistenceKey, target, parentTabId, FOCUSED_PANE_PLACEMENT)
+          : openWorkspaceTabFocused(persistenceKey, target, FOCUSED_PANE_PLACEMENT);
       if (tabId) {
         requestFileNavigation(tabId);
         navigateToTabId(tabId);
       }
     },
     [
+      isFocusModeEnabled,
       isMobile,
       navigateToTabId,
       openWorkspaceTabFocused,
@@ -1710,13 +1712,14 @@ function WorkspaceScreenContent({
         target: createWorkspaceFileTabTarget(location),
         source: "chatFiles",
         preferences: openInSidePane,
-        parentTabId: input.parentTabId,
+        isFocusModeEnabled,
+        parentTabId: isFocusModeEnabled ? undefined : input.parentTabId,
       });
       if (tabId) {
         requestFileNavigation(tabId);
       }
     },
-    [openInSidePane, persistenceKey, requestFileNavigation],
+    [isFocusModeEnabled, openInSidePane, persistenceKey, requestFileNavigation],
   );
 
   const handleOpenWorkspaceFileFromPane = useStableEvent(function handleOpenWorkspaceFileFromPane({
@@ -1848,12 +1851,9 @@ function WorkspaceScreenContent({
 
   const handleCreateNewTab = useCallback(
     (input?: { paneId?: string }) => {
-      if (!persistenceKey) {
-        return;
-      }
-      createWorkspaceTab(persistenceKey, { kind: "new_tab" }, paneLocalPlacement(input?.paneId));
+      openWorkspaceDraftTab({ paneId: input?.paneId });
     },
-    [createWorkspaceTab, persistenceKey],
+    [openWorkspaceDraftTab],
   );
 
   const launchWorkspaceTab = useCallback(
