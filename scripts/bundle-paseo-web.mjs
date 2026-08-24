@@ -15,6 +15,23 @@ execSync("npm run build:server", { cwd: ROOT_DIR, stdio: "inherit" });
 console.log("3. Bundling server backend with esbuild...");
 fs.mkdirSync(DEST_DIR, { recursive: true });
 
+const serverPackageJson = JSON.parse(
+  fs.readFileSync(path.join(ROOT_DIR, "packages/server/package.json"), "utf8"),
+);
+fs.writeFileSync(
+  path.join(DEST_DIR, "package.json"),
+  JSON.stringify(
+    {
+      name: serverPackageJson.name,
+      version: serverPackageJson.version,
+      type: "module",
+      private: true,
+    },
+    null,
+    2,
+  ) + "\n",
+);
+
 // Bundle server entrypoint
 await esbuild.build({
   entryPoints: ["packages/server/dist/server/server/exports.js"],
