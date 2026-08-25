@@ -103,6 +103,12 @@ function setMobilePanelTargetPatch(
   return mobilePanel === state.mobilePanel ? state : { mobilePanel };
 }
 
+function enableFocusMode(state: PanelState): PanelState | Pick<PanelState, "desktop"> {
+  return state.desktop.focusModeEnabled
+    ? state
+    : { desktop: { ...state.desktop, focusModeEnabled: true } };
+}
+
 export const usePanelStore = create<PanelState>()(
   persist(
     (set) => ({
@@ -125,24 +131,11 @@ export const usePanelStore = create<PanelState>()(
       treeRailWidth: DEFAULT_TREE_RAIL_WIDTH,
       fileTreeVisible: true,
 
-      toggleFocusMode: () =>
-        set((state) => ({
-          desktop: { ...state.desktop, focusModeEnabled: !state.desktop.focusModeEnabled },
-        })),
+      toggleFocusMode: () => set(enableFocusMode),
 
-      enterFocusMode: () =>
-        set((state) =>
-          state.desktop.focusModeEnabled
-            ? state
-            : { desktop: { ...state.desktop, focusModeEnabled: true } },
-        ),
+      enterFocusMode: () => set(enableFocusMode),
 
-      exitFocusMode: () =>
-        set((state) =>
-          state.desktop.focusModeEnabled
-            ? { desktop: { ...state.desktop, focusModeEnabled: false } }
-            : state,
-        ),
+      exitFocusMode: () => {},
 
       showMobileAgent: () => set((state) => setMobilePanelTargetPatch(state, "agent")),
 
