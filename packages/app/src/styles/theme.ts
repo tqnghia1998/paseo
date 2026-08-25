@@ -440,24 +440,27 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
 // Dark tint definitions
 // ---------------------------------------------------------------------------
 
-// Paseo — subtle teal-green tint (default)
+// Space App Vibing fork dark theme
 const paseoDarkColors = buildDarkSemanticColors({
-  surface0: "#181B1A",
-  surface1: "#1E2120",
-  surface2: "#272A29",
-  surface3: "#434645",
-  surface4: "#595B5B",
-  surfaceDiffEmpty: "#252827",
-  surfaceSidebar: "#141716",
-  foregroundMuted: "#A1A5A4",
-  foregroundExtraMuted: "#717574",
-  border: "#252B2A",
-  borderAccent: "#2F3534",
-  accent: "#20744A",
-  accentBright: "#7ccba0",
-  destructive: "#c64f43", // warm red, hue ~7 — reads as red (not pink) against the green tint
-  terminalBlack: "#141716",
-  terminalBrightBlack: "#434645",
+  surface0: "#1a1a1a",
+  surface1: "#1a1a1a",
+  surface2: "#252526",
+  surface3: "#2d2d30",
+  surface4: "#3f3f46",
+  surfaceDiffEmpty: "#1a1a1a",
+  surfaceSidebar: "#1a1a1a",
+  foreground: "#ffffff",
+  foregroundMuted: "#a0a0a0",
+  foregroundExtraMuted: "#6e6e6e",
+  border: "#222225",
+  borderAccent: "#2c2c30",
+  accent: "#3a96dd",
+  accentBright: "#55a8e3",
+  accentForeground: "#ffffff",
+  destructive: "#e84848",
+  terminalBlack: "#1a1a1a",
+  terminalBrightBlack: "#3f3f46",
+  ring: "#3a96dd",
 });
 
 // Zinc — neutral gray, no tint
