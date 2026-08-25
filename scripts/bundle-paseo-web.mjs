@@ -4,7 +4,10 @@ import { execSync } from "node:child_process";
 import esbuild from "esbuild";
 
 const ROOT_DIR = process.cwd();
-const DEST_DIR = "/Users/quangnghia.trinh/Documents/Git/space-app-vibing/scripts/paseo-web";
+const DEST_DIR = path.resolve(
+  process.env.PASEO_WEB_DEST_DIR ??
+    path.join(ROOT_DIR, "..", "space-app-vibing", "scripts", "paseo-web"),
+);
 
 console.log("1. Building frontend web UI...");
 execSync("node scripts/build-daemon-web-ui.mjs", { cwd: ROOT_DIR, stdio: "inherit" });
@@ -91,6 +94,7 @@ const __dirname = __dirnameFn(__filename);
 console.log("4. Copying static web-ui assets...");
 const webUiSrc = path.join(ROOT_DIR, "packages/server/dist/server/web-ui");
 const webUiDest = path.join(DEST_DIR, "web-ui");
+fs.rmSync(webUiDest, { recursive: true, force: true });
 fs.cpSync(webUiSrc, webUiDest, { recursive: true });
 
 console.log("5. Packaging runtime node_modules (node-pty native bindings)...");
