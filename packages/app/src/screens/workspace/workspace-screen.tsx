@@ -4319,7 +4319,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   tab: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: 0,
     borderRadius: theme.borderRadius.md,
     flexDirection: "row",
     alignItems: "center",

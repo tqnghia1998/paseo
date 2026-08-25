@@ -1583,9 +1583,9 @@ const styles = StyleSheet.create((theme) => ({
     marginRight: PANE_SPLIT_ACTIONS_OUTER_MARGIN,
   },
   tab: {
-    height: buttonControlHeight.xs,
+    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
     paddingHorizontal: TAB_CHIP_HORIZONTAL_PADDING,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.xl,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
