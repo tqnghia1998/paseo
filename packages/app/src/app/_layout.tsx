@@ -130,6 +130,7 @@ import {
 import { PluginCatalogSync } from "@/plugins";
 import { NotificationOpenRouter } from "@/notification-open/react";
 import { ensureOsNotificationPermission } from "@/utils/os-notifications";
+import { EmbeddedAgentActivityBridge } from "@/embedded-agent-activity";
 
 polyfillCrypto();
 
@@ -834,6 +835,7 @@ function AppShell() {
   return (
     <MobilePanelsProvider>
       <HorizontalScrollProvider>
+        <EmbeddedAgentActivityBridge />
         <OpenProjectListener />
         <AgentNavigationListener />
         <AppWithSidebar>
