@@ -134,6 +134,7 @@ import {
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { PluginCatalogSync } from "@/plugins";
+import { EmbeddedAgentActivityBridge } from "@/embedded-agent-activity";
 import {
   ensureOsNotificationPermission,
   WEB_NOTIFICATION_CLICK_EVENT,
@@ -916,6 +917,7 @@ function AppShell() {
   return (
     <MobilePanelsProvider>
       <HorizontalScrollProvider>
+        <EmbeddedAgentActivityBridge />
         <OpenProjectListener />
         <AgentNavigationListener />
         <AppWithSidebar>
