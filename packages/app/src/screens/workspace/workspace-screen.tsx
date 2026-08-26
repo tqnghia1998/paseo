@@ -3476,7 +3476,6 @@ function WorkspaceScreenContent({
         layout={workspaceLayout}
         renderMainHeader={renderWorkspaceScreenHeader}
         focusModeEnabled={desktopFocusModeEnabled}
-        onExitFocusMode={toggleFocusMode}
         workspaceKey={persistenceKey}
         normalizedServerId={normalizedServerId}
         normalizedWorkspaceId={normalizedWorkspaceId}
@@ -3513,7 +3512,6 @@ function WorkspaceScreenContent({
     renderWorkspaceScreenHeader,
     persistenceKey,
     desktopFocusModeEnabled,
-    toggleFocusMode,
     normalizedServerId,
     normalizedWorkspaceId,
     isRouteFocused,
@@ -3596,8 +3594,6 @@ function WorkspaceScreenContent({
             onCloseOtherTabs={handleCloseOtherTabs}
             onCreateNewTab={handleCreateNewTab}
             onReorderTabs={handleReorderTabsInFocusedPane}
-            focusModeEnabled={desktopFocusModeEnabled}
-            onExitFocusMode={toggleFocusMode}
           />
         </NewTabLauncherProvider>
       ) : null}
@@ -3639,7 +3635,6 @@ function WorkspaceScreenContent({
         onCloseTabsToLeft={handleCloseTabsToLeftInPane}
         onCloseTabsToRight={handleCloseTabsToRightInPane}
         onCloseOtherTabs={handleCloseOtherTabsInPane}
-        onExitFocusMode={toggleFocusMode}
         onReorderTabsInPane={handleReorderTabsInPane}
         buildPaneContentModel={buildDesktopPaneContentModel}
         headerAction={renderExplorerSidebarHeaderAction()}
@@ -3680,7 +3675,6 @@ function WorkspaceScreenContent({
     handleCloseTabsToLeftInPane,
     handleCloseTabsToRightInPane,
     handleCloseOtherTabsInPane,
-    toggleFocusMode,
     handleReorderTabsInPane,
     buildDesktopPaneContentModel,
     renderExplorerSidebarHeaderAction,
