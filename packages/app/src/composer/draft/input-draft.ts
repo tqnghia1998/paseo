@@ -22,7 +22,7 @@ import {
   resolveEffectiveComposerThinkingOptionId,
   type ProviderSelectionState,
 } from "@/provider-selection/provider-selection";
-import { useDraftStore, type DraftInput } from "@/stores/draft-store";
+import { flushDraftPersistStorage, useDraftStore, type DraftInput } from "@/stores/draft-store";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { useShallow } from "zustand/shallow";
 import type { ComposerTextSource } from "@/composer/text-source";
@@ -235,6 +235,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
         window.removeEventListener("pagehide", flush);
       }
       textPublication.flush();
+      void flushDraftPersistStorage();
     };
   }, [textPublication]);
 
