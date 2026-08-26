@@ -70,12 +70,6 @@ import { focusWithRetries } from "@/utils/web-focus";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -894,7 +888,42 @@ function SendButtonTooltip({
   sendTooltipLabel: string;
 }) {
   if (!shouldShow) return null;
-  const button = (
+  if (showActiveTurnActions) {
+    return (
+      <View style={styles.activeTurnActions}>
+        {canQueueActiveTurn ? (
+          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+            <TooltipTrigger
+              onPress={onQueueAction}
+              accessibilityLabel={queueLabel}
+              accessibilityRole="button"
+              style={[styles.sendButton, styles.sendButtonLabeled, styles.activeTurnActionButton]}
+            >
+              <Text style={styles.sendButtonLabel}>{queueLabel}</Text>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" offset={8}>
+              <Text style={styles.tooltipText}>{queueLabel}</Text>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger
+            onPress={onSteerAction}
+            accessibilityLabel={steerLabel}
+            accessibilityRole="button"
+            style={[styles.sendButton, styles.sendButtonLabeled, styles.activeTurnActionButton]}
+          >
+            <Text style={styles.sendButtonLabel}>{steerLabel}</Text>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="center" offset={8}>
+            <Text style={styles.tooltipText}>{steerLabel}</Text>
+          </TooltipContent>
+        </Tooltip>
+      </View>
+    );
+  }
+
+  return (
     <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger
         onPress={canPressLoadingButton ? onSubmitLoadingPress : onDefaultSendAction}
@@ -919,20 +948,6 @@ function SendButtonTooltip({
         <SendTooltipBody label={sendTooltipLabel} sendKeys={sendKeys} />
       </TooltipContent>
     </Tooltip>
-  );
-
-  if (!showActiveTurnActions) return button;
-
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger contextOnly>{button}</ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={onSteerAction}>{steerLabel}</ContextMenuItem>
-        {canQueueActiveTurn ? (
-          <ContextMenuItem onSelect={onQueueAction}>{queueLabel}</ContextMenuItem>
-        ) : null}
-      </ContextMenuContent>
-    </ContextMenu>
   );
 }
 
@@ -2546,6 +2561,14 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: TOOLBAR_CONTROL_GAP,
+  },
+  activeTurnActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  activeTurnActionButton: {
+    marginLeft: 0,
   },
   // Touch-sized the row's highlights touch, but the disc is always painted, so a pressed neighbour
   // keeps clear of it instead of merging with it.
