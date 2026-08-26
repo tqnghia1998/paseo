@@ -40,6 +40,12 @@ import { focusWithRetries } from "@/utils/web-focus";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -78,6 +84,7 @@ import {
   computeCanStartDictation,
   resolveComposerSurfacePresentation,
   runAlternateSendAction,
+  shouldShowActiveTurnActions,
   runDefaultSendAction,
   runMessageInputKeyboardAction,
   stopRealtimeVoice,
@@ -153,6 +160,8 @@ export interface MessageInputProps {
   defaultSendBehavior: "interrupt" | "steer" | "queue";
   /** Callback for queue button when agent is running */
   onQueue?: (payload: MessagePayload) => void;
+  /** Whether queueing can advance the current active turn. */
+  canQueueActiveTurn?: boolean;
   /** Optional handler used when submit button is in loading state. */
   onSubmitLoadingPress?: () => void;
   /** Intercept key press events before default handling. Return true to prevent default. */
@@ -741,6 +750,12 @@ function SendButtonTooltip({
   canPressLoadingButton,
   onSubmitLoadingPress,
   onDefaultSendAction,
+  onSteerAction,
+  onQueueAction,
+  steerLabel,
+  queueLabel,
+  showActiveTurnActions,
+  canQueueActiveTurn,
   isSendButtonDisabled,
   submitAccessibilityLabel,
   sendButtonCombinedStyle,
@@ -756,6 +771,12 @@ function SendButtonTooltip({
   canPressLoadingButton: boolean;
   onSubmitLoadingPress: (() => void) | undefined;
   onDefaultSendAction: () => void;
+  onSteerAction: () => void;
+  onQueueAction: () => void;
+  steerLabel: string;
+  queueLabel: string;
+  showActiveTurnActions: boolean;
+  canQueueActiveTurn: boolean;
   isSendButtonDisabled: boolean;
   submitAccessibilityLabel: string;
   sendButtonCombinedStyle: React.ComponentProps<typeof TooltipTrigger>["style"];
@@ -768,7 +789,7 @@ function SendButtonTooltip({
   sendTooltipLabel: string;
 }) {
   if (!shouldShow) return null;
-  return (
+  const button = (
     <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger
         onPress={canPressLoadingButton ? onSubmitLoadingPress : onDefaultSendAction}
@@ -789,6 +810,20 @@ function SendButtonTooltip({
         <SendTooltipBody label={sendTooltipLabel} sendKeys={sendKeys} />
       </TooltipContent>
     </Tooltip>
+  );
+
+  if (!showActiveTurnActions) return button;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger contextOnly>{button}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onSteerAction}>{steerLabel}</ContextMenuItem>
+        {canQueueActiveTurn ? (
+          <ContextMenuItem onSelect={onQueueAction}>{queueLabel}</ContextMenuItem>
+        ) : null}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -915,6 +950,7 @@ interface SendMessageContext {
   onSubmit: (payload: MessagePayload) => void;
   onMinimizeHeight: () => void;
   preserveHeightOnSubmit: boolean;
+  activeTurnBehavior?: "steer";
 }
 
 function sendMessageImpl(ctx: SendMessageContext): void {
@@ -932,6 +968,7 @@ function sendMessageImpl(ctx: SendMessageContext): void {
     attachments: ctx.attachments,
     cwd: ctx.cwd,
     forceSend: ctx.isAgentRunning || undefined,
+    activeTurnBehavior: ctx.activeTurnBehavior,
   });
   // When the host preserves and locks the composer (e.g. new-workspace creation),
   // the text stays put — collapsing the height would clip it. Keep it grown.
@@ -1072,6 +1109,7 @@ interface ResolvedMessageInputProps {
   isAgentRunning: boolean;
   defaultSendBehavior: "interrupt" | "steer" | "queue";
   onQueue: ((payload: MessagePayload) => void) | undefined;
+  canQueueActiveTurn: boolean;
   onSubmitLoadingPress: (() => void) | undefined;
   onKeyPressCallback: ((event: ComposerKeyPressEvent) => boolean) | undefined;
   onSelectionChangeCallback: ((selection: { start: number; end: number }) => void) | undefined;
@@ -1119,6 +1157,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     isAgentRunning: props.isAgentRunning ?? false,
     defaultSendBehavior: props.defaultSendBehavior,
     onQueue: props.onQueue,
+    canQueueActiveTurn: props.canQueueActiveTurn ?? false,
     onSubmitLoadingPress: props.onSubmitLoadingPress,
     onKeyPressCallback: props.onKeyPress,
     onSelectionChangeCallback: props.onSelectionChange,
@@ -1174,6 +1213,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       isAgentRunning,
       defaultSendBehavior,
       onQueue,
+      canQueueActiveTurn,
       onSubmitLoadingPress,
       onKeyPressCallback,
       onSelectionChangeCallback,
@@ -1493,33 +1533,37 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       resetComposerHeight?.();
     }, [resetComposerHeight]);
 
-    const handleSendMessage = useCallback(() => {
-      const liveValue = textInputRef.current?.getText() ?? valueRef.current;
-      if (!preserveHeightOnSubmit) {
-        updateLiveTextPresence("");
-      }
-      sendMessageImpl({
-        value: liveValue,
-        attachments,
-        hasExternalContent,
+    const handleSendMessage = useCallback(
+      (activeTurnBehavior?: "steer") => {
+        const liveValue = textInputRef.current?.getText() ?? valueRef.current;
+        if (!preserveHeightOnSubmit) {
+          updateLiveTextPresence("");
+        }
+        sendMessageImpl({
+          value: liveValue,
+          attachments,
+          hasExternalContent,
+          allowEmptySubmit,
+          cwd,
+          isAgentRunning,
+          onSubmit,
+          onMinimizeHeight: minimizeInputHeight,
+          preserveHeightOnSubmit,
+          activeTurnBehavior,
+        });
+      },
+      [
         allowEmptySubmit,
+        attachments,
         cwd,
-        isAgentRunning,
         onSubmit,
-        onMinimizeHeight: minimizeInputHeight,
+        isAgentRunning,
+        hasExternalContent,
+        minimizeInputHeight,
         preserveHeightOnSubmit,
-      });
-    }, [
-      allowEmptySubmit,
-      attachments,
-      cwd,
-      onSubmit,
-      isAgentRunning,
-      hasExternalContent,
-      minimizeInputHeight,
-      preserveHeightOnSubmit,
-      updateLiveTextPresence,
-    ]);
+        updateLiveTextPresence,
+      ],
+    );
 
     const handleQueueMessage = useCallback(
       () =>
@@ -1533,6 +1577,10 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         }),
       [attachments, cwd, onQueue, replaceText, minimizeInputHeight],
     );
+
+    const handleSteerMessage = useCallback(() => {
+      handleSendMessage("steer");
+    }, [handleSendMessage]);
 
     const handleDefaultSendAction = useCallback(() => {
       runDefaultSendAction({
@@ -1857,6 +1905,16 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 canPressLoadingButton={canPressLoadingButton}
                 onSubmitLoadingPress={onSubmitLoadingPress}
                 onDefaultSendAction={handleDefaultSendAction}
+                onSteerAction={handleSteerMessage}
+                onQueueAction={handleQueueMessage}
+                steerLabel={t("composer.input.sendAndSteer")}
+                queueLabel={t("composer.input.queueMessage")}
+                showActiveTurnActions={shouldShowActiveTurnActions({
+                  isAgentRunning,
+                  isSendButtonDisabled,
+                  canPressLoadingButton,
+                })}
+                canQueueActiveTurn={canQueueActiveTurn}
                 isSendButtonDisabled={isSendButtonDisabled}
                 submitAccessibilityLabel={submitAccessibilityLabel}
                 sendButtonCombinedStyle={sendButtonCombinedStyle}

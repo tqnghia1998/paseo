@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { useDraftStore } from "@/stores/draft-store";
+import { flushDraftPersistStorage, useDraftStore } from "@/stores/draft-store";
 import type { AttachmentMetadata, ComposerAttachment } from "@/attachments/types";
 import { createWorkspaceFileAttachment } from "@/attachments/workspace-file";
 
@@ -259,6 +259,62 @@ describe("useAgentInputDraft live contract", () => {
 
     expect(getLatest().text).toBe("hello world");
     expect(getLatest().attachments).toEqual([{ kind: "image", metadata: image }]);
+  });
+
+  it("restores a typed draft after its Paseo page remounts", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "agent:host-1:agent-1" });
+      return null;
+    }
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+    let root: Root | null = createRoot(container);
+
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      getLatest().editText("keep this draft");
+      root!.unmount();
+    });
+    await flushDraftPersistStorage();
+
+    useDraftStore.setState({
+      drafts: {},
+      createModalDraft: null,
+      attachmentFocusRequestByDraftKey: {},
+    });
+    await useDraftStore.persist.rehydrate();
+
+    latest = null;
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    expect(getLatest().text).toBe("keep this draft");
   });
 
   it("migrates legacy image drafts to image attachments on hydration", async () => {
