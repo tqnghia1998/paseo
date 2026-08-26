@@ -3954,7 +3954,6 @@ function WorkspaceScreenContent({
         renderMainHeader={renderWorkspaceScreenHeader}
         renderExplorerSidebarHeaderAction={renderExplorerSidebarHeaderAction}
         focusModeEnabled={desktopFocusModeEnabled}
-        onExitFocusMode={toggleFocusMode}
         workspaceKey={persistenceKey}
         normalizedServerId={normalizedServerId}
         normalizedWorkspaceId={normalizedWorkspaceId}
@@ -3992,7 +3991,6 @@ function WorkspaceScreenContent({
     renderExplorerSidebarHeaderAction,
     persistenceKey,
     desktopFocusModeEnabled,
-    toggleFocusMode,
     normalizedServerId,
     normalizedWorkspaceId,
     isRouteFocused,
@@ -4079,8 +4077,6 @@ function WorkspaceScreenContent({
             onCloseOtherTabs={handleCloseOtherTabs}
             onCreateNewTab={handleCreateNewTab}
             onReorderTabs={handleReorderTabsInFocusedPane}
-            focusModeEnabled={desktopFocusModeEnabled}
-            onExitFocusMode={toggleFocusMode}
           />
         </NewTabLauncherProvider>
       ) : null}
