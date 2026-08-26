@@ -135,7 +135,6 @@ interface SplitContainerProps {
   onResizeSplit: (groupId: string, sizes: number[]) => void;
   onReorderTabsInPane: (paneId: string, tabIds: string[]) => void;
   focusModeEnabled?: boolean;
-  onExitFocusMode: () => void;
 }
 
 interface WorkspaceTabDragData {
@@ -338,7 +337,6 @@ export function SplitContainer({
   onResizeSplit,
   onReorderTabsInPane,
   focusModeEnabled,
-  onExitFocusMode,
 }: SplitContainerProps) {
   const inheritedWindowChromeCorners = useWindowChromeCorners();
   const windowChromeCorners = focusModeEnabled ? inheritedWindowChromeCorners : "none";
@@ -697,7 +695,6 @@ export function SplitContainer({
                   workspaceHasMultiplePanes={workspaceHasMultiplePanes}
                   onTogglePaneMaximized={handleTogglePaneMaximized}
                   focusModeEnabled={focusModeEnabled}
-                  onExitFocusMode={onExitFocusMode}
                 />
               ) : null}
             </View>
@@ -959,7 +956,6 @@ function SplitNodeView({
   workspaceHasMultiplePanes,
   onTogglePaneMaximized,
   focusModeEnabled,
-  onExitFocusMode,
 }: SplitNodeViewProps) {
   const [groupContainerSize, setGroupContainerSize] = useState(0);
   const groupId = node.kind === "group" ? node.group.id : null;
@@ -1045,7 +1041,6 @@ function SplitNodeView({
             workspaceHasMultiplePanes={workspaceHasMultiplePanes}
             onTogglePaneMaximized={onTogglePaneMaximized}
             focusModeEnabled={focusModeEnabled}
-            onExitFocusMode={onExitFocusMode}
           />
         </WindowChromeRegion>
       </RetainedPanel>
@@ -1099,7 +1094,6 @@ function SplitNodeView({
               workspaceHasMultiplePanes={workspaceHasMultiplePanes}
               onTogglePaneMaximized={onTogglePaneMaximized}
               focusModeEnabled={focusModeEnabled}
-              onExitFocusMode={onExitFocusMode}
             />
           </SplitGroupChild>
           {index < node.group.children.length - 1 &&
@@ -1157,7 +1151,6 @@ function SplitPaneView({
   workspaceHasMultiplePanes,
   onTogglePaneMaximized,
   focusModeEnabled,
-  onExitFocusMode,
 }: SplitPaneViewProps) {
   const paneRef = useRef<View | null>(null);
   const stableOnFocusPane = useStableEvent(onFocusPane);
@@ -1291,8 +1284,6 @@ function SplitPaneView({
             onTogglePaneMaximized={handleTogglePaneMaximized}
             onSplitRight={handleSplitRight}
             onSplitDown={handleSplitDown}
-            focusModeEnabled={Boolean(focusModeEnabled)}
-            onExitFocusMode={onExitFocusMode}
           />
         </WindowChromeSafeArea>
 
