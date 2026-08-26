@@ -5,11 +5,26 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 
 export type SendBehavior = ActiveTurnBehavior | "queue";
 
+export function resolveImmediateActiveTurnBehavior(
+  defaultSendBehavior: SendBehavior,
+  requestedBehavior?: ActiveTurnBehavior,
+): ActiveTurnBehavior {
+  return requestedBehavior ?? (defaultSendBehavior === "steer" ? "steer" : "interrupt");
+}
+
 export function resolveActiveSendBehavior(
   sendBehavior: SendBehavior,
   hasPendingPermission: boolean,
 ): SendBehavior {
   return sendBehavior === "queue" && hasPendingPermission ? "interrupt" : sendBehavior;
+}
+
+export function shouldShowActiveTurnActions(input: {
+  isAgentRunning: boolean;
+  isSendButtonDisabled: boolean;
+  canPressLoadingButton: boolean;
+}): boolean {
+  return input.isAgentRunning && !input.isSendButtonDisabled && !input.canPressLoadingButton;
 }
 
 interface ComposerSurfaceState {
