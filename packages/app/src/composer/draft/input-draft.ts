@@ -21,7 +21,7 @@ import {
   resolveEffectiveComposerThinkingOptionId,
   type ProviderSelectionState,
 } from "@/provider-selection/provider-selection";
-import { useDraftStore } from "@/stores/draft-store";
+import { flushDraftPersistStorage, useDraftStore } from "@/stores/draft-store";
 import { toDraftInputIfReady } from "@/stores/draft-store/state";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb } from "@/constants/platform";
@@ -195,6 +195,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
         window.removeEventListener("pagehide", flush);
       }
       textPublication.flush();
+      void flushDraftPersistStorage();
     };
   }, [textPublication]);
 
