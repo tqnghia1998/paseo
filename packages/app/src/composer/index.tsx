@@ -2504,7 +2504,6 @@ function ComposerContentImpl({
                   defaultSendBehavior={activeSendBehavior}
                   sendShortcut={appSettings.sendShortcut}
                   onQueue={handleQueue}
-                  canQueueActiveTurn={!hasPendingPermission}
                   onSubmitLoadingPress={submitLoadingPressHandler}
                   onKeyPress={handleCommandKeyPress}
                   onSelectionChange={handleSelectionChange}
