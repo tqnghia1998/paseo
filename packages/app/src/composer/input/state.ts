@@ -19,14 +19,6 @@ export function resolveActiveSendBehavior(
   return sendBehavior === "queue" && hasPendingPermission ? "interrupt" : sendBehavior;
 }
 
-export function shouldShowActiveTurnActions(input: {
-  isAgentRunning: boolean;
-  isSendButtonDisabled: boolean;
-  canPressLoadingButton: boolean;
-}): boolean {
-  return input.isAgentRunning && !input.isSendButtonDisabled && !input.canPressLoadingButton;
-}
-
 interface ComposerSurfaceState {
   opacity: 0 | 1;
   pointerEvents: "auto" | "none";
