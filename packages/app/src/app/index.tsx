@@ -15,8 +15,7 @@ import {
 } from "@/stores/navigation-active-workspace-store";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { useSessionStore } from "@/stores/session-store";
-import { normalizeWorkspaceDescriptor } from "@/stores/session-store";
-import { normalizeWorkspacePath } from "@/utils/workspace-identity";
+import { openFolderWorkspace } from "@/app/folder-workspace";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 import { usePanelStore } from "@/stores/panel-store";
 
@@ -25,23 +24,6 @@ const isDesktop = shouldUseDesktopDaemon();
 function getFolderParam(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0]?.trim() || null;
   return value?.trim() || null;
-}
-
-function findMatchingWorkspace(
-  sessions: ReturnType<typeof useSessionStore.getState>["sessions"],
-  serverId: string,
-  target: string,
-) {
-  const workspaces = sessions[serverId]?.workspaces;
-  if (!workspaces) return null;
-  const normalizedTarget = normalizeWorkspacePath(target) ?? target;
-  for (const ws of workspaces.values()) {
-    const normalizedDir = normalizeWorkspacePath(ws.workspaceDirectory) ?? ws.workspaceDirectory;
-    if (normalizedDir === normalizedTarget || ws.id === target) {
-      return ws;
-    }
-  }
-  return null;
 }
 
 export default function Index() {
@@ -78,30 +60,17 @@ export default function Index() {
 
     async function handleFolderLaunch() {
       try {
-        const normalizedTarget = normalizeWorkspacePath(folderPath) ?? folderPath;
-        const matchingWs = findMatchingWorkspace(
-          useSessionStore.getState().sessions,
+        const workspace = await openFolderWorkspace({
+          sessions: useSessionStore.getState().sessions,
           serverId,
-          normalizedTarget,
-        );
-
-        if (matchingWs) {
-          if (cancelled) return;
-          enterFocusMode();
-          router.replace(buildHostWorkspaceRoute(serverId, matchingWs.id) as Href);
-          return;
-        }
-
-        const res = await currentClient.createWorkspace({
-          source: { kind: "directory", path: folderPath },
+          folderPath,
+          client: currentClient,
         });
+        if (cancelled || !workspace) return;
 
-        if (cancelled || !res.workspace) return;
-
-        const normalized = normalizeWorkspaceDescriptor(res.workspace);
-        useSessionStore.getState().mergeWorkspaces(serverId, [normalized]);
+        useSessionStore.getState().mergeWorkspaces(serverId, [workspace]);
         enterFocusMode();
-        router.replace(buildHostWorkspaceRoute(serverId, normalized.id) as Href);
+        router.replace(buildHostWorkspaceRoute(serverId, workspace.id) as Href);
       } catch (err) {
         console.error("Failed to open workspace for folder param:", err);
       }
