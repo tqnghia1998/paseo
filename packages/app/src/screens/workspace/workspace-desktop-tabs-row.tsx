@@ -78,7 +78,6 @@ import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { buildWorkspaceKeyboardHandlerId } from "@/keyboard/handler-id";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
-import { WorkspaceNewTabMenuContent } from "@/screens/workspace/workspace-new-tab-menu";
 import {
   paneContentToolbarTrailingPadding,
   ToolbarButton,
@@ -172,48 +171,27 @@ function TabLabelMeasurement({
 type PanePanelKinds = readonly WorkspaceTabDescriptor["kind"][];
 
 interface WorkspaceNewTabButtonProps {
-  panePanelKinds: PanePanelKinds;
-  host: PaneHost;
-  launchPurpose: WorkspaceTabLaunchPurpose;
-  serverId: string;
-  paneId?: string;
   shortcutKeys: ShortcutKey[][] | null;
+  onPress: () => void;
   placement: "inline" | "toolbar";
 }
 
-function WorkspaceNewTabButton({
-  panePanelKinds,
-  host,
-  launchPurpose,
-  serverId,
-  paneId,
-  shortcutKeys,
-  placement,
-}: WorkspaceNewTabButtonProps) {
+function WorkspaceNewTabButton({ shortcutKeys, onPress, placement }: WorkspaceNewTabButtonProps) {
   const { t } = useTranslation();
-  const tooltipText = t("workspace.tabs.actions.newTab");
-  const menu = (
-    <DropdownMenu>
-      <ToolbarButton
-        kind="menu"
-        label={tooltipText}
-        shortcut={shortcutKeys}
-        testID="workspace-new-tab-button"
-        style={placement === "inline" ? styles.inlineNewTabButton : undefined}
-      >
-        <ThemedPlus size={14} uniProps={extraMutedColorMapping} />
-      </ToolbarButton>
-      <WorkspaceNewTabMenuContent
-        serverId={serverId}
-        purpose={launchPurpose}
-        host={host}
-        panePanelKinds={panePanelKinds}
-        paneId={paneId}
-      />
-    </DropdownMenu>
+  const label = t("workspace.tabs.actions.newAgent");
+  const button = (
+    <ToolbarButton
+      label={label}
+      shortcut={shortcutKeys}
+      testID="workspace-new-tab-button"
+      style={placement === "inline" ? styles.inlineNewTabButton : undefined}
+      onPress={onPress}
+    >
+      <ThemedPlus size={14} uniProps={extraMutedColorMapping} />
+    </ToolbarButton>
   );
 
-  return placement === "inline" ? <View style={styles.inlineAddButton}>{menu}</View> : menu;
+  return placement === "inline" ? <View style={styles.inlineAddButton}>{button}</View> : button;
 }
 
 function WorkspacePaneToolbarActions({
@@ -224,9 +202,8 @@ function WorkspacePaneToolbarActions({
   showSplitActions,
   showMaximizeAction,
   paneMaximized,
-  serverId,
-  paneId,
   newTabShortcutKeys,
+  onCreateNewTab,
   onSplitRight,
   onSplitDown,
   onTogglePaneMaximized,
@@ -238,9 +215,8 @@ function WorkspacePaneToolbarActions({
   showSplitActions: boolean;
   showMaximizeAction: boolean;
   paneMaximized: boolean;
-  serverId: string;
-  paneId?: string;
   newTabShortcutKeys: ShortcutKey[][] | null;
+  onCreateNewTab: () => void;
   onSplitRight?: () => void;
   onSplitDown?: () => void;
   onTogglePaneMaximized?: () => void;
@@ -272,13 +248,9 @@ function WorkspacePaneToolbarActions({
     <ToolbarControls style={styles.paneSplitActions}>
       {showNewTabButton ? (
         <WorkspaceNewTabButton
-          panePanelKinds={panePanelKinds}
-          host={host}
-          launchPurpose={launchPurpose}
           placement="toolbar"
-          serverId={serverId}
-          paneId={paneId}
           shortcutKeys={newTabShortcutKeys}
+          onPress={onCreateNewTab}
         />
       ) : null}
       {maximizeActionVisible && onTogglePaneMaximized ? (
@@ -1319,13 +1291,9 @@ function ResolvedWorkspaceDesktopTabsRow({
           />
           {!layout.requiresHorizontalScrollFallback ? (
             <WorkspaceNewTabButton
-              panePanelKinds={panePanelKinds}
-              host={host}
-              launchPurpose={launchPurpose}
               placement="inline"
-              serverId={normalizedServerId}
-              paneId={paneId}
               shortcutKeys={newTabKeys}
+              onPress={createNewTab}
             />
           ) : null}
         </Animated.ScrollView>
@@ -1345,9 +1313,8 @@ function ResolvedWorkspaceDesktopTabsRow({
         showSplitActions={showPaneSplitActions}
         showMaximizeAction={showPaneMaximizeAction}
         paneMaximized={paneMaximized}
-        serverId={normalizedServerId}
-        paneId={paneId}
         newTabShortcutKeys={newTabKeys}
+        onCreateNewTab={createNewTab}
         onSplitRight={onSplitRight}
         onSplitDown={onSplitDown}
         onTogglePaneMaximized={onTogglePaneMaximized}
