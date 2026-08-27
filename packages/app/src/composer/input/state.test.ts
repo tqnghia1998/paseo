@@ -10,7 +10,6 @@ import {
   runAlternateSendAction,
   runDefaultSendAction,
   resolveImmediateActiveTurnBehavior,
-  shouldShowActiveTurnActions,
   runMessageInputKeyboardAction,
   stopRealtimeVoice,
 } from "./state";
@@ -216,23 +215,6 @@ describe("composer send behavior", () => {
     expect(resolveImmediateActiveTurnBehavior("steer")).toBe("steer");
     expect(resolveImmediateActiveTurnBehavior("queue")).toBe("interrupt");
     expect(resolveImmediateActiveTurnBehavior("interrupt")).toBe("interrupt");
-  });
-
-  it("hides explicit active-turn actions when loading owns the button", () => {
-    expect(
-      shouldShowActiveTurnActions({
-        isAgentRunning: true,
-        isSendButtonDisabled: false,
-        canPressLoadingButton: true,
-      }),
-    ).toBe(false);
-    expect(
-      shouldShowActiveTurnActions({
-        isAgentRunning: true,
-        isSendButtonDisabled: false,
-        canPressLoadingButton: false,
-      }),
-    ).toBe(true);
   });
 
   it("uses Enter to interrupt and Mod+Enter to queue when interrupt is selected", () => {
