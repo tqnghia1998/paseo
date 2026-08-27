@@ -98,8 +98,7 @@ export function openPreferredWorkspaceTarget(
   return openWorkspaceTargetAtLocation({
     workspaceKey: input.workspaceKey,
     target: input.target,
-    location:
-      !isFocusModeEnabled(input) && input.preferences[input.source] ? "side" : "main",
+    location: !isFocusModeEnabled(input) && input.preferences[input.source] ? "side" : "main",
     parentTabId: input.parentTabId,
   });
 }
