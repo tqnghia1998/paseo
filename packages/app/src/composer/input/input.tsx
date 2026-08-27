@@ -100,7 +100,6 @@ import {
   resolveMessageInputEnterAction,
   resolveRetainedSelection,
   runAlternateSendAction,
-  shouldShowActiveTurnActions,
   runDefaultSendAction,
   runMessageInputKeyboardAction,
   stopRealtimeVoice,
@@ -186,8 +185,6 @@ export interface MessageInputProps {
   sendShortcut: SendShortcut;
   /** Callback for queue button when agent is running */
   onQueue?: (payload: MessagePayload) => void;
-  /** Whether queueing can advance the current active turn. */
-  canQueueActiveTurn?: boolean;
   /** Optional handler used when submit button is in loading state. */
   onSubmitLoadingPress?: () => void;
   /** Intercept key press events before default handling. Return true to prevent default. */
@@ -803,12 +800,6 @@ function SendButtonTooltip({
   onSubmitLoadingPress,
   onDefaultSendAction,
   onLongPressSend,
-  onSteerAction,
-  onQueueAction,
-  steerLabel,
-  queueLabel,
-  showActiveTurnActions,
-  canQueueActiveTurn,
   isSendButtonDisabled,
   submitAccessibilityLabel,
   submitAccessibilityHint,
@@ -826,12 +817,6 @@ function SendButtonTooltip({
   onSubmitLoadingPress: (() => void) | undefined;
   onDefaultSendAction: () => void;
   onLongPressSend: () => void;
-  onSteerAction: () => void;
-  onQueueAction: () => void;
-  steerLabel: string;
-  queueLabel: string;
-  showActiveTurnActions: boolean;
-  canQueueActiveTurn: boolean;
   isSendButtonDisabled: boolean;
   submitAccessibilityLabel: string;
   submitAccessibilityHint: string | undefined;
@@ -845,42 +830,7 @@ function SendButtonTooltip({
   sendTooltipLabel: string;
 }) {
   if (!shouldShow) return null;
-  if (showActiveTurnActions) {
-    return (
-      <View style={styles.activeTurnActions}>
-        {canQueueActiveTurn ? (
-          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-            <TooltipTrigger
-              onPress={onQueueAction}
-              accessibilityLabel={queueLabel}
-              accessibilityRole="button"
-              style={[styles.sendButton, styles.sendButtonLabeled, styles.activeTurnActionButton]}
-            >
-              <Text style={styles.sendButtonLabel}>{queueLabel}</Text>
-            </TooltipTrigger>
-            <TooltipContent side="top" align="center" offset={8}>
-              <Text style={styles.tooltipText}>{queueLabel}</Text>
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
-        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-          <TooltipTrigger
-            onPress={onSteerAction}
-            accessibilityLabel={steerLabel}
-            accessibilityRole="button"
-            style={[styles.sendButton, styles.sendButtonLabeled, styles.activeTurnActionButton]}
-          >
-            <Text style={styles.sendButtonLabel}>{steerLabel}</Text>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center" offset={8}>
-            <Text style={styles.tooltipText}>{steerLabel}</Text>
-          </TooltipContent>
-        </Tooltip>
-      </View>
-    );
-  }
-
-  return (
+  const button = (
     <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger
         onPress={canPressLoadingButton ? onSubmitLoadingPress : onDefaultSendAction}
@@ -906,6 +856,8 @@ function SendButtonTooltip({
       </TooltipContent>
     </Tooltip>
   );
+
+  return button;
 }
 
 type PrimaryActionKind = "send" | "active" | "none";
@@ -1200,7 +1152,6 @@ interface ResolvedMessageInputProps {
   defaultSendBehavior: "interrupt" | "steer" | "queue";
   sendShortcut: SendShortcut;
   onQueue: ((payload: MessagePayload) => void) | undefined;
-  canQueueActiveTurn: boolean;
   onSubmitLoadingPress: (() => void) | undefined;
   onKeyPressCallback: ((event: ComposerKeyPressEvent) => boolean) | undefined;
   onSelectionChangeCallback: ((selection: { start: number; end: number }) => void) | undefined;
@@ -1249,7 +1200,6 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     defaultSendBehavior: props.defaultSendBehavior,
     sendShortcut: props.sendShortcut,
     onQueue: props.onQueue,
-    canQueueActiveTurn: props.canQueueActiveTurn ?? false,
     onSubmitLoadingPress: props.onSubmitLoadingPress,
     onKeyPressCallback: props.onKeyPress,
     onSelectionChangeCallback: props.onSelectionChange,
@@ -1328,7 +1278,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       defaultSendBehavior,
       sendShortcut,
       onQueue,
-      canQueueActiveTurn,
       onSubmitLoadingPress,
       onKeyPressCallback,
       onSelectionChangeCallback,
@@ -1797,10 +1746,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [attachments, cwd, onQueue, replaceText, minimizeInputHeight, exitFullscreen],
     );
 
-    const handleSteerMessage = useCallback(() => {
-      handleSendMessage("steer");
-    }, [handleSendMessage]);
-
     const handleDefaultSendAction = useCallback(() => {
       runDefaultSendAction({
         defaultSendBehavior,
@@ -2084,16 +2029,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           onSubmitLoadingPress={onSubmitLoadingPress}
           onDefaultSendAction={handleDefaultSendAction}
           onLongPressSend={handleLongPressSend}
-          onSteerAction={handleSteerMessage}
-          onQueueAction={handleQueueMessage}
-          steerLabel={t("composer.input.sendAndSteer")}
-          queueLabel={t("composer.input.queueMessage")}
-          showActiveTurnActions={shouldShowActiveTurnActions({
-            isAgentRunning,
-            isSendButtonDisabled,
-            canPressLoadingButton,
-          })}
-          canQueueActiveTurn={canQueueActiveTurn}
           isSendButtonDisabled={isPresentedSendDisabled}
           submitAccessibilityLabel={submitAccessibilityLabel}
           submitAccessibilityHint={submitAccessibilityHint}
@@ -2116,11 +2051,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         handleDefaultSendAction,
         handleLongPressSend,
         isPresentedSendDisabled,
-        handleSteerMessage,
-        handleQueueMessage,
-        t,
-        isAgentRunning,
-        canQueueActiveTurn,
         isSendButtonDisabled,
         hasLiveText,
         attachments,
@@ -2480,14 +2410,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-  },
-  activeTurnActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  activeTurnActionButton: {
-    marginLeft: 0,
   },
   attachButton: {
     width: TOOLBAR_CONTROL_HEIGHT,
