@@ -11,7 +11,7 @@ Paseo Web is packaged as a lightweight, self-contained standalone server that em
 1. **Paseo Daemon (`server.mjs`)**: Node.js backend daemon with WebSocket RPCs, agent lifecycle management, and session state.
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions.
-4. **Simple Mode Integration (`?folder=<path>`)**: Automatically opens directly to the agent composer/chat for the specified folder workspace without intermediate setup menus.
+4. **Chat-only embedding (`?folder=<path>`)**: Automatically opens the specified folder workspace directly in its active agent conversation/composer. The standalone build omits workspace navigation, New Tab, Import Session, Fork, command-center, and file-opening escape routes; regular Paseo builds are unchanged.
 
 ---
 
@@ -35,6 +35,7 @@ node scripts/bundle-paseo-web.mjs
 - `terminal-worker-process.js` — PTY process worker
 - `web-ui/` — Static web client bundle
 - `runtime-node-modules.tgz` — Native module bindings archive
+- `bridge-plugin.bundle.mjs` — OpenCode bridge runtime artifact
 
 ---
 
@@ -64,7 +65,7 @@ When loaded in an `iframe` or Electron `<webview>`, Paseo Web:
 
 1. Detects `?folder=` query parameter.
 2. Finds or creates the workspace corresponding to that directory.
-3. Enters Simple Focus Mode directly.
+3. Enters locked chat-only focus mode directly.
 
 ---
 
