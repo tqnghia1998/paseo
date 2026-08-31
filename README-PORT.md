@@ -11,7 +11,7 @@ Paseo Web is packaged as a lightweight, self-contained standalone server that em
 1. **Paseo Daemon (`server.mjs`)**: Node.js backend daemon with WebSocket RPCs, agent lifecycle management, and session state.
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions.
-4. **Chat-only embedding (`?folder=<path>`)**: Automatically opens the specified folder workspace directly in its active agent conversation/composer. The standalone build omits workspace navigation, New Tab, Import Session, Fork, command-center, and file-opening escape routes; regular Paseo builds are unchanged.
+4. **Chat-only embedding (`?folder=<path>`)**: Automatically opens the specified folder workspace directly in its active agent conversation/composer. The standalone build omits project and Changes sidebars, their header controls, workspace navigation, New Tab, Import Session, Fork, command-center, and file-opening escape routes; regular Paseo builds are unchanged.
 
 ---
 
