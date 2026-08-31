@@ -1003,8 +1003,6 @@ function WorkspaceHeaderTitleBar({
   onViewScriptTerminal,
   onOpenUrlInBrowserTab,
 }: WorkspaceHeaderTitleBarProps) {
-  if (isEmbeddedChatOnly) return null;
-
   return (
     <View style={styles.headerTitleContainer}>
       {isLoading ? (
