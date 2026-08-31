@@ -44,6 +44,7 @@ import {
   type WorkspaceDraftTabSetup,
 } from "@/workspace-tabs/model";
 import { openWorkspaceChanges } from "@/workspace-tabs/open-supporting-view";
+import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
 import { useSettings } from "@/hooks/use-settings";
 
 interface AutoSubmitConfig {
@@ -388,7 +389,7 @@ export function WorkspaceDraftComposer({
   );
   const handleOpenWorkspaceAttachment = useCallback(
     (attachment: WorkspaceComposerAttachment) => {
-      if (attachment.kind !== "review") {
+      if (isEmbeddedChatOnly || attachment.kind !== "review") {
         return;
       }
       openWorkspaceChanges({
