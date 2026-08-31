@@ -131,7 +131,7 @@ import { PluginCatalogSync } from "@/plugins";
 import { NotificationOpenRouter } from "@/notification-open/react";
 import { ensureOsNotificationPermission } from "@/utils/os-notifications";
 import { EmbeddedAgentActivityBridge } from "@/embedded-agent-activity";
-import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
+import { isEmbeddedChatOnly, selectEmbeddedChatOnly } from "@/embedded-chat-mode";
 
 polyfillCrypto();
 
@@ -412,7 +412,11 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     explorerVisible: isWorkspaceRoute && explorerVisible,
     isSettingsRoute: pathname.includes("/settings"),
   });
-  const desktopSidebarMounted = hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled;
+  const navigationChromeEnabled = selectEmbeddedChatOnly(false, chromeEnabled);
+  const desktopSidebarMounted = selectEmbeddedChatOnly(
+    false,
+    hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled,
+  );
   const desktopSidebarVisible = resolveDesktopSidebarVisibility({
     chromeEnabled,
     isCompactLayout,
@@ -428,12 +432,12 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const appChromeLayout = resolveDesktopAppChromeLayout({
     desktopSidebarRendered: desktopSidebarVisible,
     hasTopLeftWindowControls,
-    sidebarControlsEnabled: chromeEnabled && !isWorkspaceFocusModeEnabled,
+    sidebarControlsEnabled: navigationChromeEnabled && !isWorkspaceFocusModeEnabled,
   });
   const sidebarChrome = (
     <SidebarChrome
-      mounted={isCompactLayout ? chromeEnabled : desktopSidebarMounted}
-      visible={isCompactLayout ? chromeEnabled : desktopSidebarVisible}
+      mounted={isCompactLayout ? navigationChromeEnabled : desktopSidebarMounted}
+      visible={isCompactLayout ? navigationChromeEnabled : desktopSidebarVisible}
       keyboardShortcutsEnabled={keyboardShortcutsEnabled}
     />
   );
@@ -453,7 +457,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
           {themedSidebarChrome}
         </WindowChromeRegion>
       ) : null}
-      <WorkspaceExplorerOpenGesture enabled={chromeEnabled && isCompactLayout}>
+      <WorkspaceExplorerOpenGesture enabled={navigationChromeEnabled && isCompactLayout}>
         <WindowChromeRegion
           corners={isCompactLayout && chromeEnabled ? "both" : appChromeLayout.contentCorners}
         >
@@ -517,7 +521,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   );
 
   return (
-    <AppContainerLifetime compactGesturesEnabled={chromeEnabled && isCompactLayout}>
+    <AppContainerLifetime compactGesturesEnabled={navigationChromeEnabled && isCompactLayout}>
       <SheetHostScope enabled={isCompactLayout}>{surface}</SheetHostScope>
     </AppContainerLifetime>
   );
