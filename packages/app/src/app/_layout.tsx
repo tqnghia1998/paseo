@@ -135,6 +135,7 @@ import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notif
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { PluginCatalogSync } from "@/plugins";
 import { EmbeddedAgentActivityBridge } from "@/embedded-agent-activity";
+import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
 import {
   ensureOsNotificationPermission,
   WEB_NOTIFICATION_CLICK_EVENT,
@@ -503,7 +504,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   // conflate workspace/project-specific chrome (sidebar, mobile gesture) with
   // global concerns like keyboard shortcuts. Split those out so settings (and
   // other non-workspace routes) don't need a special-case to keep shortcuts alive.
-  const keyboardShortcutsEnabled = chromeEnabled || pathname.startsWith("/settings");
+  const keyboardShortcutsEnabled =
+    !isEmbeddedChatOnly && (chromeEnabled || pathname.startsWith("/settings"));
 
   useKeyboardShortcuts({
     enabled: keyboardShortcutsEnabled,
@@ -515,8 +517,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     cycleTheme,
   });
 
-  useActiveWorktreeNewAction();
-  useGlobalNewWorkspaceAction();
+  useActiveWorktreeNewAction(!isEmbeddedChatOnly);
+  useGlobalNewWorkspaceAction(!isEmbeddedChatOnly);
 
   const appContentMinimumWidth = resolveDesktopAppContentMinimum({
     isSettingsRoute: pathname.includes("/settings"),
@@ -573,7 +575,9 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const surface = (
     <View style={layoutStyles.surfaceFill}>
       {workspaceChrome}
-      {!isCompactLayout && appChromeLayout.sidebarToggleOwner === "window" ? (
+      {!isEmbeddedChatOnly &&
+      !isCompactLayout &&
+      appChromeLayout.sidebarToggleOwner === "window" ? (
         <WindowChromeRegion corners="top-left">
           <WindowChromeSafeArea
             placement="inline"
@@ -593,17 +597,21 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <UpdateCalloutSource />
       <LegacyAgentSkillsMigration />
       <WorktreeSetupCalloutSource />
-      <CommandCenterRootActions />
-      <CommandCenterWorkspaceActions />
-      <PluginCommandCenterActions />
-      <WorkspacePinShortcutHandler />
-      <WorkspaceRenameHost />
-      <CommandCenter />
-      <AddProjectFlowHost />
-      <HostChooserModal />
-      <ProviderSettingsHost />
-      <WorkspaceSetupDialog />
-      <KeyboardShortcutsDialog />
+      {isEmbeddedChatOnly ? null : (
+        <>
+          <CommandCenterRootActions />
+          <CommandCenterWorkspaceActions />
+          <PluginCommandCenterActions />
+          <WorkspacePinShortcutHandler />
+          <WorkspaceRenameHost />
+          <CommandCenter />
+          <AddProjectFlowHost />
+          <HostChooserModal />
+          <ProviderSettingsHost />
+          <WorkspaceSetupDialog />
+          <KeyboardShortcutsDialog />
+        </>
+      )}
       <AppDiagnosticHost />
       <QuittingOverlay />
     </View>
