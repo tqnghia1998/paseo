@@ -5,6 +5,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Import as ImportIcon } from "lucide-react-native";
 import { composerPillStyles } from "@/composer/pill-styles";
 import type { Theme } from "@/styles/theme";
+import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
 
 const ThemedImportIcon = withUnistyles(ImportIcon);
 const iconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -27,6 +28,8 @@ export function ComposerImportPill({ onPress, disabled = false }: ComposerImport
     () => [composerPillStyles.label, isHovered && composerPillStyles.labelActive],
     [isHovered],
   );
+  if (isEmbeddedChatOnly) return null;
+
   return (
     <View style={styles.row}>
       <Pressable
