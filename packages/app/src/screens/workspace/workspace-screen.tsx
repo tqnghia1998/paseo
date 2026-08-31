@@ -192,6 +192,14 @@ import {
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
+import {
+  embeddedImportVisible,
+  embeddedWorkspaceActionsEnabled,
+  findEmbeddedConversationTabId,
+  isEmbeddedChatOnly,
+  selectEmbeddedChatOnly,
+  useEmbeddedChatOnlyConversation,
+} from "@/embedded-chat-mode";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
 import type { TerminalProfile } from "@getpaseo/protocol/messages";
@@ -481,6 +489,8 @@ function WorkspaceHeaderTitleBar({
   onCopyBranchName,
   onOpenSetupTab,
 }: WorkspaceHeaderTitleBarProps) {
+  if (isEmbeddedChatOnly) return null;
+
   return (
     <View style={styles.headerTitleContainer}>
       {isLoading ? (
@@ -1559,6 +1569,15 @@ function WorkspaceScreenContent({
 
   const activeTabId = focusedPaneTabState.activeTabId;
   const activeTab = focusedPaneTabState.activeTab;
+
+  useEmbeddedChatOnlyConversation({
+    activeKind: activeTab?.descriptor.target.kind,
+    conversationTabId: findEmbeddedConversationTabId(uiTabs),
+    enabled: isRouteFocused && hasHydratedWorkspaceLayoutStore,
+    focusTab: focusWorkspaceTab,
+    openDraft: openWorkspaceDraftTab,
+    workspaceKey: persistenceKey,
+  });
 
   const tabs = useMemo<WorkspaceTabDescriptor[]>(
     () => focusedPaneTabState.tabs.map((tab) => tab.descriptor),
@@ -2788,9 +2807,11 @@ function WorkspaceScreenContent({
   );
 
   // Shared by every handler below: these actions only exist on a focused workspace route.
-  const workspaceActionsEnabled = Boolean(
-    isRouteFocused && normalizedServerId && normalizedWorkspaceId,
-  );
+  const workspaceActionsEnabled = embeddedWorkspaceActionsEnabled({
+    routeFocused: isRouteFocused,
+    serverId: normalizedServerId,
+    workspaceId: normalizedWorkspaceId,
+  });
 
   useKeyboardActionHandler({
     handlerId: buildWorkspaceKeyboardHandlerId({
@@ -3037,15 +3058,18 @@ function WorkspaceScreenContent({
             setWorkspaceTabState(persistenceKey, input.tab.tabId, state);
           }
         },
-        onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => {
-          handleOpenWorkspaceFileFromPane({
-            request,
-            paneId: input.paneId,
-            parentTabId: input.tab.tabId,
-            focusPaneBeforeOpen: input.focusPaneBeforeOpen,
-          });
-        },
-        onOpenImportSheet: openImportSheet,
+        onOpenWorkspaceFile: selectEmbeddedChatOnly(
+          () => {},
+          (request: WorkspaceFileOpenRequest) => {
+            handleOpenWorkspaceFileFromPane({
+              request,
+              paneId: input.paneId,
+              parentTabId: input.tab.tabId,
+              focusPaneBeforeOpen: input.focusPaneBeforeOpen,
+            });
+          },
+        ),
+        onOpenImportSheet: selectEmbeddedChatOnly(() => {}, openImportSheet),
       }),
     [
       handleCloseTabById,
@@ -3675,7 +3699,7 @@ function WorkspaceScreenContent({
           <FloatingPanelPortalHost name={workspaceFloatingPanelPortalHostName} />
         </View>
         <ImportSessionSheet
-          visible={isRouteFocused && isImportSheetVisible}
+          visible={embeddedImportVisible(isRouteFocused, isImportSheetVisible)}
           client={client}
           serverId={normalizedServerId}
           cwd={workspaceDirectory}
