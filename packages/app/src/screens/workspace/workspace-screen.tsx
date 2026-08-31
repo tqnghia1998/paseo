@@ -509,8 +509,6 @@ function WorkspaceHeaderTitleBar({
   onCopyBranchName,
   onOpenSetupTab,
 }: WorkspaceHeaderTitleBarProps) {
-  if (isEmbeddedChatOnly) return null;
-
   return (
     <View style={styles.headerTitleContainer}>
       {isLoading ? (
