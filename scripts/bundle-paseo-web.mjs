@@ -91,13 +91,22 @@ const __dirname = __dirnameFn(__filename);
   ],
 });
 
-console.log("4. Copying static web-ui assets...");
+console.log("4. Copying bundled OpenCode bridge plugin...");
+fs.copyFileSync(
+  path.join(
+    ROOT_DIR,
+    "packages/server/dist/server/server/agent/providers/opencode/bridge-plugin.bundle.mjs",
+  ),
+  path.join(DEST_DIR, "bridge-plugin.bundle.mjs"),
+);
+
+console.log("5. Copying static web-ui assets...");
 const webUiSrc = path.join(ROOT_DIR, "packages/server/dist/server/web-ui");
 const webUiDest = path.join(DEST_DIR, "web-ui");
 fs.rmSync(webUiDest, { recursive: true, force: true });
 fs.cpSync(webUiSrc, webUiDest, { recursive: true });
 
-console.log("5. Packaging runtime node_modules (node-pty native bindings)...");
+console.log("6. Packaging runtime node_modules (node-pty native bindings)...");
 // Tar node-pty and other native modules
 const runtimeNmTmp = path.join(DEST_DIR, "runtime-nm-temp");
 fs.mkdirSync(runtimeNmTmp, { recursive: true });
