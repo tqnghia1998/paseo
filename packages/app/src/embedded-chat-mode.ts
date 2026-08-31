@@ -1,13 +1,16 @@
 import { useLayoutEffect } from "react";
 
 export const EMBEDDED_CHAT_ONLY_BUILD_MARKER = "space-app-vibing-chat-only";
+export const EMBEDDED_NAVIGATION_HIDDEN_BUILD_MARKER = "space-app-vibing-navigation-hidden";
 
 export const isEmbeddedChatOnly =
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY === "true" &&
   EMBEDDED_CHAT_ONLY_BUILD_MARKER.length > 0;
 
 export function selectEmbeddedChatOnly<T>(embedded: T, standard: T): T {
-  return isEmbeddedChatOnly ? embedded : standard;
+  return isEmbeddedChatOnly && EMBEDDED_NAVIGATION_HIDDEN_BUILD_MARKER.length > 0
+    ? embedded
+    : standard;
 }
 
 export function embeddedWorkspaceActionsEnabled(input: {
