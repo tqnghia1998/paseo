@@ -11,7 +11,16 @@ Paseo Web is packaged as a lightweight, self-contained standalone server that em
 1. **Paseo Daemon (`server.mjs`)**: Node.js backend daemon with WebSocket RPCs, agent lifecycle management, and session state.
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions.
-4. **Chat-only embedding (`?folder=<path>`)**: Automatically opens the specified folder workspace directly in its active agent conversation/composer. The standalone build omits project and Changes sidebars, their header controls, workspace navigation, New Tab, Import Session, Fork, command-center, and file-opening escape routes; regular Paseo builds are unchanged.
+4. **Embedded UI policy**: The standalone build omits project and Changes sidebars, their header controls, workspace navigation, New Tab, Import Session, Fork, command-center, and file-opening escape routes; regular Paseo builds are unchanged.
+
+### Canonical embedding names
+
+The consumer has two named contexts backed by this same standalone build:
+
+- **Paseo Simple Mode with locked Focus Mode** — the Paseo left tab inside a Space App Vibing workspace. `?folder=<path>` opens the requested worktree directly, and Focus Mode cannot be exited.
+- **Embedded Chat-Only Mode** — the Paseo iframe shown in the Live Design drawer's **Agent** tab. It remains constrained to the active conversation and composer.
+
+These are host-context names, not separate bundles. The shared build-time invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY=true`; do not remove it or the guards in `packages/app/src/embedded-chat-mode.ts` when resolving upstream changes.
 
 ---
 
@@ -63,9 +72,20 @@ http://127.0.0.1:<port>/?folder=<absolute_folder_path>
 
 When loaded in an `iframe` or Electron `<webview>`, Paseo Web:
 
-1. Detects `?folder=` query parameter.
-2. Finds or creates the workspace corresponding to that directory.
-3. Enters locked chat-only focus mode directly.
+1. Detects the `?folder=` query parameter.
+2. Finds or creates the workspace corresponding to that directory through the idempotent `openProject` path, preserving its workspace and agent thread on remount.
+3. Enters **Paseo Simple Mode with locked Focus Mode** directly.
+4. Applies the standalone build's **Embedded Chat-Only Mode** UI restrictions. The Live Design host uses this same URL in its drawer's Agent tab.
+
+### Upstream rebase guard
+
+After syncing from `getpaseo/paseo`, verify all of the following before regenerating the consumer bundle:
+
+- `EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY=true` is still injected by `scripts/build-daemon-web-ui.mjs`.
+- `packages/app/src/embedded-chat-mode.ts` still prevents navigation away from agent/draft conversations and still gates New Tab, Import Session, Fork, sidebars, workspace headers/tabs, command center, workspace shortcuts, and file-opening paths.
+- The `?folder=` bootstrap still uses `openProject` rather than direct workspace creation.
+- Focus Mode remains locked and its exit controls remain unavailable.
+- `npm --prefix packages/app test -- src/embedded-chat-mode.test.tsx` passes, then regenerate `space-app-vibing/scripts/paseo-web` and run its `scripts/paseo-web/paseoWebBundle.test.ts` guard.
 
 ---
 
