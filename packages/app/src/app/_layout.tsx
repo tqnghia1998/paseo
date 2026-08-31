@@ -145,6 +145,7 @@ import { PluginCatalogSync } from "@/plugins";
 import { NotificationOpenRouter } from "@/notification-open/react";
 import { ensureOsNotificationPermission } from "@/utils/os-notifications";
 import { EmbeddedAgentActivityBridge } from "@/embedded-agent-activity";
+import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
 
 polyfillCrypto();
 
@@ -434,7 +435,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   // conflate workspace/project-specific chrome (sidebar, mobile gesture) with
   // global concerns like keyboard shortcuts. Split those out so settings (and
   // other non-workspace routes) don't need a special-case to keep shortcuts alive.
-  const keyboardShortcutsEnabled = chromeEnabled || pathname.startsWith("/settings");
+  const keyboardShortcutsEnabled =
+    !isEmbeddedChatOnly && (chromeEnabled || pathname.startsWith("/settings"));
 
   useKeyboardShortcuts({
     enabled: keyboardShortcutsEnabled,
@@ -446,8 +448,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     cycleTheme,
   });
 
-  useActiveWorktreeNewAction();
-  useGlobalNewWorkspaceAction();
+  useActiveWorktreeNewAction(!isEmbeddedChatOnly);
+  useGlobalNewWorkspaceAction(!isEmbeddedChatOnly);
 
   const activeWorkspace = useActiveWorkspaceSelection();
   const explorerVisible = useIsExplorerSidebarOpen({
@@ -531,7 +533,9 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       {workspaceChrome}
       <AddHostFlowHost />
       <AppearanceStyleBoundary>
-        {!isCompactLayout && appChromeLayout.sidebarToggleOwner === "window" ? (
+        {!isEmbeddedChatOnly &&
+        !isCompactLayout &&
+        appChromeLayout.sidebarToggleOwner === "window" ? (
           <WindowChromeRegion corners="top-left">
             <WindowChromeSafeArea
               placement="inline"
@@ -553,18 +557,22 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <UpdateCalloutSource />
         <LegacyAgentSkillsMigration />
         <WorktreeSetupCalloutSource />
-        <CommandCenterRootActions />
-        <CommandCenterWorkspaceActions />
-        <PluginCommandCenterActions />
-        <WorkspacePinShortcutHandler />
-        <WorkspaceRenameHost />
-        <CommandCenter />
-        <AddProjectFlowHost />
-        <HostChooserModal />
-        <HostConfirmationSheet />
-        <ProviderSettingsHost />
-        <WorkspaceSetupDialog />
-        <KeyboardShortcutsDialog />
+        {isEmbeddedChatOnly ? null : (
+          <>
+            <CommandCenterRootActions />
+            <CommandCenterWorkspaceActions />
+            <PluginCommandCenterActions />
+            <WorkspacePinShortcutHandler />
+            <WorkspaceRenameHost />
+            <CommandCenter />
+            <AddProjectFlowHost />
+            <HostChooserModal />
+            <HostConfirmationSheet />
+            <ProviderSettingsHost />
+            <WorkspaceSetupDialog />
+            <KeyboardShortcutsDialog />
+          </>
+        )}
         <AppDiagnosticHost />
         <ChangelogHost />
         <QuittingOverlay />
