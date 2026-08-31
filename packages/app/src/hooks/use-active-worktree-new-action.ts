@@ -8,7 +8,7 @@ import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 
 const WORKTREE_NEW_ACTIONS: readonly KeyboardActionId[] = ["worktree.new"];
 
-export function useActiveWorktreeNewAction(enabled = true) {
+export function useActiveWorktreeNewAction(enabled: boolean) {
   const selection = useActiveWorkspaceSelection();
   const serverId = selection?.serverId ?? null;
   const workspaceId = selection?.workspaceId ?? null;
