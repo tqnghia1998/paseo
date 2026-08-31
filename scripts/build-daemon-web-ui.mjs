@@ -39,6 +39,10 @@ async function exportBrowserWebApp() {
   console.log("Exporting browser web app...");
   await run("npm", ["run", "build:web", "--workspace=@getpaseo/app"], {
     cwd: REPO_ROOT,
+    env: {
+      ...process.env,
+      EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY: "true",
+    },
   });
 }
 
