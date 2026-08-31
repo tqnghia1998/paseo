@@ -33,6 +33,7 @@ import {
   type ComposerEditingSession,
 } from "@/composer/editing-session";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
+import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
 import {
   resolveComposerTrackControlClearance,
   resolveComposerTrackTailClearance,
@@ -1412,7 +1413,8 @@ const AgentStreamSection = memo(function AgentStreamSection({
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
   const isCompactFormFactor = useIsCompactFormFactor();
-  const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
+  const hasWorkspaceDiffStat =
+    useWorkspaceHasDiffStat(serverId, workspaceId) && !isEmbeddedChatOnly;
   const hasVisibleComposerTracks =
     hasActiveComposer && (hasVisibleAgentTracks || hasWorkspaceDiffStat);
   const bottomOverlayTailClearance = hasVisibleComposerTracks
@@ -1590,7 +1592,7 @@ function ActiveAgentComposer({
   );
   const handleOpenWorkspaceAttachment = useCallback(
     (attachment: WorkspaceComposerAttachment) => {
-      if (attachment.kind !== "review") {
+      if (isEmbeddedChatOnly || attachment.kind !== "review") {
         return;
       }
       openWorkspaceChanges({
