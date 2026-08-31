@@ -1,16 +1,9 @@
 import { useLayoutEffect } from "react";
 
-export const EMBEDDED_CHAT_ONLY_BUILD_MARKER = "space-app-vibing-chat-only";
-export const EMBEDDED_NAVIGATION_HIDDEN_BUILD_MARKER = "space-app-vibing-navigation-hidden";
-
-export const isEmbeddedChatOnly =
-  process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY === "true" &&
-  EMBEDDED_CHAT_ONLY_BUILD_MARKER.length > 0;
+export const isEmbeddedChatOnly = process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY === "true";
 
 export function selectEmbeddedChatOnly<T>(embedded: T, standard: T): T {
-  return isEmbeddedChatOnly && EMBEDDED_NAVIGATION_HIDDEN_BUILD_MARKER.length > 0
-    ? embedded
-    : standard;
+  return isEmbeddedChatOnly ? embedded : standard;
 }
 
 export function embeddedWorkspaceActionsEnabled(input: {
@@ -25,9 +18,12 @@ export function embeddedImportVisible(routeFocused: boolean, importVisible: bool
   return !isEmbeddedChatOnly && routeFocused && importVisible;
 }
 
-export function findEmbeddedConversationTabId(
-  tabs: Array<{ tabId: string; target: { kind: string } }>,
-): string | undefined {
+interface EmbeddedTab {
+  tabId: string;
+  target: { kind: string };
+}
+
+export function findEmbeddedConversationTabId(tabs: EmbeddedTab[]): string | undefined {
   return tabs.find((tab) => tab.target.kind === "agent" || tab.target.kind === "draft")?.tabId;
 }
 
@@ -41,8 +37,15 @@ export function useEmbeddedChatOnlyConversation(input: {
 }) {
   const { activeKind, conversationTabId, enabled, focusTab, openDraft, workspaceKey } = input;
   useLayoutEffect(() => {
-    if (!isEmbeddedChatOnly || !enabled || activeKind === "agent" || activeKind === "draft") return;
-    if (conversationTabId && workspaceKey) focusTab(workspaceKey, conversationTabId);
+    if (
+      !isEmbeddedChatOnly ||
+      !enabled ||
+      !workspaceKey ||
+      activeKind === "agent" ||
+      activeKind === "draft"
+    )
+      return;
+    if (conversationTabId) focusTab(workspaceKey, conversationTabId);
     else openDraft();
   }, [activeKind, conversationTabId, enabled, focusTab, openDraft, workspaceKey]);
 }

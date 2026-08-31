@@ -11,7 +11,7 @@ import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 
 const WORKSPACE_NEW_ACTIONS: readonly KeyboardActionId[] = ["workspace.new"];
 
-export function useGlobalNewWorkspaceAction(enabled = true) {
+export function useGlobalNewWorkspaceAction(enabled: boolean) {
   const selection = useActiveWorkspaceSelection();
   const serverId = selection?.serverId ?? null;
   const workspaceId = selection?.workspaceId ?? null;
