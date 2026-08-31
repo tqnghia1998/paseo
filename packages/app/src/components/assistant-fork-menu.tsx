@@ -5,6 +5,7 @@ import { Split } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
 
 export type AssistantForkTarget = "tab" | "workspace";
 
@@ -48,6 +49,8 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
     ),
     [t],
   );
+
+  if (isEmbeddedChatOnly) return null;
 
   return (
     <Tooltip delayDuration={250} enabledOnDesktop enabledOnMobile={false}>
