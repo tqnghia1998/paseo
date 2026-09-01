@@ -104,6 +104,7 @@ import {
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+import { useEmbeddedModelSelection } from "@/embedded-chat-mode";
 
 interface AgentControlOption {
   id: string;
@@ -1338,6 +1339,13 @@ export function DraftAgentControls({
   metadata,
   onSetMetadata,
 }: DraftAgentControlsProps & { draftId: string; serverId: string; showToolbar: boolean }) {
+  useEmbeddedModelSelection({
+    isInitialSelectionPending: isAllModelsLoading,
+    providers: modelSelectorProviders,
+    selectedModel,
+    select: onSelectProviderAndModel,
+  });
+
   const mappedThinkingOptions = useMemo<AgentControlOption[]>(() => {
     return toThinkingControlOptions(thinkingOptions);
   }, [thinkingOptions]);
