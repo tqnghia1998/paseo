@@ -82,7 +82,9 @@ export function buildEmbeddedLiveDesignPrompt(notes: EmbeddedLiveDesignNote[]): 
 
 const embeddingOrigin = (): string | null => {
   try {
-    return document.referrer ? new URL(document.referrer).origin : null;
+    return document.referrer
+      ? new URL(document.referrer).origin
+      : (window.location.ancestorOrigins?.[0] ?? null);
   } catch {
     return null;
   }
