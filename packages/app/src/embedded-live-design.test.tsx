@@ -110,12 +110,13 @@ describe("embedded Live Design bridge", () => {
     expect(prompt).not.toContain("CSS patch:");
   });
 
-  it("announces readiness to the embedding host", () => {
+  it("announces readiness after Paseo replaces the embed URL", () => {
     const { postMessage } = useFakeParent();
     Object.defineProperty(document, "referrer", {
       configurable: true,
       value: "https://host.example/live-design",
     });
+    window.history.replaceState({}, "", "/h/server/workspace/workspace");
 
     const { unmount } = renderHook(() =>
       useEmbeddedLiveDesignSend({ enabled: true, submit: vi.fn() }),
