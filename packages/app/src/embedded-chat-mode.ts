@@ -112,16 +112,23 @@ export function useEmbeddedChatOnlyConversation(input: {
   workspaceKey: string | null;
 }) {
   const { activeKind, conversationTabId, enabled, focusTab, openDraft, workspaceKey } = input;
+  const openingDraftRef = useRef(false);
+  const openingDraftWorkspaceRef = useRef<string | null>(null);
   useLayoutEffect(() => {
-    if (
-      !isEmbeddedChatOnly ||
-      !enabled ||
-      !workspaceKey ||
-      activeKind === "agent" ||
-      activeKind === "draft"
-    )
+    if (!isEmbeddedChatOnly || !enabled || !workspaceKey) return;
+    if (openingDraftWorkspaceRef.current !== workspaceKey) {
+      openingDraftWorkspaceRef.current = workspaceKey;
+      openingDraftRef.current = false;
+    }
+    if (conversationTabId) {
+      openingDraftRef.current = false;
+      if (activeKind !== "agent" && activeKind !== "draft") {
+        focusTab(workspaceKey, conversationTabId);
+      }
       return;
-    if (conversationTabId) focusTab(workspaceKey, conversationTabId);
-    else openDraft();
+    }
+    if (activeKind === "agent" || activeKind === "draft" || openingDraftRef.current) return;
+    openingDraftRef.current = true;
+    openDraft();
   }, [activeKind, conversationTabId, enabled, focusTab, openDraft, workspaceKey]);
 }
