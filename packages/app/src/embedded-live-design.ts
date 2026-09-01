@@ -1,6 +1,4 @@
 import { useEffect } from "react";
-import { shouldUseEmbeddedChatOnly } from "@/embedded-chat-mode";
-
 export const EMBEDDED_LIVE_DESIGN_SEND_TYPE = "space:paseo-live-design-send";
 export const EMBEDDED_LIVE_DESIGN_SENT_TYPE = "paseo:live-design-sent";
 export const EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE = "paseo:live-design-send-failed";
@@ -115,11 +113,10 @@ export function useEmbeddedLiveDesignSend(input: {
 }): void {
   const { enabled, submit } = input;
   useEffect(() => {
+    // The router replaces the embed URL with /h/... after opening its folder.
+    // Build mode, not the transient query string, identifies this standalone iframe.
     if (
-      !shouldUseEmbeddedChatOnly(
-        process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY === "true",
-        window.location.search,
-      ) ||
+      process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY !== "true" ||
       !enabled ||
       window.parent === window
     )
