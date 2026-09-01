@@ -19,8 +19,10 @@ import {
 
 const originalParent = window.parent;
 const originalReferrer = document.referrer;
+const originalSearch = window.location.search;
 
 const useFakeParent = () => {
+  window.history.replaceState({}, "", "/?embedded-live-design=1");
   const postMessage = vi.fn();
   const parent = { postMessage } as unknown as Window;
   Object.defineProperty(window, "parent", { configurable: true, value: parent });
@@ -36,6 +38,7 @@ afterEach(() => {
     configurable: true,
     value: originalReferrer,
   });
+  window.history.replaceState({}, "", originalSearch || "/");
 });
 
 const note = {
@@ -107,6 +110,24 @@ describe("embedded Live Design bridge", () => {
     expect(prompt).not.toContain("CSS patch:");
   });
 
+  it("announces readiness to the embedding host", () => {
+    const { postMessage } = useFakeParent();
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: "https://host.example/live-design",
+    });
+
+    const { unmount } = renderHook(() =>
+      useEmbeddedLiveDesignSend({ enabled: true, submit: vi.fn() }),
+    );
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: "paseo:live-design-ready" },
+      "https://host.example",
+    );
+    unmount();
+  });
+
   it("submits to the current composer and acknowledges the host", async () => {
     const submit = vi.fn().mockResolvedValue(undefined);
     const { parent, postMessage } = useFakeParent();
@@ -114,7 +135,7 @@ describe("embedded Live Design bridge", () => {
       configurable: true,
       value: "https://host.example/live-design",
     });
-    renderHook(() => useEmbeddedLiveDesignSend({ enabled: true, submit }));
+    const { unmount } = renderHook(() => useEmbeddedLiveDesignSend({ enabled: true, submit }));
 
     await act(async () => {
       window.dispatchEvent(
@@ -136,6 +157,7 @@ describe("embedded Live Design bridge", () => {
       { type: EMBEDDED_LIVE_DESIGN_SENT_TYPE, requestId: "request-1" },
       "https://host.example",
     );
+    unmount();
   });
 
   it("ignores commands from a parent origin other than the embedding host", async () => {
@@ -145,7 +167,7 @@ describe("embedded Live Design bridge", () => {
       configurable: true,
       value: "https://host.example/live-design",
     });
-    renderHook(() => useEmbeddedLiveDesignSend({ enabled: true, submit }));
+    const { unmount } = renderHook(() => useEmbeddedLiveDesignSend({ enabled: true, submit }));
 
     await act(async () => {
       window.dispatchEvent(
@@ -163,6 +185,7 @@ describe("embedded Live Design bridge", () => {
     });
 
     expect(submit).not.toHaveBeenCalled();
+    unmount();
   });
 
   it("reports composer submission failures", async () => {
@@ -172,7 +195,7 @@ describe("embedded Live Design bridge", () => {
       configurable: true,
       value: "https://host.example/live-design",
     });
-    renderHook(() => useEmbeddedLiveDesignSend({ enabled: true, submit }));
+    const { unmount } = renderHook(() => useEmbeddedLiveDesignSend({ enabled: true, submit }));
 
     await act(async () => {
       window.dispatchEvent(
@@ -197,5 +220,6 @@ describe("embedded Live Design bridge", () => {
       },
       "https://host.example",
     );
+    unmount();
   });
 });
