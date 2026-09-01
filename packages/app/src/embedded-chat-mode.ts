@@ -1,7 +1,14 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
 
-export const isEmbeddedChatOnly = process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY === "true";
+export function shouldUseEmbeddedChatOnly(isEmbeddedBuild: boolean, search: string): boolean {
+  return isEmbeddedBuild && new URLSearchParams(search).has("embedded-live-design");
+}
+
+export const isEmbeddedChatOnly = shouldUseEmbeddedChatOnly(
+  process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY === "true",
+  typeof window === "undefined" ? "" : window.location.search,
+);
 
 export function selectEmbeddedChatOnly<T>(embedded: T, standard: T): T {
   return isEmbeddedChatOnly ? embedded : standard;
