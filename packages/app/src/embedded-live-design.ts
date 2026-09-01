@@ -1,9 +1,11 @@
 import { useEffect } from "react";
-import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
+import { shouldUseEmbeddedChatOnly } from "@/embedded-chat-mode";
 
 export const EMBEDDED_LIVE_DESIGN_SEND_TYPE = "space:paseo-live-design-send";
 export const EMBEDDED_LIVE_DESIGN_SENT_TYPE = "paseo:live-design-sent";
 export const EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE = "paseo:live-design-send-failed";
+export const EMBEDDED_LIVE_DESIGN_READY_TYPE = "paseo:live-design-ready";
+export const EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE = "space:paseo-live-design-ready-request";
 
 export interface EmbeddedLiveDesignNote {
   comment: string;
@@ -90,14 +92,17 @@ const embeddingOrigin = (): string | null => {
 
 function publishResult(
   targetOrigin: string,
-  type: typeof EMBEDDED_LIVE_DESIGN_SENT_TYPE | typeof EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE,
-  requestId: string,
+  type:
+    | typeof EMBEDDED_LIVE_DESIGN_SENT_TYPE
+    | typeof EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE
+    | typeof EMBEDDED_LIVE_DESIGN_READY_TYPE,
+  requestId?: string,
   error?: unknown,
 ): void {
   window.parent.postMessage(
     {
       type,
-      requestId,
+      ...(requestId ? { requestId } : {}),
       ...(error ? { error: error instanceof Error ? error.message : String(error) } : {}),
     },
     targetOrigin,
@@ -110,16 +115,31 @@ export function useEmbeddedLiveDesignSend(input: {
 }): void {
   const { enabled, submit } = input;
   useEffect(() => {
-    if (!isEmbeddedChatOnly || !enabled || window.parent === window) return;
+    if (
+      !shouldUseEmbeddedChatOnly(
+        process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY === "true",
+        window.location.search,
+      ) ||
+      !enabled ||
+      window.parent === window
+    )
+      return;
     const expectedOrigin = embeddingOrigin();
+    if (!expectedOrigin) return;
+    const isTrustedHost = (event: MessageEvent) =>
+      event.source === window.parent && event.origin === expectedOrigin;
     const handleMessage = (event: MessageEvent) => {
+      if (!isTrustedHost(event)) return;
       if (
-        !expectedOrigin ||
-        event.source !== window.parent ||
-        event.origin !== expectedOrigin ||
-        !isEmbeddedLiveDesignSendMessage(event.data)
-      )
+        event.data !== null &&
+        typeof event.data === "object" &&
+        "type" in event.data &&
+        event.data.type === EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE
+      ) {
+        publishResult(event.origin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
         return;
+      }
+      if (!isEmbeddedLiveDesignSendMessage(event.data)) return;
       const { notes, requestId } = event.data;
       void submit(buildEmbeddedLiveDesignPrompt(notes))
         .then(() => publishResult(event.origin, EMBEDDED_LIVE_DESIGN_SENT_TYPE, requestId))
@@ -128,6 +148,7 @@ export function useEmbeddedLiveDesignSend(input: {
         );
     };
     window.addEventListener("message", handleMessage);
+    publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
     return () => window.removeEventListener("message", handleMessage);
   }, [enabled, submit]);
 }
