@@ -129,6 +129,28 @@ describe("embedded Live Design bridge", () => {
     unmount();
   });
 
+  it("uses the browser ancestor origin when referrer policy strips the referrer", () => {
+    const { postMessage } = useFakeParent();
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: "",
+    });
+    Object.defineProperty(window.location, "ancestorOrigins", {
+      configurable: true,
+      value: ["https://host.example"],
+    });
+
+    const { unmount } = renderHook(() =>
+      useEmbeddedLiveDesignSend({ enabled: true, submit: vi.fn() }),
+    );
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: "paseo:live-design-ready" },
+      "https://host.example",
+    );
+    unmount();
+  });
+
   it("submits to the current composer and acknowledges the host", async () => {
     const submit = vi.fn().mockResolvedValue(undefined);
     const { parent, postMessage } = useFakeParent();
