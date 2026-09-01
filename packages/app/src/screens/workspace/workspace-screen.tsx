@@ -211,6 +211,7 @@ import {
   selectEmbeddedChatOnly,
   useEmbeddedChatOnlyConversation,
 } from "@/embedded-chat-mode";
+import { EmbeddedConversationTabStrip } from "@/screens/workspace/embedded-conversation-tab-strip";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
 import type { TerminalProfile } from "@getpaseo/protocol/messages";
@@ -3572,9 +3573,21 @@ function WorkspaceScreenContent({
     composerFullscreen: useComposerTabFullscreen(workspacePanelKey, activeTabId),
   });
 
+  const workspaceTabControl = selectEmbeddedChatOnly(
+    <EmbeddedConversationTabStrip
+      tabs={tabs}
+      activeTabId={activeTabId}
+      onSelectTab={handleSelectSwitcherTab}
+      onCloseTab={handleCloseTabById}
+      onCreateTab={handleCreateNewTab}
+    />,
+    null,
+  );
+
   // Compact sheets use the shared workspace scope, above both center and Explorer.
   const workspaceCenterColumn = isMobile ? (
     <View style={styles.centerColumn}>
+      {workspaceTabControl}
       <FloatingHeaderLayout
         header={compactHeaderLayout.header}
         floating={compactHeaderLayout.floating}
@@ -3597,6 +3610,8 @@ function WorkspaceScreenContent({
   ) : (
     <View style={styles.centerColumn}>
       {rendersDesktopSplitContent ? null : renderWorkspaceScreenHeader()}
+
+      {workspaceTabControl}
 
       {shouldRenderDesktopPaneFallback ? (
         <NewTabLauncherProvider value={newTabLauncher}>
