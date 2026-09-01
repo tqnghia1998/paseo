@@ -119,6 +119,7 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
+import { useEmbeddedLiveDesignSend } from "@/embedded-live-design";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
@@ -1255,6 +1256,7 @@ function ComposerContentImpl({
   });
 
   const { settings: appSettings } = useAppSettings();
+  const { isActiveComposer } = useComposerKeyboardScope();
 
   const agentState = useSessionStore(useShallow(buildAgentStateSelector(serverId, agentId)));
 
@@ -1650,6 +1652,7 @@ function ComposerContentImpl({
         result,
         outgoingAttachments,
       });
+      return result;
     },
     [
       allowEmptySubmit,
@@ -1666,6 +1669,19 @@ function ComposerContentImpl({
       t,
     ],
   );
+
+  useEmbeddedLiveDesignSend({
+    enabled: isWeb && isActiveComposer,
+    submit: useCallback(
+      async (text: string) => {
+        const result = await sendMessageWithContent(text, []);
+        if (result === "failed" || result === "noop") {
+          throw new Error("Paseo could not send the Live Design notes");
+        }
+      },
+      [sendMessageWithContent],
+    ),
+  });
 
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
