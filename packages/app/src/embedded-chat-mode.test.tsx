@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY = "true";
+  window.history.replaceState(null, "", "/?embedded-live-design=1");
 });
 
 import {
@@ -19,11 +20,18 @@ import {
   findEmbeddedConversationTabId,
   getEmbeddedConversationTabs,
   resolveEmbeddedModelSelection,
+  shouldUseEmbeddedChatOnly,
   useEmbeddedChatOnlyConversation,
   useEmbeddedModelSelection,
 } from "./embedded-chat-mode";
 
 describe("embedded chat-only mode", () => {
+  it("requires an explicit Live Design embed URL", () => {
+    expect(shouldUseEmbeddedChatOnly(true, "")).toBe(false);
+    expect(shouldUseEmbeddedChatOnly(true, "?embedded-live-design=1")).toBe(true);
+    expect(shouldUseEmbeddedChatOnly(false, "?embedded-live-design=1")).toBe(false);
+  });
+
   it("disables workspace navigation actions", () => {
     expect(
       embeddedWorkspaceActionsEnabled({
