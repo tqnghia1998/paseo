@@ -208,11 +208,48 @@ describe("embedded chat-only mode", () => {
     expect(openDraft).not.toHaveBeenCalled();
   });
 
-  it("opens a draft only after the workspace key is available", () => {
+  it("opens one draft after the workspace key is available until a conversation exists", () => {
     const focusTab = vi.fn();
     const openDraft = vi.fn();
     const { rerender } = renderHook(
-      ({ workspaceKey }: { workspaceKey: string | null }) =>
+      ({
+        workspaceKey,
+        conversationTabId,
+      }: {
+        workspaceKey: string | null;
+        conversationTabId?: string;
+      }) =>
+        useEmbeddedChatOnlyConversation({
+          activeKind: "changes",
+          conversationTabId,
+          enabled: true,
+          focusTab,
+          openDraft,
+          workspaceKey,
+        }),
+      {
+        initialProps: {
+          workspaceKey: null as string | null,
+          conversationTabId: undefined as string | undefined,
+        },
+      },
+    );
+
+    expect(openDraft).not.toHaveBeenCalled();
+
+    act(() => rerender({ workspaceKey: "server:workspace", conversationTabId: undefined }));
+    act(() => rerender({ workspaceKey: "server:workspace", conversationTabId: undefined }));
+    expect(openDraft).toHaveBeenCalledOnce();
+
+    act(() => rerender({ workspaceKey: "server:workspace", conversationTabId: "draft" }));
+    expect(focusTab).toHaveBeenCalledWith("server:workspace", "draft");
+  });
+
+  it("opens a draft after switching workspaces while the prior workspace is pending", () => {
+    const focusTab = vi.fn();
+    const openDraft = vi.fn();
+    const { rerender } = renderHook(
+      ({ workspaceKey }: { workspaceKey: string }) =>
         useEmbeddedChatOnlyConversation({
           activeKind: "changes",
           enabled: true,
@@ -220,13 +257,10 @@ describe("embedded chat-only mode", () => {
           openDraft,
           workspaceKey,
         }),
-      { initialProps: { workspaceKey: null as string | null } },
+      { initialProps: { workspaceKey: "server:workspace-a" } },
     );
 
-    expect(openDraft).not.toHaveBeenCalled();
-
-    act(() => rerender({ workspaceKey: "server:workspace" }));
-
-    expect(openDraft).toHaveBeenCalledOnce();
+    act(() => rerender({ workspaceKey: "server:workspace-b" }));
+    expect(openDraft).toHaveBeenCalledTimes(2);
   });
 });
