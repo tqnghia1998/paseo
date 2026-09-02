@@ -10,6 +10,8 @@ vi.hoisted(() => {
 
 import {
   buildEmbeddedLiveDesignPrompt,
+  EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE,
+  EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE,
   EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE,
   EMBEDDED_LIVE_DESIGN_SEND_TYPE,
   EMBEDDED_LIVE_DESIGN_SENT_TYPE,
@@ -39,6 +41,7 @@ afterEach(() => {
     value: originalReferrer,
   });
   window.history.replaceState({}, "", originalSearch || "/");
+  sessionStorage.clear();
 });
 
 const note = {
@@ -119,7 +122,7 @@ describe("embedded Live Design bridge", () => {
     window.history.replaceState({}, "", "/h/server/workspace/workspace");
 
     const { unmount } = renderHook(() =>
-      useEmbeddedLiveDesignSend({ enabled: true, submit: vi.fn() }),
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit: vi.fn() }),
     );
 
     expect(postMessage).toHaveBeenCalledWith(
@@ -141,7 +144,7 @@ describe("embedded Live Design bridge", () => {
     });
 
     const { unmount } = renderHook(() =>
-      useEmbeddedLiveDesignSend({ enabled: true, submit: vi.fn() }),
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit: vi.fn() }),
     );
 
     expect(postMessage).toHaveBeenCalledWith(
@@ -158,7 +161,9 @@ describe("embedded Live Design bridge", () => {
       configurable: true,
       value: "https://host.example/live-design",
     });
-    const { unmount } = renderHook(() => useEmbeddedLiveDesignSend({ enabled: true, submit }));
+    const { unmount } = renderHook(() =>
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit }),
+    );
 
     await act(async () => {
       window.dispatchEvent(
@@ -175,12 +180,160 @@ describe("embedded Live Design bridge", () => {
       await Promise.resolve();
     });
 
-    expect(submit).toHaveBeenCalledWith(expect.stringContaining("# Request 1\n"));
+    expect(submit).toHaveBeenCalledWith(
+      expect.stringContaining("# Request 1\n"),
+      expect.any(Function),
+    );
     expect(postMessage).toHaveBeenCalledWith(
       { type: EMBEDDED_LIVE_DESIGN_SENT_TYPE, requestId: "request-1" },
       "https://host.example",
     );
     unmount();
+  });
+
+  it("reports completion only after the submitted turn settles", async () => {
+    let onSubmitted: (() => void) | undefined;
+    const submit = vi.fn(async (_text: string, callback: () => void) => {
+      onSubmitted = callback;
+    });
+    const { parent, postMessage } = useFakeParent();
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: "https://host.example/live-design",
+    });
+    const { unmount } = renderHook(() =>
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://host.example",
+          source: parent,
+          data: {
+            type: EMBEDDED_LIVE_DESIGN_SEND_TYPE,
+            requestId: "request-complete",
+            notes: [note],
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: EMBEDDED_LIVE_DESIGN_SENT_TYPE, requestId: "request-complete" },
+      "https://host.example",
+    );
+    expect(postMessage).not.toHaveBeenCalledWith(
+      { type: EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId: "request-complete" },
+      "https://host.example",
+    );
+
+    onSubmitted?.();
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId: "request-complete" },
+      "https://host.example",
+    );
+    unmount();
+  });
+
+  it("replays an unacknowledged completion after a remount", async () => {
+    let onTurnFinished: (() => Promise<void>) | undefined;
+    const submit = vi.fn(async (_text: string, callback: () => Promise<void>) => {
+      onTurnFinished = callback;
+    });
+    const { parent, postMessage } = useFakeParent();
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: "https://host.example/live-design",
+    });
+    const first = renderHook(() =>
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://host.example",
+          source: parent,
+          data: {
+            type: EMBEDDED_LIVE_DESIGN_SEND_TYPE,
+            requestId: "request-replay",
+            notes: [note],
+          },
+        }),
+      );
+      await Promise.resolve();
+      await onTurnFinished?.();
+    });
+    first.unmount();
+    postMessage.mockClear();
+    const second = renderHook(() =>
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://host.example",
+          source: parent,
+          data: { type: EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE },
+        }),
+      );
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId: "request-replay" },
+      "https://host.example",
+    );
+    second.unmount();
+  });
+
+  it("settles a pending request after the iframe remounts", async () => {
+    const submit = vi.fn().mockResolvedValue(undefined);
+    const resumePending = vi.fn(async (onTurnFinished: () => Promise<void>) => {
+      await onTurnFinished();
+    });
+    const { parent, postMessage } = useFakeParent();
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: "https://host.example/live-design",
+    });
+    const first = renderHook(() =>
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://host.example",
+          source: parent,
+          data: {
+            type: EMBEDDED_LIVE_DESIGN_SEND_TYPE,
+            requestId: "request-pending",
+            notes: [note],
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+    first.unmount();
+    postMessage.mockClear();
+
+    const second = renderHook(() =>
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit, resumePending }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(resumePending).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId: "request-pending" },
+      "https://host.example",
+    );
+    second.unmount();
   });
 
   it("ignores commands from a parent origin other than the embedding host", async () => {
@@ -190,7 +343,9 @@ describe("embedded Live Design bridge", () => {
       configurable: true,
       value: "https://host.example/live-design",
     });
-    const { unmount } = renderHook(() => useEmbeddedLiveDesignSend({ enabled: true, submit }));
+    const { unmount } = renderHook(() =>
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit }),
+    );
 
     await act(async () => {
       window.dispatchEvent(
@@ -218,7 +373,9 @@ describe("embedded Live Design bridge", () => {
       configurable: true,
       value: "https://host.example/live-design",
     });
-    const { unmount } = renderHook(() => useEmbeddedLiveDesignSend({ enabled: true, submit }));
+    const { unmount } = renderHook(() =>
+      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit }),
+    );
 
     await act(async () => {
       window.dispatchEvent(

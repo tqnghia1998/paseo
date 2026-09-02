@@ -356,6 +356,7 @@ function stripSteerOptions(options?: AgentSteerOptions): AgentRunOptions | undef
 export interface WaitForAgentOptions {
   signal?: AbortSignal;
   waitForActive?: boolean;
+  waitThroughPermission?: boolean;
 }
 
 export interface WaitForAgentResult {
@@ -3401,7 +3402,8 @@ export class AgentManager {
       Boolean(snapshot.activeForegroundTurnId) || Boolean(pendingForegroundRun);
 
     const immediatePermission = this.peekPendingPermission(snapshot);
-    if (immediatePermission) {
+    const waitThroughPermission = options?.waitThroughPermission ?? false;
+    if (immediatePermission && !waitThroughPermission) {
       return {
         status: snapshot.lifecycle,
         permission: immediatePermission,
@@ -3410,7 +3412,8 @@ export class AgentManager {
     }
 
     const initialStatus = snapshot.lifecycle;
-    const initialBusy = isAgentBusy(initialStatus) || hasForegroundTurn;
+    const initialBusy =
+      isAgentBusy(initialStatus) || hasForegroundTurn || Boolean(immediatePermission);
     const waitForActive = options?.waitForActive ?? false;
     if (!waitForActive && !initialBusy) {
       return {
@@ -3419,14 +3422,6 @@ export class AgentManager {
         lastMessage: await this.getLastAssistantMessage(agentId),
       };
     }
-    if (waitForActive && !initialBusy && !hasForegroundTurn) {
-      return {
-        status: initialStatus,
-        permission: null,
-        lastMessage: await this.getLastAssistantMessage(agentId),
-      };
-    }
-
     if (options?.signal?.aborted) {
       throw createAbortError(options.signal, "wait_for_agent aborted");
     }
@@ -3509,7 +3504,7 @@ export class AgentManager {
             currentStatus = event.agent.lifecycle;
             const pending = this.peekPendingPermission(event.agent);
             if (pending) {
-              finish(pending);
+              if (!waitThroughPermission) finish(pending);
               return;
             }
             if (isAgentBusy(event.agent.lifecycle)) {
@@ -3527,7 +3522,7 @@ export class AgentManager {
 
           if (event.type === "agent_stream") {
             if (event.event.type === "permission_requested") {
-              finish(event.event.request);
+              if (!waitThroughPermission) finish(event.event.request);
               return;
             }
             if (event.event.type === "turn_failed") {
