@@ -193,10 +193,11 @@ import {
   embeddedImportVisible,
   embeddedWorkspaceActionsEnabled,
   findEmbeddedConversationTabId,
-  isEmbeddedChatOnly,
-  selectEmbeddedChatOnly,
-  useEmbeddedChatOnlyConversation,
-} from "@/embedded-chat-mode";
+  isEmbeddedFocusMode,
+  selectEmbeddedFocusMode,
+  selectEmbeddedLiveDesignPresentation,
+  useEmbeddedLiveDesignConversation,
+} from "@/embedded-focus-mode";
 import { EmbeddedConversationTabStrip } from "@/screens/workspace/embedded-conversation-tab-strip";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
@@ -1400,7 +1401,7 @@ function shouldShowWorkspaceScreenHeader(input: {
   isFocusModeEnabled: boolean;
   isMobile: boolean;
 }): boolean {
-  return !isEmbeddedChatOnly && (!input.isFocusModeEnabled || input.isMobile);
+  return !isEmbeddedFocusMode && (!input.isFocusModeEnabled || input.isMobile);
 }
 
 function buildWorkspaceTerminalScopeKey(serverId: string, workspaceId: string): string | null {
@@ -2117,7 +2118,7 @@ function WorkspaceScreenContent({
   const activeTabId = focusedPaneTabState.activeTabId;
   const activeTab = focusedPaneTabState.activeTab;
 
-  useEmbeddedChatOnlyConversation({
+  useEmbeddedLiveDesignConversation({
     activeKind: activeTab?.descriptor.target.kind,
     conversationTabId: findEmbeddedConversationTabId(uiTabs),
     enabled: isRouteFocused && hasHydratedWorkspaceLayoutStore,
@@ -3655,7 +3656,7 @@ function WorkspaceScreenContent({
             setWorkspaceTabState(persistenceKey, input.tab.tabId, state);
           }
         },
-        onOpenWorkspaceFile: selectEmbeddedChatOnly(
+        onOpenWorkspaceFile: selectEmbeddedLiveDesignPresentation(
           () => {},
           (request: WorkspaceFileOpenRequest) => {
             handleOpenWorkspaceFileFromPane({
@@ -3666,7 +3667,7 @@ function WorkspaceScreenContent({
             });
           },
         ),
-        onOpenImportSheet: selectEmbeddedChatOnly(() => {}, openImportSheet),
+        onOpenImportSheet: selectEmbeddedFocusMode(() => {}, openImportSheet),
       }),
     [
       handleCloseTabById,
@@ -4116,7 +4117,7 @@ function WorkspaceScreenContent({
     />
   );
 
-  const workspaceTabControl = selectEmbeddedChatOnly(
+  const workspaceTabControl = selectEmbeddedLiveDesignPresentation(
     <EmbeddedConversationTabStrip
       tabs={tabs}
       activeTabId={activeTabId}

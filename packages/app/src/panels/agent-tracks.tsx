@@ -20,7 +20,7 @@ import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { openPreferredWorkspaceTarget } from "@/workspace-tabs/open-beside";
 import { openComposerChanges } from "@/workspace-tabs/open-supporting-view";
-import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
+import { isEmbeddedLiveDesignPresentation } from "@/embedded-focus-mode";
 
 /**
  * The pane's ambient context — workspace changes, subagents, and tasks — as a row of pills above
@@ -52,7 +52,7 @@ export const AgentTracks = memo(function AgentTracks({
 }): ReactElement | null {
   const { tabId, openTab } = usePaneContext();
   const hasWorkspaceDiffStat =
-    useWorkspaceHasDiffStat(serverId, workspaceId) && !isEmbeddedChatOnly;
+    useWorkspaceHasDiffStat(serverId, workspaceId) && !isEmbeddedLiveDesignPresentation;
   const isCompact = useIsCompactFormFactor();
   const canSplit = supportsDesktopPaneSplits() && !isCompact;
   const openInSidePane = useSettings((settings) => settings.openInSidePane);

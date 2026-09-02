@@ -131,7 +131,7 @@ import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notif
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { PluginCatalogSync } from "@/plugins";
 import { EmbeddedAgentActivityBridge } from "@/embedded-agent-activity";
-import { isEmbeddedChatOnly, selectEmbeddedChatOnly } from "@/embedded-chat-mode";
+import { isEmbeddedFocusMode, selectEmbeddedFocusMode } from "@/embedded-focus-mode";
 import {
   ensureOsNotificationPermission,
   WEB_NOTIFICATION_CLICK_EVENT,
@@ -502,7 +502,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   // global concerns like keyboard shortcuts. Split those out so settings (and
   // other non-workspace routes) don't need a special-case to keep shortcuts alive.
   const keyboardShortcutsEnabled =
-    !isEmbeddedChatOnly && (chromeEnabled || pathname.startsWith("/settings"));
+    !isEmbeddedFocusMode && (chromeEnabled || pathname.startsWith("/settings"));
 
   useKeyboardShortcuts({
     enabled: keyboardShortcutsEnabled,
@@ -514,14 +514,14 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     cycleTheme,
   });
 
-  useActiveWorktreeNewAction(!isEmbeddedChatOnly);
-  useGlobalNewWorkspaceAction(!isEmbeddedChatOnly);
+  useActiveWorktreeNewAction(!isEmbeddedFocusMode);
+  useGlobalNewWorkspaceAction(!isEmbeddedFocusMode);
 
   const appContentMinimumWidth = resolveDesktopAppContentMinimum({
     isSettingsRoute: pathname.includes("/settings"),
   });
-  const navigationChromeEnabled = selectEmbeddedChatOnly(false, chromeEnabled);
-  const desktopSidebarMounted = selectEmbeddedChatOnly(
+  const navigationChromeEnabled = selectEmbeddedFocusMode(false, chromeEnabled);
+  const desktopSidebarMounted = selectEmbeddedFocusMode(
     false,
     hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled,
   );
@@ -583,7 +583,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     <View style={layoutStyles.surfaceFill}>
       {workspaceChrome}
       <AppearanceStyleBoundary>
-        {!isEmbeddedChatOnly &&
+        {!isEmbeddedFocusMode &&
         !isCompactLayout &&
         appChromeLayout.sidebarToggleOwner === "window" ? (
           <WindowChromeRegion corners="top-left">
@@ -607,7 +607,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <UpdateCalloutSource />
         <LegacyAgentSkillsMigration />
         <WorktreeSetupCalloutSource />
-        {isEmbeddedChatOnly ? null : (
+        {isEmbeddedFocusMode ? null : (
           <>
             <CommandCenterRootActions />
             <CommandCenterWorkspaceActions />
