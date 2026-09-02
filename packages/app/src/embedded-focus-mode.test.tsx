@@ -6,12 +6,11 @@ import type { ProviderSelectorProvider } from "@/provider-selection/provider-sel
 import { describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
-  process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY = "true";
+  process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
   window.history.replaceState(null, "", "/?embedded-live-design=1");
 });
 
 import {
-  embeddedAgentProfiles,
   embeddedImportVisible,
   embeddedMessageInputFocusHintVisible,
   embeddedMessageInputFocusShortcutEnabled,
@@ -20,16 +19,21 @@ import {
   findEmbeddedConversationTabId,
   getEmbeddedConversationTabs,
   resolveEmbeddedModelSelection,
-  shouldUseEmbeddedChatOnly,
-  useEmbeddedChatOnlyConversation,
+  shouldUseEmbeddedFocusMode,
+  shouldUseEmbeddedLiveDesignPresentation,
+  useEmbeddedLiveDesignConversation,
   useEmbeddedModelSelection,
-} from "./embedded-chat-mode";
+} from "./embedded-focus-mode";
 
-describe("embedded chat-only mode", () => {
-  it("requires an explicit Live Design embed URL", () => {
-    expect(shouldUseEmbeddedChatOnly(true, "")).toBe(false);
-    expect(shouldUseEmbeddedChatOnly(true, "?embedded-live-design=1")).toBe(true);
-    expect(shouldUseEmbeddedChatOnly(false, "?embedded-live-design=1")).toBe(false);
+describe("embedded focus mode", () => {
+  it("locks every standalone embed while limiting chat presentation to Live Design", () => {
+    expect(shouldUseEmbeddedFocusMode(true)).toBe(true);
+    expect(shouldUseEmbeddedFocusMode(false)).toBe(false);
+    expect(shouldUseEmbeddedLiveDesignPresentation(true, "")).toBe(false);
+    expect(shouldUseEmbeddedLiveDesignPresentation(true, "?embedded-live-design=1")).toBe(true);
+    expect(shouldUseEmbeddedLiveDesignPresentation(true, "?embedded-live-design=0")).toBe(false);
+    expect(shouldUseEmbeddedLiveDesignPresentation(true, "?embedded-live-design")).toBe(false);
+    expect(shouldUseEmbeddedLiveDesignPresentation(false, "?embedded-live-design=1")).toBe(false);
   });
 
   it("disables workspace navigation actions", () => {
@@ -41,7 +45,6 @@ describe("embedded chat-only mode", () => {
       }),
     ).toBe(false);
     expect(embeddedImportVisible(true, true)).toBe(false);
-    expect(embeddedAgentProfiles({ rows: [] })).toBeNull();
     expect(embeddedModelSelectorManagementEnabled()).toBe(false);
     expect(embeddedMessageInputFocusShortcutEnabled()).toBe(false);
     expect(
@@ -194,7 +197,7 @@ describe("embedded chat-only mode", () => {
     const openDraft = vi.fn();
 
     renderHook(() =>
-      useEmbeddedChatOnlyConversation({
+      useEmbeddedLiveDesignConversation({
         activeKind: "changes",
         conversationTabId: "agent",
         enabled: true,
@@ -219,7 +222,7 @@ describe("embedded chat-only mode", () => {
         workspaceKey: string | null;
         conversationTabId?: string;
       }) =>
-        useEmbeddedChatOnlyConversation({
+        useEmbeddedLiveDesignConversation({
           activeKind: "changes",
           conversationTabId,
           enabled: true,
@@ -250,7 +253,7 @@ describe("embedded chat-only mode", () => {
     const openDraft = vi.fn();
     const { rerender } = renderHook(
       ({ workspaceKey }: { workspaceKey: string }) =>
-        useEmbeddedChatOnlyConversation({
+        useEmbeddedLiveDesignConversation({
           activeKind: "changes",
           enabled: true,
           focusTab,

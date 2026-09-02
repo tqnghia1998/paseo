@@ -11,16 +11,16 @@ Paseo Web is packaged as a lightweight, self-contained standalone server that em
 1. **Paseo Daemon (`server.mjs`)**: Node.js backend daemon with WebSocket RPCs, agent lifecycle management, and session state.
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions.
-4. **Embedded UI policy**: The standalone build omits project and Changes sidebars, their header controls, workspace navigation, New Tab, Import Session, Fork, command-center, and file-opening escape routes; regular Paseo builds are unchanged.
+4. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, Import Session, Fork, command-center navigation, agent-profile/provider management, and other app-level escape routes; regular Paseo builds are unchanged.
 
-### Canonical embedding names
+### Canonical embedded mode
 
-The consumer has two named contexts backed by this same standalone build:
+Both consumer surfaces use one **Embedded Focus Mode** backed by the same standalone build:
 
-- **Paseo Simple Mode with locked Focus Mode** — the Paseo left tab inside a Space App Vibing workspace. `?folder=<path>` opens the requested worktree directly, and Focus Mode cannot be exited.
-- **Embedded Chat-Only Mode** — the Paseo iframe shown in the Live Design drawer's **Agent** tab. It remains constrained to the active conversation and composer.
+- The Paseo left tab inside a Space App Vibing workspace keeps the selected worktree's workspace tabs and content.
+- The narrower Live Design drawer's **Agent** tab uses a chat-first presentation: it replaces the full workspace tab row with an inline conversation strip and prevents non-conversation content from opening.
 
-These are host-context names, not separate bundles. The shared build-time invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY=true`; do not remove it or the guards in `packages/app/src/embedded-chat-mode.ts` when resolving upstream changes.
+The `?embedded-live-design=1` query selects only that narrow presentation and Live Design messaging; it does not enable a separate policy or distribution. The build-wide invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true`; do not remove it or the guards in `packages/app/src/embedded-focus-mode.ts` when resolving upstream changes.
 
 ---
 
@@ -74,18 +74,19 @@ When loaded in an `iframe` or Electron `<webview>`, Paseo Web:
 
 1. Detects the `?folder=` query parameter.
 2. Finds or creates the workspace corresponding to that directory through the idempotent `openProject` path, preserving its workspace and agent thread on remount.
-3. Enters **Paseo Simple Mode with locked Focus Mode** directly.
-4. Applies the standalone build's **Embedded Chat-Only Mode** UI restrictions. The Live Design host uses this same URL in its drawer's Agent tab.
+3. Enters **Embedded Focus Mode** directly.
+4. Keeps the selected worktree's tabs/content in the full Vibing host, or applies the chat-first presentation when the Live Design host adds `?embedded-live-design=1`.
 
 ### Upstream rebase guard
 
 After syncing from `getpaseo/paseo`, verify all of the following before regenerating the consumer bundle:
 
-- `EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY=true` is still injected by `scripts/build-daemon-web-ui.mjs`.
-- `packages/app/src/embedded-chat-mode.ts` still prevents navigation away from agent/draft conversations and still gates New Tab, Import Session, Fork, sidebars, workspace headers/tabs, command center, workspace shortcuts, and file-opening paths.
+- `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true` is still injected by `scripts/build-daemon-web-ui.mjs`.
+- `packages/app/src/embedded-focus-mode.ts` still gates project/workspace navigation, Import Session, Fork, sidebars, workspace headers, command center, route-changing shortcuts, and model-management escape paths for every standalone embed.
+- The full Vibing host still renders tabs/content inside the selected worktree, while `?embedded-live-design=1` selects only the inline conversation strip and chat-first content restriction.
 - The `?folder=` bootstrap still uses `openProject` rather than direct workspace creation.
 - Focus Mode remains locked and its exit controls remain unavailable.
-- `npm --prefix packages/app test -- src/embedded-chat-mode.test.tsx` passes, then regenerate `space-app-vibing/scripts/paseo-web` and run its `scripts/paseo-web/paseoWebBundle.test.ts` guard.
+- `npm --prefix packages/app test -- src/embedded-focus-mode.test.tsx` passes, then regenerate `space-app-vibing/scripts/paseo-web` and run its `scripts/paseo-web/paseoWebBundle.test.ts` guard.
 
 ---
 
@@ -118,7 +119,7 @@ The standalone bundled Paseo Web artifacts have already been prepared in `script
 2. **Frontend UI Components & State:**
    - Replace `src/components/CodexWeb.tsx` with `src/components/PaseoWeb.tsx`:
      - Embed URL: `http://127.0.0.1:<port>/?folder=<worktree_folder_path>`
-       _(Paseo automatically parses `?folder=` to open the workspace in Simple Mode directly)._
+       _(Paseo automatically parses `?folder=` to open the workspace in Embedded Focus Mode directly)._
      - Use the existing desktop webview / iframe preview patterns.
    - In `src/components/TabContent.tsx`, `src/App.tsx`, and `src/utils/desktopPreviewId.ts`:
      - Update tab types / preview resources (e.g. rename `'codex'` resource/type to `'paseo'` or map it to Paseo Web).
