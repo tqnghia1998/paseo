@@ -1536,11 +1536,16 @@ function ComposerContentImpl({
   );
 
   const queueMessage = useCallback(
-    (queuedMessage: string, queuedAttachments: ComposerAttachment[]) => {
+    (
+      queuedMessage: string,
+      queuedAttachments: ComposerAttachment[],
+      onSubmitted?: () => Promise<void>,
+    ) => {
       const result = queueComposerMessage({
         agentId,
         text: queuedMessage,
         attachments: queuedAttachments,
+        ...(onSubmitted ? { onSubmitted } : {}),
         queue: queueWriter,
       });
       if (!result.queued) return;
@@ -1566,6 +1571,7 @@ function ComposerContentImpl({
       outgoingAttachments: ComposerAttachment[],
       forceSend?: boolean,
       activeTurnBehavior?: "steer",
+      onQueuedMessageSubmitted?: () => Promise<void>,
     ) => {
       const result = await submitAgentInput({
         message: outgoingMessage,
@@ -1578,9 +1584,10 @@ function ComposerContentImpl({
         // Parent-managed submits are still valid submit paths even when the
         // transport is disconnected, because the parent decides the failure mode.
         canSubmit: Boolean(sendAgentMessageRef.current || onSubmitMessageRef.current),
-        queueMessage: ({ message: queuedText, attachments: queuedAttachments }) => {
-          queueMessage(queuedText, queuedAttachments);
+        queueMessage: ({ message: queuedText, attachments: queuedAttachments, onSubmitted }) => {
+          queueMessage(queuedText, queuedAttachments, onSubmitted);
         },
+        ...(onQueuedMessageSubmitted ? { onQueuedMessageSubmitted } : {}),
         submitMessage: async ({ message: submitText, attachments: submitAttachments }) => {
           if (submitBehavior !== "preserve-and-lock") {
             beginSubmit(submitAttachments);
@@ -1622,15 +1629,37 @@ function ComposerContentImpl({
   );
 
   useEmbeddedLiveDesignSend({
+    agentId,
     enabled: isWeb && isActiveComposer,
     submit: useCallback(
-      async (text: string) => {
-        const result = await sendMessageWithContent(text, []);
+      async (text: string, onTurnFinished: () => Promise<void>) => {
+        const waitForTurn = async () => {
+          if (!client) return;
+          const result = await client.waitForFinish(agentId, 0, {
+            waitForActive: true,
+            waitThroughPermission: true,
+          });
+          if (result.status !== "permission") await onTurnFinished();
+        };
+        const result = await sendMessageWithContent(text, [], undefined, undefined, waitForTurn);
         if (result === "failed" || result === "noop") {
           throw new Error("Paseo could not send the Live Design notes");
         }
+        if (result === "submitted") {
+          void waitForTurn().catch(() => undefined);
+        }
       },
-      [sendMessageWithContent],
+      [agentId, client, sendMessageWithContent],
+    ),
+    resumePending: useCallback(
+      async (onTurnFinished: () => Promise<void>) => {
+        if (!client) return;
+        const result = await client.waitForFinish(agentId, 0, {
+          waitThroughPermission: true,
+        });
+        if (result.status !== "permission") await onTurnFinished();
+      },
+      [agentId, client],
     ),
   });
 

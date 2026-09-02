@@ -807,8 +807,9 @@ describe("sendQueuedComposerMessageNow", () => {
 
   it("removes the queued entry and submits its text + attachments", async () => {
     const review = reviewWorkspaceAttachment("Queued for send.");
+    const onSubmitted = vi.fn().mockResolvedValue(undefined);
     const queue = createFakeQueue(
-      new Map([["agent", [{ id: "msg-1", text: "send me", attachments: [review] }]]]),
+      new Map([["agent", [{ id: "msg-1", text: "send me", attachments: [review], onSubmitted }]]]),
     );
     const submitted: Array<{ text: string; attachments: ComposerAttachment[] }> = [];
     const result = await sendQueuedComposerMessageNow({
@@ -822,6 +823,7 @@ describe("sendQueuedComposerMessageNow", () => {
     expect(result).toEqual({ status: "submitted" });
     expect(queue.state.get("agent")).toEqual([]);
     expect(submitted).toEqual([{ text: "send me", attachments: [review] }]);
+    expect(onSubmitted).toHaveBeenCalledOnce();
   });
 
   it("restores the queued entry to the front and surfaces the error message on failure", async () => {
