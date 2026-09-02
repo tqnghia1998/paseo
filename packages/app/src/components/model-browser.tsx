@@ -76,6 +76,7 @@ import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { useCurrentOverlayLayer } from "@/lib/overlay-root";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { focusedModelBrowserControlOwnsEnter } from "@/components/model-browser-focus";
+import { embeddedModelSelectorManagementEnabled } from "@/embedded-focus-mode";
 import {
   MODEL_BROWSER_CREATE_PROFILE_KEY,
   MODEL_BROWSER_KEYBOARD_KEYS,
@@ -487,13 +488,17 @@ export function useModelBrowser({
         />
       ),
       back: singleProviderView ? undefined : { onPress: () => showAll(view.providerId) },
-      actions: (
-        <ProviderSettingsAction
-          serverId={serverId}
-          provider={view.providerId}
-          label={t("modelSelector.openProviderSettings", { provider: view.providerLabel })}
-        />
-      ),
+      actions: embeddedModelSelectorManagementEnabled() ? (
+        <View style={styles.headerActionRow}>
+          <ProviderSettingsAction
+            serverId={serverId}
+            provider={view.providerId}
+            label={t("modelSelector.openProviderSettings", {
+              provider: view.providerLabel,
+            })}
+          />
+        </View>
+      ) : undefined,
       search: {
         onChange: handleSearchQueryChange,
         onFocus: () => setIsSearchFocused(true),
