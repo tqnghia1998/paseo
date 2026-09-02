@@ -173,7 +173,7 @@ export function useEmbeddedLiveDesignSend(input: {
     // The router replaces the embed URL with /h/... after opening its folder.
     // Build mode, not the transient query string, identifies this standalone iframe.
     if (
-      process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY !== "true" ||
+      process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS !== "true" ||
       !enabled ||
       window.parent === window
     )
