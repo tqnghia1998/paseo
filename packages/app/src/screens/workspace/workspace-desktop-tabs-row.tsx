@@ -82,7 +82,7 @@ import {
   HorizontalScrollBoundaryShades,
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
-import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
+import { isEmbeddedLiveDesignPresentation } from "@/embedded-focus-mode";
 
 const DROPDOWN_WIDTH = 220;
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
@@ -883,7 +883,7 @@ export function WorkspaceDesktopTabsRow(props: WorkspaceDesktopTabsRowProps) {
     [presentations, props.tabs],
   );
 
-  if (isEmbeddedChatOnly) return null;
+  if (isEmbeddedLiveDesignPresentation) return null;
 
   return (
     <>
