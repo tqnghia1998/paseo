@@ -11,7 +11,12 @@ export interface AgentInputSubmitActionInput<TAttachment> {
   forceSend?: boolean;
   isAgentRunning: boolean;
   canSubmit: boolean;
-  queueMessage: (input: { message: string; attachments: TAttachment[] }) => void;
+  queueMessage: (input: {
+    message: string;
+    attachments: TAttachment[];
+    onSubmitted?: () => Promise<void>;
+  }) => void;
+  onQueuedMessageSubmitted?: () => Promise<void>;
   submitMessage: (input: { message: string; attachments: TAttachment[] }) => Promise<void>;
   clearDraft: (lifecycle: "sent" | "abandoned") => void;
   setUserInput: (text: string) => void;
@@ -43,7 +48,11 @@ export async function submitAgentInput<TAttachment>(
   }
 
   if (input.isAgentRunning && !input.forceSend) {
-    input.queueMessage({ message: trimmedMessage, attachments });
+    input.queueMessage({
+      message: trimmedMessage,
+      attachments,
+      ...(input.onQueuedMessageSubmitted ? { onSubmitted: input.onQueuedMessageSubmitted } : {}),
+    });
     if (shouldClearOnSubmit) {
       input.setUserInput("");
       input.setAttachments([]);
