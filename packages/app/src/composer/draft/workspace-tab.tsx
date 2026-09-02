@@ -609,6 +609,10 @@ export function WorkspaceDraftAgentTab({
   const handleFocusInputCallback = useCallback((focus: () => void) => {
     focusInputRef.current = focus;
   }, []);
+  const resolveLiveDesignAgentId = useCallback(
+    () => useCreateFlowStore.getState().pendingByDraftId[draftId]?.agentId ?? undefined,
+    [draftId],
+  );
 
   const handleDropdownCloseFocus = useCallback(() => {
     focusInputRef.current?.();
@@ -669,6 +673,7 @@ export function WorkspaceDraftAgentTab({
             workspaceId={workspaceId}
             isPaneFocused={isPaneFocused}
             onSubmitMessage={handleCreateFromInput}
+            resolveLiveDesignAgentId={resolveLiveDesignAgentId}
             isSubmitLoading={isSubmitting}
             blurOnSubmit={true}
             textSource={draftInput.textSource}
