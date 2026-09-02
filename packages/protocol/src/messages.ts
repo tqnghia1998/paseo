@@ -1562,6 +1562,8 @@ export const WaitForFinishRequestSchema = z.object({
   /** Accepts full ID, unique prefix, or exact full title (server resolves). */
   agentId: z.string(),
   timeoutMs: z.number().int().positive().optional(),
+  waitForActive: z.boolean().optional(),
+  waitThroughPermission: z.boolean().optional(),
 });
 
 export const DaemonTailscaleSetRequestSchema = z.object({
