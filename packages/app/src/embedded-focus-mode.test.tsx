@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, renderHook } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
 import { describe, expect, it, vi } from "vitest";
 
@@ -16,12 +16,11 @@ import {
   embeddedMessageInputFocusShortcutEnabled,
   embeddedModelSelectorManagementEnabled,
   embeddedWorkspaceActionsEnabled,
-  findEmbeddedConversationTabId,
-  getEmbeddedConversationTabs,
+  findNearestEmbeddedConversationTabId,
+  preserveEmbeddedLiveDesignMessagingQuery,
   resolveEmbeddedModelSelection,
   shouldUseEmbeddedFocusMode,
-  shouldUseEmbeddedLiveDesignPresentation,
-  useEmbeddedLiveDesignConversation,
+  shouldUseEmbeddedLiveDesignMessaging,
   useEmbeddedModelSelection,
 } from "./embedded-focus-mode";
 
@@ -29,21 +28,30 @@ describe("embedded focus mode", () => {
   it("locks every standalone embed while limiting chat presentation to Live Design", () => {
     expect(shouldUseEmbeddedFocusMode(true)).toBe(true);
     expect(shouldUseEmbeddedFocusMode(false)).toBe(false);
-    expect(shouldUseEmbeddedLiveDesignPresentation(true, "")).toBe(false);
-    expect(shouldUseEmbeddedLiveDesignPresentation(true, "?embedded-live-design=1")).toBe(true);
-    expect(shouldUseEmbeddedLiveDesignPresentation(true, "?embedded-live-design=0")).toBe(false);
-    expect(shouldUseEmbeddedLiveDesignPresentation(true, "?embedded-live-design")).toBe(false);
-    expect(shouldUseEmbeddedLiveDesignPresentation(false, "?embedded-live-design=1")).toBe(false);
+    expect(shouldUseEmbeddedLiveDesignMessaging(true, "")).toBe(false);
+    expect(shouldUseEmbeddedLiveDesignMessaging(true, "?embedded-live-design=1")).toBe(true);
+    expect(shouldUseEmbeddedLiveDesignMessaging(true, "?embedded-live-design=0")).toBe(false);
+    expect(shouldUseEmbeddedLiveDesignMessaging(true, "?embedded-live-design")).toBe(false);
+    expect(shouldUseEmbeddedLiveDesignMessaging(false, "?embedded-live-design=1")).toBe(false);
   });
 
-  it("disables workspace navigation actions", () => {
+  it("preserves Live Design messaging across the folder route replacement", () => {
+    expect(preserveEmbeddedLiveDesignMessagingQuery("/h/server/workspace/id", true)).toBe(
+      "/h/server/workspace/id?embedded-live-design=1",
+    );
+    expect(preserveEmbeddedLiveDesignMessagingQuery("/h/server/workspace/id", false)).toBe(
+      "/h/server/workspace/id",
+    );
+  });
+
+  it("keeps current-worktree workspace actions available", () => {
     expect(
       embeddedWorkspaceActionsEnabled({
         routeFocused: true,
         serverId: "server",
         workspaceId: "workspace",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(embeddedImportVisible(true, true)).toBe(false);
     expect(embeddedModelSelectorManagementEnabled()).toBe(false);
     expect(embeddedMessageInputFocusShortcutEnabled()).toBe(false);
@@ -181,89 +189,23 @@ describe("embedded focus mode", () => {
     expect(select).not.toHaveBeenCalled();
   });
 
-  it("keeps only agent and draft tabs in the embedded tab strip", () => {
+  it("finds the nearest conversation tab by tab order", () => {
     const tabs = [
+      { tabId: "agent-left", target: { kind: "agent" } },
       { tabId: "changes", target: { kind: "changes" } },
-      { tabId: "agent", target: { kind: "agent" } },
-      { tabId: "draft", target: { kind: "draft" } },
+      { tabId: "draft-tie", target: { kind: "draft" } },
+      { tabId: "browser", target: { kind: "browser" } },
+      { tabId: "draft-right", target: { kind: "draft" } },
     ];
 
-    expect(getEmbeddedConversationTabs(tabs)).toEqual([tabs[1], tabs[2]]);
-    expect(findEmbeddedConversationTabId(tabs)).toBe("agent");
-  });
-
-  it("returns to an existing conversation from another tab", () => {
-    const focusTab = vi.fn();
-    const openDraft = vi.fn();
-
-    renderHook(() =>
-      useEmbeddedLiveDesignConversation({
-        activeKind: "changes",
-        conversationTabId: "agent",
-        enabled: true,
-        focusTab,
-        openDraft,
-        workspaceKey: "server:workspace",
-      }),
-    );
-
-    expect(focusTab).toHaveBeenCalledWith("server:workspace", "agent");
-    expect(openDraft).not.toHaveBeenCalled();
-  });
-
-  it("opens one draft after the workspace key is available until a conversation exists", () => {
-    const focusTab = vi.fn();
-    const openDraft = vi.fn();
-    const { rerender } = renderHook(
-      ({
-        workspaceKey,
-        conversationTabId,
-      }: {
-        workspaceKey: string | null;
-        conversationTabId?: string;
-      }) =>
-        useEmbeddedLiveDesignConversation({
-          activeKind: "changes",
-          conversationTabId,
-          enabled: true,
-          focusTab,
-          openDraft,
-          workspaceKey,
-        }),
-      {
-        initialProps: {
-          workspaceKey: null as string | null,
-          conversationTabId: undefined as string | undefined,
-        },
-      },
-    );
-
-    expect(openDraft).not.toHaveBeenCalled();
-
-    act(() => rerender({ workspaceKey: "server:workspace", conversationTabId: undefined }));
-    act(() => rerender({ workspaceKey: "server:workspace", conversationTabId: undefined }));
-    expect(openDraft).toHaveBeenCalledOnce();
-
-    act(() => rerender({ workspaceKey: "server:workspace", conversationTabId: "draft" }));
-    expect(focusTab).toHaveBeenCalledWith("server:workspace", "draft");
-  });
-
-  it("opens a draft after switching workspaces while the prior workspace is pending", () => {
-    const focusTab = vi.fn();
-    const openDraft = vi.fn();
-    const { rerender } = renderHook(
-      ({ workspaceKey }: { workspaceKey: string }) =>
-        useEmbeddedLiveDesignConversation({
-          activeKind: "changes",
-          enabled: true,
-          focusTab,
-          openDraft,
-          workspaceKey,
-        }),
-      { initialProps: { workspaceKey: "server:workspace-a" } },
-    );
-
-    act(() => rerender({ workspaceKey: "server:workspace-b" }));
-    expect(openDraft).toHaveBeenCalledTimes(2);
+    expect(findNearestEmbeddedConversationTabId(tabs, "changes")).toBe("agent-left");
+    expect(findNearestEmbeddedConversationTabId(tabs, "browser")).toBe("draft-tie");
+    expect(findNearestEmbeddedConversationTabId(tabs, "draft-right")).toBe("draft-right");
+    expect(
+      findNearestEmbeddedConversationTabId(
+        tabs.filter((tab) => tab.target.kind !== "agent" && tab.target.kind !== "draft"),
+        "changes",
+      ),
+    ).toBeUndefined();
   });
 });
