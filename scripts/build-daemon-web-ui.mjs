@@ -41,7 +41,7 @@ async function exportBrowserWebApp() {
     cwd: REPO_ROOT,
     env: {
       ...process.env,
-      EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY: "true",
+      EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS: "true",
     },
   });
 }

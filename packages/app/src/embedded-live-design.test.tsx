@@ -5,7 +5,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
-  process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY = "true";
+  process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
 });
 
 import {
