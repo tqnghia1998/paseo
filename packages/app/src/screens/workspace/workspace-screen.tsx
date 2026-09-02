@@ -206,13 +206,12 @@ import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import {
   embeddedImportVisible,
   embeddedWorkspaceActionsEnabled,
-  findEmbeddedConversationTabId,
+  findNearestEmbeddedConversationTabId,
   isEmbeddedFocusMode,
+  isEmbeddedLiveDesignMessaging,
   selectEmbeddedFocusMode,
-  selectEmbeddedLiveDesignPresentation,
-  useEmbeddedLiveDesignConversation,
 } from "@/embedded-focus-mode";
-import { EmbeddedConversationTabStrip } from "@/screens/workspace/embedded-conversation-tab-strip";
+import { useEmbeddedLiveDesignActivation } from "@/embedded-live-design";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
 import type { TerminalProfile } from "@getpaseo/protocol/messages";
@@ -1578,20 +1577,57 @@ function WorkspaceScreenContent({
 
   const activeTabId = focusedPaneTabState.activeTabId;
   const activeTab = focusedPaneTabState.activeTab;
-
-  useEmbeddedLiveDesignConversation({
-    activeKind: activeTab?.descriptor.target.kind,
-    conversationTabId: findEmbeddedConversationTabId(uiTabs),
-    enabled: isRouteFocused && hasHydratedWorkspaceLayoutStore,
-    focusTab: focusWorkspaceTab,
-    openDraft: openWorkspaceDraftTab,
-    workspaceKey: persistenceKey,
-  });
-
   const tabs = useMemo<WorkspaceTabDescriptor[]>(
     () => focusedPaneTabState.tabs.map((tab) => tab.descriptor),
     [focusedPaneTabState.tabs],
   );
+  const openingEmbeddedLiveDesignDraftRef = useRef(false);
+  const embeddedLiveDesignWorkspaceRef = useRef<string | null>(null);
+  const activateEmbeddedLiveDesignConversation = useCallback(
+    (preferredAgentId?: string) => {
+      if (!persistenceKey) return;
+      if (embeddedLiveDesignWorkspaceRef.current !== persistenceKey) {
+        embeddedLiveDesignWorkspaceRef.current = persistenceKey;
+        openingEmbeddedLiveDesignDraftRef.current = false;
+      }
+      const preferredTab = preferredAgentId
+        ? uiTabs.find(
+            (tab) => tab.target.kind === "agent" && tab.target.agentId === preferredAgentId,
+          )
+        : undefined;
+      const conversationTabId =
+        preferredTab?.tabId ??
+        (preferredAgentId
+          ? openWorkspaceTabFocused(
+              persistenceKey,
+              { kind: "agent", agentId: preferredAgentId },
+              FOCUSED_PANE_PLACEMENT,
+            )
+          : findNearestEmbeddedConversationTabId(tabs, activeTabId));
+      if (conversationTabId) {
+        openingEmbeddedLiveDesignDraftRef.current = false;
+        if (conversationTabId !== activeTabId) focusWorkspaceTab(persistenceKey, conversationTabId);
+        return;
+      }
+      if (openingEmbeddedLiveDesignDraftRef.current) return;
+      openingEmbeddedLiveDesignDraftRef.current = true;
+      if (!openWorkspaceDraftTab()) openingEmbeddedLiveDesignDraftRef.current = false;
+    },
+    [
+      activeTabId,
+      focusWorkspaceTab,
+      openWorkspaceDraftTab,
+      openWorkspaceTabFocused,
+      persistenceKey,
+      tabs,
+      uiTabs,
+    ],
+  );
+  useEmbeddedLiveDesignActivation({
+    activateConversation: activateEmbeddedLiveDesignConversation,
+    enabled: isEmbeddedLiveDesignMessaging && isRouteFocused && hasHydratedWorkspaceLayoutStore,
+    workspaceId: normalizedWorkspaceId,
+  });
   const hasSetupTab = useMemo(
     () =>
       uiTabs.some(
@@ -3025,17 +3061,14 @@ function WorkspaceScreenContent({
             setWorkspaceTabState(persistenceKey, input.tab.tabId, state);
           }
         },
-        onOpenWorkspaceFile: selectEmbeddedLiveDesignPresentation(
-          () => {},
-          (request: WorkspaceFileOpenRequest) => {
-            handleOpenWorkspaceFileFromPane({
-              request,
-              paneId: input.paneId,
-              parentTabId: input.tab.tabId,
-              focusPaneBeforeOpen: input.focusPaneBeforeOpen,
-            });
-          },
-        ),
+        onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => {
+          handleOpenWorkspaceFileFromPane({
+            request,
+            paneId: input.paneId,
+            parentTabId: input.tab.tabId,
+            focusPaneBeforeOpen: input.focusPaneBeforeOpen,
+          });
+        },
         onOpenImportSheet: selectEmbeddedFocusMode(() => {}, openImportSheet),
       }),
     [
@@ -3574,21 +3607,9 @@ function WorkspaceScreenContent({
     composerFullscreen: useComposerTabFullscreen(workspacePanelKey, activeTabId),
   });
 
-  const workspaceTabControl = selectEmbeddedLiveDesignPresentation(
-    <EmbeddedConversationTabStrip
-      tabs={tabs}
-      activeTabId={activeTabId}
-      onSelectTab={handleSelectSwitcherTab}
-      onCloseTab={handleCloseTabById}
-      onCreateTab={handleCreateNewTab}
-    />,
-    null,
-  );
-
   // Compact sheets use the shared workspace scope, above both center and Explorer.
   const workspaceCenterColumn = isMobile ? (
     <View style={styles.centerColumn}>
-      {workspaceTabControl}
       <FloatingHeaderLayout
         header={compactHeaderLayout.header}
         floating={compactHeaderLayout.floating}
@@ -3611,8 +3632,6 @@ function WorkspaceScreenContent({
   ) : (
     <View style={styles.centerColumn}>
       {rendersDesktopSplitContent ? null : renderWorkspaceScreenHeader()}
-
-      {workspaceTabControl}
 
       {shouldRenderDesktopPaneFallback ? (
         <NewTabLauncherProvider value={newTabLauncher}>
