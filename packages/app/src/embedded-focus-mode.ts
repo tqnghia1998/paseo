@@ -1,17 +1,34 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
 
-export function shouldUseEmbeddedChatOnly(isEmbeddedBuild: boolean, search: string): boolean {
-  return isEmbeddedBuild && new URLSearchParams(search).has("embedded-live-design");
+export const EMBEDDED_FOCUS_BUILD_MARKER = "space-app-vibing-embedded-focus";
+
+export function shouldUseEmbeddedFocusMode(isEmbeddedBuild: boolean): boolean {
+  return isEmbeddedBuild && EMBEDDED_FOCUS_BUILD_MARKER.length > 0;
 }
 
-export const isEmbeddedChatOnly = shouldUseEmbeddedChatOnly(
-  process.env.EXPO_PUBLIC_PASEO_EMBEDDED_CHAT_ONLY === "true",
+export function shouldUseEmbeddedLiveDesignPresentation(
+  isEmbeddedFocusMode: boolean,
+  search: string,
+): boolean {
+  return isEmbeddedFocusMode && new URLSearchParams(search).get("embedded-live-design") === "1";
+}
+
+export const isEmbeddedFocusMode = shouldUseEmbeddedFocusMode(
+  process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS === "true",
+);
+
+export const isEmbeddedLiveDesignPresentation = shouldUseEmbeddedLiveDesignPresentation(
+  isEmbeddedFocusMode,
   typeof window === "undefined" ? "" : window.location.search,
 );
 
-export function selectEmbeddedChatOnly<T>(embedded: T, standard: T): T {
-  return isEmbeddedChatOnly ? embedded : standard;
+export function selectEmbeddedFocusMode<T>(embedded: T, standard: T): T {
+  return isEmbeddedFocusMode ? embedded : standard;
+}
+
+export function selectEmbeddedLiveDesignPresentation<T>(embedded: T, standard: T): T {
+  return isEmbeddedLiveDesignPresentation ? embedded : standard;
 }
 
 export function embeddedWorkspaceActionsEnabled(input: {
@@ -19,19 +36,19 @@ export function embeddedWorkspaceActionsEnabled(input: {
   serverId: string;
   workspaceId: string;
 }): boolean {
-  return !isEmbeddedChatOnly && input.routeFocused && Boolean(input.serverId && input.workspaceId);
+  return (
+    !isEmbeddedLiveDesignPresentation &&
+    input.routeFocused &&
+    Boolean(input.serverId && input.workspaceId)
+  );
 }
 
 export function embeddedImportVisible(routeFocused: boolean, importVisible: boolean): boolean {
-  return !isEmbeddedChatOnly && routeFocused && importVisible;
+  return !isEmbeddedFocusMode && routeFocused && importVisible;
 }
 
 export function embeddedModelSelectorManagementEnabled(): boolean {
-  return !isEmbeddedChatOnly;
-}
-
-export function embeddedAgentProfiles<T>(profiles: T): T | null {
-  return embeddedModelSelectorManagementEnabled() ? profiles : null;
+  return !isEmbeddedFocusMode;
 }
 
 const EMBEDDED_PROVIDER_PRIORITY = ["codex", "claude", "opencode", "pi"];
@@ -61,7 +78,7 @@ export function useEmbeddedModelSelection(input: {
   const { isInitialSelectionPending, providers, selectedModel, select } = input;
   const completedRef = useRef(false);
   useEffect(() => {
-    if (!isEmbeddedChatOnly || isInitialSelectionPending || completedRef.current) return;
+    if (!isEmbeddedFocusMode || isInitialSelectionPending || completedRef.current) return;
     if (selectedModel.trim()) {
       completedRef.current = true;
       return;
@@ -74,7 +91,7 @@ export function useEmbeddedModelSelection(input: {
 }
 
 export function embeddedMessageInputFocusShortcutEnabled(): boolean {
-  return !isEmbeddedChatOnly;
+  return !isEmbeddedFocusMode;
 }
 
 export function embeddedMessageInputFocusHintVisible(input: {
@@ -103,7 +120,7 @@ export function findEmbeddedConversationTabId(tabs: EmbeddedTab[]): string | und
   return getEmbeddedConversationTabs(tabs)[0]?.tabId;
 }
 
-export function useEmbeddedChatOnlyConversation(input: {
+export function useEmbeddedLiveDesignConversation(input: {
   activeKind?: string;
   conversationTabId?: string;
   enabled: boolean;
@@ -115,7 +132,7 @@ export function useEmbeddedChatOnlyConversation(input: {
   const openingDraftRef = useRef(false);
   const openingDraftWorkspaceRef = useRef<string | null>(null);
   useLayoutEffect(() => {
-    if (!isEmbeddedChatOnly || !enabled || !workspaceKey) return;
+    if (!isEmbeddedLiveDesignPresentation || !enabled || !workspaceKey) return;
     if (openingDraftWorkspaceRef.current !== workspaceKey) {
       openingDraftWorkspaceRef.current = workspaceKey;
       openingDraftRef.current = false;
