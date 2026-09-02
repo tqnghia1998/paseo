@@ -113,7 +113,9 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
-import { useEmbeddedLiveDesignSend } from "@/embedded-live-design";
+import { shouldSettleLiveDesignTurn, useEmbeddedLiveDesignSend } from "@/embedded-live-design";
+import { isEmbeddedLiveDesignMessaging } from "@/embedded-focus-mode";
+import { useStableEvent } from "@/hooks/use-stable-event";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
@@ -918,6 +920,7 @@ interface ComposerProps {
   workspaceId?: string | null;
   isPaneFocused: boolean;
   onSubmitMessage?: (payload: MessagePayload) => Promise<void>;
+  resolveLiveDesignAgentId?: () => string | undefined;
   onClientSlashCommand?: (command: ClientSlashCommand) => Promise<void>;
   /** When true, the submit button is enabled even without text or images (e.g. external attachment selected). */
   hasExternalContent?: boolean;
@@ -1147,6 +1150,7 @@ function ComposerContentImpl({
   serverId,
   workspaceId,
   onSubmitMessage,
+  resolveLiveDesignAgentId,
   onClientSlashCommand,
   hasExternalContent = false,
   allowEmptySubmit = false,
@@ -1630,16 +1634,30 @@ function ComposerContentImpl({
 
   useEmbeddedLiveDesignSend({
     agentId,
-    enabled: isWeb && isActiveComposer,
-    submit: useCallback(
-      async (text: string, onTurnFinished: () => Promise<void>) => {
+    enabled: isWeb && isActiveComposer && isEmbeddedLiveDesignMessaging,
+    workspaceId,
+    submit: useStableEvent(
+      async (
+        text: string,
+        onTurnFinished: () => Promise<void>,
+        onAgentResolved: (agentId: string) => void,
+      ) => {
         const waitForTurn = async () => {
+          const resolvedDraftAgentId = resolveLiveDesignAgentId?.();
+          const resolvedAgentId = resolvedDraftAgentId ?? agentId;
+          onAgentResolved(resolvedAgentId);
           if (!client) return;
-          const result = await client.waitForFinish(agentId, 0, {
+          const result = await client.waitForFinish(resolvedAgentId, 0, {
             waitForActive: true,
             waitThroughPermission: true,
           });
-          if (result.status !== "permission") await onTurnFinished();
+          if (
+            shouldSettleLiveDesignTurn(
+              result.status,
+              resolveLiveDesignAgentId === undefined || Boolean(resolvedDraftAgentId),
+            )
+          )
+            await onTurnFinished();
         };
         const result = await sendMessageWithContent(text, [], undefined, undefined, waitForTurn);
         if (result === "failed" || result === "noop") {
@@ -1649,18 +1667,16 @@ function ComposerContentImpl({
           void waitForTurn().catch(() => undefined);
         }
       },
-      [agentId, client, sendMessageWithContent],
     ),
-    resumePending: useCallback(
-      async (onTurnFinished: () => Promise<void>) => {
-        if (!client) return;
-        const result = await client.waitForFinish(agentId, 0, {
-          waitThroughPermission: true,
-        });
-        if (result.status !== "permission") await onTurnFinished();
-      },
-      [agentId, client],
-    ),
+    resumePending: useStableEvent(async (onTurnFinished: () => Promise<void>) => {
+      if (!client) return;
+      const result = await client.waitForFinish(agentId, 0, {
+        waitForActive: true,
+        waitThroughPermission: true,
+      });
+      if (shouldSettleLiveDesignTurn(result.status, resolveLiveDesignAgentId === undefined))
+        await onTurnFinished();
+    }),
   });
 
   const handleSubmit = useCallback(

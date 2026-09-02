@@ -15,12 +15,9 @@ Paseo Web is packaged as a lightweight, self-contained standalone server that em
 
 ### Canonical embedded mode
 
-Both consumer surfaces use one **Embedded Focus Mode** backed by the same standalone build:
+Both consumer surfaces use one **Embedded Focus Mode** backed by the same standalone build. The Paseo left tab inside Space App Vibing and the Live Design drawer's **Agent** tab render the same workspace tabs, content, and interactions for the selected worktree.
 
-- The Paseo left tab inside a Space App Vibing workspace keeps the selected worktree's workspace tabs and content.
-- The narrower Live Design drawer's **Agent** tab uses a chat-first presentation: it replaces the full workspace tab row with an inline conversation strip and prevents non-conversation content from opening.
-
-The `?embedded-live-design=1` query selects only that narrow presentation and Live Design messaging; it does not enable a separate policy or distribution. The build-wide invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true`; do not remove it or the guards in `packages/app/src/embedded-focus-mode.ts` when resolving upstream changes.
+The `?embedded-live-design=1` query enables Live Design messaging only; it does not enable a separate policy, presentation, or distribution. When the host asks whether Paseo is ready to receive notes, the workspace focuses the nearest agent/draft tab by tab order or creates a draft if none exists. The build-wide invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true`; do not remove it or the guards in `packages/app/src/embedded-focus-mode.ts` when resolving upstream changes.
 
 ---
 
@@ -75,7 +72,7 @@ When loaded in an `iframe` or Electron `<webview>`, Paseo Web:
 1. Detects the `?folder=` query parameter.
 2. Finds or creates the workspace corresponding to that directory through the idempotent `openProject` path, preserving its workspace and agent thread on remount.
 3. Enters **Embedded Focus Mode** directly.
-4. Keeps the selected worktree's tabs/content in the full Vibing host, or applies the chat-first presentation when the Live Design host adds `?embedded-live-design=1`.
+4. Keeps the selected worktree's same tabs/content in both hosts; `?embedded-live-design=1` only enables note handoff to the nearest conversation.
 
 ### Upstream rebase guard
 
@@ -83,7 +80,7 @@ After syncing from `getpaseo/paseo`, verify all of the following before regenera
 
 - `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true` is still injected by `scripts/build-daemon-web-ui.mjs`.
 - `packages/app/src/embedded-focus-mode.ts` still gates project/workspace navigation, Import Session, Fork, sidebars, workspace headers, command center, route-changing shortcuts, and model-management escape paths for every standalone embed.
-- The full Vibing host still renders tabs/content inside the selected worktree, while `?embedded-live-design=1` selects only the inline conversation strip and chat-first content restriction.
+- Vibing and Live Design still render identical tabs/content inside the selected worktree; `?embedded-live-design=1` only enables note handoff, which focuses the nearest conversation or creates a draft first.
 - The `?folder=` bootstrap still uses `openProject` rather than direct workspace creation.
 - Focus Mode remains locked and its exit controls remain unavailable.
 - `npm --prefix packages/app test -- src/embedded-focus-mode.test.tsx` passes, then regenerate `space-app-vibing/scripts/paseo-web` and run its `scripts/paseo-web/paseoWebBundle.test.ts` guard.
