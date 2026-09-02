@@ -131,7 +131,7 @@ import { PluginCatalogSync } from "@/plugins";
 import { NotificationOpenRouter } from "@/notification-open/react";
 import { ensureOsNotificationPermission } from "@/utils/os-notifications";
 import { EmbeddedAgentActivityBridge } from "@/embedded-agent-activity";
-import { isEmbeddedChatOnly, selectEmbeddedChatOnly } from "@/embedded-chat-mode";
+import { isEmbeddedFocusMode, selectEmbeddedFocusMode } from "@/embedded-focus-mode";
 
 polyfillCrypto();
 
@@ -386,7 +386,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   // global concerns like keyboard shortcuts. Split those out so settings (and
   // other non-workspace routes) don't need a special-case to keep shortcuts alive.
   const keyboardShortcutsEnabled =
-    !isEmbeddedChatOnly && (chromeEnabled || pathname.startsWith("/settings"));
+    !isEmbeddedFocusMode && (chromeEnabled || pathname.startsWith("/settings"));
 
   useKeyboardShortcuts({
     enabled: keyboardShortcutsEnabled,
@@ -398,8 +398,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     cycleTheme,
   });
 
-  useActiveWorktreeNewAction(!isEmbeddedChatOnly);
-  useGlobalNewWorkspaceAction(!isEmbeddedChatOnly);
+  useActiveWorktreeNewAction(!isEmbeddedFocusMode);
+  useGlobalNewWorkspaceAction(!isEmbeddedFocusMode);
 
   const activeWorkspace = useActiveWorkspaceSelection();
   const explorerVisible = useIsExplorerSidebarOpen({
@@ -412,8 +412,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     explorerVisible: isWorkspaceRoute && explorerVisible,
     isSettingsRoute: pathname.includes("/settings"),
   });
-  const navigationChromeEnabled = selectEmbeddedChatOnly(false, chromeEnabled);
-  const desktopSidebarMounted = selectEmbeddedChatOnly(
+  const navigationChromeEnabled = selectEmbeddedFocusMode(false, chromeEnabled);
+  const desktopSidebarMounted = selectEmbeddedFocusMode(
     false,
     hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled,
   );
@@ -473,7 +473,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     <View style={layoutStyles.surfaceFill}>
       {workspaceChrome}
       <AppearanceStyleBoundary>
-        {!isEmbeddedChatOnly &&
+        {!isEmbeddedFocusMode &&
         !isCompactLayout &&
         appChromeLayout.sidebarToggleOwner === "window" ? (
           <WindowChromeRegion corners="top-left">
@@ -497,7 +497,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <UpdateCalloutSource />
         <LegacyAgentSkillsMigration />
         <WorktreeSetupCalloutSource />
-        {isEmbeddedChatOnly ? null : (
+        {isEmbeddedFocusMode ? null : (
           <>
             <CommandCenterRootActions />
             <CommandCenterWorkspaceActions />
