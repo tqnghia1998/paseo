@@ -12,10 +12,13 @@ import {
   buildEmbeddedLiveDesignPrompt,
   EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE,
   EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE,
+  EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE,
   EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE,
   EMBEDDED_LIVE_DESIGN_SEND_TYPE,
   EMBEDDED_LIVE_DESIGN_SENT_TYPE,
   isEmbeddedLiveDesignSendMessage,
+  shouldSettleLiveDesignTurn,
+  useEmbeddedLiveDesignActivation,
   useEmbeddedLiveDesignSend,
 } from "./embedded-live-design";
 
@@ -69,6 +72,14 @@ const note = {
 };
 
 describe("embedded Live Design bridge", () => {
+  it("settles terminal agent errors but not unresolved draft-tab errors", () => {
+    expect(shouldSettleLiveDesignTurn("idle", false)).toBe(true);
+    expect(shouldSettleLiveDesignTurn("error", true)).toBe(true);
+    expect(shouldSettleLiveDesignTurn("error", false)).toBe(false);
+    expect(shouldSettleLiveDesignTurn("permission", true)).toBe(false);
+    expect(shouldSettleLiveDesignTurn("timeout", true)).toBe(false);
+  });
+
   it("validates messages and builds the agent prompt", () => {
     expect(
       isEmbeddedLiveDesignSendMessage({
@@ -111,6 +122,43 @@ describe("embedded Live Design bridge", () => {
     expect(prompt).not.toContain("Element context:");
     expect(prompt).not.toContain("Anchor:");
     expect(prompt).not.toContain("CSS patch:");
+  });
+
+  it("activates a conversation only for a readiness request from the embedding host", () => {
+    const { parent } = useFakeParent();
+    const activateConversation = vi.fn();
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: "https://host.example/live-design",
+    });
+
+    const { unmount } = renderHook(() =>
+      useEmbeddedLiveDesignActivation({
+        enabled: true,
+        activateConversation,
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://attacker.example",
+          source: parent,
+          data: { type: EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://host.example",
+          source: parent,
+          data: { type: EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE },
+        }),
+      );
+    });
+
+    expect(activateConversation).toHaveBeenCalledOnce();
+    unmount();
   });
 
   it("announces readiness after Paseo replaces the embed URL", () => {
@@ -183,6 +231,7 @@ describe("embedded Live Design bridge", () => {
     expect(submit).toHaveBeenCalledWith(
       expect.stringContaining("# Request 1\n"),
       expect.any(Function),
+      expect.any(Function),
     );
     expect(postMessage).toHaveBeenCalledWith(
       { type: EMBEDDED_LIVE_DESIGN_SENT_TYPE, requestId: "request-1" },
@@ -249,7 +298,12 @@ describe("embedded Live Design bridge", () => {
       value: "https://host.example/live-design",
     });
     const first = renderHook(() =>
-      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit }),
+      useEmbeddedLiveDesignSend({
+        agentId: "agent-1",
+        enabled: true,
+        submit,
+        workspaceId: "workspace-1",
+      }),
     );
 
     await act(async () => {
@@ -270,7 +324,11 @@ describe("embedded Live Design bridge", () => {
     first.unmount();
     postMessage.mockClear();
     const second = renderHook(() =>
-      useEmbeddedLiveDesignSend({ agentId: "agent-1", enabled: true, submit }),
+      useEmbeddedLiveDesignActivation({
+        activateConversation: vi.fn(),
+        enabled: true,
+        workspaceId: "workspace-1",
+      }),
     );
 
     await act(async () => {
@@ -287,6 +345,70 @@ describe("embedded Live Design bridge", () => {
       { type: EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId: "request-replay" },
       "https://host.example",
     );
+    second.unmount();
+  });
+
+  it("activates the reassigned agent to recover a pending draft request", async () => {
+    let onAgentResolved: ((agentId: string) => void) | undefined;
+    const submit = vi.fn(
+      async (
+        _text: string,
+        _onTurnFinished: () => Promise<void>,
+        resolveAgent: (agentId: string) => void,
+      ) => {
+        onAgentResolved = resolveAgent;
+      },
+    );
+    const { parent } = useFakeParent();
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: "https://host.example/live-design",
+    });
+    const first = renderHook(() =>
+      useEmbeddedLiveDesignSend({
+        agentId: "draft-tab",
+        enabled: true,
+        submit,
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://host.example",
+          source: parent,
+          data: {
+            type: EMBEDDED_LIVE_DESIGN_SEND_TYPE,
+            requestId: "request-draft",
+            notes: [note],
+          },
+        }),
+      );
+      await Promise.resolve();
+      onAgentResolved?.("agent-real");
+    });
+    first.unmount();
+
+    const activateConversation = vi.fn();
+    const second = renderHook(() =>
+      useEmbeddedLiveDesignActivation({
+        activateConversation,
+        enabled: true,
+        workspaceId: "workspace-1",
+      }),
+    );
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://host.example",
+          source: parent,
+          data: { type: EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE },
+        }),
+      );
+    });
+
+    expect(activateConversation).toHaveBeenCalledWith("agent-real");
     second.unmount();
   });
 
