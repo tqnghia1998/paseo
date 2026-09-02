@@ -3173,7 +3173,13 @@ export class Session {
       case "send_agent_message_request":
         return this.handleSendAgentMessageRequest(msg);
       case "wait_for_finish_request":
-        return this.handleWaitForFinish(msg.agentId, msg.requestId, msg.timeoutMs);
+        return this.handleWaitForFinish(
+          msg.agentId,
+          msg.requestId,
+          msg.timeoutMs,
+          msg.waitForActive,
+          msg.waitThroughPermission,
+        );
       case "create_agent_request":
         return this.handleCreateAgentRequest(msg);
       case "resume_agent_request":
@@ -9013,6 +9019,8 @@ export class Session {
     agentIdOrIdentifier: string,
     requestId: string,
     timeoutMs?: number,
+    waitForActive?: boolean,
+    waitThroughPermission?: boolean,
   ): Promise<void> {
     const sourceSignal = this.delivery.requestSignal;
     sourceSignal.throwIfAborted();
@@ -9082,7 +9090,8 @@ export class Session {
 
       let result = await this.agentManager.waitForAgentEvent(agentId, {
         signal: AbortSignal.any([abortController.signal, sourceSignal]),
-        waitForActive: true,
+        waitForActive,
+        waitThroughPermission,
       });
       let final = await this.getAgentPayloadById(agentId);
       if (!final) {
