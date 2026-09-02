@@ -52,7 +52,6 @@ import {
   type WorkspaceDraftTabSetup,
 } from "@/workspace-tabs/model";
 import { openWorkspaceChanges } from "@/workspace-tabs/open-supporting-view";
-import { isEmbeddedLiveDesignPresentation } from "@/embedded-focus-mode";
 import { useSettings } from "@/hooks/use-settings";
 
 const EMPTY_PENDING_PERMISSIONS = new Map();
@@ -430,7 +429,7 @@ export function WorkspaceDraftAgentTab({
   );
   const handleOpenWorkspaceAttachment = useCallback(
     (attachment: WorkspaceComposerAttachment) => {
-      if (isEmbeddedLiveDesignPresentation || attachment.kind !== "review") {
+      if (attachment.kind !== "review") {
         return;
       }
       openWorkspaceChanges({
@@ -603,6 +602,10 @@ export function WorkspaceDraftAgentTab({
   const handleFocusInputCallback = useCallback((focus: () => void) => {
     focusInputRef.current = focus;
   }, []);
+  const resolveLiveDesignAgentId = useCallback(
+    () => useCreateFlowStore.getState().pendingByDraftId[draftId]?.agentId ?? undefined,
+    [draftId],
+  );
 
   const inputAreaWrapperStyle = useMemo(
     () => [animatedStaticStyles.inputAreaWrapper, { paddingBottom: insets.bottom }],
@@ -665,6 +668,7 @@ export function WorkspaceDraftAgentTab({
           externalKeyboardShift
           isPaneFocused={isPaneFocused}
           onSubmitMessage={handleCreateFromInput}
+          resolveLiveDesignAgentId={resolveLiveDesignAgentId}
           isSubmitLoading={isSubmitting}
           blurOnSubmit={true}
           value={draftInput.text}

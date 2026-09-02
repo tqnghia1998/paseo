@@ -87,6 +87,7 @@ export function buildEmbeddedLiveDesignPrompt(notes: EmbeddedLiveDesignNote[]): 
 interface StoredRequest {
   requestId: string;
   agentId: string;
+  workspaceId?: string;
 }
 
 const requestStorageKey = (state: "completed" | "pending") => `paseo:live-design-${state}`;
@@ -101,7 +102,9 @@ const requests = (state: "completed" | "pending"): StoredRequest[] => {
           item !== null &&
           typeof item === "object" &&
           typeof (item as StoredRequest).requestId === "string" &&
-          typeof (item as StoredRequest).agentId === "string",
+          typeof (item as StoredRequest).agentId === "string" &&
+          ((item as StoredRequest).workspaceId === undefined ||
+            typeof (item as StoredRequest).workspaceId === "string"),
       )
       ? (parsed as StoredRequest[])
       : [];
@@ -132,6 +135,11 @@ const forgetRequest = (state: "completed" | "pending", requestId: string) => {
   }
 };
 
+const requestsForWorkspace = (
+  state: "completed" | "pending",
+  workspaceId: string,
+): StoredRequest[] => requests(state).filter((request) => request.workspaceId === workspaceId);
+
 const embeddingOrigin = (): string | null => {
   try {
     return document.referrer
@@ -141,6 +149,13 @@ const embeddingOrigin = (): string | null => {
     return null;
   }
 };
+
+export function shouldSettleLiveDesignTurn(
+  status: "idle" | "error" | "permission" | "timeout",
+  hasResolvedAgent: boolean,
+): boolean {
+  return status === "idle" || (status === "error" && hasResolvedAgent);
+}
 
 function publishResult(
   targetOrigin: string,
@@ -162,16 +177,66 @@ function publishResult(
   );
 }
 
+export function useEmbeddedLiveDesignActivation(input: {
+  activateConversation: (agentId?: string) => void;
+  enabled: boolean;
+  workspaceId: string;
+}): void {
+  const { activateConversation, enabled, workspaceId } = input;
+  useEffect(() => {
+    if (
+      process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS !== "true" ||
+      !enabled ||
+      window.parent === window
+    )
+      return;
+    const expectedOrigin = embeddingOrigin();
+    if (!expectedOrigin) return;
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== window.parent || event.origin !== expectedOrigin) return;
+      if (event.data === null || typeof event.data !== "object" || !("type" in event.data)) {
+        return;
+      }
+      if (event.data.type === EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE) {
+        activateConversation();
+        return;
+      }
+      if (event.data.type === EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE) {
+        for (const { requestId } of requestsForWorkspace("completed", workspaceId)) {
+          publishResult(event.origin, EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId);
+        }
+        const pendingAgentId = requestsForWorkspace("pending", workspaceId)[0]?.agentId;
+        if (pendingAgentId) activateConversation(pendingAgentId);
+        return;
+      }
+      if (
+        event.data.type === EMBEDDED_LIVE_DESIGN_COMPLETION_ACK_TYPE &&
+        typeof (event.data as { requestId?: unknown }).requestId === "string"
+      ) {
+        forgetRequest("completed", (event.data as { requestId: string }).requestId);
+        const pendingAgentId = requestsForWorkspace("pending", workspaceId)[0]?.agentId;
+        if (pendingAgentId) activateConversation(pendingAgentId);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [activateConversation, enabled, workspaceId]);
+}
+
 export function useEmbeddedLiveDesignSend(input: {
   agentId: string;
   enabled: boolean;
-  submit: (text: string, onTurnFinished: () => Promise<void>) => Promise<void>;
+  submit: (
+    text: string,
+    onTurnFinished: () => Promise<void>,
+    onAgentResolved: (agentId: string) => void,
+  ) => Promise<void>;
   resumePending?: (onTurnFinished: () => Promise<void>) => Promise<void>;
+  workspaceId?: string | null;
 }): void {
-  const { agentId, enabled, submit, resumePending } = input;
+  const { agentId, enabled, submit, resumePending, workspaceId } = input;
   useEffect(() => {
-    // The router replaces the embed URL with /h/... after opening its folder.
-    // Build mode, not the transient query string, identifies this standalone iframe.
+    // The caller gates this hook on the preserved Live Design query; the build check is defense in depth.
     if (
       process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS !== "true" ||
       !enabled ||
@@ -189,32 +254,29 @@ export function useEmbeddedLiveDesignSend(input: {
           publishResult(event.origin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
           return;
         }
-        if (event.data.type === EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE) {
-          for (const { requestId } of requests("completed").filter(
-            (completed) => completed.agentId === agentId,
-          )) {
-            publishResult(event.origin, EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId);
-          }
-          return;
-        }
-        if (
-          event.data.type === EMBEDDED_LIVE_DESIGN_COMPLETION_ACK_TYPE &&
-          typeof (event.data as { requestId?: unknown }).requestId === "string"
-        ) {
-          forgetRequest("completed", (event.data as { requestId: string }).requestId);
-          return;
-        }
       }
       if (!isEmbeddedLiveDesignSendMessage(event.data)) return;
       const { notes, requestId } = event.data;
-      const request = { requestId, agentId };
+      const request: StoredRequest = {
+        requestId,
+        agentId,
+        ...(workspaceId ? { workspaceId } : {}),
+      };
       rememberRequest("pending", request);
-      const onTurnFinished = async () => {
+      const onAgentResolved = (resolvedAgentId: string) => {
+        const pendingRequest =
+          requests("pending").find((pending) => pending.requestId === requestId) ?? request;
         forgetRequest("pending", requestId);
-        rememberRequest("completed", request);
+        rememberRequest("pending", { ...pendingRequest, agentId: resolvedAgentId });
+      };
+      const onTurnFinished = async () => {
+        const pendingRequest =
+          requests("pending").find((pending) => pending.requestId === requestId) ?? request;
+        forgetRequest("pending", requestId);
+        rememberRequest("completed", pendingRequest);
         publishResult(event.origin, EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId);
       };
-      void submit(buildEmbeddedLiveDesignPrompt(notes), onTurnFinished)
+      void submit(buildEmbeddedLiveDesignPrompt(notes), onTurnFinished, onAgentResolved)
         .then(() => publishResult(event.origin, EMBEDDED_LIVE_DESIGN_SENT_TYPE, requestId))
         .catch((error) => {
           forgetRequest("pending", requestId);
@@ -223,7 +285,11 @@ export function useEmbeddedLiveDesignSend(input: {
     };
     window.addEventListener("message", handleMessage);
     if (resumePending) {
-      for (const request of requests("pending").filter((pending) => pending.agentId === agentId)) {
+      for (const request of requests("pending").filter(
+        (pending) =>
+          pending.agentId === agentId &&
+          (!workspaceId || !pending.workspaceId || pending.workspaceId === workspaceId),
+      )) {
         void resumePending(async () => {
           forgetRequest("pending", request.requestId);
           rememberRequest("completed", request);
@@ -233,5 +299,5 @@ export function useEmbeddedLiveDesignSend(input: {
     }
     publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
     return () => window.removeEventListener("message", handleMessage);
-  }, [agentId, enabled, resumePending, submit]);
+  }, [agentId, enabled, resumePending, submit, workspaceId]);
 }

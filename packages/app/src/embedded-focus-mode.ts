@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
 
 export const EMBEDDED_FOCUS_BUILD_MARKER = "space-app-vibing-embedded-focus";
@@ -7,7 +7,7 @@ export function shouldUseEmbeddedFocusMode(isEmbeddedBuild: boolean): boolean {
   return isEmbeddedBuild && EMBEDDED_FOCUS_BUILD_MARKER.length > 0;
 }
 
-export function shouldUseEmbeddedLiveDesignPresentation(
+export function shouldUseEmbeddedLiveDesignMessaging(
   isEmbeddedFocusMode: boolean,
   search: string,
 ): boolean {
@@ -18,17 +18,17 @@ export const isEmbeddedFocusMode = shouldUseEmbeddedFocusMode(
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS === "true",
 );
 
-export const isEmbeddedLiveDesignPresentation = shouldUseEmbeddedLiveDesignPresentation(
+export const isEmbeddedLiveDesignMessaging = shouldUseEmbeddedLiveDesignMessaging(
   isEmbeddedFocusMode,
   typeof window === "undefined" ? "" : window.location.search,
 );
 
-export function selectEmbeddedFocusMode<T>(embedded: T, standard: T): T {
-  return isEmbeddedFocusMode ? embedded : standard;
+export function preserveEmbeddedLiveDesignMessagingQuery(route: string, enabled: boolean): string {
+  return enabled ? `${route}?embedded-live-design=1` : route;
 }
 
-export function selectEmbeddedLiveDesignPresentation<T>(embedded: T, standard: T): T {
-  return isEmbeddedLiveDesignPresentation ? embedded : standard;
+export function selectEmbeddedFocusMode<T>(embedded: T, standard: T): T {
+  return isEmbeddedFocusMode ? embedded : standard;
 }
 
 export function embeddedWorkspaceActionsEnabled(input: {
@@ -36,11 +36,7 @@ export function embeddedWorkspaceActionsEnabled(input: {
   serverId: string;
   workspaceId: string;
 }): boolean {
-  return (
-    !isEmbeddedLiveDesignPresentation &&
-    input.routeFocused &&
-    Boolean(input.serverId && input.workspaceId)
-  );
+  return input.routeFocused && Boolean(input.serverId && input.workspaceId);
 }
 
 export function embeddedImportVisible(routeFocused: boolean, importVisible: boolean): boolean {
@@ -112,40 +108,21 @@ interface EmbeddedTab {
   target: { kind: string };
 }
 
-export function getEmbeddedConversationTabs<T extends EmbeddedTab>(tabs: T[]): T[] {
-  return tabs.filter((tab) => tab.target.kind === "agent" || tab.target.kind === "draft");
-}
+const isConversationTab = (tab: EmbeddedTab) =>
+  tab.target.kind === "agent" || tab.target.kind === "draft";
 
-export function findEmbeddedConversationTabId(tabs: EmbeddedTab[]): string | undefined {
-  return getEmbeddedConversationTabs(tabs)[0]?.tabId;
-}
+export function findNearestEmbeddedConversationTabId(
+  tabs: EmbeddedTab[],
+  activeTabId: string | null,
+): string | undefined {
+  const activeIndex = tabs.findIndex((tab) => tab.tabId === activeTabId);
+  if (activeIndex < 0) return tabs.find(isConversationTab)?.tabId;
 
-export function useEmbeddedLiveDesignConversation(input: {
-  activeKind?: string;
-  conversationTabId?: string;
-  enabled: boolean;
-  focusTab: (workspaceKey: string, tabId: string) => void;
-  openDraft: () => unknown;
-  workspaceKey: string | null;
-}) {
-  const { activeKind, conversationTabId, enabled, focusTab, openDraft, workspaceKey } = input;
-  const openingDraftRef = useRef(false);
-  const openingDraftWorkspaceRef = useRef<string | null>(null);
-  useLayoutEffect(() => {
-    if (!isEmbeddedLiveDesignPresentation || !enabled || !workspaceKey) return;
-    if (openingDraftWorkspaceRef.current !== workspaceKey) {
-      openingDraftWorkspaceRef.current = workspaceKey;
-      openingDraftRef.current = false;
-    }
-    if (conversationTabId) {
-      openingDraftRef.current = false;
-      if (activeKind !== "agent" && activeKind !== "draft") {
-        focusTab(workspaceKey, conversationTabId);
-      }
-      return;
-    }
-    if (activeKind === "agent" || activeKind === "draft" || openingDraftRef.current) return;
-    openingDraftRef.current = true;
-    openDraft();
-  }, [activeKind, conversationTabId, enabled, focusTab, openDraft, workspaceKey]);
+  let nearest: { distance: number; tabId: string } | undefined;
+  tabs.forEach((tab, index) => {
+    if (!isConversationTab(tab)) return;
+    const distance = Math.abs(index - activeIndex);
+    if (!nearest || distance < nearest.distance) nearest = { distance, tabId: tab.tabId };
+  });
+  return nearest?.tabId;
 }

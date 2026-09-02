@@ -80,8 +80,6 @@ import {
   HorizontalScrollBoundaryShades,
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
-import { isEmbeddedLiveDesignPresentation } from "@/embedded-focus-mode";
-
 const DROPDOWN_WIDTH = 220;
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
 const PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING = 2;
@@ -867,8 +865,6 @@ export function WorkspaceDesktopTabsRow(props: WorkspaceDesktopTabsRowProps) {
       }),
     [presentations, props.tabs],
   );
-
-  if (isEmbeddedLiveDesignPresentation) return null;
 
   return (
     <>
