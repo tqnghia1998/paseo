@@ -18,6 +18,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { openFolderWorkspace } from "@/app/folder-workspace";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 import { usePanelStore } from "@/stores/panel-store";
+import { preserveEmbeddedLiveDesignMessagingQuery } from "@/embedded-focus-mode";
 
 const isDesktop = shouldUseDesktopDaemon();
 
@@ -29,8 +30,9 @@ function getFolderParam(value: string | string[] | undefined): string | null {
 export default function Index() {
   const pathname = usePathname();
   const router = useRouter();
-  const params = useLocalSearchParams<{ folder?: string }>();
+  const params = useLocalSearchParams<{ folder?: string; "embedded-live-design"?: string }>();
   const folderParam = getFolderParam(params.folder);
+  const embeddedLiveDesignMessaging = params["embedded-live-design"] === "1";
 
   const bootstrapState = useHostRuntimeBootstrapState();
   const anyOnlineHostServerId = useEarliestOnlineHostServerId();
@@ -70,7 +72,12 @@ export default function Index() {
 
         useSessionStore.getState().mergeWorkspaces(serverId, [workspace]);
         enterFocusMode();
-        router.replace(buildHostWorkspaceRoute(serverId, workspace.id) as Href);
+        router.replace(
+          preserveEmbeddedLiveDesignMessagingQuery(
+            buildHostWorkspaceRoute(serverId, workspace.id),
+            embeddedLiveDesignMessaging,
+          ) as Href,
+        );
       } catch (err) {
         console.error("Failed to open workspace for folder param:", err);
       }
@@ -81,7 +88,7 @@ export default function Index() {
     return () => {
       cancelled = true;
     };
-  }, [folderParam, targetServerId, client, router, enterFocusMode]);
+  }, [client, embeddedLiveDesignMessaging, enterFocusMode, folderParam, router, targetServerId]);
 
   const startupRoute = resolveStartupRoute({
     route: { kind: "index", pathname },
