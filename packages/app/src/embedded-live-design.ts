@@ -1,9 +1,13 @@
 import { useEffect } from "react";
 export const EMBEDDED_LIVE_DESIGN_SEND_TYPE = "space:paseo-live-design-send";
 export const EMBEDDED_LIVE_DESIGN_SENT_TYPE = "paseo:live-design-sent";
+export const EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE = "paseo:live-design-completed";
 export const EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE = "paseo:live-design-send-failed";
 export const EMBEDDED_LIVE_DESIGN_READY_TYPE = "paseo:live-design-ready";
 export const EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE = "space:paseo-live-design-ready-request";
+export const EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE =
+  "space:paseo-live-design-completion-sync-request";
+export const EMBEDDED_LIVE_DESIGN_COMPLETION_ACK_TYPE = "space:paseo-live-design-completion-ack";
 
 export interface EmbeddedLiveDesignNote {
   comment: string;
@@ -80,6 +84,54 @@ export function buildEmbeddedLiveDesignPrompt(notes: EmbeddedLiveDesignNote[]): 
   ].join("\n");
 }
 
+interface StoredRequest {
+  requestId: string;
+  agentId: string;
+}
+
+const requestStorageKey = (state: "completed" | "pending") => `paseo:live-design-${state}`;
+
+const requests = (state: "completed" | "pending"): StoredRequest[] => {
+  try {
+    const stored = sessionStorage.getItem(requestStorageKey(state));
+    const parsed: unknown = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) &&
+      parsed.every(
+        (item) =>
+          item !== null &&
+          typeof item === "object" &&
+          typeof (item as StoredRequest).requestId === "string" &&
+          typeof (item as StoredRequest).agentId === "string",
+      )
+      ? (parsed as StoredRequest[])
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const rememberRequest = (state: "completed" | "pending", request: StoredRequest) => {
+  try {
+    const existing = requests(state);
+    if (!existing.some(({ requestId }) => requestId === request.requestId)) {
+      sessionStorage.setItem(requestStorageKey(state), JSON.stringify([...existing, request]));
+    }
+  } catch {
+    // Storage is optional; completion delivery still works in the active iframe.
+  }
+};
+
+const forgetRequest = (state: "completed" | "pending", requestId: string) => {
+  try {
+    sessionStorage.setItem(
+      requestStorageKey(state),
+      JSON.stringify(requests(state).filter((request) => request.requestId !== requestId)),
+    );
+  } catch {
+    // Storage is optional; completion delivery still works in the active iframe.
+  }
+};
+
 const embeddingOrigin = (): string | null => {
   try {
     return document.referrer
@@ -94,6 +146,7 @@ function publishResult(
   targetOrigin: string,
   type:
     | typeof EMBEDDED_LIVE_DESIGN_SENT_TYPE
+    | typeof EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE
     | typeof EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE
     | typeof EMBEDDED_LIVE_DESIGN_READY_TYPE,
   requestId?: string,
@@ -110,10 +163,12 @@ function publishResult(
 }
 
 export function useEmbeddedLiveDesignSend(input: {
+  agentId: string;
   enabled: boolean;
-  submit: (text: string) => Promise<void>;
+  submit: (text: string, onTurnFinished: () => Promise<void>) => Promise<void>;
+  resumePending?: (onTurnFinished: () => Promise<void>) => Promise<void>;
 }): void {
-  const { enabled, submit } = input;
+  const { agentId, enabled, submit, resumePending } = input;
   useEffect(() => {
     // The router replaces the embed URL with /h/... after opening its folder.
     // Build mode, not the transient query string, identifies this standalone iframe.
@@ -129,25 +184,54 @@ export function useEmbeddedLiveDesignSend(input: {
       event.source === window.parent && event.origin === expectedOrigin;
     const handleMessage = (event: MessageEvent) => {
       if (!isTrustedHost(event)) return;
-      if (
-        event.data !== null &&
-        typeof event.data === "object" &&
-        "type" in event.data &&
-        event.data.type === EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE
-      ) {
-        publishResult(event.origin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
-        return;
+      if (event.data !== null && typeof event.data === "object" && "type" in event.data) {
+        if (event.data.type === EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE) {
+          publishResult(event.origin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
+          return;
+        }
+        if (event.data.type === EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE) {
+          for (const { requestId } of requests("completed").filter(
+            (completed) => completed.agentId === agentId,
+          )) {
+            publishResult(event.origin, EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId);
+          }
+          return;
+        }
+        if (
+          event.data.type === EMBEDDED_LIVE_DESIGN_COMPLETION_ACK_TYPE &&
+          typeof (event.data as { requestId?: unknown }).requestId === "string"
+        ) {
+          forgetRequest("completed", (event.data as { requestId: string }).requestId);
+          return;
+        }
       }
       if (!isEmbeddedLiveDesignSendMessage(event.data)) return;
       const { notes, requestId } = event.data;
-      void submit(buildEmbeddedLiveDesignPrompt(notes))
+      const request = { requestId, agentId };
+      rememberRequest("pending", request);
+      const onTurnFinished = async () => {
+        forgetRequest("pending", requestId);
+        rememberRequest("completed", request);
+        publishResult(event.origin, EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId);
+      };
+      void submit(buildEmbeddedLiveDesignPrompt(notes), onTurnFinished)
         .then(() => publishResult(event.origin, EMBEDDED_LIVE_DESIGN_SENT_TYPE, requestId))
-        .catch((error) =>
-          publishResult(event.origin, EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE, requestId, error),
-        );
+        .catch((error) => {
+          forgetRequest("pending", requestId);
+          publishResult(event.origin, EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE, requestId, error);
+        });
     };
     window.addEventListener("message", handleMessage);
+    if (resumePending) {
+      for (const request of requests("pending").filter((pending) => pending.agentId === agentId)) {
+        void resumePending(async () => {
+          forgetRequest("pending", request.requestId);
+          rememberRequest("completed", request);
+          publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, request.requestId);
+        }).catch(() => undefined);
+      }
+    }
     publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
     return () => window.removeEventListener("message", handleMessage);
-  }, [enabled, submit]);
+  }, [agentId, enabled, resumePending, submit]);
 }

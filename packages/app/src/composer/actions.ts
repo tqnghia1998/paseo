@@ -22,6 +22,7 @@ export interface QueuedComposerMessage {
   id: string;
   text: string;
   attachments: ComposerAttachment[];
+  onSubmitted?: () => Promise<void>;
 }
 
 export interface AttachmentPersister {
@@ -219,6 +220,7 @@ export interface QueueComposerMessageInput {
   agentId: string;
   text: string;
   attachments: ComposerAttachment[];
+  onSubmitted?: () => Promise<void>;
   queue: QueueWriter;
 }
 
@@ -235,6 +237,7 @@ export function queueComposerMessage(input: QueueComposerMessageInput): QueueCom
     id: generateMessageId(),
     text: trimmed,
     attachments: input.attachments,
+    ...(input.onSubmitted ? { onSubmitted: input.onSubmitted } : {}),
   };
   input.queue.write((prev) => {
     const next = new Map(prev);
@@ -302,6 +305,7 @@ export async function sendQueuedComposerMessageNow(
   });
   try {
     await input.submitMessage({ text: item.text, attachments: item.attachments });
+    void item.onSubmitted?.().catch(() => undefined);
     return { status: "submitted" };
   } catch (error) {
     input.queue.write((prev) => {
