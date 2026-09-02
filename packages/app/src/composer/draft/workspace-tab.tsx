@@ -52,7 +52,7 @@ import {
   type WorkspaceDraftTabSetup,
 } from "@/workspace-tabs/model";
 import { openWorkspaceChanges } from "@/workspace-tabs/open-supporting-view";
-import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
+import { isEmbeddedLiveDesignPresentation } from "@/embedded-focus-mode";
 import { useSettings } from "@/hooks/use-settings";
 
 const EMPTY_PENDING_PERMISSIONS = new Map();
@@ -450,7 +450,7 @@ export function WorkspaceDraftAgentTab({
   );
   const handleOpenWorkspaceAttachment = useCallback(
     (attachment: WorkspaceComposerAttachment) => {
-      if (isEmbeddedChatOnly || attachment.kind !== "review") {
+      if (isEmbeddedLiveDesignPresentation || attachment.kind !== "review") {
         return;
       }
       openWorkspaceChanges({
