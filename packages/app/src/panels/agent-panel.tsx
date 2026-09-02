@@ -28,7 +28,7 @@ import { useRetainedPanelActive } from "@/components/retained-panel";
 import { RetainedChatContent } from "./retained-chat-content";
 import { Composer } from "@/composer";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
-import { isEmbeddedChatOnly } from "@/embedded-chat-mode";
+import { isEmbeddedLiveDesignPresentation } from "@/embedded-focus-mode";
 import {
   resolveComposerTrackControlClearance,
   resolveComposerTrackTailClearance,
@@ -1394,7 +1394,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
 }) {
   const isCompactFormFactor = useIsCompactFormFactor();
   const hasWorkspaceDiffStat =
-    useWorkspaceHasDiffStat(serverId, workspaceId) && !isEmbeddedChatOnly;
+    useWorkspaceHasDiffStat(serverId, workspaceId) && !isEmbeddedLiveDesignPresentation;
   const hasVisibleComposerTracks =
     hasActiveComposer && (hasVisibleAgentTracks || hasWorkspaceDiffStat);
   const bottomOverlayTailClearance = hasVisibleComposerTracks
@@ -1567,7 +1567,7 @@ function ActiveAgentComposer({
   );
   const handleOpenWorkspaceAttachment = useCallback(
     (attachment: WorkspaceComposerAttachment) => {
-      if (isEmbeddedChatOnly || attachment.kind !== "review") {
+      if (isEmbeddedLiveDesignPresentation || attachment.kind !== "review") {
         return;
       }
       openWorkspaceChanges({

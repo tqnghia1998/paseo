@@ -1,10 +1,10 @@
-/* eslint-disable react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop */
+/* oxlint-disable react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop */
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { Plus, X } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
-import { getEmbeddedConversationTabs } from "@/embedded-chat-mode";
+import { getEmbeddedConversationTabs } from "@/embedded-focus-mode";
 import type { WorkspaceTabDescriptor } from "./workspace-tabs-types";
 
 const ThemedPlus = withUnistyles(Plus);
