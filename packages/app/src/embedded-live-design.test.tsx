@@ -98,15 +98,7 @@ describe("embedded Live Design bridge", () => {
     const prompt = buildEmbeddedLiveDesignPrompt([note]);
     expect(prompt).toBe(
       [
-        "Apply this Live Design feedback.",
-        "",
-        "- Read the project instructions and use a relevant UI/UX or frontend skill when available.",
-        "- Start with the referenced files and selectors.",
-        "- Make only the requested changes.",
-        "- Preserve the existing architecture and design system.",
-        "- Do not browse to verify the supplied page.",
-        "- Do not run builds or tests.",
-        "- Do not make unrelated refactors.",
+        "Apply this Live Design feedback. Follow the project instructions and frontend conventions, start directly with the referenced files and selectors, and preserve the existing design system. The user is actively reviewing changes live in the preview via HMR, so apply code edits directly without browser verification.",
         "",
         "# Request 1",
         "",
