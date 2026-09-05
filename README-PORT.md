@@ -73,6 +73,7 @@ When loaded in an `iframe` or Electron `<webview>`, Paseo Web:
 2. Finds or creates the workspace corresponding to that directory through the idempotent `openProject` path, preserving its workspace and agent thread on remount.
 3. Enters **Embedded Focus Mode** directly.
 4. Keeps the selected worktree's same tabs/content in both hosts; `?embedded-live-design=1` only enables note handoff to the nearest conversation.
+5. Dictation and voice mode are enabled by the standalone runner (`PASEO_DICTATION_ENABLED`/`PASEO_VOICE_MODE_ENABLED` in `scripts/paseo-web.js`); the host iframe must keep `microphone` in its `allow` list.
 
 ### Upstream rebase guard
 
