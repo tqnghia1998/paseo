@@ -14,13 +14,21 @@ process.env.PASEO_VOICE_MODE_ENABLED = "true";
 process.env.PASEO_AUTH_REQUIRED = "false";
 process.env.PASEO_RELAY_ENABLED = "false";
 
-// Auto-extract runtime native modules (node-pty) if bundled as runtime-node-modules.tgz
+// Auto-extract runtime native modules if bundled as runtime-node-modules.tgz.
 const bundledNodeModulesRoot = path.join(__dirname, "node_modules");
 const bundledArchive = path.join(__dirname, "runtime-node-modules.tgz");
+const sherpaPlatform = process.platform === "win32" ? "win" : process.platform;
+const requiredRuntimePackages = [
+  "node-pty",
+  "sherpa-onnx-node",
+  `sherpa-onnx-${sherpaPlatform}-${process.arch}`,
+];
 
 if (
   fs.existsSync(bundledArchive) &&
-  !fs.existsSync(path.join(bundledNodeModulesRoot, "node-pty"))
+  requiredRuntimePackages.some(
+    (packageName) => !fs.existsSync(path.join(bundledNodeModulesRoot, packageName)),
+  )
 ) {
   fs.mkdirSync(bundledNodeModulesRoot, { recursive: true });
   execFileSync("tar", ["-xzf", bundledArchive, "-C", bundledNodeModulesRoot], {
