@@ -11,7 +11,8 @@ Paseo Web is packaged as a lightweight, self-contained standalone server that em
 1. **Paseo Daemon (`server.mjs`)**: Node.js backend daemon with WebSocket RPCs, agent lifecycle management, and session state.
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions.
-4. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, Import Session, Fork, command-center navigation, agent-profile/provider management, and other app-level escape routes; regular Paseo builds are unchanged.
+4. **Local Speech Worker (`worker-process.js`)**: Isolated worker for embedded dictation and voice mode.
+5. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, Import Session, Fork, command-center navigation, agent-profile/provider management, and other app-level escape routes; regular Paseo builds are unchanged.
 
 ### Canonical embedded mode
 
@@ -39,8 +40,9 @@ node scripts/bundle-paseo-web.mjs
 - `paseo-web.js` — Executable CLI runner
 - `server.mjs` — Standalone bundled daemon
 - `terminal-worker-process.js` — PTY process worker
+- `worker-process.js` — Local speech worker
 - `web-ui/` — Static web client bundle
-- `runtime-node-modules.tgz` — Native module bindings archive
+- `runtime-node-modules.tgz` — Native runtime bindings archive (PTY and speech)
 - `bridge-plugin.bundle.mjs` — OpenCode bridge runtime artifact
 
 ---
@@ -104,6 +106,7 @@ The standalone bundled Paseo Web artifacts have already been prepared in `script
 - `scripts/paseo-web/server.mjs`: Bundled backend & WebSocket server.
 - `scripts/paseo-web/web-ui/`: Bundled web frontend.
 - `scripts/paseo-web/terminal-worker-process.js`: Terminal worker.
+- `scripts/paseo-web/worker-process.js`: Local speech worker for dictation and voice mode.
 
 ### Tasks to Complete
 
