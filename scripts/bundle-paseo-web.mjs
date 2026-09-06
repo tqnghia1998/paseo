@@ -4,6 +4,7 @@ import { execSync } from "node:child_process";
 import esbuild from "esbuild";
 
 const ROOT_DIR = process.cwd();
+const SHERPA_PLATFORM = process.platform === "win32" ? "win" : process.platform;
 const DEST_DIR = path.resolve(
   process.env.PASEO_WEB_DEST_DIR ??
     path.join(ROOT_DIR, "..", "space-app-vibing", "scripts", "paseo-web"),
@@ -63,7 +64,7 @@ const __dirname = __dirnameFn(__filename);
   ],
 });
 
-// Also bundle terminal worker
+// Also bundle the isolated workers that resolve relative to server.mjs.
 await esbuild.build({
   entryPoints: ["packages/server/dist/server/terminal/terminal-worker-process.js"],
   bundle: true,
@@ -91,6 +92,30 @@ const __dirname = __dirnameFn(__filename);
   ],
 });
 
+await esbuild.build({
+  entryPoints: ["packages/server/dist/server/server/speech/providers/local/worker-process.js"],
+  bundle: true,
+  platform: "node",
+  target: "node20",
+  format: "esm",
+  outfile: path.join(DEST_DIR, "worker-process.js"),
+  banner: {
+    js: `
+import { createRequire as __createRequire } from 'node:module';
+import { fileURLToPath as __fileURLToPath } from 'node:url';
+import { dirname as __dirnameFn } from 'node:path';
+const require = __createRequire(import.meta.url);
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __dirnameFn(__filename);
+`,
+  },
+  external: ["sherpa-onnx-node"],
+});
+fs.writeFileSync(
+  path.join(DEST_DIR, "worker-process.js"),
+  fs.readFileSync(path.join(DEST_DIR, "worker-process.js"), "utf8").replace(/[\t ]+$/gm, ""),
+);
+
 console.log("4. Copying bundled OpenCode bridge plugin...");
 fs.copyFileSync(
   path.join(
@@ -106,8 +131,7 @@ const webUiDest = path.join(DEST_DIR, "web-ui");
 fs.rmSync(webUiDest, { recursive: true, force: true });
 fs.cpSync(webUiSrc, webUiDest, { recursive: true });
 
-console.log("6. Packaging runtime node_modules (node-pty native bindings)...");
-// Tar node-pty and other native modules
+console.log("6. Packaging runtime native modules...");
 const runtimeNmTmp = path.join(DEST_DIR, "runtime-nm-temp");
 fs.mkdirSync(runtimeNmTmp, { recursive: true });
 
@@ -119,6 +143,16 @@ if (!nodePtySrc) {
   throw new Error("Could not find the node-pty runtime package");
 }
 fs.cpSync(nodePtySrc, path.join(runtimeNmTmp, "node-pty"), { recursive: true });
+
+const sherpaPackage = "sherpa-onnx-node";
+const sherpaPlatformPackage = `sherpa-onnx-${SHERPA_PLATFORM}-${process.arch}`;
+for (const packageName of [sherpaPackage, sherpaPlatformPackage]) {
+  const source = path.join(ROOT_DIR, "node_modules", packageName);
+  if (!fs.existsSync(source)) {
+    throw new Error(`Could not find the ${packageName} runtime package`);
+  }
+  fs.cpSync(source, path.join(runtimeNmTmp, packageName), { recursive: true });
+}
 
 execSync(`tar -czf "${path.join(DEST_DIR, "runtime-node-modules.tgz")}" -C "${runtimeNmTmp}" .`);
 fs.rmSync(runtimeNmTmp, { recursive: true, force: true });
