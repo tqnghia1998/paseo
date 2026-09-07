@@ -767,3 +767,41 @@ test.each(["missing", "archived"] as const)(
     expect(await projectRegistry.list()).toEqual(previousProject ? [previousProject] : []);
   },
 );
+
+test("re-opening a directory with duplicate active records prefers recent agent activity", async () => {
+  const repo = path.join(tmpDir, "repo");
+  gitRoots.add(repo);
+
+  const stale = await provisioning.findOrCreateWorkspaceForDirectory(repo);
+  const twinCreatedAt = new Date(Date.parse(stale.createdAt) + 1000).toISOString();
+  const twin = createPersistedWorkspaceRecord({
+    workspaceId: "wks_test_twin_record",
+    projectId: stale.projectId,
+    cwd: repo,
+    kind: stale.kind,
+    displayName: stale.displayName,
+    createdAt: twinCreatedAt,
+    updatedAt: twinCreatedAt,
+  });
+  await workspaceRegistry.upsert(twin);
+
+  let activity = new Map<string, Date>();
+  const activityProvisioning = createWorkspaceProvisioningService({
+    workspaceRegistry,
+    projectRegistry,
+    workspaceGitService: gitService(),
+    getRecentAgentActivityByWorkspace: () => Promise.resolve(activity),
+    logger,
+  });
+
+  // No agent activity anywhere: deterministic oldest-first fallback keeps the original record.
+  expect((await activityProvisioning.findOrCreateWorkspaceForDirectory(repo)).workspaceId).toBe(
+    stale.workspaceId,
+  );
+
+  // Activity in the newer duplicate record wins over the oldest record.
+  activity = new Map([[twin.workspaceId, new Date()]]);
+  expect((await activityProvisioning.findOrCreateWorkspaceForDirectory(repo)).workspaceId).toBe(
+    twin.workspaceId,
+  );
+});
