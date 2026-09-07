@@ -93,6 +93,8 @@ export function createWorkspaceProvisioningService(deps: {
   workspaceRegistry: WorkspaceRegistry;
   projectRegistry: ProjectRegistry;
   workspaceGitService: Pick<WorkspaceGitService, "getCheckout" | "getSnapshot" | "peekSnapshot">;
+  /** workspaceId -> most recent agent lastActivityAt; used to prefer the live duplicate. */
+  getRecentAgentActivityByWorkspace?: () => Promise<Map<string, Date>>;
   logger: Logger;
   lifecycle?: PluginLifecycle;
 }): WorkspaceProvisioningService {
@@ -303,15 +305,26 @@ export function createWorkspaceProvisioningService(deps: {
   async function findOrCreateWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord> {
     const normalizedCwd = resolve(cwd);
     const workspaces = await workspaceRegistry.list();
+    // Duplicate workspace records for one directory are a legacy/failed-write
+    // artifact. Prefer the record the user is actually using (most recent agent
+    // activity) so re-opening a folder does not resurrect a stale twin whose
+    // conversations are missing.
+    const agentActivity =
+      (await deps.getRecentAgentActivityByWorkspace?.()) ?? new Map<string, Date>();
     const active = workspaces
       .filter(
         (workspace) => !workspace.archivedAt && areEquivalentPaths(workspace.cwd, normalizedCwd),
       )
-      .sort(
-        (left, right) =>
+      .sort((left, right) => {
+        const activityDelta =
+          (agentActivity.get(right.workspaceId)?.getTime() ?? 0) -
+          (agentActivity.get(left.workspaceId)?.getTime() ?? 0);
+        if (activityDelta !== 0) return activityDelta;
+        return (
           Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
-          left.workspaceId.localeCompare(right.workspaceId),
-      )[0];
+          left.workspaceId.localeCompare(right.workspaceId)
+        );
+      })[0];
     if (active) return refreshWorkspaceRecord(active);
     const archived = workspaces
       .filter(
