@@ -105,6 +105,8 @@ export function createWorkspaceProvisioningService(deps: {
   projectRegistry: ProjectRegistry;
   workspaceGitService: Pick<WorkspaceGitService, "getCheckout" | "getSnapshot" | "peekSnapshot">;
   isDirectory: (path: string) => Promise<boolean>;
+  /** workspaceId -> most recent agent lastActivityAt; used to prefer the live duplicate. */
+  getRecentAgentActivityByWorkspace?: () => Promise<Map<string, Date>>;
   logger: Logger;
   lifecycle?: PluginLifecycle;
 }): WorkspaceProvisioningService {
@@ -363,7 +365,17 @@ export function createWorkspaceProvisioningService(deps: {
           Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
           left.workspaceId.localeCompare(right.workspaceId),
       );
-    const active = workspaces.find((workspace) => !workspace.archivedAt);
+    // Prefer the active duplicate the user recently used; preserve oldest-first
+    // ordering for ties and archived workspace recovery.
+    const agentActivity =
+      (await deps.getRecentAgentActivityByWorkspace?.()) ?? new Map<string, Date>();
+    const active = workspaces
+      .filter((workspace) => !workspace.archivedAt)
+      .sort(
+        (left, right) =>
+          (agentActivity.get(right.workspaceId)?.getTime() ?? 0) -
+          (agentActivity.get(left.workspaceId)?.getTime() ?? 0),
+      )[0];
     if (active) return refreshWorkspaceRecord(active);
     const archived = workspaces.find((workspace) => workspace.archivedAt);
     if (archived) {
