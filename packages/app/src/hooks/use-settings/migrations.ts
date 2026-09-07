@@ -17,6 +17,15 @@ const STEER_DEFAULT_MIGRATION = "steer-default";
 const MOBILE_CONTENT_16_MIGRATION = "mobile-content-16";
 
 /**
+ * The Space App Vibing fork queues sends behind an active turn by default, but older installs
+ * materialized upstream's "steer" default into storage (and steer-default flipped even older
+ * "interrupt" values), so those stored values cannot be told apart from deliberate ones. This
+ * flips every stored "interrupt" and "steer" to "queue" exactly once; picking them afterwards
+ * sticks.
+ */
+const QUEUE_DEFAULT_MIGRATION = "queue-default";
+
+/**
  * Brings stored settings up to date, returning what the caller should use. Owns both writes so
  * the marker can only ever be written after the settings it describes: a failed marker write
  * leaves the migration to re-run harmlessly, while a failed settings write must leave the marker
@@ -41,6 +50,15 @@ export async function migrateAppSettings(
     migrated =
       migrated.sendBehavior === "interrupt" ? { ...migrated, sendBehavior: "steer" } : migrated;
     applied.add(STEER_DEFAULT_MIGRATION);
+    addedMigration = true;
+  }
+
+  if (!applied.has(QUEUE_DEFAULT_MIGRATION)) {
+    migrated =
+      migrated.sendBehavior === "interrupt" || migrated.sendBehavior === "steer"
+        ? { ...migrated, sendBehavior: "queue" }
+        : migrated;
+    applied.add(QUEUE_DEFAULT_MIGRATION);
     addedMigration = true;
   }
 

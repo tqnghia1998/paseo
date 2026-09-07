@@ -71,13 +71,13 @@ describe("loadAppSettingsFromStorage", () => {
     },
   );
 
-  it("preserves a persisted steer send behavior", async () => {
+  it("flips a persisted steer send behavior to queue once via the queue-default migration", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
         "@paseo:app-settings": JSON.stringify({ sendBehavior: "steer" }),
       }),
     });
-    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");
+    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("queue");
   });
 
   it("keeps valid settings when another build wrote unknown fields or enum values", async () => {
@@ -101,7 +101,7 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.sidebarRowItems.host).toBe(false);
     expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "null")).toEqual(stored);
   });
-  it("migrates a stored interrupt to steer and persists it", async () => {
+  it("migrates a stored interrupt to queue and persists it", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
         [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "interrupt" }),
@@ -110,9 +110,9 @@ describe("loadAppSettingsFromStorage", () => {
 
     const result = await loadAppSettingsFromStorage(deps);
 
-    expect(result.sendBehavior).toBe("steer");
+    expect(result.sendBehavior).toBe("queue");
     expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "{}").sendBehavior).toBe(
-      "steer",
+      "queue",
     );
     expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "{}")).not.toHaveProperty(
       "needsWrite",
