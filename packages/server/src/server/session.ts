@@ -913,7 +913,7 @@ export class Session {
           }
         };
         for (const record of await this.agentStorage.list()) {
-          consider(record.workspaceId ?? undefined, record.lastActivityAt ?? record.updatedAt);
+          consider(record.workspaceId, record.lastActivityAt ?? record.updatedAt);
         }
         for (const agent of this.agentManager.listAgents()) {
           consider(agent.workspaceId, agent.updatedAt);
