@@ -154,7 +154,24 @@ for (const packageName of [sherpaPackage, sherpaPlatformPackage]) {
   fs.cpSync(source, path.join(runtimeNmTmp, packageName), { recursive: true });
 }
 
-execSync(`tar -czf "${path.join(DEST_DIR, "runtime-node-modules.tgz")}" -C "${runtimeNmTmp}" .`);
+// Zero mtimes so repeated builds produce a byte-identical archive (cpSync stamps copies with
+// "now", which tar bakes in and made every rebuild churn the committed tgz). lutimes so symlink
+// entries are stamped without following them.
+const ZERO_TIME = new Date(0);
+const zeroMtimes = (dir) => {
+  fs.utimesSync(dir, ZERO_TIME, ZERO_TIME);
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) zeroMtimes(entryPath);
+    else fs.lutimesSync(entryPath, ZERO_TIME, ZERO_TIME);
+  }
+};
+zeroMtimes(runtimeNmTmp);
+// gzip:!timestamp drops the current time from the gzip header, which bsdtar stamps in and
+// which made even mtime-zeroed rebuilds produce different bytes.
+execSync(
+  `tar --options='gzip:!timestamp' -czf "${path.join(DEST_DIR, "runtime-node-modules.tgz")}" -C "${runtimeNmTmp}" .`,
+);
 fs.rmSync(runtimeNmTmp, { recursive: true, force: true });
 
 console.log("Done bundling paseo-web into", DEST_DIR);
