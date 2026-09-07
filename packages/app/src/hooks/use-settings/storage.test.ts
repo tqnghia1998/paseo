@@ -49,6 +49,10 @@ describe("loadAppSettingsFromStorage", () => {
       }),
     });
     expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("queue");
+
+    // A deliberate steer pick after the migration has run sticks.
+    await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify({ sendBehavior: "steer" }));
+    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");
   });
 
   it("keeps valid settings when another build wrote unknown fields or enum values", async () => {
