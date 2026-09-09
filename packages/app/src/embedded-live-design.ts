@@ -5,6 +5,8 @@ export const EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE = "paseo:live-design-completed"
 export const EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE = "paseo:live-design-send-failed";
 export const EMBEDDED_LIVE_DESIGN_READY_TYPE = "paseo:live-design-ready";
 export const EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE = "space:paseo-live-design-ready-request";
+export const EMBEDDED_LIVE_DESIGN_NEW_AGENT_REQUEST_TYPE =
+  "space:paseo-live-design-new-agent-request";
 export const EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE =
   "space:paseo-live-design-completion-sync-request";
 export const EMBEDDED_LIVE_DESIGN_COMPLETION_ACK_TYPE = "space:paseo-live-design-completion-ack";
@@ -57,7 +59,7 @@ export function buildEmbeddedLiveDesignPrompt(notes: EmbeddedLiveDesignNote[]): 
     return [
       `# Request ${index + 1}`,
       "",
-      `- Comment: ${note.comment}`,
+      `- Comment: ${note.comment.replace(/\r?\n/g, "\\n")}`,
       ...(file ? [`- File: ${file}`] : []),
       ...(note.context?.url ? [`- Page: ${note.context.url}`] : []),
       ...(note.context?.viewport
@@ -81,6 +83,8 @@ interface StoredRequest {
   agentId: string;
   workspaceId?: string;
 }
+
+const newAgentReadyRequestIds = new Map<string, string>();
 
 const requestStorageKey = (state: "completed" | "pending") => `paseo:live-design-${state}`;
 
@@ -170,7 +174,7 @@ function publishResult(
 }
 
 export function useEmbeddedLiveDesignActivation(input: {
-  activateConversation: (agentId?: string) => void;
+  activateConversation: (agentId?: string, newAgent?: boolean) => string | null | void;
   enabled: boolean;
   workspaceId: string;
 }): void {
@@ -191,6 +195,14 @@ export function useEmbeddedLiveDesignActivation(input: {
       }
       if (event.data.type === EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE) {
         activateConversation();
+        return;
+      }
+      if (event.data.type === EMBEDDED_LIVE_DESIGN_NEW_AGENT_REQUEST_TYPE) {
+        const requestId = (event.data as { requestId?: unknown }).requestId;
+        const agentId = activateConversation(undefined, true);
+        if (typeof requestId === "string" && agentId) {
+          newAgentReadyRequestIds.set(agentId, requestId);
+        }
         return;
       }
       if (event.data.type === EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE) {
@@ -289,7 +301,13 @@ export function useEmbeddedLiveDesignSend(input: {
         }).catch(() => undefined);
       }
     }
-    publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
+    const newAgentRequestId = newAgentReadyRequestIds.get(agentId);
+    if (newAgentRequestId) {
+      newAgentReadyRequestIds.delete(agentId);
+      publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_READY_TYPE, newAgentRequestId);
+    } else {
+      publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
+    }
     return () => window.removeEventListener("message", handleMessage);
   }, [agentId, enabled, resumePending, submit, workspaceId]);
 }
