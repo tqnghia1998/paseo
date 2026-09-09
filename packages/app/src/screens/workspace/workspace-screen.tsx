@@ -199,6 +199,7 @@ import {
   isEmbeddedFocusMode,
   isEmbeddedLiveDesignMessaging,
   selectEmbeddedFocusMode,
+  shouldUseDesktopWorkspaceTabs,
 } from "@/embedded-focus-mode";
 import { useEmbeddedLiveDesignActivation } from "@/embedded-live-design";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
@@ -1015,6 +1016,7 @@ function WorkspaceScreenContent({
   const _insets = useSafeAreaInsets();
   const toast = useToast();
   const isMobile = useIsCompactFormFactor();
+  const usesDesktopWorkspaceTabs = shouldUseDesktopWorkspaceTabs(isMobile);
   const hasMacTrafficLights = useHasWindowChromeObstruction("top-left");
   const explorerToggleOwner = resolveWorkspaceExplorerToggleOwner({
     isMobile,
@@ -3647,7 +3649,7 @@ function WorkspaceScreenContent({
 
   // Sheets opened from the compact column present inside it, so their panels read the workspace
   // providers, and they cover the compact header as a modal.
-  const workspaceCenterColumn = isMobile ? (
+  const workspaceCenterColumn = !usesDesktopWorkspaceTabs ? (
     <WorkspacePanelProviders
       launcher={newTabLauncher}
       workspaceKey={workspacePanelKey}
@@ -3678,7 +3680,8 @@ function WorkspaceScreenContent({
     <View style={styles.centerColumn}>
       {rendersDesktopSplitContent ? null : renderWorkspaceScreenHeader()}
 
-      {shouldRenderDesktopPaneFallback ? (
+      {shouldRenderDesktopPaneFallback ||
+      (usesDesktopWorkspaceTabs && !rendersDesktopSplitContent) ? (
         <NewTabLauncherProvider value={newTabLauncher}>
           <WorkspaceDesktopTabsRow
             paneId={focusedPaneIdOrUndefined}
