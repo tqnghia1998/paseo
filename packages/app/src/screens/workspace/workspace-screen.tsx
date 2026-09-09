@@ -214,6 +214,7 @@ import {
   isEmbeddedFocusMode,
   isEmbeddedLiveDesignMessaging,
   selectEmbeddedFocusMode,
+  shouldUseDesktopWorkspaceTabs,
 } from "@/embedded-focus-mode";
 import { useEmbeddedLiveDesignActivation } from "@/embedded-live-design";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
@@ -1041,6 +1042,7 @@ function WorkspaceScreenContent({
   const isMobile = useIsCompactFormFactor();
   const canRenderDesktopPaneSplits = supportsDesktopPaneSplits();
   const layoutMode = useWorkspaceLayoutStore((state) => state.layoutMode);
+  const usesDesktopWorkspaceTabs = shouldUseDesktopWorkspaceTabs(isMobile);
   const hasMacTrafficLights = useHasWindowChromeObstruction("top-left");
   const explorerToggleOwner = resolveWorkspaceExplorerToggleOwner({
     isMobile,
@@ -3615,8 +3617,7 @@ function WorkspaceScreenContent({
   });
 
   // Compact sheets escape to the app overlay host, above both sidebars.
-
-  const workspaceCenterColumn = isMobile ? (
+  const workspaceCenterColumn = !usesDesktopWorkspaceTabs ? (
     <View style={styles.centerColumn}>
       <FloatingHeaderLayout
         header={compactHeaderLayout.header}
@@ -3634,7 +3635,8 @@ function WorkspaceScreenContent({
     <View style={styles.centerColumn}>
       {rendersDesktopSplitContent ? null : renderWorkspaceScreenHeader()}
 
-      {shouldRenderDesktopPaneFallback ? (
+      {shouldRenderDesktopPaneFallback ||
+      (usesDesktopWorkspaceTabs && !rendersDesktopSplitContent) ? (
         <NewTabLauncherProvider value={newTabLauncher}>
           <WorkspaceDesktopTabsRow
             paneId={focusedPaneIdOrUndefined}
