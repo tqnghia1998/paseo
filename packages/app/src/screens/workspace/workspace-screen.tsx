@@ -196,6 +196,7 @@ import {
   isEmbeddedFocusMode,
   isEmbeddedLiveDesignMessaging,
   selectEmbeddedFocusMode,
+  shouldUseDesktopWorkspaceTabs,
 } from "@/embedded-focus-mode";
 import { useEmbeddedLiveDesignActivation } from "@/embedded-live-design";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
@@ -4146,6 +4147,10 @@ function WorkspaceScreenContent({
   ]);
   const desktopContent = desktopSplitContent ?? content;
   const rendersDesktopSplitContent = !isMobile && desktopSplitContent !== null;
+  const usesDesktopWorkspaceTabs = shouldUseDesktopWorkspaceTabs(
+    isMobile,
+    isEmbeddedLiveDesignMessaging,
+  );
 
   const workspacePanelContent = (
     <WorkspacePanelContent
@@ -4154,7 +4159,7 @@ function WorkspaceScreenContent({
     />
   );
 
-  const workspaceTabControl = isMobile ? (
+  const workspaceTabControl = !usesDesktopWorkspaceTabs ? (
     <MobileWorkspaceTabSwitcher
       tabs={tabs}
       activeTabKey={activeTabKey}
@@ -4183,7 +4188,8 @@ function WorkspaceScreenContent({
 
       {workspaceTabControl}
 
-      {shouldRenderDesktopPaneFallback ? (
+      {shouldRenderDesktopPaneFallback ||
+      (usesDesktopWorkspaceTabs && !rendersDesktopSplitContent) ? (
         <NewTabLauncherProvider value={newTabLauncher}>
           <WorkspaceDesktopTabsRow
             paneId={focusedPaneIdOrUndefined}

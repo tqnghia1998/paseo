@@ -19,6 +19,7 @@ import {
   findNearestEmbeddedConversationTabId,
   preserveEmbeddedLiveDesignMessagingQuery,
   resolveEmbeddedModelSelection,
+  shouldUseDesktopWorkspaceTabs,
   shouldUseEmbeddedFocusMode,
   shouldUseEmbeddedLiveDesignMessaging,
   useEmbeddedModelSelection,
@@ -33,6 +34,12 @@ describe("embedded focus mode", () => {
     expect(shouldUseEmbeddedLiveDesignMessaging(true, "?embedded-live-design=0")).toBe(false);
     expect(shouldUseEmbeddedLiveDesignMessaging(true, "?embedded-live-design")).toBe(false);
     expect(shouldUseEmbeddedLiveDesignMessaging(false, "?embedded-live-design=1")).toBe(false);
+  });
+
+  it("keeps Live Design workspace tabs in their desktop row", () => {
+    expect(shouldUseDesktopWorkspaceTabs(true, true)).toBe(true);
+    expect(shouldUseDesktopWorkspaceTabs(true, false)).toBe(false);
+    expect(shouldUseDesktopWorkspaceTabs(false, false)).toBe(true);
   });
 
   it("preserves Live Design messaging across the folder route replacement", () => {
