@@ -114,6 +114,88 @@ describe("embedded Live Design bridge", () => {
     expect(prompt).not.toContain("Element context:");
     expect(prompt).not.toContain("Anchor:");
     expect(prompt).not.toContain("CSS patch:");
+    expect(
+      buildEmbeddedLiveDesignPrompt([{ ...note, comment: "Tighten the spacing\nKeep the rhythm" }]),
+    ).toContain("- Comment: Tighten the spacing\\nKeep the rhythm");
+  });
+
+  it("asks the workspace to create a new conversation only for a trusted host", () => {
+    const { parent } = useFakeParent();
+    const activateConversation = vi.fn();
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: "https://host.example/live-design",
+    });
+
+    const { unmount } = renderHook(() =>
+      useEmbeddedLiveDesignActivation({
+        enabled: true,
+        activateConversation,
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://attacker.example",
+          source: parent,
+          data: { type: "space:paseo-live-design-new-agent-request" },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://host.example",
+          source: parent,
+          data: { type: "space:paseo-live-design-new-agent-request" },
+        }),
+      );
+    });
+
+    expect(activateConversation).toHaveBeenCalledOnce();
+    expect(activateConversation).toHaveBeenCalledWith(undefined, true);
+    unmount();
+  });
+
+  it("correlates a new-agent readiness response with the fresh tab", () => {
+    const { parent, postMessage } = useFakeParent();
+    const activateConversation = vi.fn().mockReturnValue("new-draft-tab");
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: "https://host.example/live-design",
+    });
+
+    const activation = renderHook(() =>
+      useEmbeddedLiveDesignActivation({
+        enabled: true,
+        activateConversation,
+        workspaceId: "workspace-1",
+      }),
+    );
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://host.example",
+          source: parent,
+          data: {
+            type: "space:paseo-live-design-new-agent-request",
+            requestId: "new-agent-request-1",
+          },
+        }),
+      );
+    });
+    activation.unmount();
+    postMessage.mockClear();
+
+    const composer = renderHook(() =>
+      useEmbeddedLiveDesignSend({ agentId: "new-draft-tab", enabled: true, submit: vi.fn() }),
+    );
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: "paseo:live-design-ready", requestId: "new-agent-request-1" },
+      "https://host.example",
+    );
+    composer.unmount();
   });
 
   it("activates a conversation only for a readiness request from the embedding host", () => {
