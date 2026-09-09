@@ -60,7 +60,10 @@ import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
-import { embeddedMessageInputFocusHintVisible } from "@/embedded-focus-mode";
+import {
+  embeddedMessageInputFocusHintVisible,
+  isEmbeddedLiveDesignMessaging,
+} from "@/embedded-focus-mode";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useComposerHeight } from "./height";
 import { ComposerInputPresentation } from "./presentation";
@@ -1730,7 +1733,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     );
 
     const shouldHandleWebKeyPress = isWeb;
-    const shouldSubmitOnEnter = isWeb && !isCompact;
+    const shouldSubmitOnEnter = isWeb && (!isCompact || isEmbeddedLiveDesignMessaging);
 
     const handleDesktopKeyPress = useCallback(
       (event: WebTextInputKeyPressEvent) => {
