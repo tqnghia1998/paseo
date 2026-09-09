@@ -2117,11 +2117,15 @@ function WorkspaceScreenContent({
   const openingEmbeddedLiveDesignDraftRef = useRef(false);
   const embeddedLiveDesignWorkspaceRef = useRef<string | null>(null);
   const activateEmbeddedLiveDesignConversation = useCallback(
-    (preferredAgentId?: string) => {
+    (preferredAgentId?: string, newAgent = false) => {
       if (!persistenceKey) return;
       if (embeddedLiveDesignWorkspaceRef.current !== persistenceKey) {
         embeddedLiveDesignWorkspaceRef.current = persistenceKey;
         openingEmbeddedLiveDesignDraftRef.current = false;
+      }
+      if (newAgent) {
+        openingEmbeddedLiveDesignDraftRef.current = false;
+        return openWorkspaceDraftTab();
       }
       const preferredTab = preferredAgentId
         ? uiTabs.find(
