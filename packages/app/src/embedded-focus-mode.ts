@@ -14,6 +14,13 @@ export function shouldUseEmbeddedLiveDesignMessaging(
   return isEmbeddedFocusMode && new URLSearchParams(search).get("embedded-live-design") === "1";
 }
 
+export function shouldUseDesktopWorkspaceTabs(
+  isCompact: boolean,
+  isLiveDesignMessaging: boolean,
+): boolean {
+  return !isCompact || isLiveDesignMessaging;
+}
+
 export const isEmbeddedFocusMode = shouldUseEmbeddedFocusMode(
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS === "true",
 );
