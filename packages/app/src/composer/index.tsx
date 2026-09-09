@@ -2586,10 +2586,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   queueText: {
     flex: 1,
+    minWidth: 0,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
   },
   queueActions: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
