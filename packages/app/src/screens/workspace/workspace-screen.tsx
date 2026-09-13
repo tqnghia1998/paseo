@@ -198,7 +198,6 @@ import {
   findNearestEmbeddedConversationTabId,
   isEmbeddedFocusMode,
   isEmbeddedLiveDesignMessaging,
-  selectEmbeddedFocusMode,
   shouldUseDesktopWorkspaceTabs,
 } from "@/embedded-focus-mode";
 import { useEmbeddedLiveDesignActivation } from "@/embedded-live-design";
@@ -3108,7 +3107,7 @@ function WorkspaceScreenContent({
             focusPaneBeforeOpen: input.focusPaneBeforeOpen,
           });
         },
-        onOpenImportSheet: selectEmbeddedFocusMode(() => {}, openImportSheet),
+        onOpenImportSheet: openImportSheet,
       }),
     [
       handleCloseTabById,
