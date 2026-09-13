@@ -47,7 +47,7 @@ export function embeddedWorkspaceActionsEnabled(input: {
 }
 
 export function embeddedImportVisible(routeFocused: boolean, importVisible: boolean): boolean {
-  return !isEmbeddedFocusMode && routeFocused && importVisible;
+  return routeFocused && importVisible;
 }
 
 export function embeddedModelSelectorManagementEnabled(): boolean {
