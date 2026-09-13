@@ -12,7 +12,7 @@ Paseo Web is packaged as a lightweight, self-contained standalone server that em
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions.
 4. **Local Speech Worker (`worker-process.js`)**: Isolated worker for embedded dictation and voice mode.
-5. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, Import Session, Fork, command-center navigation, agent-profile/provider management, and other app-level escape routes; regular Paseo builds are unchanged.
+5. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, Fork, command-center navigation, agent-profile/provider management, and other app-level escape routes; Import Session remains available for the selected worktree. Regular Paseo builds are unchanged.
 
 ### Canonical embedded mode
 
@@ -82,7 +82,7 @@ When loaded in an `iframe` or Electron `<webview>`, Paseo Web:
 After syncing from `getpaseo/paseo`, verify all of the following before regenerating the consumer bundle:
 
 - `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true` is still injected by `scripts/build-daemon-web-ui.mjs`.
-- `packages/app/src/embedded-focus-mode.ts` still gates project/workspace navigation, Import Session, Fork, sidebars, workspace headers, command center, route-changing shortcuts, and model-management escape paths for every standalone embed.
+- `packages/app/src/embedded-focus-mode.ts` still gates project/workspace navigation, Fork, sidebars, workspace headers, command center, route-changing shortcuts, and model-management escape paths for every standalone embed; Import Session remains available for the selected worktree.
 - Vibing and Live Design still render identical tabs/content inside the selected worktree; `?embedded-live-design=1` only enables note handoff, which focuses the nearest conversation or creates a draft first.
 - The `?folder=` bootstrap still uses `openProject` rather than direct workspace creation.
 - Focus Mode remains locked and its exit controls remain unavailable.
