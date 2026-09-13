@@ -51,7 +51,7 @@ describe("embedded focus mode", () => {
     );
   });
 
-  it("keeps current-worktree workspace actions available", () => {
+  it("keeps current-worktree workspace actions and session import available", () => {
     expect(
       embeddedWorkspaceActionsEnabled({
         routeFocused: true,
@@ -59,7 +59,9 @@ describe("embedded focus mode", () => {
         workspaceId: "workspace",
       }),
     ).toBe(true);
-    expect(embeddedImportVisible(true, true)).toBe(false);
+    expect(embeddedImportVisible(true, true)).toBe(true);
+    expect(embeddedImportVisible(false, true)).toBe(false);
+    expect(embeddedImportVisible(true, false)).toBe(false);
     expect(embeddedModelSelectorManagementEnabled()).toBe(false);
     expect(embeddedMessageInputFocusShortcutEnabled()).toBe(false);
     expect(
