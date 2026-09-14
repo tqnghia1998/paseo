@@ -5,7 +5,6 @@ import { Split } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
 
 export type AssistantForkTarget = "tab" | "workspace";
 
@@ -49,8 +48,6 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
     ),
     [t],
   );
-
-  if (isEmbeddedFocusMode) return null;
 
   return (
     <Tooltip delayDuration={250} enabledOnDesktop enabledOnMobile={false}>
