@@ -23,6 +23,7 @@ import {
 } from "@/composer/submission/model";
 import type { PendingPermission } from "@/types/shared";
 import type { ComposerAttachment } from "@/attachments/types";
+import { queuedMessagePersistence } from "@/stores/queued-message-store";
 import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
 import type {
   AgentPermissionRequest,
@@ -201,6 +202,24 @@ function preserveWorkspaceDescriptorIdentity(
     return existing;
   }
   return incoming;
+}
+
+type QueuedMessages = Map<
+  string,
+  Array<{ id: string; text: string; attachments: ComposerAttachment[] }>
+>;
+
+function mergeQueuedMessages(checkpoint: QueuedMessages, pending: QueuedMessages): QueuedMessages {
+  const merged = new Map(checkpoint);
+  for (const [agentId, messages] of pending) {
+    const persisted = merged.get(agentId) ?? [];
+    const persistedIds = new Set(persisted.map((message) => message.id));
+    const additions = messages.filter((message) => !persistedIds.has(message.id));
+    if (persisted.length > 0 || additions.length > 0) {
+      merged.set(agentId, [...persisted, ...additions]);
+    }
+  }
+  return merged;
 }
 
 function preserveMapIdentity<Key, Value>(
@@ -743,6 +762,25 @@ export const useSessionStore = create<SessionStore>()(
             },
           };
         });
+        void queuedMessagePersistence
+          .load(serverId)
+          .then((persistedQueue) => {
+            set((prev) => {
+              const session = prev.sessions[serverId];
+              if (!session || persistedQueue.size === 0) return prev;
+              const queuedMessages = mergeQueuedMessages(persistedQueue, session.queuedMessages);
+              void queuedMessagePersistence.save(serverId, queuedMessages);
+              return {
+                ...prev,
+                sessions: {
+                  ...prev.sessions,
+                  [serverId]: { ...session, queuedMessages },
+                },
+              };
+            });
+            return undefined;
+          })
+          .catch(() => undefined);
       },
 
       clearSession: (serverId) => {
@@ -1788,6 +1826,7 @@ export const useSessionStore = create<SessionStore>()(
           if (session.queuedMessages === nextValue) {
             return prev;
           }
+          void queuedMessagePersistence.save(serverId, nextValue).catch(() => undefined);
           return {
             ...prev,
             sessions: {
