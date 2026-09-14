@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
@@ -13,6 +13,7 @@ import {
 } from "./session-store";
 import type { StreamItem } from "../types/stream";
 import { reduceTurnLiveness, type TurnLivenessTransition } from "@/timeline/turn-liveness";
+import { queuedMessagePersistence } from "./queued-message-store";
 
 function createTestAgent(agentId: string): Agent {
   return {
@@ -659,6 +660,54 @@ describe("normalizeWorkspaceDescriptor", () => {
         mainRepoRoot: null,
       },
     });
+  });
+});
+
+describe("queued messages", () => {
+  it("persists queue changes while retaining the in-memory queue", () => {
+    initializeTestSession();
+    const store = useSessionStore.getState();
+
+    store.setQueuedMessages(
+      "test-server",
+      new Map([["agent-1", [{ id: "queued-1", text: "finish the tests", attachments: [] }]]]),
+    );
+
+    expect(
+      useSessionStore.getState().sessions["test-server"]?.queuedMessages.get("agent-1"),
+    ).toEqual([{ id: "queued-1", text: "finish the tests", attachments: [] }]);
+  });
+
+  it("keeps the checkpointed queue ahead of messages queued before restore finishes", async () => {
+    let resolveCheckpoint!: (
+      queue: Map<string, Array<{ id: string; text: string; attachments: [] }>>,
+    ) => void;
+    const load = vi
+      .spyOn(queuedMessagePersistence, "load")
+      .mockReturnValue(new Promise((resolve) => (resolveCheckpoint = resolve)));
+
+    try {
+      initializeTestSession();
+      const store = useSessionStore.getState();
+      store.setQueuedMessages(
+        "test-server",
+        new Map([["agent-1", [{ id: "new", text: "new message", attachments: [] }]]]),
+      );
+
+      resolveCheckpoint(
+        new Map([
+          ["agent-1", [{ id: "checkpointed", text: "checkpointed message", attachments: [] }]],
+        ]),
+      );
+      await vi.waitFor(() => {
+        expect(store.getSession("test-server")?.queuedMessages.get("agent-1")).toEqual([
+          { id: "checkpointed", text: "checkpointed message", attachments: [] },
+          { id: "new", text: "new message", attachments: [] },
+        ]);
+      });
+    } finally {
+      load.mockRestore();
+    }
   });
 });
 
