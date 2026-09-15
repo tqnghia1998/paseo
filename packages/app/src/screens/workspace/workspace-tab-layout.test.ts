@@ -12,6 +12,7 @@ import {
   selectWorkspaceChrome,
   computeWorkspaceTabLayout,
   retainWorkspaceTabMeasuredWidth,
+  shouldShowInlineWorkspaceNewTab,
 } from "@/screens/workspace/workspace-tab-layout";
 
 const metrics = {
@@ -166,6 +167,12 @@ describe("computeWorkspaceTabLayout", () => {
     expect(result.closeButtonPolicy).toBe("all");
     expect(result.requiresHorizontalScrollFallback).toBe(false);
     expect(result.items).toEqual([]);
+  });
+
+  it("hides the inline New Agent control until a tab has been measured", () => {
+    expect(shouldShowInlineWorkspaceNewTab(0, false)).toBe(false);
+    expect(shouldShowInlineWorkspaceNewTab(1, false)).toBe(true);
+    expect(shouldShowInlineWorkspaceNewTab(1, true)).toBe(false);
   });
 
   it("uses rendered label width rather than character count", () => {
