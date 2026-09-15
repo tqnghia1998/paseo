@@ -62,6 +62,7 @@ import {
 import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 import { panelTargetSupportsHostForWorkspaceKey } from "@/plugins/workspace-panels/locations";
+import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
 
 export {
   AMBIENT_PLACEMENT,
@@ -454,6 +455,25 @@ function keepWorkspaceFocusOutOfExplorerSidebar(
   return { ...layout, focusedPaneId: mainPane?.id ?? null };
 }
 
+function replaceRetainedNewTabWithDraft(
+  layout: WorkspaceLayout,
+  enabled: boolean,
+): WorkspaceLayout {
+  if (!enabled) return layout;
+  const retainedMainTab = collectAllTabs(layout.root).find(
+    (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === DEFAULT_PANE_ID,
+  );
+  if (retainedMainTab?.target.kind !== "new_tab") return layout;
+  return (
+    replaceTabTargetInLayout({
+      layout,
+      tabId: retainedMainTab.tabId,
+      target: { kind: "draft", draftId: retainedMainTab.tabId },
+      createTabId: () => retainedMainTab.tabId,
+    })?.layout ?? layout
+  );
+}
+
 type ExplorerSidebarState = Pick<
   WorkspaceLayoutStore,
   "layoutByWorkspace" | "explorerSidebarPaneIdByWorkspace"
@@ -653,6 +673,7 @@ function createExplorerSidebarPane(
 
 export function createWorkspaceLayoutStore(
   ids: WorkspaceLayoutIdSource = defaultWorkspaceLayoutIds,
+  replaceLastClosedTabWithDraft = false,
 ) {
   return create<WorkspaceLayoutStore>()(
     persist(
@@ -940,13 +961,17 @@ export function createWorkspaceLayoutStore(
             if (!nextLayout) {
               return state;
             }
+            const embeddedDraftLayout = replaceRetainedNewTabWithDraft(
+              nextLayout,
+              replaceLastClosedTabWithDraft,
+            );
 
             return {
               ...withoutFocusRestoration(state, normalizedWorkspaceKey),
               ...reconcileRememberedSidePane(state, normalizedWorkspaceKey, nextLayout),
               layoutByWorkspace: {
                 ...state.layoutByWorkspace,
-                [normalizedWorkspaceKey]: nextLayout,
+                [normalizedWorkspaceKey]: embeddedDraftLayout,
               },
             };
           });
@@ -1792,7 +1817,10 @@ export function createWorkspaceLayoutStore(
   );
 }
 
-export const useWorkspaceLayoutStore = createWorkspaceLayoutStore();
+export const useWorkspaceLayoutStore = createWorkspaceLayoutStore(
+  defaultWorkspaceLayoutIds,
+  isEmbeddedFocusMode,
+);
 
 /**
  * The agent tabs that exist right now, across every workspace of this host, independently
