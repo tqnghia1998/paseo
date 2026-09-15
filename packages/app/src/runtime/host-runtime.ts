@@ -2361,6 +2361,7 @@ export class HostRuntimeStore {
           }),
           encodeImages,
           submission: createMessageSubmissionWriter(serverId),
+          messageId: next.id,
         });
       },
     })

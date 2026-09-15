@@ -436,6 +436,24 @@ describe("dispatchComposerAgentMessage", () => {
     expect(client.calls[0]?.options.activeTurnBehavior).toBe("steer");
   });
 
+  it("reuses a supplied message id for the optimistic row and daemon request", async () => {
+    const client = createFakeSendClient();
+    const stream = createFakeStream();
+
+    await dispatchComposerAgentMessage({
+      client,
+      agentId: "agent",
+      text: "queued message",
+      attachments: [],
+      encodeImages: async () => [],
+      submission: stream,
+      messageId: "queued-1",
+    });
+
+    expect(client.calls[0]?.options.messageId).toBe("queued-1");
+    expect(stream.tail.get("agent")?.[0]).toMatchObject({ clientMessageId: "queued-1" });
+  });
+
   it("stamps only a steer optimistic row with the daemon active turn ID", async () => {
     const client = createFakeSendClient();
     const stream = createFakeStream();
@@ -812,7 +830,8 @@ describe("sendQueuedComposerMessageNow", () => {
     const queue = createFakeQueue(
       new Map([["agent", [{ id: "msg-1", text: "send me", attachments: [review], onSubmitted }]]]),
     );
-    const submitted: Array<{ text: string; attachments: ComposerAttachment[] }> = [];
+    const submitted: Array<{ text: string; attachments: ComposerAttachment[]; messageId: string }> =
+      [];
     const result = await sendQueuedComposerMessageNow({
       agentId: "agent",
       messageId: "msg-1",
@@ -823,7 +842,7 @@ describe("sendQueuedComposerMessageNow", () => {
     });
     expect(result).toEqual({ status: "submitted" });
     expect(queue.state.get("agent")).toEqual([]);
-    expect(submitted).toEqual([{ text: "send me", attachments: [review] }]);
+    expect(submitted).toEqual([{ text: "send me", attachments: [review], messageId: "msg-1" }]);
     expect(onSubmitted).toHaveBeenCalledOnce();
   });
 
