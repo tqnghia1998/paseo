@@ -3300,7 +3300,7 @@ describe("workspace-layout-store actions", () => {
     expect(findPaneById(layout.root, "explorer")?.hidden).toBe(true);
   });
 
-  it("replaces the last closed tab with a New Agent draft in embedded workspaces", () => {
+  it("keeps the New Tab placeholder after the final tab closes in embedded workspaces", () => {
     const workspaceKey = createWorkspaceKey();
     const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
 
@@ -3315,7 +3315,32 @@ describe("workspace-layout-store actions", () => {
     const mainTab = collectAllTabs(layout.root).find(
       (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
     );
-    expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
+    expect(mainTab?.target).toEqual({ kind: "new_tab" });
+  });
+
+  it("does not resurrect a New Agent draft when reconciling a workspace the user emptied", () => {
+    const workspaceKey = createWorkspaceKey();
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+
+    const tabId = embeddedStore.getState().openTab({
+      workspaceKey,
+      target: { kind: "draft", draftId: "draft-1" },
+      intent: "reveal",
+    });
+    embeddedStore.getState().closeTab(workspaceKey, tabId!);
+    embeddedStore.getState().reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: [],
+      autoOpenAgentIds: [],
+      standaloneTerminalIds: [],
+    });
+
+    const layout = embeddedStore.getState().layoutByWorkspace[workspaceKey];
+    const mainTab = collectAllTabs(layout.root).find(
+      (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
+    );
+    expect(mainTab?.target).toEqual({ kind: "new_tab" });
   });
 
   it("seeds a new embedded workspace with a New Agent draft", () => {
