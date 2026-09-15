@@ -3300,6 +3300,24 @@ describe("workspace-layout-store actions", () => {
     expect(findPaneById(layout.root, "explorer")?.hidden).toBe(true);
   });
 
+  it("replaces the last closed tab with a New Agent draft in embedded workspaces", () => {
+    const workspaceKey = createWorkspaceKey();
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+
+    const tabId = embeddedStore.getState().openTab({
+      workspaceKey,
+      target: { kind: "draft", draftId: "draft-1" },
+      intent: "reveal",
+    });
+    embeddedStore.getState().closeTab(workspaceKey, tabId!);
+
+    const layout = embeddedStore.getState().layoutByWorkspace[workspaceKey];
+    const mainTab = collectAllTabs(layout.root).find(
+      (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
+    );
+    expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
+  });
+
   it("persists explicit agent opens per workspace", () => {
     const workspaceKey = createWorkspaceKey();
     const otherWorkspaceKey = buildWorkspaceTabPersistenceKey({
