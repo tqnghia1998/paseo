@@ -1028,6 +1028,7 @@ function useLastMainPane(input: {
   return lastMainPaneRef;
 }
 
+// eslint-disable-next-line complexity -- embedded focus activation keeps the host-specific policy local to this route.
 function WorkspaceScreenContent({
   serverId,
   workspaceId,
