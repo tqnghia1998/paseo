@@ -1651,6 +1651,19 @@ describe("PiRpcAgentSession", () => {
     });
   });
 
+  test("completes a normal Pi turn when the runtime sends agent_end without agent_settled", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    const { turnId } = await session.startTurn("finish normally");
+    fakeSession.finishAgentRun({
+      message: { role: "assistant", stopReason: "stop", content: [] },
+      willRetry: false,
+    });
+
+    await expect(events.nextTurnCompletion()).resolves.toMatchObject({ turnId });
+  });
+
   test("does not synthesize completion when agentInvoked is true for slash prompts", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();

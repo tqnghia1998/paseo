@@ -2292,9 +2292,16 @@ export class PiRpcAgentSession implements AgentSession {
       return;
     }
     if (event.type === "agent_end") {
-      // COMPAT(piAgentSettled): added in v0.5.0, remove after 2027-02-21 once the Pi
-      // floor emits agent_settled and willRetry.
-      if (event.willRetry === undefined) {
+      // A successful foreground prompt has a Paseo turn ID, so its final agent_end is
+      // enough to settle when a Pi-compatible runtime omits agent_settled. Retry,
+      // error, abort, and autonomous extension work still need the settle boundary.
+      if (
+        event.willRetry === undefined ||
+        (event.willRetry === false &&
+          this.activeTurnId &&
+          !latestPiErrorMessage(event.messages ?? []) &&
+          !isPiAbortedTerminalResponse(event.messages ?? []))
+      ) {
         this.completeTurn(turnId, event.messages ?? []);
         return;
       }
