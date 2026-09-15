@@ -1050,6 +1050,7 @@ function DesktopCenterColumnChrome({
   );
 }
 
+// eslint-disable-next-line complexity -- embedded focus activation keeps the host-specific policy local to this route.
 function WorkspaceScreenContent({
   serverId,
   workspaceId,
