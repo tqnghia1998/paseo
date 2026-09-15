@@ -2807,6 +2807,7 @@ describe("HostRuntimeStore", () => {
 
     store.drainQueuedAgentMessage(host.serverId, "agent");
     await fakeClient.waitForSentMessages(1);
+    expect(fakeClient.sentAgentMessages[0]?.[2]?.messageId).toBe("queued-with-attachment");
 
     // The row and the pending submission must exist while the RPC is still in flight —
     // the user sees their message and the working footer immediately, exactly as when
