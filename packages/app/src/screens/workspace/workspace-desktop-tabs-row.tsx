@@ -49,7 +49,10 @@ import { buttonControlHeight } from "@/components/ui/control-geometry";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-layout";
-import { retainWorkspaceTabMeasuredWidth } from "@/screens/workspace/workspace-tab-layout";
+import {
+  retainWorkspaceTabMeasuredWidth,
+  shouldShowInlineWorkspaceNewTab,
+} from "@/screens/workspace/workspace-tab-layout";
 import {
   WorkspaceTabPresentationResolver,
   WorkspaceTabIcon,
@@ -1245,7 +1248,10 @@ function ResolvedWorkspaceDesktopTabsRow({
             getItemData={getTabDragData}
             renderItem={renderTab}
           />
-          {!layout.requiresHorizontalScrollFallback ? (
+          {shouldShowInlineWorkspaceNewTab(
+            displayedTabs.length,
+            layout.requiresHorizontalScrollFallback,
+          ) ? (
             <WorkspaceNewTabButton
               placement="inline"
               shortcutKeys={newTabKeys}
