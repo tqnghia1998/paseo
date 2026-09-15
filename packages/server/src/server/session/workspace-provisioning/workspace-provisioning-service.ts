@@ -76,6 +76,9 @@ export interface WorkspaceProvisioningService {
 
 export type WorkspaceProvisioningErrorCode = "unknown_project" | "archived_project";
 
+// Session instances are per socket, so concurrent iframe loads need one daemon-wide open.
+const workspaceOpenByKey = new Map<string, Promise<PersistedWorkspaceRecord>>();
+
 export class WorkspaceProvisioningError extends Error {
   constructor(
     readonly code: WorkspaceProvisioningErrorCode,
@@ -322,6 +325,24 @@ export function createWorkspaceProvisioningService(deps: {
 
   async function findOrCreateWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord> {
     const normalizedCwd = resolve(cwd);
+    const key = `${serverId ?? ""}\0${normalizedCwd}`;
+    const inFlight = workspaceOpenByKey.get(key);
+    if (inFlight) return inFlight;
+
+    const pending = findOrCreateWorkspaceForDirectoryUncoalesced(normalizedCwd);
+    workspaceOpenByKey.set(key, pending);
+    try {
+      return await pending;
+    } finally {
+      if (workspaceOpenByKey.get(key) === pending) {
+        workspaceOpenByKey.delete(key);
+      }
+    }
+  }
+
+  async function findOrCreateWorkspaceForDirectoryUncoalesced(
+    normalizedCwd: string,
+  ): Promise<PersistedWorkspaceRecord> {
     const workspaces = await workspaceRegistry.list();
     // Duplicate workspace records for one directory are a legacy/failed-write
     // artifact. Prefer the record the user is actually using (most recent agent
