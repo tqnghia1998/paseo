@@ -2431,6 +2431,7 @@ export class HostRuntimeStore {
           // into that turn instead of interrupting it; with no turn running, the daemon starts
           // a normal one.
           activeTurnBehavior: "steer",
+          messageId: next.id,
         });
       },
     })
