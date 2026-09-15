@@ -1477,6 +1477,7 @@ function ComposerContentImpl({
         text: string,
         attachments: ComposerAttachment[],
         activeTurnBehavior: "interrupt" | "steer",
+        messageId?: string,
       ) => Promise<void>)
     | null
   >(null);
@@ -1530,7 +1531,12 @@ function ComposerContentImpl({
   }, [focusInput, onFocusInput]);
 
   const submitMessage = useCallback(
-    async (text: string, submitAttachments: ComposerAttachment[], activeTurnBehavior?: "steer") => {
+    async (
+      text: string,
+      submitAttachments: ComposerAttachment[],
+      activeTurnBehavior?: "steer",
+      messageId?: string,
+    ) => {
       onMessageSent?.();
       if (onSubmitMessageRef.current) {
         await onSubmitMessageRef.current({ text, attachments: submitAttachments, cwd });
@@ -1544,6 +1550,7 @@ function ComposerContentImpl({
         text,
         submitAttachments,
         resolveImmediateActiveTurnBehavior(appSettings.sendBehavior, activeTurnBehavior),
+        messageId,
       );
     },
     [appSettings.sendBehavior, cwd, onMessageSent, t],
@@ -1559,6 +1566,7 @@ function ComposerContentImpl({
       text: string,
       sendAttachments: ComposerAttachment[],
       activeTurnBehavior: "interrupt" | "steer",
+      messageId?: string,
     ) => {
       if (!client) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
@@ -1581,6 +1589,7 @@ function ComposerContentImpl({
                 targetAgentId,
               ).turnId ?? undefined)
             : undefined,
+        messageId,
       });
       onAttentionPromptSend?.();
     };
@@ -2008,8 +2017,8 @@ function ComposerContentImpl({
         agentId,
         messageId: id,
         queue: queueWriter,
-        submitMessage: ({ text, attachments: queuedAttachments }) =>
-          submitMessage(text, queuedAttachments),
+        submitMessage: ({ text, attachments: queuedAttachments, messageId }) =>
+          submitMessage(text, queuedAttachments, undefined, messageId),
         failedToSendMessage: t("composer.errors.failedToSend"),
       });
       if (result.status === "failed") {
