@@ -30,6 +30,13 @@ export interface WorkspaceTabLayoutResult {
   requiresHorizontalScrollFallback: boolean;
 }
 
+export function shouldShowInlineWorkspaceNewTab(
+  displayedTabCount: number,
+  requiresHorizontalScrollFallback: boolean,
+): boolean {
+  return displayedTabCount > 0 && !requiresHorizontalScrollFallback;
+}
+
 export function retainWorkspaceTabMeasuredWidth(
   currentWidth: number,
   measuredWidth: number,
