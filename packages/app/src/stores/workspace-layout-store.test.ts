@@ -3318,6 +3318,25 @@ describe("workspace-layout-store actions", () => {
     expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
   });
 
+  it("seeds a new embedded workspace with a New Agent draft", () => {
+    const workspaceKey = createWorkspaceKey();
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+
+    embeddedStore.getState().reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: [],
+      autoOpenAgentIds: [],
+      standaloneTerminalIds: [],
+    });
+
+    const layout = embeddedStore.getState().layoutByWorkspace[workspaceKey];
+    const mainTab = collectAllTabs(layout.root).find(
+      (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
+    );
+    expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
+  });
+
   it("persists explicit agent opens per workspace", () => {
     const workspaceKey = createWorkspaceKey();
     const otherWorkspaceKey = buildWorkspaceTabPersistenceKey({
