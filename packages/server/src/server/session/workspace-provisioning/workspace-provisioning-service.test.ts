@@ -144,6 +144,27 @@ test("re-opening an active workspace by exact path returns the same record witho
   expect(await workspaceRegistry.list()).toHaveLength(1);
 });
 
+test("coalesces concurrent opens from separate sessions for the same directory", async () => {
+  const repo = path.join(tmpDir, "repo");
+  gitRoots.add(repo);
+  const createSessionProvisioning = () =>
+    createWorkspaceProvisioningService({
+      serverId: "server-1",
+      workspaceRegistry,
+      projectRegistry,
+      workspaceGitService: gitService(),
+      logger,
+    });
+
+  const [first, second] = await Promise.all([
+    createSessionProvisioning().findOrCreateWorkspaceForDirectory(repo),
+    createSessionProvisioning().findOrCreateWorkspaceForDirectory(repo),
+  ]);
+
+  expect(second.workspaceId).toBe(first.workspaceId);
+  expect(await workspaceRegistry.list()).toHaveLength(1);
+});
+
 test("re-opening Windows-equivalent workspace cwd spellings reuses the active and archived record", async () => {
   const cwd = path.join(tmpDir, "workspace");
   const created = await provisioning.findOrCreateWorkspaceForDirectory(cwd);
