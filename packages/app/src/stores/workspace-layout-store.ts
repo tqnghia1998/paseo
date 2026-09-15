@@ -1158,10 +1158,13 @@ export function createWorkspaceLayoutStore(
               },
               snapshot,
             );
-            const nextLayout = keepWorkspaceFocusOutOfExplorerSidebar(
-              nextState.layout,
-              explorerSidebarPaneId,
-              currentLayout.focusedPaneId,
+            const nextLayout = replaceRetainedNewTabWithDraft(
+              keepWorkspaceFocusOutOfExplorerSidebar(
+                nextState.layout,
+                explorerSidebarPaneId,
+                currentLayout.focusedPaneId,
+              ),
+              replaceLastClosedTabWithDraft,
             );
             let pinnedAgentIdsByWorkspace = state.pinnedAgentIdsByWorkspace;
             for (const agentId of state.pinnedAgentIdsByWorkspace[normalizedWorkspaceKey] ?? []) {
