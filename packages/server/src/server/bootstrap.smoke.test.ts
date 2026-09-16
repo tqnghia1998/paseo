@@ -54,6 +54,124 @@ describe("paseo daemon bootstrap", () => {
     vi.restoreAllMocks();
   });
 
+  test("removes persisted agents for missing external worktrees at startup", async () => {
+    const paseoHomeRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-worktree-cleanup-"));
+    const paseoHome = path.join(paseoHomeRoot, ".paseo");
+    const worktree = path.join(paseoHomeRoot, "worktree");
+    const unrelatedDirectory = path.join(paseoHomeRoot, "unrelated");
+    const staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
+    await Promise.all([
+      mkdir(paseoHome, { recursive: true }),
+      mkdir(path.join(paseoHome, "agents", "target"), { recursive: true }),
+      mkdir(path.join(paseoHome, "agents", "other"), { recursive: true }),
+      mkdir(path.join(paseoHome, "projects"), { recursive: true }),
+      mkdir(unrelatedDirectory),
+    ]);
+    await writeFile(
+      path.join(paseoHome, "agents", "target", "agent-target.json"),
+      JSON.stringify({
+        id: "agent-target",
+        provider: "codex",
+        cwd: worktree,
+        workspaceId: "workspace-target",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        labels: {},
+        lastStatus: "closed",
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(paseoHome, "agents", "other", "agent-other.json"),
+      JSON.stringify({
+        id: "agent-other",
+        provider: "codex",
+        cwd: unrelatedDirectory,
+        workspaceId: "workspace-other",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        labels: {},
+        lastStatus: "closed",
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(paseoHome, "projects", "workspaces.json"),
+      JSON.stringify([
+        {
+          workspaceId: "workspace-target",
+          projectId: "project",
+          cwd: worktree,
+          kind: "worktree",
+          displayName: "target",
+          title: null,
+          branch: "target",
+          worktreeRoot: worktree,
+          isPaseoOwnedWorktree: false,
+          mainRepoRoot: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          archivedAt: null,
+          autoArchivedChangeRequestUrl: null,
+          pinnedAt: null,
+        },
+        {
+          workspaceId: "workspace-other",
+          projectId: "project",
+          cwd: unrelatedDirectory,
+          kind: "directory",
+          displayName: "other",
+          title: null,
+          branch: null,
+          worktreeRoot: null,
+          isPaseoOwnedWorktree: false,
+          mainRepoRoot: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          archivedAt: null,
+          autoArchivedChangeRequestUrl: null,
+          pinnedAt: null,
+        },
+      ]),
+      "utf8",
+    );
+    const config: PaseoDaemonConfig = {
+      listen: "127.0.0.1:0",
+      paseoHome,
+      corsAllowedOrigins: [],
+      hostnames: true,
+      mcpEnabled: false,
+      staticDir,
+      mcpDebug: false,
+      agentClients: createTestAgentClients(),
+      agentStoragePath: path.join(paseoHome, "agents"),
+      relayEnabled: false,
+      appBaseUrl: "https://app.paseo.sh",
+      openai: undefined,
+      speech: undefined,
+    };
+    const daemon = await createPaseoDaemon(config, pino({ level: "silent" }));
+
+    try {
+      await expect(daemon.agentStorage.get("agent-target")).resolves.toBeNull();
+      await expect(daemon.agentStorage.get("agent-other")).resolves.toMatchObject({
+        cwd: unrelatedDirectory,
+      });
+      await expect(
+        readFile(path.join(paseoHome, "projects", "workspaces.json"), "utf8"),
+      ).resolves.toContain('"archivedAt": "');
+    } finally {
+      await daemon.stop().catch(() => undefined);
+      await rm(paseoHomeRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 50,
+      });
+      await rm(staticDir, { recursive: true, force: true });
+    }
+  });
+
   test("starts and serves health endpoint", async () => {
     const daemonHandle = await createTestPaseoDaemon({
       openai: { stt: { apiKey: "test-openai-api-key" }, tts: { apiKey: "test-openai-api-key" } },
