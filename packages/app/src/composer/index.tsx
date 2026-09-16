@@ -1660,6 +1660,11 @@ function ComposerContentImpl({
       });
       if (!result.queued) return;
 
+      // Clear the persisted draft synchronously. The input's own clear goes
+      // through a staged after-paint write on web, so an iframe unmount (a
+      // feature switch) can drop it and the queued text would come back in the
+      // input on remount — queueing it again produced duplicate pills.
+      clearDraft("sent");
       replaceUserInput("");
       setSelectedAttachments([]);
       resetSuppression();
@@ -1667,6 +1672,7 @@ function ComposerContentImpl({
     },
     [
       agentId,
+      clearDraft,
       clearSentAttachments,
       queueWriter,
       resetSuppression,
