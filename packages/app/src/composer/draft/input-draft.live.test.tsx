@@ -296,7 +296,7 @@ describe("useAgentInputDraft live contract", () => {
       );
     });
 
-    expect(getLatest().text).toBe("keep this draft");
+    expect(getLatest().textSource.getSnapshot()).toBe("keep this draft");
   });
 
   it("migrates legacy image drafts to image attachments on hydration", async () => {
