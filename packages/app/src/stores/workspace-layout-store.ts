@@ -456,11 +456,15 @@ function keepWorkspaceFocusOutOfExplorerSidebar(
 }
 
 /**
- * Seeds a brand-new embedded workspace's default New Tab placeholder as a New
- * Agent draft. Only for a workspace the store has never laid out; a layout the
- * user emptied stays emptied, so closing the final tab sticks across remounts.
+ * Replaces a retained New Tab placeholder in the main pane with a fresh New
+ * Agent draft. `closeTab` applies this to every final close (the embedded
+ * fallback); `reconcileTabs` applies it only to a workspace the store has
+ * never laid out, so a workspace the user emptied stays emptied on remount.
  */
-function seedFreshWorkspaceDraft(layout: WorkspaceLayout, enabled: boolean): WorkspaceLayout {
+function replaceRetainedNewTabWithDraft(
+  layout: WorkspaceLayout,
+  enabled: boolean,
+): WorkspaceLayout {
   if (!enabled) return layout;
   const retainedMainTab = collectAllTabs(layout.root).find(
     (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === DEFAULT_PANE_ID,
@@ -963,12 +967,17 @@ export function createWorkspaceLayoutStore(
             if (!nextLayout) {
               return state;
             }
+            const embeddedDraftLayout = replaceRetainedNewTabWithDraft(
+              nextLayout,
+              replaceLastClosedTabWithDraft,
+            );
+
             return {
               ...withoutFocusRestoration(state, normalizedWorkspaceKey),
               ...reconcileRememberedSidePane(state, normalizedWorkspaceKey, nextLayout),
               layoutByWorkspace: {
                 ...state.layoutByWorkspace,
-                [normalizedWorkspaceKey]: nextLayout,
+                [normalizedWorkspaceKey]: embeddedDraftLayout,
               },
             };
           });
@@ -1164,7 +1173,7 @@ export function createWorkspaceLayoutStore(
               currentLayout.focusedPaneId,
             );
             const nextLayout = isFreshWorkspace
-              ? seedFreshWorkspaceDraft(reconciledLayout, replaceLastClosedTabWithDraft)
+              ? replaceRetainedNewTabWithDraft(reconciledLayout, replaceLastClosedTabWithDraft)
               : reconciledLayout;
             let pinnedAgentIdsByWorkspace = state.pinnedAgentIdsByWorkspace;
             for (const agentId of state.pinnedAgentIdsByWorkspace[normalizedWorkspaceKey] ?? []) {
