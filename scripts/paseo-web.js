@@ -52,6 +52,7 @@ function parseArgs(args) {
   let port = 6768;
   let host = "127.0.0.1";
   let home = null;
+  let cleanupWorktrees = null;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -67,13 +68,24 @@ function parseArgs(args) {
       home = args[++i];
     } else if (arg.startsWith("--home=")) {
       home = arg.slice("--home=".length);
+    } else if (arg.startsWith("--cleanup-worktrees=")) {
+      cleanupWorktrees = JSON.parse(arg.slice("--cleanup-worktrees=".length));
     }
   }
 
-  return { port, host, home };
+  if (
+    cleanupWorktrees !== null &&
+    (!Array.isArray(cleanupWorktrees) ||
+      cleanupWorktrees.some(
+        (targetPath) => typeof targetPath !== "string" || !path.isAbsolute(targetPath),
+      ))
+  ) {
+    throw new Error("--cleanup-worktrees must be a JSON array of absolute paths");
+  }
+  return { port, host, home, cleanupWorktrees };
 }
 
-const { port, host, home: customHome } = parseArgs(process.argv.slice(2));
+const { port, host, home: customHome, cleanupWorktrees } = parseArgs(process.argv.slice(2));
 const home = customHome || path.join(os.homedir(), ".paseo-web");
 
 const config = loadConfig(home, {
@@ -91,7 +103,16 @@ const config = loadConfig(home, {
 });
 
 const logger = createRootLogger({ level: "info", format: "pretty" });
-const daemon = await createPaseoDaemon(config, logger);
+const daemon = await createPaseoDaemon(
+  { ...config, worktreeCleanupToken: process.env.PASEO_WORKTREE_CLEANUP_TOKEN },
+  logger,
+);
+if (cleanupWorktrees) {
+  await daemon.cleanupWorktrees(cleanupWorktrees);
+  await daemon.stop().catch(() => undefined);
+  process.exit(0);
+}
+
 await daemon.start();
 
 const listenTarget = daemon.getListenTarget() || { host, port };
