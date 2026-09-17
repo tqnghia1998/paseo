@@ -3317,12 +3317,12 @@ describe("workspace-layout-store actions", () => {
     expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
   });
 
-  it("does not resurrect a New Agent draft when reconciling a restored workspace the user emptied", () => {
+  it("restores a New Agent draft instead of the generic New tab in embedded workspaces", () => {
     const workspaceKey = createWorkspaceKey();
     const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
 
-    // The persisted shape after the user closed every tab: hydration refills
-    // the empty main pane with the New Tab placeholder.
+    // Hydration refills an empty persisted main pane with the generic New Tab
+    // placeholder. Embedded Focus Mode must never expose that non-agent UI.
     embeddedStore.setState((state) => ({
       layoutByWorkspace: {
         ...state.layoutByWorkspace,
@@ -3341,7 +3341,85 @@ describe("workspace-layout-store actions", () => {
     const mainTab = collectAllTabs(layout.root).find(
       (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
     );
-    expect(mainTab?.target).toEqual({ kind: "new_tab" });
+    expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
+  });
+
+  it("seeds an empty embedded split pane with a New Agent draft", () => {
+    const workspaceKey = createWorkspaceKey();
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+    const initialTabId = embeddedStore.getState().openTab({
+      workspaceKey,
+      target: { kind: "draft", draftId: "draft-1" },
+      intent: "reveal",
+    });
+
+    const paneId = embeddedStore.getState().splitPaneEmpty(workspaceKey, {
+      targetPaneId: "main",
+      position: "right",
+    });
+
+    const layout = embeddedStore.getState().layoutByWorkspace[workspaceKey];
+    const pane = findPaneById(layout.root, paneId);
+    const paneTab = collectAllTabs(layout.root).find(
+      (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === paneId,
+    );
+    expect(initialTabId).toBe("draft-1");
+    expect(paneTab?.target).toEqual({ kind: "draft", draftId: pane?.focusedTabId });
+  });
+
+  it("restores every embedded split-pane placeholder as a New Agent draft", () => {
+    const workspaceKey = createWorkspaceKey();
+    const genericStore = createWorkspaceLayoutStore(workspaceLayoutIds);
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+
+    genericStore.getState().openTab({
+      workspaceKey,
+      target: { kind: "draft", draftId: "draft-1" },
+      intent: "reveal",
+    });
+    const paneId = genericStore.getState().splitPaneEmpty(workspaceKey, {
+      targetPaneId: "main",
+      position: "right",
+    });
+    const persistedLayout = genericStore.getState().layoutByWorkspace[workspaceKey];
+    embeddedStore.setState({ layoutByWorkspace: { [workspaceKey]: persistedLayout } });
+
+    embeddedStore.getState().reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: [],
+      autoOpenAgentIds: [],
+      standaloneTerminalIds: [],
+    });
+
+    const layout = embeddedStore.getState().layoutByWorkspace[workspaceKey];
+    const splitPane = findPaneById(layout.root, paneId);
+    const splitPaneTab = collectAllTabs(layout.root).find(
+      (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === paneId,
+    );
+    expect(splitPaneTab?.target).toEqual({
+      kind: "draft",
+      draftId: splitPane?.focusedTabId,
+    });
+  });
+
+  it("seeds an embedded side pane with a New Agent draft", () => {
+    const workspaceKey = createWorkspaceKey();
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+    embeddedStore.getState().openTab({
+      workspaceKey,
+      target: { kind: "draft", draftId: "draft-1" },
+      intent: "reveal",
+    });
+
+    const paneId = embeddedStore.getState().ensureSidePane(workspaceKey);
+    const layout = embeddedStore.getState().layoutByWorkspace[workspaceKey];
+    const pane = findPaneById(layout.root, paneId);
+    const paneTab = collectAllTabs(layout.root).find(
+      (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === paneId,
+    );
+
+    expect(paneTab?.target).toEqual({ kind: "draft", draftId: pane?.focusedTabId });
   });
 
   it("seeds a new embedded workspace with a New Agent draft", () => {
