@@ -1399,10 +1399,13 @@ export function createWorkspaceLayoutStore(
             ...withoutFocusRestoration(state, normalizedWorkspaceKey),
             layoutByWorkspace: {
               ...state.layoutByWorkspace,
-              [normalizedWorkspaceKey]:
+              [normalizedWorkspaceKey]: replaceRetainedNewTabsWithDraft(
                 options?.focus === false
                   ? { ...result.layout, focusedPaneId: layout.focusedPaneId }
                   : result.layout,
+                replaceLastClosedTabWithDraft,
+                explorerPaneId,
+              ),
             },
             sidePaneIdByWorkspace: {
               ...state.sidePaneIdByWorkspace,
