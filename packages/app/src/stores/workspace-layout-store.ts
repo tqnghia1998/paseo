@@ -537,6 +537,15 @@ function seedNewPaneDraft(
   return replaceNewTabWithDraft(layout, findPaneById(layout.root, paneId)?.focusedTabId, enabled);
 }
 
+function replaceEmbeddedNewTabs(layout: WorkspaceLayout, enabled: boolean): WorkspaceLayout {
+  if (!enabled) return layout;
+  let nextLayout = layout;
+  for (const tab of collectAllTabs(layout.root)) {
+    nextLayout = replaceNewTabWithDraft(nextLayout, tab.tabId, true);
+  }
+  return nextLayout;
+}
+
 type ExplorerSidebarState = Pick<
   WorkspaceLayoutStore,
   "layoutByWorkspace" | "explorerSidebarPaneIdByWorkspace"
@@ -1503,10 +1512,13 @@ export function createWorkspaceLayoutStore(
                   }) ?? closedLayout)
                 : closedLayout;
             const nextLayout = nextLayoutBeforeFocusNormalization
-              ? keepWorkspaceFocusOutOfExplorerSidebar(
-                  nextLayoutBeforeFocusNormalization,
-                  explorerSidebarPaneId,
-                  layout.focusedPaneId,
+              ? replaceEmbeddedNewTabs(
+                  keepWorkspaceFocusOutOfExplorerSidebar(
+                    nextLayoutBeforeFocusNormalization,
+                    explorerSidebarPaneId,
+                    layout.focusedPaneId,
+                  ),
+                  replaceLastClosedTabWithDraft,
                 )
               : null;
             if (!nextLayout) {
@@ -1783,9 +1795,12 @@ export function createWorkspaceLayoutStore(
               explorerSidebarPaneId,
               currentLayout.focusedPaneId,
             );
-            const nextLayout = isFreshWorkspace
-              ? seedFreshWorkspaceDraft(reconciledLayout, replaceLastClosedTabWithDraft)
-              : reconciledLayout;
+            const nextLayout = replaceEmbeddedNewTabs(
+              isFreshWorkspace
+                ? seedFreshWorkspaceDraft(reconciledLayout, replaceLastClosedTabWithDraft)
+                : reconciledLayout,
+              replaceLastClosedTabWithDraft,
+            );
             let pinnedAgentIdsByWorkspace = state.pinnedAgentIdsByWorkspace;
             for (const agentId of state.pinnedAgentIdsByWorkspace[normalizedWorkspaceKey] ?? []) {
               if (!nextState.pinnedAgentIds?.has(agentId)) {
