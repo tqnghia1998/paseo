@@ -455,32 +455,39 @@ function keepWorkspaceFocusOutOfExplorerSidebar(
   return { ...layout, focusedPaneId: mainPane?.id ?? null };
 }
 
-/**
- * Embedded Focus Mode exposes agent work only. Convert every ordinary-pane New
- * Tab placeholder, including restored, split, and side panes, to a fresh draft.
- */
-function replaceRetainedNewTabsWithDraft(
+function replaceNewTabWithDraft(
   layout: WorkspaceLayout,
+  tabId: string | null | undefined,
   enabled: boolean,
-  explorerSidebarPaneId: string | null,
 ): WorkspaceLayout {
-  if (!enabled) return layout;
-  return collectAllTabs(layout.root).reduce((nextLayout, tab) => {
-    if (
-      tab.target.kind !== "new_tab" ||
-      findPaneContainingTab(nextLayout.root, tab.tabId)?.id === explorerSidebarPaneId
-    ) {
-      return nextLayout;
-    }
-    return (
-      replaceTabTargetInLayout({
-        layout: nextLayout,
-        tabId: tab.tabId,
-        target: { kind: "draft", draftId: tab.tabId },
-        createTabId: () => tab.tabId,
-      })?.layout ?? nextLayout
-    );
-  }, layout);
+  if (!enabled || !tabId) return layout;
+  const tab = collectAllTabs(layout.root).find((entry) => entry.tabId === tabId);
+  if (tab?.target.kind !== "new_tab") return layout;
+  return (
+    replaceTabTargetInLayout({
+      layout,
+      tabId,
+      target: { kind: "draft", draftId: tabId },
+      createTabId: () => tabId,
+    })?.layout ?? layout
+  );
+}
+
+/** Seeds only a brand-new embedded workspace; an explicit final close stays closed. */
+function seedFreshWorkspaceDraft(layout: WorkspaceLayout, enabled: boolean): WorkspaceLayout {
+  return replaceNewTabWithDraft(
+    layout,
+    findPaneById(layout.root, DEFAULT_PANE_ID)?.focusedTabId,
+    enabled,
+  );
+}
+
+function seedNewPaneDraft(
+  layout: WorkspaceLayout,
+  paneId: string,
+  enabled: boolean,
+): WorkspaceLayout {
+  return replaceNewTabWithDraft(layout, findPaneById(layout.root, paneId)?.focusedTabId, enabled);
 }
 
 type ExplorerSidebarState = Pick<
@@ -891,12 +898,12 @@ export function createWorkspaceLayoutStore(
             ...withoutFocusRestoration(state, normalizedWorkspaceKey),
             layoutByWorkspace: {
               ...state.layoutByWorkspace,
-              [normalizedWorkspaceKey]: replaceRetainedNewTabsWithDraft(
+              [normalizedWorkspaceKey]: seedNewPaneDraft(
                 options?.focus === false
                   ? { ...result.layout, focusedPaneId: layout.focusedPaneId }
                   : result.layout,
+                result.paneId,
                 replaceLastClosedTabWithDraft,
-                explorerPaneId,
               ),
             },
             sidePaneIdByWorkspace: {
@@ -973,18 +980,12 @@ export function createWorkspaceLayoutStore(
             if (!nextLayout) {
               return state;
             }
-            const embeddedDraftLayout = replaceRetainedNewTabsWithDraft(
-              nextLayout,
-              replaceLastClosedTabWithDraft,
-              explorerSidebarPaneId,
-            );
-
             return {
               ...withoutFocusRestoration(state, normalizedWorkspaceKey),
               ...reconcileRememberedSidePane(state, normalizedWorkspaceKey, nextLayout),
               layoutByWorkspace: {
                 ...state.layoutByWorkspace,
-                [normalizedWorkspaceKey]: embeddedDraftLayout,
+                [normalizedWorkspaceKey]: nextLayout,
               },
             };
           });
@@ -1152,6 +1153,7 @@ export function createWorkspaceLayoutStore(
           }
 
           set((state) => {
+            const isFreshWorkspace = !(normalizedWorkspaceKey in state.layoutByWorkspace);
             const rawLayout = getWorkspaceLayout(state.layoutByWorkspace, normalizedWorkspaceKey);
             const explorerSidebarPaneId = resolveExplorerSidebarPaneId(
               rawLayout,
@@ -1176,11 +1178,9 @@ export function createWorkspaceLayoutStore(
               explorerSidebarPaneId,
               currentLayout.focusedPaneId,
             );
-            const nextLayout = replaceRetainedNewTabsWithDraft(
-              reconciledLayout,
-              replaceLastClosedTabWithDraft,
-              explorerSidebarPaneId,
-            );
+            const nextLayout = isFreshWorkspace
+              ? seedFreshWorkspaceDraft(reconciledLayout, replaceLastClosedTabWithDraft)
+              : reconciledLayout;
             let pinnedAgentIdsByWorkspace = state.pinnedAgentIdsByWorkspace;
             for (const agentId of state.pinnedAgentIdsByWorkspace[normalizedWorkspaceKey] ?? []) {
               if (!nextState.pinnedAgentIds?.has(agentId)) {
@@ -1323,10 +1323,10 @@ export function createWorkspaceLayoutStore(
             ...withoutFocusRestoration(state, normalizedWorkspaceKey),
             layoutByWorkspace: {
               ...state.layoutByWorkspace,
-              [normalizedWorkspaceKey]: replaceRetainedNewTabsWithDraft(
+              [normalizedWorkspaceKey]: seedNewPaneDraft(
                 result.layout,
+                result.paneId,
                 replaceLastClosedTabWithDraft,
-                explorerSidebarPaneId,
               ),
             },
           }));
