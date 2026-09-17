@@ -3301,7 +3301,7 @@ describe("workspace-layout-store actions", () => {
     expect(findPaneById(layout.root, "explorer")?.hidden).toBe(true);
   });
 
-  it("keeps the final embedded New Agent closed after reconciliation", () => {
+  it("replaces the final embedded close with a focused New Agent draft", () => {
     const workspaceKey = createWorkspaceKey();
     const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
 
@@ -3323,11 +3323,11 @@ describe("workspace-layout-store actions", () => {
     const mainTab = collectAllTabs(layout.root).find(
       (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
     );
-    expect(mainTab?.target).toEqual({ kind: "new_tab" });
+    expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
     expect(findPaneById(layout.root, "main")?.focusedTabId).toBe(mainTab?.tabId);
   });
 
-  it("keeps a final embedded close closed after persistence and iframe remount", async () => {
+  it("keeps the final embedded New Agent fallback after persistence and iframe remount", async () => {
     const workspaceKey = createWorkspaceKey();
     const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
     const tabId = embeddedStore.getState().openTab({
@@ -3355,7 +3355,7 @@ describe("workspace-layout-store actions", () => {
           tab.tabId,
         )?.id === "main",
     );
-    expect(restoredTab?.target).toEqual({ kind: "new_tab" });
+    expect(restoredTab?.target).toEqual({ kind: "draft", draftId: restoredTab?.tabId });
 
     remountedStore.getState().reconcileTabs(workspaceKey, {
       agentsHydrated: true,
@@ -3369,7 +3369,7 @@ describe("workspace-layout-store actions", () => {
     const mainTab = collectAllTabs(layout.root).find(
       (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
     );
-    expect(mainTab?.target).toEqual({ kind: "new_tab" });
+    expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
   });
 
   it("seeds an empty embedded split pane with a New Agent draft", () => {
