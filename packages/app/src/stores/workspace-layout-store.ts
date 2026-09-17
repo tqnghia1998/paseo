@@ -503,39 +503,23 @@ function keepWorkspaceFocusOutOfExplorerSidebar(
   return { ...layout, focusedPaneId: mainPane?.id ?? null };
 }
 
-function replaceNewTabWithDraft(
-  layout: WorkspaceLayout,
-  tabId: string | null | undefined,
-  enabled: boolean,
-): WorkspaceLayout {
-  if (!enabled || !tabId) return layout;
-  const tab = collectAllTabs(layout.root).find((entry) => entry.tabId === tabId);
-  if (tab?.target.kind !== "new_tab") return layout;
-  return (
-    replaceTabTargetInLayout({
-      layout,
-      tabId,
-      target: { kind: "draft", draftId: tabId },
-      createTabId: () => tabId,
-    })?.layout ?? layout
-  );
+function replaceNewTabsWithDraft(layout: WorkspaceLayout, enabled: boolean): WorkspaceLayout {
+  if (!enabled) return layout;
+  return collectAllTabs(layout.root).reduce((nextLayout, tab) => {
+    if (tab.target.kind !== "new_tab") return nextLayout;
+    return (
+      replaceTabTargetInLayout({
+        layout: nextLayout,
+        tabId: tab.tabId,
+        target: { kind: "draft", draftId: tab.tabId },
+        createTabId: () => tab.tabId,
+      })?.layout ?? nextLayout
+    );
+  }, layout);
 }
 
-/** Seeds only a brand-new embedded workspace; an explicit final close stays closed. */
 function seedFreshWorkspaceDraft(layout: WorkspaceLayout, enabled: boolean): WorkspaceLayout {
-  return replaceNewTabWithDraft(
-    layout,
-    findPaneById(layout.root, DEFAULT_PANE_ID)?.focusedTabId,
-    enabled,
-  );
-}
-
-function seedNewPaneDraft(
-  layout: WorkspaceLayout,
-  paneId: string,
-  enabled: boolean,
-): WorkspaceLayout {
-  return replaceNewTabWithDraft(layout, findPaneById(layout.root, paneId)?.focusedTabId, enabled);
+  return replaceNewTabsWithDraft(layout, enabled);
 }
 
 type ExplorerSidebarState = Pick<
@@ -1362,11 +1346,10 @@ export function createWorkspaceLayoutStore(
             ...withoutFocusRestoration(state, normalizedWorkspaceKey),
             layoutByWorkspace: {
               ...state.layoutByWorkspace,
-              [normalizedWorkspaceKey]: seedNewPaneDraft(
+              [normalizedWorkspaceKey]: replaceNewTabsWithDraft(
                 options?.focus === false
                   ? { ...result.layout, focusedPaneId: layout.focusedPaneId }
                   : result.layout,
-                result.paneId,
                 replaceLastClosedTabWithDraft,
               ),
             },
@@ -1447,12 +1430,16 @@ export function createWorkspaceLayoutStore(
             if (!nextLayout) {
               return state;
             }
+            const embeddedNextLayout = replaceNewTabsWithDraft(
+              nextLayout,
+              replaceLastClosedTabWithDraft,
+            );
             return {
               ...withoutFocusRestoration(state, normalizedWorkspaceKey),
-              ...reconcileRememberedSidePane(state, normalizedWorkspaceKey, nextLayout),
+              ...reconcileRememberedSidePane(state, normalizedWorkspaceKey, embeddedNextLayout),
               layoutByWorkspace: {
                 ...state.layoutByWorkspace,
-                [normalizedWorkspaceKey]: nextLayout,
+                [normalizedWorkspaceKey]: embeddedNextLayout,
               },
             };
           });
@@ -1853,9 +1840,8 @@ export function createWorkspaceLayoutStore(
             ...withoutFocusRestoration(state, normalizedWorkspaceKey),
             layoutByWorkspace: {
               ...state.layoutByWorkspace,
-              [normalizedWorkspaceKey]: seedNewPaneDraft(
+              [normalizedWorkspaceKey]: replaceNewTabsWithDraft(
                 result.layout,
-                result.paneId,
                 replaceLastClosedTabWithDraft,
               ),
             },
