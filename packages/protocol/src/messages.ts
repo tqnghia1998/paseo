@@ -532,6 +532,7 @@ const ToolCallDetailPayloadSchema: z.ZodType<ToolCallDetail, unknown> = z.discri
       command: z.string(),
       cwd: z.string().optional(),
       output: z.string().optional(),
+      stdin: z.string().optional(),
       exitCode: z.number().nullable().optional(),
     }),
     z.object({

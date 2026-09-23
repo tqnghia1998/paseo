@@ -1275,6 +1275,72 @@ describe("Codex app-server provider", () => {
     }
   });
 
+  test("keeps interactive terminal input and output on the parent shell card", async () => {
+    const appServer = createFakeCodexAppServer();
+    const session = new CodexAppServerAgentSession(
+      createConfig({ cwd: "/workspace/project" }),
+      null,
+      createTestLogger(),
+      async () => appServer.child,
+    );
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    try {
+      await session.connect();
+      appServer.child.stdout.write(
+        `${JSON.stringify({
+          method: "item/started",
+          params: {
+            threadId: "thread-1",
+            item: {
+              type: "commandExecution",
+              id: "interactive-shell",
+              command: "git add -p ui/sharing.jsx",
+              status: "inProgress",
+            },
+          },
+        })}\n`,
+      );
+      appServer.typesIntoTerminal({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "interactive-shell",
+        processId: "4242",
+        text: "s\ny\nn\ny\nd\n",
+      });
+      const completed = waitForTimelineToolCall(session, "interactive-shell");
+      appServer.completesCommand({
+        threadId: "thread-1",
+        callId: "interactive-shell",
+        command: "git add -p ui/sharing.jsx",
+        output: "diff --git a/ui/sharing.jsx b/ui/sharing.jsx\nStage this hunk?",
+      });
+      await expect(completed).resolves.toMatchObject({
+        item: {
+          callId: "interactive-shell",
+          name: "shell",
+          status: "completed",
+          detail: {
+            type: "shell",
+            command: "git add -p ui/sharing.jsx",
+            output: "diff --git a/ui/sharing.jsx b/ui/sharing.jsx\nStage this hunk?",
+            stdin: "s\ny\nn\ny\nd\n",
+          },
+        },
+      });
+      expect(
+        events.filter((event) => event.type === "timeline").map((event) => event.item),
+      ).toEqual([
+        expect.objectContaining({ callId: "interactive-shell", status: "running" }),
+        expect.objectContaining({ callId: "interactive-shell", status: "running" }),
+        expect.objectContaining({ callId: "interactive-shell", status: "completed" }),
+      ]);
+    } finally {
+      await session.close();
+    }
+  });
+
   test("shows the exact bytes Codex writes into an existing terminal", async () => {
     const appServer = createFakeCodexAppServer();
     const session = new CodexAppServerAgentSession(
@@ -1301,22 +1367,20 @@ describe("Codex app-server provider", () => {
         provider: "codex",
         item: {
           type: "tool_call",
-          callId: "terminal-session-4242-1",
-          name: "terminal",
+          callId: "interactive-shell",
+          name: "terminal_input",
           status: "completed",
           error: null,
           detail: {
             type: "plain_text",
+            label: "Input",
             text: "gh pr merge 2030 --squash\n",
             icon: "square_terminal",
-          },
-          metadata: {
-            processId: "4242",
           },
         },
       });
 
-      const relabeledTerminal = waitForTimelineToolCall(session, "terminal-session-4242-1");
+      const relabeledTerminal = waitForTimelineToolCall(session, "interactive-shell");
       appServer.runsLegacyCommand({
         threadId: "thread-1",
         callId: "interactive-shell",
@@ -1324,23 +1388,19 @@ describe("Codex app-server provider", () => {
         output: "Process running with session id 4242",
       });
 
-      await expect(relabeledTerminal).resolves.toEqual({
+      await expect(relabeledTerminal).resolves.toMatchObject({
         type: "timeline",
         provider: "codex",
         item: {
           type: "tool_call",
-          callId: "terminal-session-4242-1",
-          name: "terminal",
-          status: "completed",
+          callId: "interactive-shell",
+          name: "shell",
+          status: "running",
           error: null,
           detail: {
-            type: "plain_text",
-            label: "sleep 30",
-            text: "gh pr merge 2030 --squash\n",
-            icon: "square_terminal",
-          },
-          metadata: {
-            processId: "4242",
+            type: "shell",
+            command: "sleep 30",
+            stdin: "gh pr merge 2030 --squash\n",
           },
         },
       });
@@ -1350,7 +1410,231 @@ describe("Codex app-server provider", () => {
     }
   });
 
-  test("keeps repeated writes to one terminal as separate timeline rows", async () => {
+  test("refreshes interactive shell output without duplicating mirrored input or output", async () => {
+    const appServer = createFakeCodexAppServer();
+    const session = new CodexAppServerAgentSession(
+      createConfig({ cwd: "/workspace/project" }),
+      null,
+      createTestLogger(),
+      async () => appServer.child,
+    );
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    const notify = (method: string, params: unknown) =>
+      appServer.child.stdout.write(`${JSON.stringify({ method, params })}\n`);
+
+    try {
+      await session.connect();
+      notify("item/started", {
+        threadId: "thread-1",
+        item: {
+          type: "commandExecution",
+          id: "interactive-shell",
+          command: "git add -p",
+          status: "inProgress",
+        },
+      });
+      notify("item/commandExecution/outputDelta", {
+        threadId: "thread-1",
+        itemId: "interactive-shell",
+        delta: "Stage this hunk?\n",
+      });
+      notify("codex/event/exec_command_output_delta", {
+        thread_id: "thread-1",
+        msg: {
+          type: "exec_command_output_delta",
+          call_id: "interactive-shell",
+          chunk: Buffer.from("Stage this hunk?\n").toString("base64"),
+        },
+      });
+      for (let i = 0; i < 2; i += 1) {
+        appServer.typesIntoTerminal({
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: "interactive-shell",
+          processId: "4242",
+          text: "y\n",
+        });
+        notify("codex/event/terminal_interaction", {
+          thread_id: "thread-1",
+          msg: {
+            type: "terminal_interaction",
+            call_id: "interactive-shell",
+            process_id: "4242",
+            stdin: "y\n",
+          },
+        });
+      }
+      const completed = waitForTimelineToolCall(session, "interactive-shell");
+      appServer.completesCommand({
+        threadId: "thread-1",
+        callId: "interactive-shell",
+        command: "git add -p",
+        output: "Stage this hunk?\nDone\n",
+      });
+      await completed;
+      const tools = events.filter((event) => event.type === "timeline").map((event) => event.item);
+      expect(tools).toHaveLength(4);
+      expect(tools[1]).toMatchObject({
+        callId: "interactive-shell",
+        status: "running",
+        detail: { type: "shell", output: "Stage this hunk?\n" },
+      });
+      expect(tools[2]).toMatchObject({
+        detail: { type: "shell", output: "Stage this hunk?\n", stdin: "y\ny\n" },
+      });
+      expect(tools[3]).toMatchObject({
+        status: "completed",
+        detail: { type: "shell", output: "Stage this hunk?\nDone\n", stdin: "y\ny\n" },
+      });
+      appServer.assertNoErrors();
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("keeps streamed output when canonical completion omits aggregated output", async () => {
+    const appServer = createFakeCodexAppServer();
+    const session = new CodexAppServerAgentSession(
+      createConfig({ cwd: "/workspace/project" }),
+      null,
+      createTestLogger(),
+      async () => appServer.child,
+    );
+    try {
+      await session.connect();
+      appServer.child.stdout.write(
+        `${JSON.stringify({
+          method: "item/commandExecution/outputDelta",
+          params: { threadId: "thread-1", itemId: "shell-1", delta: "Stage this hunk?\n" },
+        })}\n`,
+      );
+      const completed = waitForTimelineToolCall(session, "shell-1");
+      appServer.completesSilentCommand({
+        threadId: "thread-1",
+        callId: "shell-1",
+        command: "git add -p",
+        cwd: "/workspace/project",
+      });
+      await expect(completed).resolves.toMatchObject({
+        item: { detail: { type: "shell", output: "Stage this hunk?\n" } },
+      });
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("keeps later-turn terminal input on the original command and timeline turn", async () => {
+    const appServer = createFakeCodexAppServer();
+    const { session, paseoTurnId } = await startPublicSteeringSession(appServer);
+    try {
+      const initial = waitForTimelineToolCall(session, "interactive-shell");
+      appServer.runsLegacyCommand({
+        threadId: "thread-1",
+        callId: "interactive-shell",
+        command: "git add -p",
+        output: "Process running with session id 4242",
+      });
+      await initial;
+      appServer.child.stdout.write(
+        `${JSON.stringify({
+          method: "item/commandExecution/outputDelta",
+          params: { threadId: "thread-1", itemId: "interactive-shell", delta: "First hunk\n" },
+        })}\n`,
+      );
+      const finished = new Promise<void>((resolve) => {
+        const unsubscribe = session.subscribe((event) => {
+          if (event.type !== "turn_completed") return;
+          unsubscribe();
+          resolve();
+        });
+      });
+      appServer.completeTurn();
+      await finished;
+      const nextTurn = await session.startTurn("continue staging");
+      appServer.startsTurn({ threadId: "thread-1", turnId: "native-B" });
+      appServer.child.stdout.write(
+        `${JSON.stringify({
+          method: "item/commandExecution/outputDelta",
+          params: { threadId: "thread-1", itemId: "interactive-shell", delta: "Second hunk\n" },
+        })}\n`,
+      );
+      const updated = waitForTimelineToolCall(session, "interactive-shell");
+      appServer.typesIntoTerminal({
+        threadId: "thread-1",
+        turnId: "native-B",
+        itemId: "interactive-shell",
+        processId: "4242",
+        text: "y\n",
+      });
+      expect(nextTurn.turnId).not.toBe(paseoTurnId);
+      await expect(updated).resolves.toMatchObject({
+        turnId: paseoTurnId,
+        item: {
+          callId: "interactive-shell",
+          detail: {
+            type: "shell",
+            command: "git add -p",
+            stdin: "y\n",
+            output: "Process running with session id 4242First hunk\nSecond hunk\n",
+          },
+        },
+      });
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("batches interactive prompt output without waiting for another input or completion", async () => {
+    const appServer = createFakeCodexAppServer();
+    const session = new CodexAppServerAgentSession(
+      createConfig({ cwd: "/workspace/project" }),
+      null,
+      createTestLogger(),
+      async () => appServer.child,
+    );
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    try {
+      await session.connect();
+      appServer.runsLegacyCommand({
+        threadId: "thread-1",
+        callId: "interactive-shell",
+        command: "git add -p",
+        output: "Process running with session id 4242",
+      });
+      const inputUpdate = waitForTimelineToolCall(session, "interactive-shell");
+      appServer.typesIntoTerminal({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "interactive-shell",
+        processId: "4242",
+        text: "y\n",
+      });
+      await expect(inputUpdate).resolves.toMatchObject({ item: { detail: { stdin: "y\n" } } });
+      events.length = 0;
+      for (const delta of ["Next ", "hunk?"]) {
+        appServer.child.stdout.write(
+          `${JSON.stringify({
+            method: "item/commandExecution/outputDelta",
+            params: { threadId: "thread-1", itemId: "interactive-shell", delta },
+          })}\n`,
+        );
+      }
+      await vi.waitFor(() => expect(events).toHaveLength(1));
+      expect(events[0]).toMatchObject({
+        type: "timeline",
+        item: {
+          callId: "interactive-shell",
+          detail: { output: "Process running with session id 4242Next hunk?", stdin: "y\n" },
+        },
+      });
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("accumulates repeated identical writes on one terminal row", async () => {
     const appServer = createFakeCodexAppServer();
     const session = new CodexAppServerAgentSession(
       createConfig({ cwd: "/workspace/project" }),
@@ -1368,7 +1652,7 @@ describe("Codex app-server provider", () => {
         turnId: "turn-1",
         itemId: "interactive-shell",
         processId: "4242",
-        text: "git status\n",
+        text: "y\n",
       });
 
       const secondTimelineItem = waitForNextTimelineItem(session);
@@ -1377,19 +1661,19 @@ describe("Codex app-server provider", () => {
         turnId: "turn-1",
         itemId: "interactive-shell",
         processId: "4242",
-        text: "git push\n",
+        text: "y\n",
       });
 
       const [first, second] = await Promise.all([firstTimelineItem, secondTimelineItem]);
       expect(first.item).toMatchObject({
         type: "tool_call",
-        callId: "terminal-session-4242-1",
-        detail: { type: "plain_text", text: "git status\n" },
+        callId: "interactive-shell",
+        detail: { type: "plain_text", label: "Input", text: "y\n" },
       });
       expect(second.item).toMatchObject({
         type: "tool_call",
-        callId: "terminal-session-4242-2",
-        detail: { type: "plain_text", text: "git push\n" },
+        callId: "interactive-shell",
+        detail: { type: "plain_text", label: "Input", text: "y\ny\n" },
       });
       appServer.assertNoErrors();
     } finally {

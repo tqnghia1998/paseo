@@ -72,7 +72,8 @@ import {
 } from "../../../executable-resolution/executable-resolution.js";
 import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import { spawnProcess } from "../../../utils/spawn.js";
-import { extractCodexTerminalSessionId, nonEmptyString } from "./tool-call-mapper-utils.js";
+import { nonEmptyString } from "./tool-call-mapper-utils.js";
+import { CodexTerminalInteractions } from "./codex/terminal-interactions.js";
 import { buildCodexFeatures, codexModelSupportsFastMode } from "./codex-feature-definitions.js";
 import {
   CodexAppServerClient,
@@ -1643,30 +1644,6 @@ export function mapCodexPatchNotificationToToolCall(params: {
   return params.running ? toRunningToolCall(mapped) : mapped;
 }
 
-function mapCodexTerminalInteractionToToolCall(params: {
-  callId: string;
-  processId?: string | null;
-  command?: string | null;
-  stdin?: string | null;
-}): ToolCallTimelineItem {
-  const processId = nonEmptyString(params.processId ?? undefined);
-  const label = nonEmptyString(params.command ?? undefined);
-  return {
-    type: "tool_call",
-    callId: params.callId,
-    name: "terminal",
-    status: "completed",
-    error: null,
-    detail: {
-      type: "plain_text",
-      ...(label ? { label } : {}),
-      ...(params.stdin !== null && params.stdin !== undefined ? { text: params.stdin } : {}),
-      icon: "square_terminal",
-    },
-    ...(processId ? { metadata: { processId } } : {}),
-  };
-}
-
 function mapCodexThreadPlanItem(normalizedItem: Record<string, unknown>): AgentTimelineItem | null {
   const callId =
     nonEmptyString(normalizedItem.id ?? normalizedItem.itemId ?? undefined) ??
@@ -2510,6 +2487,7 @@ type ParsedCodexNotification =
     }
   | {
       kind: "exec_command_output_delta";
+      source: "item" | "codex_event";
       callId: string | null;
       stream: string | null;
       chunk: string | null;
@@ -2874,6 +2852,7 @@ const CodexNotificationSchema = z.union([
     .transform(
       ({ params }): ParsedCodexNotification => ({
         kind: "exec_command_output_delta",
+        source: "codex_event",
         callId: params.msg.call_id ?? null,
         stream: params.msg.stream ?? null,
         chunk: params.msg.chunk ?? params.msg.delta ?? null,
@@ -2883,6 +2862,37 @@ const CodexNotificationSchema = z.union([
   z
     .object({
       method: z.literal("codex/event/exec_command_output_delta"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
+  z
+    .object({
+      method: z.literal("item/commandExecution/outputDelta"),
+      params: z.object({
+        threadId: z.string(),
+        itemId: z.string(),
+        delta: z.string(),
+      }),
+    })
+    .transform(
+      ({ params }): ParsedCodexNotification => ({
+        kind: "exec_command_output_delta",
+        source: "item",
+        callId: params.itemId,
+        stream: null,
+        chunk: params.delta,
+        threadId: params.threadId,
+      }),
+    ),
+  z
+    .object({
+      method: z.literal("item/commandExecution/outputDelta"),
       params: z.unknown(),
     })
     .transform(
@@ -3386,15 +3396,12 @@ export class CodexAppServerAgentSession implements AgentSession {
   private pendingAgentMessages = new Map<string, string>();
   private pendingReasoning = new Map<string, string[]>();
   private pendingCommandOutputDeltas = new Map<string, string[]>();
+  private pendingCanonicalCommandOutputDeltas = new Map<string, string[]>();
   private pendingFileChangeOutputDeltas = new Map<string, string[]>();
   private pendingAssistantMessageBoundary = false;
-  private terminalCommandByProcessId = new Map<string, string>();
-  private pendingUnlabeledTerminalInteractions = new Map<
-    string,
-    Array<{ callId: string; stdin: string | null }>
-  >();
-  private nextTerminalInteractionOrdinal = 0;
-  private emittedTerminalInteractionKeys = new Set<string>();
+  private terminalInteractions = new CodexTerminalInteractions();
+  private terminalOutputDirtyIds = new Set<string>();
+  private terminalOutputFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private emittedExecCommandStartedCallIds = new Set<string>();
   private emittedExecCommandCompletedCallIds = new Set<string>();
   private emittedItemStartedIds = new Set<string>();
@@ -4897,6 +4904,9 @@ export class CodexAppServerAgentSession implements AgentSession {
 
   async close(): Promise<void> {
     this.closed = true;
+    if (this.terminalOutputFlushTimer) clearTimeout(this.terminalOutputFlushTimer);
+    this.terminalOutputFlushTimer = null;
+    this.terminalOutputDirtyIds.clear();
     this.clearPendingPermissions();
     this.pendingSubAgentNotificationsByThreadId.clear();
     this.subscribers.clear();
@@ -5232,6 +5242,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (this.loadingPersistedHistory && event.type === "provider_subagent") {
       this.persistedProviderSubagentEvents.push(event);
       return;
+    }
+    if (event.type === "timeline" && event.item.type === "tool_call") {
+      const item = this.terminalInteractions.track(
+        event.item,
+        getAgentStreamEventTurnId(event) ?? this.activeForegroundTurnId ?? undefined,
+      );
+      const turnId = this.terminalInteractions.turnId(item.callId);
+      event = { ...event, item, ...(turnId ? { turnId } : {}) };
     }
     this.notifySubscribers(event);
   }
@@ -5940,15 +5958,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     if (parsed.kind === "exec_command_output_delta") {
-      const outputDeltas = routedSubAgentCallId
-        ? this.subAgentCallsByCallId.get(routedSubAgentCallId)?.pendingCommandOutputDeltas
-        : this.pendingCommandOutputDeltas;
-      if (!outputDeltas) {
-        return;
-      }
-      this.appendOutputDeltaChunk(outputDeltas, parsed.callId, parsed.chunk, {
-        decodeBase64: true,
-      });
+      this.handleCommandOutputDelta(parsed, routedSubAgentCallId);
       return;
     }
     const outputDeltas = routedSubAgentCallId
@@ -5956,6 +5966,48 @@ export class CodexAppServerAgentSession implements AgentSession {
       : this.pendingFileChangeOutputDeltas;
     if (outputDeltas) {
       this.appendOutputDeltaChunk(outputDeltas, parsed.itemId, parsed.delta);
+    }
+  }
+
+  private handleCommandOutputDelta(
+    parsed: Extract<CodexDeltaNotification, { kind: "exec_command_output_delta" }>,
+    subAgentCallId: string | null,
+  ): void {
+    const isCanonical = parsed.source === "item";
+    const legacyOutputDeltas = subAgentCallId
+      ? this.subAgentCallsByCallId.get(subAgentCallId)?.pendingCommandOutputDeltas
+      : this.pendingCommandOutputDeltas;
+    if (!legacyOutputDeltas) return;
+    const outputDeltas = isCanonical
+      ? this.pendingCanonicalCommandOutputDeltas
+      : legacyOutputDeltas;
+    this.appendOutputDeltaChunk(outputDeltas, parsed.callId, parsed.chunk, {
+      decodeBase64: !isCanonical,
+    });
+    if (
+      !subAgentCallId &&
+      parsed.callId &&
+      this.terminalInteractions.isInteractive(parsed.callId)
+    ) {
+      this.terminalOutputDirtyIds.add(parsed.callId);
+      this.terminalOutputFlushTimer ??= setTimeout(() => this.flushTerminalOutput(), 100);
+    }
+  }
+
+  private refreshTerminalOutput(callId: string): ToolCallTimelineItem | null {
+    this.terminalOutputDirtyIds.delete(callId);
+    const chunks =
+      this.pendingCanonicalCommandOutputDeltas.get(callId) ??
+      this.pendingCommandOutputDeltas.get(callId);
+    return chunks ? this.terminalInteractions.output(callId, chunks.join("")) : null;
+  }
+
+  private flushTerminalOutput(): void {
+    if (this.terminalOutputFlushTimer) clearTimeout(this.terminalOutputFlushTimer);
+    this.terminalOutputFlushTimer = null;
+    for (const callId of this.terminalOutputDirtyIds) {
+      const item = this.refreshTerminalOutput(callId);
+      if (item) this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item });
     }
   }
 
@@ -6035,6 +6087,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private resetTurnTrackingState(): void {
+    this.flushTerminalOutput();
+    const retainedTerminals = this.terminalInteractions.resetTurn();
     this.latestPlanResult = null;
     this.emittedItemStartedIds.clear();
     this.emittedItemCompletedIds.clear();
@@ -6043,7 +6097,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.emittedExecCommandCompletedCallIds.clear();
     this.pendingAgentMessages.clear();
     this.pendingReasoning.clear();
-    this.pendingCommandOutputDeltas.clear();
+    for (const deltas of [
+      this.pendingCommandOutputDeltas,
+      this.pendingCanonicalCommandOutputDeltas,
+    ]) {
+      for (const callId of deltas.keys()) {
+        if (!retainedTerminals.has(callId)) deltas.delete(callId);
+      }
+    }
     this.pendingFileChangeOutputDeltas.clear();
     this.pendingAssistantMessageBoundary = false;
     this.warnedIncompleteEditToolCallIds.clear();
@@ -6260,10 +6321,16 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     const bufferedOutput = this.consumeOutputDelta(outputDeltas, parsed.callId);
-    const resolvedOutput = parsed.output ?? bufferedOutput;
-    if (!subAgentCallId) {
-      this.rememberTerminalProcessForCommand(parsed.command, resolvedOutput);
-    }
+    const canonicalOutput = this.consumeOutputDelta(
+      this.pendingCanonicalCommandOutputDeltas,
+      parsed.callId,
+    );
+    const streamedOutput = canonicalOutput ?? bufferedOutput;
+    const resolvedOutput =
+      parsed.output ??
+      (!subAgentCallId && parsed.callId
+        ? this.terminalInteractions.withOutputBaseline(parsed.callId, streamedOutput)
+        : streamedOutput);
     const timelineItem = mapCodexExecNotificationToToolCall({
       callId: parsed.callId,
       command: parsed.command,
@@ -6277,6 +6344,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (timelineItem) {
       if (!subAgentCallId) {
         this.emittedExecCommandCompletedCallIds.add(timelineItem.callId);
+        this.terminalInteractions.recordCompletion(timelineItem);
       }
       this.emitCodexToolTimelineItem(timelineItem, subAgentCallId, parsed.threadId);
     }
@@ -6285,27 +6353,11 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handleTerminalInteractionNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "terminal_interaction" }>,
   ): void {
-    const interactionKey = [parsed.processId ?? "", parsed.stdin ?? ""].join("\u0000");
-    if (!this.shouldEmitTerminalInteractionKey(interactionKey)) {
-      return;
-    }
-    const command =
-      (parsed.processId ? this.terminalCommandByProcessId.get(parsed.processId) : undefined) ??
-      null;
-    const callId = this.createTerminalInteractionCallId(parsed.processId, parsed.callId);
-    if (!command && parsed.processId) {
-      const pendingInteractions =
-        this.pendingUnlabeledTerminalInteractions.get(parsed.processId) ?? [];
-      pendingInteractions.push({ callId, stdin: parsed.stdin });
-      this.pendingUnlabeledTerminalInteractions.set(parsed.processId, pendingInteractions);
-    }
-    const timelineItem = mapCodexTerminalInteractionToToolCall({
-      callId,
-      processId: parsed.processId,
-      command,
-      stdin: parsed.stdin,
-    });
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+    // Input refreshes immediately; subsequent interactive output is batched.
+    const callId = this.terminalInteractions.resolveCallId(parsed);
+    const outputItem = callId ? this.refreshTerminalOutput(callId) : null;
+    const item = this.terminalInteractions.input(parsed) ?? outputItem;
+    if (item) this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item });
   }
 
   private handlePatchApplyStartedNotification(
@@ -6477,6 +6529,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       }
       this.warnOnIncompleteEditToolCall(timelineItem, "item_completed", parsed.item);
     }
+    this.terminalInteractions.recordCompletion(timelineItem);
     this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     if (timelineItem.type === "assistant_message") {
       this.pendingAssistantMessageBoundary = true;
@@ -6545,6 +6598,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     itemId: string | null | undefined,
   ): void {
     if (!itemId) {
+      return;
+    }
+    if (timelineItem.type === "tool_call" && timelineItem.detail.type === "shell") {
+      const canonical = this.consumeOutputDelta(this.pendingCanonicalCommandOutputDeltas, itemId);
+      const legacy = this.consumeOutputDelta(this.pendingCommandOutputDeltas, itemId);
+      timelineItem.detail.output ??=
+        this.terminalInteractions.withOutputBaseline(itemId, canonical ?? legacy) ?? undefined;
       return;
     }
     if (timelineItem.type === "assistant_message") {
@@ -6735,61 +6795,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     store.delete(id);
     return buffered.join("");
-  }
-
-  private rememberTerminalProcessForCommand(command: unknown, output: string | null): void {
-    const normalizedCommand = normalizeCodexCommandValue(command);
-    if (!normalizedCommand) {
-      return;
-    }
-    const displayCommand =
-      typeof normalizedCommand === "string"
-        ? normalizedCommand
-        : normalizedCommand.join(" ").trim();
-    if (!displayCommand) {
-      return;
-    }
-    const processId = extractCodexTerminalSessionId(output ?? undefined);
-    if (!processId) {
-      return;
-    }
-    this.terminalCommandByProcessId.set(processId, displayCommand);
-    if (!this.pendingUnlabeledTerminalInteractions.has(processId)) {
-      return;
-    }
-    const pendingInteractions = this.pendingUnlabeledTerminalInteractions.get(processId) ?? [];
-    this.pendingUnlabeledTerminalInteractions.delete(processId);
-    for (const pendingInteraction of pendingInteractions) {
-      this.emitEvent({
-        type: "timeline",
-        provider: CODEX_PROVIDER,
-        item: mapCodexTerminalInteractionToToolCall({
-          callId: pendingInteraction.callId,
-          processId,
-          command: displayCommand,
-          stdin: pendingInteraction.stdin,
-        }),
-      });
-    }
-  }
-
-  private createTerminalInteractionCallId(
-    processId: string | null,
-    fallbackCallId: string | null,
-  ): string {
-    const baseCallId = processId
-      ? `terminal-session-${processId}`
-      : (nonEmptyString(fallbackCallId ?? undefined) ?? "terminal-interaction");
-    this.nextTerminalInteractionOrdinal += 1;
-    return `${baseCallId}-${this.nextTerminalInteractionOrdinal}`;
-  }
-
-  private shouldEmitTerminalInteractionKey(key: string): boolean {
-    if (this.emittedTerminalInteractionKeys.has(key)) {
-      return false;
-    }
-    this.emittedTerminalInteractionKeys.add(key);
-    return true;
   }
 
   private warnOnIncompleteEditToolCall(
