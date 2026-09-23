@@ -86,6 +86,7 @@ After syncing from `getpaseo/paseo`, verify all of the following before regenera
 - Vibing and Live Design still render identical tabs/content inside the selected worktree; `?embedded-live-design=1` only enables note handoff, which focuses the nearest conversation or creates a draft first.
 - The `?folder=` bootstrap still uses `openProject` rather than direct workspace creation.
 - Focus Mode remains locked and its exit controls remain unavailable.
+- Codex terminal interactions stay on their parent Shell card with separate input and output. Preserve `codex/terminal-interactions.ts`, the optional shell `stdin` protocol field, and its renderer when syncing provider changes; mirrored events must not erase repeated input.
 - `npm --prefix packages/app test -- src/embedded-focus-mode.test.tsx` passes, then regenerate `space-app-vibing/scripts/paseo-web` and run its `scripts/paseo-web/paseoWebBundle.test.ts` guard.
 
 ---
