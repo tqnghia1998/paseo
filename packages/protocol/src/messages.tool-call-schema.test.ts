@@ -15,6 +15,16 @@ function canonicalBase() {
 }
 
 describe("shared messages tool_call schema", () => {
+  it("preserves optional shell input independently of command output", () => {
+    const item = {
+      ...canonicalBase(),
+      status: "completed",
+      error: null,
+      detail: { type: "shell", command: "git add -p", output: "Stage this hunk?", stdin: "y\ny\n" },
+    };
+    expect(AgentTimelineItemPayloadSchema.parse(item)).toEqual(item);
+  });
+
   it("parses each status-discriminated tool_call variant at runtime", () => {
     const running = AgentTimelineItemPayloadSchema.parse({
       ...canonicalBase(),
