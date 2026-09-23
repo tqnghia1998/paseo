@@ -150,10 +150,12 @@ function useDiffLines(detail: ToolCallDetail | undefined): DiffLine[] | undefine
 interface ShellDetailProps {
   command: string;
   output: string | null | undefined;
+  stdin?: string;
   ds: DetailStyles;
 }
 
-function ShellDetailSection({ command, output, ds }: ShellDetailProps) {
+function ShellDetailSection({ command, output, stdin, ds }: ShellDetailProps) {
+  const { t } = useTranslation();
   const normalizedCommand = command.replace(/\n+$/, "");
   const commandOutput = (output ?? "").replace(/^\n+/, "");
   const hasOutput = commandOutput.length > 0;
@@ -176,7 +178,11 @@ function ShellDetailSection({ command, output, ds }: ShellDetailProps) {
               <Text selectable style={styles.scrollText}>
                 <Text style={styles.shellPrompt}>$ </Text>
                 {normalizedCommand}
+                {hasOutput && stdin ? `\n\n${t("toolCallDetails.output")}` : ""}
                 {hasOutput ? `\n\n${commandOutput}` : ""}
+                {stdin ? (
+                  <Text testID="shell-tool-input">{`\n\n${t("toolCallDetails.input")}\n${stdin}`}</Text>
+                ) : null}
               </Text>
             </View>
           </ScrollView>
@@ -675,7 +681,13 @@ function buildDetailSections(
   if (!detail) return [];
   if (detail.type === "shell") {
     return [
-      <ShellDetailSection key="shell" command={detail.command} output={detail.output} ds={ds} />,
+      <ShellDetailSection
+        key="shell"
+        command={detail.command}
+        output={detail.output}
+        stdin={detail.stdin}
+        ds={ds}
+      />,
     ];
   }
   if (detail.type === "worktree_setup") {
