@@ -255,6 +255,7 @@ export type ToolCallDetail =
       command: string;
       cwd?: string;
       output?: string;
+      stdin?: string;
       exitCode?: number | null;
     }
   | {
