@@ -1731,11 +1731,12 @@ function ComposerContentImpl({
   useEmbeddedLiveDesignSend({
     agentId,
     enabled: isWeb && isActiveComposer && isEmbeddedLiveDesignMessaging,
+    isDraft: resolveLiveDesignAgentId !== undefined,
     workspaceId,
     submit: useStableEvent(
       async (
         text: string,
-        onTurnFinished: () => Promise<void>,
+        onTurnFinished: (outcome?: "succeeded" | "failed" | "unknown") => Promise<void>,
         onAgentResolved: (agentId: string) => void,
       ) => {
         const waitForTurn = async () => {
@@ -1753,7 +1754,7 @@ function ComposerContentImpl({
               resolveLiveDesignAgentId === undefined || Boolean(resolvedDraftAgentId),
             )
           )
-            await onTurnFinished();
+            await onTurnFinished(result.status === "idle" ? "succeeded" : "failed");
         };
         const result = await sendMessageWithContent(text, [], undefined, undefined, waitForTurn);
         if (result === "failed" || result === "noop") {
@@ -1764,15 +1765,17 @@ function ComposerContentImpl({
         }
       },
     ),
-    resumePending: useStableEvent(async (onTurnFinished: () => Promise<void>) => {
-      if (!client) return;
-      const result = await client.waitForFinish(agentId, 0, {
-        waitForActive: true,
-        waitThroughPermission: true,
-      });
-      if (shouldSettleLiveDesignTurn(result.status, resolveLiveDesignAgentId === undefined))
-        await onTurnFinished();
-    }),
+    resumePending: useStableEvent(
+      async (onTurnFinished: (outcome?: "succeeded" | "failed" | "unknown") => Promise<void>) => {
+        if (!client) return;
+        const result = await client.waitForFinish(agentId, 0, {
+          waitForActive: true,
+          waitThroughPermission: true,
+        });
+        if (shouldSettleLiveDesignTurn(result.status, resolveLiveDesignAgentId === undefined))
+          await onTurnFinished(result.status === "idle" ? "succeeded" : "failed");
+      },
+    ),
   });
 
   const handleSubmit = useCallback(
