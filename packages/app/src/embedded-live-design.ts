@@ -12,6 +12,8 @@ export const EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE =
 export const EMBEDDED_LIVE_DESIGN_COMPLETION_ACK_TYPE = "space:paseo-live-design-completion-ack";
 
 export interface EmbeddedLiveDesignNote {
+  id?: string;
+  iterationId?: string;
   comment: string;
   requestedScope?: "this-instance" | "all-instances";
   context?: {
@@ -57,13 +59,14 @@ export function isEmbeddedLiveDesignSendMessage(
   data: unknown,
 ): data is EmbeddedLiveDesignSendMessage {
   if (!data || typeof data !== "object") return false;
+  if ("images" in data || "imageGrant" in data) return false;
   const message = data as Partial<EmbeddedLiveDesignSendMessage>;
+  const notes = message.notes;
+  if (!Array.isArray(notes) || notes.length === 0) return false;
   return (
     message.type === EMBEDDED_LIVE_DESIGN_SEND_TYPE &&
     typeof message.requestId === "string" &&
-    Array.isArray(message.notes) &&
-    message.notes.length > 0 &&
-    message.notes.every(
+    notes.every(
       (note) => note !== null && typeof note === "object" && typeof note.comment === "string",
     )
   );
@@ -99,6 +102,7 @@ interface StoredRequest {
   requestId: string;
   agentId: string;
   workspaceId?: string;
+  outcome?: "succeeded" | "failed" | "unknown";
 }
 
 const newAgentReadyRequestIds = new Map<string, string>();
@@ -117,7 +121,9 @@ const requests = (state: "completed" | "pending"): StoredRequest[] => {
           typeof (item as StoredRequest).requestId === "string" &&
           typeof (item as StoredRequest).agentId === "string" &&
           ((item as StoredRequest).workspaceId === undefined ||
-            typeof (item as StoredRequest).workspaceId === "string"),
+            typeof (item as StoredRequest).workspaceId === "string") &&
+          ((item as StoredRequest).outcome === undefined ||
+            ["succeeded", "failed", "unknown"].includes((item as StoredRequest).outcome!)),
       )
       ? (parsed as StoredRequest[])
       : [];
@@ -179,12 +185,16 @@ function publishResult(
     | typeof EMBEDDED_LIVE_DESIGN_READY_TYPE,
   requestId?: string,
   error?: unknown,
+  outcome?: StoredRequest["outcome"],
+  destination?: { agentId: string; workspaceId: string; isDraft: boolean },
 ): void {
   window.parent.postMessage(
     {
       type,
       ...(requestId ? { requestId } : {}),
       ...(error ? { error: error instanceof Error ? error.message : String(error) } : {}),
+      ...(type === EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE && outcome ? { outcome } : {}),
+      ...(type === EMBEDDED_LIVE_DESIGN_READY_TYPE && destination ? { destination } : {}),
     },
     targetOrigin,
   );
@@ -223,8 +233,14 @@ export function useEmbeddedLiveDesignActivation(input: {
         return;
       }
       if (event.data.type === EMBEDDED_LIVE_DESIGN_COMPLETION_SYNC_REQUEST_TYPE) {
-        for (const { requestId } of requestsForWorkspace("completed", workspaceId)) {
-          publishResult(event.origin, EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId);
+        for (const { requestId, outcome } of requestsForWorkspace("completed", workspaceId)) {
+          publishResult(
+            event.origin,
+            EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE,
+            requestId,
+            undefined,
+            outcome,
+          );
         }
         const pendingAgentId = requestsForWorkspace("pending", workspaceId)[0]?.agentId;
         if (pendingAgentId) activateConversation(pendingAgentId);
@@ -247,15 +263,18 @@ export function useEmbeddedLiveDesignActivation(input: {
 export function useEmbeddedLiveDesignSend(input: {
   agentId: string;
   enabled: boolean;
+  isDraft?: boolean;
   submit: (
     text: string,
-    onTurnFinished: () => Promise<void>,
+    onTurnFinished: (outcome?: StoredRequest["outcome"]) => Promise<void>,
     onAgentResolved: (agentId: string) => void,
   ) => Promise<void>;
-  resumePending?: (onTurnFinished: () => Promise<void>) => Promise<void>;
+  resumePending?: (
+    onTurnFinished: (outcome?: StoredRequest["outcome"]) => Promise<void>,
+  ) => Promise<void>;
   workspaceId?: string | null;
 }): void {
-  const { agentId, enabled, submit, resumePending, workspaceId } = input;
+  const { agentId, enabled, isDraft = false, submit, resumePending, workspaceId } = input;
   useEffect(() => {
     // The caller gates this hook on the preserved Live Design query; the build check is defense in depth.
     if (
@@ -268,11 +287,32 @@ export function useEmbeddedLiveDesignSend(input: {
     if (!expectedOrigin) return;
     const isTrustedHost = (event: MessageEvent) =>
       event.source === window.parent && event.origin === expectedOrigin;
+    const readyDestination = workspaceId ? { agentId, workspaceId, isDraft } : undefined;
     const handleMessage = (event: MessageEvent) => {
       if (!isTrustedHost(event)) return;
       if (event.data !== null && typeof event.data === "object" && "type" in event.data) {
+        if (
+          event.data.type === EMBEDDED_LIVE_DESIGN_SEND_TYPE &&
+          typeof event.data.requestId === "string" &&
+          ("images" in event.data || "imageGrant" in event.data)
+        ) {
+          publishResult(
+            event.origin,
+            EMBEDDED_LIVE_DESIGN_SEND_FAILED_TYPE,
+            event.data.requestId,
+            "Live Design image handoff is no longer supported",
+          );
+          return;
+        }
         if (event.data.type === EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE) {
-          publishResult(event.origin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
+          publishResult(
+            event.origin,
+            EMBEDDED_LIVE_DESIGN_READY_TYPE,
+            undefined,
+            undefined,
+            undefined,
+            readyDestination,
+          );
           return;
         }
       }
@@ -293,14 +333,22 @@ export function useEmbeddedLiveDesignSend(input: {
           agentId: resolvedAgentId,
         });
       };
-      const onTurnFinished = async () => {
+      const onTurnFinished = async (outcome: StoredRequest["outcome"] = "unknown") => {
         const pendingRequest =
           requests("pending").find((pending) => pending.requestId === requestId) ?? request;
         forgetRequest("pending", requestId);
-        rememberRequest("completed", pendingRequest);
-        publishResult(event.origin, EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, requestId);
+        rememberRequest("completed", { ...pendingRequest, outcome });
+        publishResult(
+          event.origin,
+          EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE,
+          requestId,
+          undefined,
+          outcome,
+        );
       };
-      void submit(buildEmbeddedLiveDesignPrompt(notes), onTurnFinished, onAgentResolved)
+      void (async () => {
+        await submit(buildEmbeddedLiveDesignPrompt(notes), onTurnFinished, onAgentResolved);
+      })()
         .then(() => publishResult(event.origin, EMBEDDED_LIVE_DESIGN_SENT_TYPE, requestId))
         .catch((error) => {
           forgetRequest("pending", requestId);
@@ -314,20 +362,40 @@ export function useEmbeddedLiveDesignSend(input: {
           pending.agentId === agentId &&
           (!workspaceId || !pending.workspaceId || pending.workspaceId === workspaceId),
       )) {
-        void resumePending(async () => {
+        void resumePending(async (outcome = "unknown") => {
           forgetRequest("pending", request.requestId);
-          rememberRequest("completed", request);
-          publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE, request.requestId);
+          rememberRequest("completed", { ...request, outcome });
+          publishResult(
+            expectedOrigin,
+            EMBEDDED_LIVE_DESIGN_COMPLETED_TYPE,
+            request.requestId,
+            undefined,
+            outcome,
+          );
         }).catch(() => undefined);
       }
     }
     const newAgentRequestId = newAgentReadyRequestIds.get(agentId);
     if (newAgentRequestId) {
       newAgentReadyRequestIds.delete(agentId);
-      publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_READY_TYPE, newAgentRequestId);
+      publishResult(
+        expectedOrigin,
+        EMBEDDED_LIVE_DESIGN_READY_TYPE,
+        newAgentRequestId,
+        undefined,
+        undefined,
+        readyDestination,
+      );
     } else {
-      publishResult(expectedOrigin, EMBEDDED_LIVE_DESIGN_READY_TYPE);
+      publishResult(
+        expectedOrigin,
+        EMBEDDED_LIVE_DESIGN_READY_TYPE,
+        undefined,
+        undefined,
+        undefined,
+        readyDestination,
+      );
     }
     return () => window.removeEventListener("message", handleMessage);
-  }, [agentId, enabled, resumePending, submit, workspaceId]);
+  }, [agentId, enabled, isDraft, resumePending, submit, workspaceId]);
 }
