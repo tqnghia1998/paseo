@@ -220,6 +220,9 @@ export async function dispatchComposerAgentMessage(
   input.submission.begin(input.agentId, userMessage);
   try {
     const imagesData = await input.encodeImages(wirePayload.images);
+    if (wirePayload.images.length > 0 && imagesData?.length !== wirePayload.images.length) {
+      throw new Error("Could not encode every image attachment; the message was not sent");
+    }
     await input.client.sendAgentMessage(input.agentId, input.text, {
       messageId: clientMessageId,
       ...(input.activeTurnBehavior ? { activeTurnBehavior: input.activeTurnBehavior } : {}),
