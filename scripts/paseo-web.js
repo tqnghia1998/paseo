@@ -5,6 +5,11 @@ import fs from "node:fs";
 import os from "node:os";
 import { execFileSync } from "node:child_process";
 
+// Keep the host-only capability out of extraction tools, providers and PTYs.
+// Capture before importing the daemon: imports can snapshot process.env.
+const worktreeCleanupToken = process.env.PASEO_WORKTREE_CLEANUP_TOKEN;
+delete process.env.PASEO_WORKTREE_CLEANUP_TOKEN;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -103,10 +108,7 @@ const config = loadConfig(home, {
 });
 
 const logger = createRootLogger({ level: "info", format: "pretty" });
-const daemon = await createPaseoDaemon(
-  { ...config, worktreeCleanupToken: process.env.PASEO_WORKTREE_CLEANUP_TOKEN },
-  logger,
-);
+const daemon = await createPaseoDaemon({ ...config, worktreeCleanupToken }, logger);
 if (cleanupWorktrees) {
   await daemon.cleanupWorktrees(cleanupWorktrees);
   await daemon.stop().catch(() => undefined);
