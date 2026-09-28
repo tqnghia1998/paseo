@@ -20,6 +20,8 @@ Both consumer surfaces use one **Embedded Focus Mode** backed by the same standa
 
 The `?embedded-live-design=1` query enables Live Design messaging only; it does not enable a separate policy, presentation, or distribution. When the host asks whether Paseo is ready to receive notes, the workspace focuses the nearest agent/draft tab by tab order or creates a draft if none exists. The build-wide invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true`; do not remove it or the guards in `packages/app/src/embedded-focus-mode.ts` when resolving upstream changes.
 
+Live Design handoff is text-only. Obsolete host messages containing `images` or `imageGrant` are rejected, without submitting their text. Ordinary Paseo image attachments remain available through the composer.
+
 ---
 
 ## 2. Bundling Commands (in `paseo` repo)
@@ -32,8 +34,19 @@ npm run build:server
 npm run build:client
 
 # Bundle Paseo Web into scripts/paseo-web and destination repos
-node scripts/bundle-paseo-web.mjs
+PASEO_WEB_DEST_DIR=/absolute/consumer/worktree/scripts/paseo-web npm run build:web
 ```
+
+For changes limited to `scripts/paseo-web.js`, refresh an existing bundle without
+rebuilding or replacing its backend, native archive, or UI:
+
+```bash
+PASEO_WEB_DEST_DIR=/absolute/consumer/worktree/scripts/paseo-web npm run build:web -- --runner-only
+```
+
+The runner consumes `PASEO_WORKTREE_CLEANUP_TOKEN` before importing the daemon or
+launching extraction tools. It retains the capability only in daemon configuration,
+not in the environment inherited by providers, external commands, or terminals.
 
 ### Bundle Output Structure (`scripts/paseo-web/`)
 
