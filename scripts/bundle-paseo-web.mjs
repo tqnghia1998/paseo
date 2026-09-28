@@ -10,6 +10,16 @@ const DEST_DIR = path.resolve(
     path.join(ROOT_DIR, "..", "space-app-vibing", "scripts", "paseo-web"),
 );
 
+// Runner-only fixes do not need to rebuild or replace the daemon and embedded UI.
+if (process.argv.includes("--runner-only")) {
+  if (!fs.existsSync(path.join(DEST_DIR, "server.mjs"))) {
+    throw new Error("--runner-only requires an existing standalone bundle");
+  }
+  fs.copyFileSync(path.join(ROOT_DIR, "scripts/paseo-web.js"), path.join(DEST_DIR, "paseo-web.js"));
+  console.log("Updated paseo-web runner in", DEST_DIR);
+  process.exit(0);
+}
+
 console.log("1. Building frontend web UI...");
 execSync("node scripts/build-daemon-web-ui.mjs", { cwd: ROOT_DIR, stdio: "inherit" });
 
@@ -18,6 +28,7 @@ execSync("npm run build:server", { cwd: ROOT_DIR, stdio: "inherit" });
 
 console.log("3. Bundling server backend with esbuild...");
 fs.mkdirSync(DEST_DIR, { recursive: true });
+fs.copyFileSync(path.join(ROOT_DIR, "scripts/paseo-web.js"), path.join(DEST_DIR, "paseo-web.js"));
 
 const serverPackageJson = JSON.parse(
   fs.readFileSync(path.join(ROOT_DIR, "packages/server/package.json"), "utf8"),
