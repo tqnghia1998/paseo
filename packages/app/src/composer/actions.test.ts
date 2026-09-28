@@ -419,6 +419,25 @@ describe("pickAndPersistImages", () => {
 });
 
 describe("dispatchComposerAgentMessage", () => {
+  it("rejects a send when an image cannot be encoded instead of silently sending text", async () => {
+    const client = createFakeSendClient();
+    const stream = createFakeStream();
+
+    await expect(
+      dispatchComposerAgentMessage({
+        client,
+        agentId: "agent",
+        text: "See the image",
+        attachments: [{ kind: "image", metadata: imageWithId("missing") }],
+        encodeImages: async () => undefined,
+        submission: stream,
+      }),
+    ).rejects.toThrow("image");
+
+    expect(client.calls).toHaveLength(0);
+    expect(stream.tail.get("agent") ?? []).toEqual([]);
+  });
+
   it("forwards the configured active-turn intent without provider capability checks", async () => {
     const client = createFakeSendClient();
     const stream = createFakeStream();
