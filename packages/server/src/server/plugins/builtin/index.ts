@@ -25,6 +25,7 @@ export function resolveBuiltinPluginsRoot(moduleUrl: string | URL = import.meta.
     return path.join(moduleDir.slice(0, archiveIndex), "builtin-plugins");
   }
   const candidates = [
+    path.join(moduleDir, "builtin-plugins"),
     path.resolve(moduleDir, "..", "..", "..", "builtin-plugins"),
     path.resolve(moduleDir, "..", "..", "..", "..", "..", "..", "plugins"),
   ];
