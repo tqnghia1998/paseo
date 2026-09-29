@@ -22,6 +22,8 @@ The `?embedded-live-design=1` query enables Live Design messaging only; it does 
 
 Live Design handoff is text-only. Obsolete host messages containing `images` or `imageGrant` are rejected, without submitting their text. Ordinary Paseo image attachments remain available through the composer.
 
+Sent Live Design context attachments open a read-only, scrollable viewer with Copy and Close actions. Conversation Find temporarily reveals the selected message's context inline so matches remain searchable and keyboard navigation stays in the conversation. The context collapses when Find closes or moves to another message. The short message and attachment contents are unchanged by viewing or searching them.
+
 ---
 
 ## 2. Bundling Commands (in `paseo` repo)
