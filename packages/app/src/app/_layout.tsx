@@ -503,8 +503,10 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   // conflate workspace/project-specific chrome (sidebar, mobile gesture) with
   // global concerns like keyboard shortcuts. Split those out so settings (and
   // other non-workspace routes) don't need a special-case to keep shortcuts alive.
-  const keyboardShortcutsEnabled =
-    !isEmbeddedFocusMode && (chromeEnabled || pathname.startsWith("/settings"));
+  const keyboardShortcutsEnabled = selectEmbeddedFocusMode(
+    false,
+    chromeEnabled || pathname.startsWith("/settings"),
+  );
 
   useKeyboardShortcuts({
     enabled: keyboardShortcutsEnabled,
