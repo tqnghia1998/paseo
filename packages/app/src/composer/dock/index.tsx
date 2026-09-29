@@ -6,8 +6,11 @@ import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { resolveInlineComposerCapacity } from "./internal/capacity";
 import { useFullscreenSlotFrame } from "./internal/fullscreen";
-import { useIsCompactFormFactor } from "@/constants/layout";
-import { HEADER_INNER_HEIGHT } from "@/constants/layout";
+import {
+  useIsCompactFormFactor,
+  HEADER_INNER_HEIGHT,
+  resolveComposerMaxContentWidth,
+} from "@/constants/layout";
 
 interface ComposerDockProps {
   children: [ReactNode, ReactNode, ReactNode?];
@@ -83,7 +86,11 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     paddingBottom: HEADER_INNER_HEIGHT + 24,
   },
-  form: { flexShrink: 1, width: "100%", maxWidth: theme.contentMaxWidth },
+  form: {
+    flexShrink: 1,
+    width: "100%",
+    maxWidth: resolveComposerMaxContentWidth(theme.contentMaxWidth),
+  },
   centeredComposer: { flexShrink: 0 },
   setup: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
 }));
