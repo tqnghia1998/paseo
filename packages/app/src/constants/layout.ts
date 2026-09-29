@@ -1,5 +1,6 @@
 import { useUnistyles } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
+import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
 
 export const FOOTER_HEIGHT = 75;
 
@@ -10,6 +11,21 @@ export const HEADER_INNER_HEIGHT = 36;
 export const HEADER_INNER_HEIGHT_MOBILE = 56;
 export const WORKSPACE_SECONDARY_HEADER_HEIGHT = 36;
 export const HEADER_TOP_PADDING_MOBILE = 8;
+
+export const CHAT_HORIZONTAL_SPACING = isEmbeddedFocusMode ? 24 : 4;
+export const CHAT_WIDE_MIN_WIDTH = 960;
+
+export function resolveChatMaxContentWidth(contentMaxWidth: number): number | "100%" {
+  return isEmbeddedFocusMode ? "100%" : contentMaxWidth;
+}
+
+export function resolveComposerMaxContentWidth(contentMaxWidth: number): number {
+  return isEmbeddedFocusMode ? CHAT_WIDE_MIN_WIDTH : contentMaxWidth;
+}
+
+export function getChatHorizontalSpacing(isNarrow: boolean) {
+  return isNarrow ? 4 : CHAT_HORIZONTAL_SPACING;
+}
 
 export const COMPACT_FORM_FACTOR_WIDTH = 500;
 

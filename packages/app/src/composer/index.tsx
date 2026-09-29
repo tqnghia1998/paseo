@@ -33,6 +33,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { usePanelStore } from "@/stores/panel-store";
 import { useHasFinePointer } from "@/hooks/use-fine-pointer";
+import { useChatGutter } from "@/hooks/use-chat-gutter";
 import { useShallow } from "zustand/shallow";
 import {
   ArrowUp,
@@ -47,7 +48,7 @@ import {
   Paperclip,
 } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
-import { FOOTER_HEIGHT } from "@/constants/layout";
+import { FOOTER_HEIGHT, resolveComposerMaxContentWidth } from "@/constants/layout";
 import {
   AgentControls,
   DraftAgentControls,
@@ -424,10 +425,10 @@ function renderComposerAttachmentPill(args: RenderComposerAttachmentPillArgs): R
       />
     );
   }
-  if (attachment.kind === "file") {
+  if (attachment.kind === "file" || attachment.kind === "text") {
     return (
       <FileAttachmentPill
-        key={attachment.attachment.id}
+        key={attachment.kind === "file" ? attachment.attachment.id : `text:${index}`}
         attachment={attachment}
         index={index}
         disabled={disabled}
@@ -800,7 +801,7 @@ function GithubAttachmentPill({
 }
 
 interface FileAttachmentPillProps {
-  attachment: Extract<ComposerAttachment, { kind: "file" }>;
+  attachment: Extract<ComposerAttachment, { kind: "file" | "text" }>;
   index: number;
   disabled: boolean;
   onRemove: (index: number) => void;
@@ -818,7 +819,10 @@ function FileAttachmentPill({
   const handleRemove = useCallback(() => {
     onRemove(index);
   }, [onRemove, index]);
-  const fileName = attachment.attachment.fileName;
+  const fileName =
+    attachment.kind === "file"
+      ? attachment.attachment.fileName
+      : (attachment.attachment.title ?? t("message.attachments.textAttachment"));
   return (
     <AttachmentPill
       testID="composer-file-attachment-pill"
@@ -831,7 +835,11 @@ function FileAttachmentPill({
       <AttachmentLabel
         icon={filePillIcon}
         title={fileName}
-        subtitle={getFileTypeLabel(fileName) ?? t("message.attachments.file")}
+        subtitle={
+          attachment.kind === "text"
+            ? t("message.attachments.text")
+            : (getFileTypeLabel(fileName) ?? t("message.attachments.file"))
+        }
       />
     </AttachmentPill>
   );
@@ -1272,6 +1280,7 @@ function ComposerContentImpl({
   placeholder,
 }: ComposerContentProps) {
   const mode = resolveComposerInputMode(inputMode);
+  const chatGutter = useChatGutter();
   const { t } = useTranslation();
   const buttonIconSize = resolveComposerButtonIconSize();
   const client = useHostRuntimeClient(serverId);
@@ -1738,6 +1747,7 @@ function ComposerContentImpl({
         text: string,
         onTurnFinished: (outcome?: "succeeded" | "failed" | "unknown") => Promise<void>,
         onAgentResolved: (agentId: string) => void,
+        liveDesignAttachments: ComposerAttachment[],
       ) => {
         const waitForTurn = async () => {
           const resolvedDraftAgentId = resolveLiveDesignAgentId?.();
@@ -1756,7 +1766,13 @@ function ComposerContentImpl({
           )
             await onTurnFinished(result.status === "idle" ? "succeeded" : "failed");
         };
-        const result = await sendMessageWithContent(text, [], undefined, undefined, waitForTurn);
+        const result = await sendMessageWithContent(
+          text,
+          liveDesignAttachments,
+          undefined,
+          undefined,
+          waitForTurn,
+        );
         if (result === "failed" || result === "noop") {
           throw new Error("Paseo could not send the Live Design notes");
         }
@@ -2368,10 +2384,11 @@ function ComposerContentImpl({
   const inputAreaContainerStyle = useMemo(
     () => [
       styles.inputAreaContainer,
+      !isFullscreen && chatGutter.style,
       isComposerLocked && styles.inputAreaLocked,
       isFullscreen && styles.inputAreaFullscreen,
     ],
-    [isComposerLocked, isFullscreen],
+    [chatGutter.style, isComposerLocked, isFullscreen],
   );
   const inputAreaContentStyle = useMemo(
     () => [styles.inputAreaContent, isFullscreen && styles.fullscreenFill],
@@ -2499,7 +2516,7 @@ function ComposerContentImpl({
       >
         <AttachmentLightbox source={lightboxSource} onClose={handleLightboxClose} />
         {/* Input area */}
-        <View style={inputAreaContainerStyle}>
+        <View style={inputAreaContainerStyle} onLayout={chatGutter.onLayout}>
           <View style={inputAreaContentStyle}>
             {isFullscreen ? null : queueList}
             {!isFullscreen && sendErrorNode}
@@ -2629,7 +2646,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     alignItems: "center",
     width: "100%",
     overflow: "visible",
-    paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[4],
   },
   inputAreaLocked: {
@@ -2650,7 +2666,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   inputAreaContent: {
     flexShrink: 1,
     width: "100%",
-    maxWidth: theme.contentMaxWidth,
+    maxWidth: resolveComposerMaxContentWidth(theme.contentMaxWidth),
     gap: theme.spacing[3],
   },
   messageInputContainer: {
