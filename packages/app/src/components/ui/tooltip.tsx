@@ -27,9 +27,9 @@ import { FadeIn, FadeOut } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { FloatingSurface } from "@/components/ui/floating";
-import { useRetainedPanelActive } from "@/components/retained-panel";
 import { isNative, isWeb } from "@/constants/platform";
 import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
+import { useRetainedPanelActive } from "@/components/retained-panel";
 
 type Side = "top" | "bottom" | "left" | "right";
 type Align = "start" | "center" | "end";
@@ -257,15 +257,14 @@ export function Tooltip({
   });
 
   const isCompact = useIsCompactFormFactor();
-  const active = useRetainedPanelActive();
   const opensOnPress = isNative || isCompact;
-  const enabled = active && (opensOnPress ? enabledOnMobile : enabledOnDesktop);
+  const isPanelActive = useRetainedPanelActive();
+  const enabled = isPanelActive && (opensOnPress ? enabledOnMobile : enabledOnDesktop);
 
-  // Remove the portal in the inactive commit, before the retained chat freezes.
-  // Closing also prevents the tooltip from returning when its panel is shown again.
+  // Portals escape the hidden panel, so dismiss them before its chat freezes.
   useEffect(() => {
-    if (!active && isOpen) setIsOpen(false);
-  }, [active, isOpen, setIsOpen]);
+    if (!enabled && isOpen) setIsOpen(false);
+  }, [enabled, isOpen, setIsOpen]);
 
   const value = useMemo<TooltipContextValue>(
     () => ({
@@ -330,6 +329,10 @@ export function TooltipTrigger({
     clearOpenTimer();
     ctx.setOpen(false);
   }, [clearOpenTimer, ctx]);
+
+  useEffect(() => {
+    if (!ctx.enabled || disabled) clearOpenTimer();
+  }, [clearOpenTimer, ctx.enabled, disabled]);
 
   useEffect(() => {
     return () => {

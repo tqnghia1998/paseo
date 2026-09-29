@@ -23,6 +23,8 @@ Embedded conversations fill their parent pane through `resolveChatMaxContentWidt
 
 The raw DOM transcript in `agent-stream/strategy-web.tsx` measures its own viewport and applies the responsive gutter independently of the native list styles in `view.tsx`; preserve this path, including virtualized rows and turn footers.
 
+Tooltips must dismiss their global portal and cancel pending hover timers when their retained panel becomes inactive, before `RetainedChatContent` freezes the source chat. The first-fork empty pill was the fork tooltip's portal, not the conversation jumper or workspace diff pill. Preserve the real-browser regression in `components/ui/tooltip.browser.test.tsx`.
+
 The `?embedded-live-design=1` query enables Live Design messaging, not a second build or focus policy. It also retains the desktop tab row at compact widths. When the host asks whether Paseo is ready to receive notes, the workspace focuses the nearest agent/draft tab by tab order (earlier tab on a tie) or creates a draft if none exists. Send new agent always creates a fresh draft. The build-wide invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true`; preserve it and the guards in `packages/app/src/embedded-focus-mode.ts` when resolving upstream changes.
 
 Embedded empty panes open a focused New Agent draft instead of the generic New Tab launcher, including after closing the last conversation tab or remounting. After persisted form preferences load, an empty model selection defaults to the first available model in Codex, Claude, OpenCode, then Pi order; an explicit selection is preserved.
@@ -111,6 +113,7 @@ After syncing from `getpaseo/paseo`, verify all of the following before regenera
 
 - `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true` is still injected by `scripts/build-daemon-web-ui.mjs`.
 - Embedded guards still gate project/workspace navigation, sidebars, workspace headers, command center, route-changing shortcuts, and model-management escape paths; Fork in a new tab and Import Session remain scoped to the selected worktree.
+- Tooltips dismiss their global portal and cancel pending hover timers when their retained panel becomes inactive; run `components/ui/tooltip.browser.test.tsx` to verify hidden-chat suspension and return.
 - Preserve the empty-pane New Agent fallback, persisted model choices, queue checkpoints, text attachments, and request-correlated Live Design outcomes across remounts.
 - The `?folder=` bootstrap still uses `openProject` rather than direct workspace creation.
 - Focus Mode remains locked and its exit controls remain unavailable.
