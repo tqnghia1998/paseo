@@ -30,6 +30,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { FloatingSurface } from "@/components/ui/floating";
 import { isNative, isWeb } from "@/constants/platform";
 import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
+import { useRetainedPanelActive } from "@/components/retained-panel";
 
 type Side = "top" | "bottom" | "left" | "right";
 type Align = "start" | "center" | "end";
@@ -249,7 +250,13 @@ export function Tooltip({
 
   const isCompact = useIsCompactFormFactor();
   const opensOnPress = isNative || isCompact;
-  const enabled = opensOnPress ? enabledOnMobile : enabledOnDesktop;
+  const isPanelActive = useRetainedPanelActive();
+  const enabled = isPanelActive && (opensOnPress ? enabledOnMobile : enabledOnDesktop);
+
+  // Portals escape the hidden panel, so dismiss them before its chat freezes.
+  useEffect(() => {
+    if (!enabled && isOpen) setIsOpen(false);
+  }, [enabled, isOpen, setIsOpen]);
 
   const value = useMemo<TooltipContextValue>(
     () => ({
@@ -308,6 +315,10 @@ export function TooltipTrigger({
     clearOpenTimer();
     ctx.setOpen(false);
   }, [clearOpenTimer, ctx]);
+
+  useEffect(() => {
+    if (!ctx.enabled || disabled) clearOpenTimer();
+  }, [clearOpenTimer, ctx.enabled, disabled]);
 
   useEffect(() => {
     return () => {
