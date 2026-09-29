@@ -3,6 +3,8 @@ import { Pressable, Text, View, type PointerEvent as RNPointerEvent } from "reac
 import { StyleSheet } from "react-native-unistyles";
 import { useReducedMotion } from "react-native-reanimated";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
+import { CHAT_WIDE_MIN_WIDTH } from "@/constants/layout";
+import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { createChatOutlineHoverIntent } from "./hover-intent";
 import { promptTickMagnification } from "./model";
@@ -12,7 +14,7 @@ import type { ChatOutlineRailProps } from "./rail";
 // magnifying a slot must not move the box the pointer is resting on. See docs/hover.md.
 const RAIL_WIDTH = 36;
 const SLOT_HEIGHT = 8;
-const MIN_PANEL_WIDTH = 918;
+const MIN_PANEL_WIDTH = isEmbeddedFocusMode ? CHAT_WIDE_MIN_WIDTH : 918;
 const RESTING_PILL_HEIGHT = 2;
 const MAGNIFIED_PILL_HEIGHT = 4;
 const RESTING_PILL_WIDTH = 10;

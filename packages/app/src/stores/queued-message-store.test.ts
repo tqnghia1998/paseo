@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createQueuedMessagePersistence, type QueuedMessageStorage } from "./queued-message-store";
+import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
 
 function createStorage(): QueuedMessageStorage {
   const values = new Map<string, string>();
@@ -30,6 +31,15 @@ describe("queued message persistence", () => {
                 path: "src/app.ts",
                 selection: { kind: "whole_file" as const },
               },
+              {
+                kind: "text" as const,
+                attachment: {
+                  type: "text" as const,
+                  mimeType: "text/plain" as const,
+                  title: "Live Design context",
+                  text: '[{"comment":"Tighten spacing"}]',
+                },
+              },
             ],
           },
         ],
@@ -39,6 +49,10 @@ describe("queued message persistence", () => {
     await persistence.save("server-1", queued);
 
     expect(await persistence.load("server-1")).toEqual(queued);
+    const restored = (await persistence.load("server-1")).get("agent-1")![0];
+    expect(splitComposerAttachmentsForSubmit(restored.attachments).attachments[1]).toEqual(
+      queued.get("agent-1")![0].attachments[1].attachment,
+    );
   });
 
   it("keeps the most recent checkpoint when writes complete out of order", async () => {
