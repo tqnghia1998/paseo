@@ -6,13 +6,14 @@ This document explains the porting setup for Paseo Web, how the standalone bundl
 
 ## 1. Overview & Architecture
 
-Paseo Web is packaged as a lightweight, self-contained standalone server that embeds:
+Paseo Web is packaged as a standalone server that embeds:
 
 1. **Paseo Daemon (`server.mjs`)**: Node.js backend daemon with WebSocket RPCs, agent lifecycle management, and session state.
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions.
 4. **Local Speech Worker (`worker-process.js`)**: Isolated worker for embedded dictation and voice mode.
-5. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, Fork, command-center navigation, agent-profile/provider management, and other app-level escape routes; Import Session remains available for the selected worktree. Regular Paseo builds are unchanged.
+5. **Built-in usage plugins (`builtin-plugins/`)**: The daemon's usage sources, with runtime compilers included in the dependency archive.
+6. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, command-center navigation, and agent-profile/provider management. Fork in a new tab and Import Session remain available within the selected worktree.
 
 ### Canonical embedded mode
 
@@ -22,24 +23,24 @@ Embedded conversations fill their parent pane through `resolveChatMaxContentWidt
 
 The raw DOM transcript in `agent-stream/strategy-web.tsx` measures its own viewport and applies the responsive gutter independently of the native list styles in `view.tsx`; preserve this path, including virtualized rows and turn footers.
 
-The `?embedded-live-design=1` query enables Live Design messaging only; it does not enable a separate policy, presentation, or distribution. When the host asks whether Paseo is ready to receive notes, the workspace focuses the nearest agent/draft tab by tab order or creates a draft if none exists. The build-wide invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true`; do not remove it or the guards in `packages/app/src/embedded-focus-mode.ts` when resolving upstream changes.
+The `?embedded-live-design=1` query enables Live Design messaging, not a second build or focus policy. It also retains the desktop tab row at compact widths. When the host asks whether Paseo is ready to receive notes, the workspace focuses the nearest agent/draft tab by tab order (earlier tab on a tie) or creates a draft if none exists. Send new agent always creates a fresh draft. The build-wide invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true`; preserve it and the guards in `packages/app/src/embedded-focus-mode.ts` when resolving upstream changes.
 
-Live Design handoff is text-only. Obsolete host messages containing `images` or `imageGrant` are rejected, without submitting their text. Ordinary Paseo image attachments remain available through the composer.
+Embedded empty panes open a focused New Agent draft instead of the generic New Tab launcher, including after closing the last conversation tab or remounting. After persisted form preferences load, an empty model selection defaults to the first available model in Codex, Claude, OpenCode, then Pi order; an explicit selection is preserved.
 
-Sent Live Design context attachments open a read-only, scrollable viewer with Copy and Close actions. Conversation Find temporarily reveals the selected message's context inline so matches remain searchable and keyboard navigation stays in the conversation. The context collapses when Find closes or moves to another message. The short message and attachment contents are unchanged by viewing or searching them.
+Queue is the fork's default send behavior. During an active turn, the composer has one Send/Queue action, without a separate Steer button or send-menu action; alternate-send keyboard behavior remains available. Queued messages are checkpointed per server for remounts. The one-time `queue-default` settings migration converts older persisted interrupt/steer defaults to queue; later explicit choices stick.
+
+Live Design handoff is text-only: a short message accompanies a `Live Design context` text attachment containing editing instructions, an untrusted-evidence warning, and fenced JSON. Drafts and queues preserve the attachment. Obsolete host messages containing `images` or `imageGrant` are rejected, without submitting their text. Ordinary Paseo image attachments remain available through the composer.
+
+Sent Live Design context attachments open the shared adaptive modal sheet with read-only, scrollable text, the shared Copy action, and a close control. Conversation Find temporarily reveals the selected message's context inline so matches remain searchable and keyboard navigation stays in the conversation. The context collapses when Find closes or moves to another message. Viewing or searching does not alter the message; rewinding restores the context as editable composer text while preserving an existing draft.
 
 ---
 
 ## 2. Bundling Commands (in `paseo` repo)
 
-To build the web UI and generate the standalone package:
+Run from the Paseo checkout with its npm dependencies installed. Use an absolute destination when the consumer is a worktree; the default is `../space-app-vibing/scripts/paseo-web` relative to the Paseo checkout, not the caller's Vibing worktree.
 
 ```bash
-# Build server & client declarations
-npm run build:server
-npm run build:client
-
-# Bundle Paseo Web into scripts/paseo-web and destination repos
+# Builds the embedded web UI and server stack, then writes the consumer bundle
 PASEO_WEB_DEST_DIR=/absolute/consumer/worktree/scripts/paseo-web npm run build:web
 ```
 
@@ -57,27 +58,34 @@ not in the environment inherited by providers, external commands, or terminals.
 ### Bundle Output Structure (`scripts/paseo-web/`)
 
 - `paseo-web.js` — Executable CLI runner
+- `package.json` — Packaged daemon name/version and ESM metadata
 - `server.mjs` — Standalone bundled daemon
 - `terminal-worker-process.js` — PTY process worker
 - `worker-process.js` — Local speech worker
 - `web-ui/` — Static web client bundle
-- `runtime-node-modules.tgz` — Native runtime bindings archive (PTY and speech)
+- `runtime-node-modules.tgz` — PTY and speech dependencies, TypeScript, esbuild, and the build host's esbuild binary
 - `bridge-plugin.bundle.mjs` — OpenCode bridge runtime artifact
-- `builtin-plugins/` — Usage-source plugins loaded beside the standalone server; the runtime archive also includes TypeScript, esbuild, and its platform binary so loading does not depend on the consumer's installed packages.
+- `builtin-plugins/` — Usage-source plugins loaded beside `server.mjs`; checkout-only `tsconfig.json` files are omitted because their parent configuration is not shipped
+
+The runner extracts the archive when a required runtime package is missing. Plugin loading must work without the Paseo checkout's `node_modules`. The built-in registry is `packages/server/src/server/plugins/builtin/index.ts`; see [built-in plugin behavior](docs/plugins.md#built-in-plugins).
+
+The archive is platform-specific. Vibing's Electron packaging replaces the target Sherpa speech package when needed, but does not replace `@esbuild/<platform>-<arch>`. A bundle built on one platform must not be assumed usable on another; verify the target compiler binary and PTY/speech runtime before shipping.
 
 ---
 
 ## 3. Running Paseo Web Standalone
 
 ```bash
-node scripts/paseo-web/paseo-web.js --port=6890 --home=~/.paseo-space
+node /absolute/consumer/worktree/scripts/paseo-web/paseo-web.js --port=6890 --home="$HOME/.paseo-space"
 ```
 
 ### CLI Options:
 
 - `--port=<number>` (or `-p <number>`): Port to listen on (default: `6768`).
 - `--host=<address>`: Host to bind to (default: `127.0.0.1`).
-- `--home=<path>`: Custom Paseo home directory for logs and state.
+- `--home=<path>`: Custom Paseo home directory for logs and state (default: `~/.paseo-web`). Pass an expanded absolute path.
+
+The runner disables authentication and relay access and binds to loopback by default. Do not expose it as an authenticated remote Paseo service.
 
 ---
 
@@ -89,12 +97,12 @@ To open directly into a workspace folder:
 http://127.0.0.1:<port>/?folder=<absolute_folder_path>
 ```
 
-When loaded in an `iframe` or Electron `<webview>`, Paseo Web:
+Vibing uses a renderer-owned `iframe` in both browser and Electron builds. Paseo Web:
 
 1. Detects the `?folder=` query parameter.
 2. Finds or creates the workspace corresponding to that directory through the idempotent `openProject` path, preserving its workspace and agent thread on remount.
 3. Enters **Embedded Focus Mode** directly.
-4. Keeps the selected worktree's same tabs/content in both hosts; `?embedded-live-design=1` only enables note handoff to the nearest conversation.
+4. Keeps the selected worktree's tabs/content in both hosts; Live Design messaging selects the nearest conversation or explicitly creates a fresh one.
 5. Dictation and voice mode are enabled by the standalone runner (`PASEO_DICTATION_ENABLED`/`PASEO_VOICE_MODE_ENABLED` in `scripts/paseo-web.js`); the host iframe must keep `microphone` in its `allow` list.
 
 ### Upstream rebase guard
@@ -102,53 +110,30 @@ When loaded in an `iframe` or Electron `<webview>`, Paseo Web:
 After syncing from `getpaseo/paseo`, verify all of the following before regenerating the consumer bundle:
 
 - `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true` is still injected by `scripts/build-daemon-web-ui.mjs`.
-- `packages/app/src/embedded-focus-mode.ts` still gates project/workspace navigation, Fork, sidebars, workspace headers, command center, route-changing shortcuts, and model-management escape paths for every standalone embed; Import Session remains available for the selected worktree.
-- Vibing and Live Design still render identical tabs/content inside the selected worktree; `?embedded-live-design=1` only enables note handoff, which focuses the nearest conversation or creates a draft first.
+- Embedded guards still gate project/workspace navigation, sidebars, workspace headers, command center, route-changing shortcuts, and model-management escape paths; Fork in a new tab and Import Session remain scoped to the selected worktree.
+- Preserve the empty-pane New Agent fallback, persisted model choices, queue checkpoints, text attachments, and request-correlated Live Design outcomes across remounts.
 - The `?folder=` bootstrap still uses `openProject` rather than direct workspace creation.
 - Focus Mode remains locked and its exit controls remain unavailable.
 - Codex terminal interactions stay on their parent Shell card with separate input and output. Preserve `codex/terminal-interactions.ts`, the optional shell `stdin` protocol field, and its renderer when syncing provider changes; mirrored events must not erase repeated input.
-- `npm --prefix packages/app test -- src/embedded-focus-mode.test.tsx` passes, then regenerate `space-app-vibing/scripts/paseo-web` and run its `scripts/paseo-web/paseoWebBundle.test.ts` guard.
+- The built-in registry resolves beside `server.mjs`, all listed plugin sources ship, and the archive contains TypeScript, esbuild, and its target binary. Do not restore checkout-only plugin tsconfigs.
+- Run focused source checks, then rebuild and run the consumer guard. The full build copies the runner automatically; do not hand-edit generated artifacts.
 
----
+```bash
+# In the Paseo checkout
+npm run test --workspace=@getpaseo/app -- --project unit src/embedded-focus-mode.test.tsx src/embedded-live-design.test.tsx src/app/folder-workspace.test.ts src/stores/queued-message-store.test.ts src/constants/layout.test.ts --bail=1 --maxWorkers=1
+npm run test:unit --workspace=@getpaseo/server -- src/server/plugins/builtin/index.test.ts -t "standalone bundles resolve|listed built-ins resolve" --bail=1 --maxWorkers=1
+node --test scripts/paseo-web.test.mjs
+npm run typecheck
+npm run lint
 
-## 5. Integration Prompt for Target Repo (`space-app-vibing`)
+# In the destination Vibing worktree, after rebuilding
+pnpm exec vitest run scripts/paseo-web/paseoWebBundle.test.ts
+```
 
-Use the following prompt when implementing the integration in the consumer application:
+## 5. Current Vibing Integration
 
-````markdown
-Replace the embedded Codex Web tab/integration with Paseo Web.
+`server/routes/paseo.ts` owns two independent runtimes: the shared Paseo tab instance and the Live Design instance, each with its own port and persistent home. They use the same bundle, but their conversations do not share state. `src/components/PaseoWeb.tsx` owns the workspace iframe and activity bridge.
 
-### Background & Context
+Worktree deletion cleans matching agent persistence from both runtime homes; startup also prunes agents whose working directories no longer exist. Preserve cleanup-token isolation when changing the runner. Refreshing the bundle does not restart running daemons.
 
-We are replacing the Codex Web preview engine with Paseo Web.
-The standalone bundled Paseo Web artifacts have already been prepared in `scripts/paseo-web/`:
-
-- `scripts/paseo-web/paseo-web.js`: Standalone runner script (accepts `--port=<port>`, `--host=<host>`, `--home=<data-dir>`).
-- `scripts/paseo-web/server.mjs`: Bundled backend & WebSocket server.
-- `scripts/paseo-web/web-ui/`: Bundled web frontend.
-- `scripts/paseo-web/terminal-worker-process.js`: Terminal worker.
-- `scripts/paseo-web/worker-process.js`: Local speech worker for dictation and voice mode.
-
-### Tasks to Complete
-
-1. **Backend Server & Process Management:**
-   - Update the backend process manager (where `scripts/codex-web/codex-web.js` was spawned) to launch Paseo Web:
-     ```bash
-     node scripts/paseo-web/paseo-web.js --port=<port> --home=<paseo_home_dir>
-     ```
-   - Update backend status endpoints and health check probes (replacing `src/api/codex.ts` with `src/api/paseo.ts` or updating accordingly).
-
-2. **Frontend UI Components & State:**
-   - Replace `src/components/CodexWeb.tsx` with `src/components/PaseoWeb.tsx`:
-     - Embed URL: `http://127.0.0.1:<port>/?folder=<worktree_folder_path>`
-       _(Paseo automatically parses `?folder=` to open the workspace in Embedded Focus Mode directly)._
-     - Use the existing desktop webview / iframe preview patterns.
-   - In `src/components/TabContent.tsx`, `src/App.tsx`, and `src/utils/desktopPreviewId.ts`:
-     - Update tab types / preview resources (e.g. rename `'codex'` resource/type to `'paseo'` or map it to Paseo Web).
-     - Update tab headers, icons, labels, and tool selectors from "Codex Web" to "Paseo Web".
-
-3. **Cleanup & Verification:**
-   - Remove obsolete `scripts/codex-web/` directory (saves ~123 MB).
-   - Update tests (`TabContent.test.tsx`, `desktopPreviewLifecycle.test.ts`, etc.) to assert Paseo Web components and test IDs.
-   - Run typecheck and tests to ensure everything builds and passes.
-````
+Vibing's `AGENTS.md` contains the host-side fork overlay checklist; `PROJECT_DOCUMENTATION.md` owns host lifecycle and packaging details.
