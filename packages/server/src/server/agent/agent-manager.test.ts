@@ -10687,168 +10687,198 @@ test("provider user_message is recorded from the live stream", async () => {
   expect(userMessages[0].text).toBe("continuation prompt");
 });
 
-test("canonical submitted prompt keeps wire identity while rewind resolves provider identity", async () => {
-  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-submitted-prompt-"));
-  const storagePath = join(workdir, "agents");
-  const storage = new AgentStorage(storagePath, logger);
-  const allowProviderEcho = deferred<void>();
+test.each<{
+  name: string;
+  prompt: AgentPromptInput;
+  expectedText: string;
+}>([
+  { name: "plain text", prompt: "hello from composer", expectedText: "hello from composer" },
+  {
+    name: "Live Design context",
+    prompt: [
+      { type: "text", text: "hello from composer" },
+      {
+        type: "text",
+        mimeType: "text/plain",
+        title: "Live Design context",
+        text: "Make Save red.",
+      },
+    ],
+    expectedText: "hello from composer\nMake Save red.",
+  },
+  {
+    name: "ordinary text attachment",
+    prompt: [
+      { type: "text", text: "hello from composer" },
+      { type: "text", mimeType: "text/plain", title: "Reference", text: "Attached reference." },
+    ],
+    expectedText: "hello from composer",
+  },
+])(
+  "canonical submitted prompt keeps wire identity while rewind resolves provider identity: $name",
+  async ({ prompt: submittedPrompt, expectedText }) => {
+    const workdir = mkdtempSync(join(tmpdir(), "agent-manager-submitted-prompt-"));
+    const storagePath = join(workdir, "agents");
+    const storage = new AgentStorage(storagePath, logger);
+    const allowProviderEcho = deferred<void>();
 
-  class SubmittedUserMessageSession extends TestAgentSession {
-    override readonly capabilities = {
-      ...TEST_CAPABILITIES,
-      supportsRewindFiles: true,
-    };
-    readonly rewindMessageIds: string[] = [];
-    interruptCount = 0;
+    class SubmittedUserMessageSession extends TestAgentSession {
+      override readonly capabilities = {
+        ...TEST_CAPABILITIES,
+        supportsRewindFiles: true,
+      };
+      readonly rewindMessageIds: string[] = [];
+      interruptCount = 0;
 
-    override async startTurn(
-      prompt: AgentPromptInput,
-      options?: AgentRunOptions,
-    ): Promise<{ turnId: string }> {
-      const turnId = "turn-submitted-user-message";
-      const text = typeof prompt === "string" ? prompt : "";
-      setTimeout(async () => {
-        this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
+      override async startTurn(
+        prompt: AgentPromptInput,
+        options?: AgentRunOptions,
+      ): Promise<{ turnId: string }> {
+        const turnId = "turn-submitted-user-message";
+        const text = typeof prompt === "string" ? prompt : "";
+        setTimeout(async () => {
+          this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
+          this.pushEvent({
+            type: "timeline",
+            provider: this.provider,
+            turnId,
+            item: { type: "assistant_message", text: "output before provider echo" },
+          });
+          await allowProviderEcho.promise;
+          this.pushEvent({
+            type: "timeline",
+            provider: this.provider,
+            turnId,
+            item: {
+              type: "user_message",
+              text,
+              messageId: "provider-message-1",
+              clientMessageId: options?.clientMessageId,
+            },
+          });
+          this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
+        }, 0);
+        return { turnId };
+      }
+
+      override async interrupt(): Promise<void> {
+        this.interruptCount += 1;
         this.pushEvent({
-          type: "timeline",
+          type: "turn_canceled",
           provider: this.provider,
-          turnId,
-          item: { type: "assistant_message", text: "output before provider echo" },
+          turnId: "turn-submitted-user-message",
         });
-        await allowProviderEcho.promise;
-        this.pushEvent({
-          type: "timeline",
-          provider: this.provider,
-          turnId,
+      }
+
+      override async revertFiles({ messageId }: { messageId: string }): Promise<void> {
+        this.rewindMessageIds.push(messageId);
+      }
+    }
+
+    class SubmittedUserMessageClient extends TestAgentClient {
+      session: SubmittedUserMessageSession | null = null;
+
+      override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+        this.session = new SubmittedUserMessageSession(config);
+        return this.session;
+      }
+    }
+
+    const client = new SubmittedUserMessageClient();
+    const manager = new AgentManager({
+      clients: { codex: client },
+      registry: storage,
+      logger,
+      idFactory: () => "00000000-0000-4000-8000-000000000402",
+    });
+    const events: AgentManagerEvent[] = [];
+    manager.subscribe((event) => events.push(event), { replayState: false });
+    const streamEvents = () =>
+      events.flatMap((event) => {
+        if (event.type !== "agent_stream") return [];
+        if (event.event.type !== "timeline") return [{ type: event.event.type }];
+        const item = event.event.item;
+        return [
+          {
+            type: item.type,
+            seq: event.seq,
+            ...(item.type === "user_message"
+              ? {
+                  text: item.text,
+                  clientMessageId: item.clientMessageId,
+                  messageId: item.messageId,
+                }
+              : {}),
+          },
+        ];
+      });
+
+    try {
+      const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+        workspaceId: undefined,
+      });
+
+      const run = manager.runAgent(snapshot.id, submittedPrompt, {
+        clientMessageId: "msg-client-1",
+      });
+      await manager.waitForAgentRunStart(snapshot.id);
+
+      await expect(manager.rewind(snapshot.id, "msg-client-1", "files")).rejects.toThrow(
+        "Cannot rewind before the provider acknowledges the submitted prompt",
+      );
+      expect(client.session?.interruptCount).toBe(0);
+
+      allowProviderEcho.resolve();
+      expect(await run).toMatchObject({ canceled: false });
+
+      expect(streamEvents()).toEqual([
+        { type: "turn_started" },
+        {
+          type: "user_message",
+          seq: 1,
+          text: expectedText,
+          clientMessageId: "msg-client-1",
+          messageId: "msg-client-1",
+        },
+        { type: "assistant_message", seq: 2 },
+        { type: "turn_completed" },
+      ]);
+
+      const timeline = manager.fetchTimeline(snapshot.id, { direction: "tail", limit: 20 }).rows;
+      expect(timeline).toMatchObject([
+        {
+          seq: 1,
+          timestamp: expect.any(String),
+          providerMessageId: "provider-message-1",
+          turnId: "turn-submitted-user-message",
           item: {
             type: "user_message",
-            text,
-            messageId: "provider-message-1",
-            clientMessageId: options?.clientMessageId,
+            text: expectedText,
+            messageId: "msg-client-1",
+            clientMessageId: "msg-client-1",
           },
-        });
-        this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
-      }, 0);
-      return { turnId };
-    }
-
-    override async interrupt(): Promise<void> {
-      this.interruptCount += 1;
-      this.pushEvent({
-        type: "turn_canceled",
-        provider: this.provider,
-        turnId: "turn-submitted-user-message",
-      });
-    }
-
-    override async revertFiles({ messageId }: { messageId: string }): Promise<void> {
-      this.rewindMessageIds.push(messageId);
-    }
-  }
-
-  class SubmittedUserMessageClient extends TestAgentClient {
-    session: SubmittedUserMessageSession | null = null;
-
-    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
-      this.session = new SubmittedUserMessageSession(config);
-      return this.session;
-    }
-  }
-
-  const client = new SubmittedUserMessageClient();
-  const manager = new AgentManager({
-    clients: { codex: client },
-    registry: storage,
-    logger,
-    idFactory: () => "00000000-0000-4000-8000-000000000402",
-  });
-  const events: AgentManagerEvent[] = [];
-  manager.subscribe((event) => events.push(event), { replayState: false });
-  const streamEvents = () =>
-    events.flatMap((event) => {
-      if (event.type !== "agent_stream") return [];
-      if (event.event.type !== "timeline") return [{ type: event.event.type }];
-      const item = event.event.item;
-      return [
+        },
         {
-          type: item.type,
-          seq: event.seq,
-          ...(item.type === "user_message"
-            ? {
-                text: item.text,
-                clientMessageId: item.clientMessageId,
-                messageId: item.messageId,
-              }
-            : {}),
+          seq: 2,
+          timestamp: expect.any(String),
+          turnId: "turn-submitted-user-message",
+          item: { type: "assistant_message", text: "output before provider echo" },
         },
-      ];
-    });
+      ]);
 
-  try {
-    const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
-      workspaceId: undefined,
-    });
-
-    const run = manager.runAgent(snapshot.id, "hello from composer", {
-      clientMessageId: "msg-client-1",
-    });
-    await manager.waitForAgentRunStart(snapshot.id);
-
-    await expect(manager.rewind(snapshot.id, "msg-client-1", "files")).rejects.toThrow(
-      "Cannot rewind before the provider acknowledges the submitted prompt",
-    );
-    expect(client.session?.interruptCount).toBe(0);
-
-    allowProviderEcho.resolve();
-    expect(await run).toMatchObject({ canceled: false });
-
-    expect(streamEvents()).toEqual([
-      { type: "turn_started" },
-      {
-        type: "user_message",
-        seq: 1,
-        text: "hello from composer",
-        clientMessageId: "msg-client-1",
-        messageId: "msg-client-1",
-      },
-      { type: "assistant_message", seq: 2 },
-      { type: "turn_completed" },
-    ]);
-
-    const timeline = manager.fetchTimeline(snapshot.id, { direction: "tail", limit: 20 }).rows;
-    expect(timeline).toMatchObject([
-      {
-        seq: 1,
-        timestamp: expect.any(String),
-        providerMessageId: "provider-message-1",
-        turnId: "turn-submitted-user-message",
-        item: {
-          type: "user_message",
-          text: "hello from composer",
-          messageId: "msg-client-1",
-          clientMessageId: "msg-client-1",
-        },
-      },
-      {
-        seq: 2,
-        timestamp: expect.any(String),
-        turnId: "turn-submitted-user-message",
-        item: { type: "assistant_message", text: "output before provider echo" },
-      },
-    ]);
-
-    await manager.rewind(snapshot.id, "msg-client-1", "files");
-    await manager.rewind(snapshot.id, "provider-native-message", "files");
-    expect(client.session?.rewindMessageIds).toEqual([
-      "provider-message-1",
-      "provider-native-message",
-    ]);
-  } finally {
-    await manager.flush().catch(() => undefined);
-    await storage.flush().catch(() => undefined);
-    rmSync(workdir, { recursive: true, force: true });
-  }
-});
+      await manager.rewind(snapshot.id, "msg-client-1", "files");
+      await manager.rewind(snapshot.id, "provider-native-message", "files");
+      expect(client.session?.rewindMessageIds).toEqual([
+        "provider-message-1",
+        "provider-native-message",
+      ]);
+    } finally {
+      await manager.flush().catch(() => undefined);
+      await storage.flush().catch(() => undefined);
+      rmSync(workdir, { recursive: true, force: true });
+    }
+  },
+);
 
 test("authoritative timeline records a daemon-handled submitted prompt before its output", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-daemon-handled-prompt-"));
