@@ -15,7 +15,9 @@ import {
 import { StatusRing } from "@/components/status-ring";
 import { bySizing } from "@/components/ui/control-geometry";
 import { STATUS_RING_HALO_INSET } from "@/components/status-ring/geometry";
+import { resolveComposerMaxContentWidth } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
+import { useChatGutter } from "@/hooks/use-chat-gutter";
 import { getStatusDotColor } from "@/utils/status-dot-color";
 import { STATUS_INDICATOR_FILLED_DOT_SIZE } from "@/utils/status-indicator-geometry";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -35,8 +37,13 @@ import { COMPOSER_PILL_CLEARANCE, composerPillStyles } from "./pill-styles";
  * move the transcript.
  */
 export function ComposerTrackBar({ children }: { children: ReactNode }): ReactElement {
+  const chatGutter = useChatGutter();
   return (
-    <View style={styles.bar} pointerEvents="box-none">
+    <View
+      style={[styles.bar, chatGutter.style]}
+      onLayout={chatGutter.onLayout}
+      pointerEvents="box-none"
+    >
       <View style={styles.track} pointerEvents="box-none">
         {children}
       </View>
@@ -365,7 +372,6 @@ const styles = StyleSheet.create((theme) => {
       right: 0,
       bottom: 0,
       alignItems: "center",
-      paddingHorizontal: theme.spacing[4],
       paddingBottom: {
         xs: COMPOSER_PILL_CLEARANCE.compact,
         md: COMPOSER_PILL_CLEARANCE.wide,
@@ -373,7 +379,7 @@ const styles = StyleSheet.create((theme) => {
     },
     track: {
       width: "100%",
-      maxWidth: theme.contentMaxWidth,
+      maxWidth: resolveComposerMaxContentWidth(theme.contentMaxWidth),
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing[1],

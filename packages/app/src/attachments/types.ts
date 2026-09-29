@@ -105,6 +105,7 @@ export interface WorkspaceFileComposerAttachment {
 
 export type UserComposerAttachment =
   | { kind: "image"; metadata: AttachmentMetadata }
+  | { kind: "text"; attachment: Extract<AgentAttachment, { type: "text" }> }
   | { kind: "file"; attachment: UploadedFileAttachment }
   | WorkspaceFileComposerAttachment
   | PluginResourceComposerAttachment
