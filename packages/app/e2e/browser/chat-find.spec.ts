@@ -19,6 +19,7 @@ import {
 } from "../support/helpers/composer";
 
 import { openCommandCenter, closeCommandCenter } from "../support/helpers/command-center";
+import { getServerId } from "../support/helpers/server-id";
 
 const MAC_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -213,6 +214,94 @@ test("counts and steps through every match in the chat, not just the selected me
     await expectHighlight(page, "scope-needle");
     await expectHighlightedMessage(page, "assistant-message");
     await closeFind(page);
+  } finally {
+    await agent.cleanup();
+  }
+});
+
+test("finds Live Design attachment text and collapses it after navigation or closing", async ({
+  page,
+}, testInfo) => {
+  const context = 'Make Save red.\n{"source":"src/SaveButton.tsx","feedback":"Make Save red"}';
+  const agent = await seedMockAgentWorkspace({
+    repoPrefix: "chat-find-live-design-",
+    title: "Live Design search",
+    featureValues: { mockAssistantResponse: "Done: Make Save red." },
+  });
+  try {
+    await page.addInitScript(
+      ({ draftKey, context: attachmentText }) => {
+        localStorage.setItem(
+          "paseo-drafts",
+          JSON.stringify({
+            version: 5,
+            state: {
+              drafts: {
+                [draftKey]: {
+                  input: {
+                    text: "Apply this Live Design note.",
+                    attachments: [
+                      {
+                        kind: "text",
+                        attachment: {
+                          type: "text",
+                          mimeType: "text/plain",
+                          title: "Live Design context",
+                          text: attachmentText,
+                        },
+                      },
+                    ],
+                  },
+                  lifecycle: "active",
+                  updatedAt: Date.now(),
+                  version: 1,
+                },
+              },
+              createModalDraft: null,
+            },
+          }),
+        );
+      },
+      { draftKey: `agent:${getServerId()}:${agent.agentId}`, context },
+    );
+    await openAgentRoute(page, agent);
+    await expectComposerDraft(page, "Apply this Live Design note.");
+    await composerLocator(page).press("Enter");
+    const message = page.getByTestId("user-message");
+    const expandedContext = message.locator('[data-message-text="true"]').filter({
+      hasText: "src/SaveButton.tsx",
+    });
+    await expect(message.getByRole("button", { name: "Live Design context" })).toBeVisible();
+    await expect(page.getByTestId("assistant-message")).toContainText("Done: Make Save red.");
+    await expect(expandedContext).toHaveCount(0);
+
+    await searchChat(page, "Make Save red");
+    await expect(status(page)).toHaveText("1 of 3");
+    await expectHighlight(page, "Make Save red");
+    await expectHighlightedMessage(page, "user-message");
+    await expectNextMatch(page, "2 of 3", "Make Save red");
+    await expectHighlightedMessage(page, "user-message");
+    await page.screenshot({ path: testInfo.outputPath("live-design-search.png") });
+    await expectNextMatch(page, "3 of 3", "Make Save red");
+    await expectHighlightedMessage(page, "assistant-message");
+    await expect(expandedContext).toHaveCount(0);
+    await previousMatch(page);
+    await expect(status(page)).toHaveText("2 of 3");
+    await expectHighlight(page, "Make Save red");
+    await expectFindStatus(page, "src/SaveButton.tsx", "1 of 1");
+    await expectHighlight(page, "src/SaveButton.tsx");
+    await closeFind(page);
+    await expect(expandedContext).toHaveCount(0);
+
+    await message.getByRole("button", { name: "Live Design context" }).click();
+    await expect(page.getByTestId("live-design-context-viewer")).toContainText(context);
+    await page
+      .getByTestId("live-design-context-viewer")
+      .getByRole("button", { name: "Close", exact: true })
+      .click();
+    await expect(page.getByTestId("live-design-context-viewer")).toHaveCount(0);
+    await expect(message).toContainText("Apply this Live Design note.");
+    await expectComposerDraft(page, "");
   } finally {
     await agent.cleanup();
   }
