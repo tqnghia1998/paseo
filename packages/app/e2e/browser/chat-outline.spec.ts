@@ -34,15 +34,79 @@ import {
   openAgentTimeline,
   scrollThroughOlderHistoryPages,
   scrollTimelineToNewestLoadedEdge,
+  scrollTimelineToOldestLoadedEdge,
   seedLongMockAgentTimeline,
   type LongTimelineAgent,
 } from "../support/helpers/timeline-pagination";
+import { expectChatGutter, resizeChatPane } from "../support/helpers/chat-gutter";
 
 // Wide enough that the timeline panel clears the rail's MIN_PANEL_WIDTH with room
 // to spare. At 1280 the panel measures 960, which sits too close to the threshold
 // for chrome-width changes elsewhere to stay out of these tests.
 const WIDE_VIEWPORT = { width: 1440, height: 900 };
 const LOADED_TURNS = 16;
+
+test("keeps chat gutters aligned across resizing and retained tabs", async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const agent = await seedLongMockAgentTimeline({ turns: 2 });
+  try {
+    await page.setViewportSize(WIDE_VIEWPORT);
+    await openAgentTimeline(page, agent);
+    for (const width of [768, 918, 959, 960, 1024, 1440]) {
+      await resizeChatPane(page, width);
+      await expectChatGutter(page, width);
+    }
+    await page.screenshot({ path: testInfo.outputPath("embedded-chat-wide.png") });
+    const transcript = page.getByTestId("agent-chat-scroll").filter({ visible: true }).first();
+    const retainedTranscript = await transcript.elementHandle();
+    if (!retainedTranscript) throw new Error("Expected a mounted transcript");
+    await page.getByTestId("workspace-new-tab-button").filter({ visible: true }).first().click();
+    await expect(transcript).toBeHidden();
+    expect(await retainedTranscript.isVisible()).toBe(false);
+    expect(await retainedTranscript.evaluate((element) => element.isConnected)).toBe(true);
+    await page.setViewportSize({ width: 800, height: 900 });
+    await page
+      .getByTestId(`workspace-tab-agent_${agent.agentId}`)
+      .filter({ visible: true })
+      .first()
+      .click({ position: { x: 12, y: 13 } });
+    await resizeChatPane(page, 768);
+    await expectChatGutter(page, 768);
+    await page.screenshot({ path: testInfo.outputPath("embedded-chat-narrow.png") });
+    await resizeChatPane(page, 960);
+    await expectChatGutter(page, 960);
+  } finally {
+    await agent.cleanup();
+  }
+});
+
+test("keeps virtualized rows inside the chat gutter", async ({ page }) => {
+  test.setTimeout(120_000);
+  const agent = await seedLongMockAgentTimeline({ turns: 80 });
+  try {
+    await page.setViewportSize(WIDE_VIEWPORT);
+    await openAgentTimeline(page, agent);
+    const transcript = page.getByTestId("agent-chat-scroll").filter({ visible: true }).first();
+    await expect(async () => {
+      await scrollTimelineToOldestLoadedEdge(page);
+      await expect(transcript).toHaveAttribute("id", "agent-chat-scroll-web-dom-virtualized", {
+        timeout: 1_000,
+      });
+    }).toPass({ timeout: 30_000 });
+    await expect(transcript).toHaveAttribute("id", "agent-chat-scroll-web-dom-virtualized");
+    await expect(transcript.locator("[data-index]").first()).toBeVisible();
+    await resizeChatPane(page, 960);
+    await expect(transcript.locator(":scope > div").first()).toHaveCSS(
+      "padding-left",
+      process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS === "true" ? "96px" : "16px",
+    );
+    await resizeChatPane(page, 917);
+    await expect(transcript.locator(":scope > div").first()).toHaveCSS("padding-left", "16px");
+    await expect(chatOutlineRail(page)).toBeHidden();
+  } finally {
+    await agent.cleanup();
+  }
+});
 
 test.describe("desktop chat outline", () => {
   test("keeps the prompt marked while reading split Markdown blocks and after completion", async ({

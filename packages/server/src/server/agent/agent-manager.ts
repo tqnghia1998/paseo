@@ -114,7 +114,11 @@ function submittedPromptText(prompt: AgentPromptInput): string {
     return prompt;
   }
   return prompt
-    .flatMap((block) => (block.type === "text" && !("mimeType" in block) ? [block.text] : []))
+    .flatMap((block) =>
+      block.type === "text" && (!("mimeType" in block) || block.title === "Live Design context")
+        ? [block.text]
+        : [],
+    )
     .join("\n")
     .trim();
 }

@@ -23,7 +23,12 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import {
+  CHAT_HORIZONTAL_SPACING,
+  resolveChatMaxContentWidth,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
+import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Check, ChevronDown, X } from "lucide-react-native";
@@ -691,23 +696,28 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const renderUserMessageItem = useCallback(
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "user_message" }>) => {
         return (
-          <UserMessage
-            serverId={resolvedServerId}
-            agentId={agentId}
-            messageId={item.messageId}
-            message={item.text}
-            images={item.images}
-            attachments={item.attachments}
-            timestamp={item.timestamp.getTime()}
-            capabilities={context.capabilities}
-            client={client}
-            isFirstInGroup={layoutItem.isFirstInUserGroup}
-            isLastInGroup={layoutItem.isLastInUserGroup}
-            isPending={
-              item.clientMessageId !== undefined &&
-              pendingClientMessageIds.has(item.clientMessageId)
-            }
-          />
+          <ChatFindExpansion messageId={getStreamItemMessageId(item)}>
+            {(renderFullContent) => (
+              <UserMessage
+                renderFullContent={renderFullContent}
+                serverId={resolvedServerId}
+                agentId={agentId}
+                messageId={item.messageId}
+                message={item.text}
+                images={item.images}
+                attachments={item.attachments}
+                timestamp={item.timestamp.getTime()}
+                capabilities={context.capabilities}
+                client={client}
+                isFirstInGroup={layoutItem.isFirstInUserGroup}
+                isLastInGroup={layoutItem.isLastInUserGroup}
+                isPending={
+                  item.clientMessageId !== undefined &&
+                  pendingClientMessageIds.has(item.clientMessageId)
+                }
+              />
+            )}
+          </ChatFindExpansion>
         );
       },
       [context.capabilities, agentId, client, pendingClientMessageIds, resolvedServerId],
@@ -1624,7 +1634,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   contentWrapper: {
     width: "100%",
-    maxWidth: theme.contentMaxWidth,
+    maxWidth: resolveChatMaxContentWidth(theme.contentMaxWidth),
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
   },
@@ -1632,8 +1642,8 @@ const stylesheet = StyleSheet.create((theme) => ({
     paddingVertical: 0,
     flexGrow: 1,
     paddingHorizontal: {
-      xs: theme.spacing[3],
-      md: theme.spacing[4],
+      xs: theme.spacing[isEmbeddedFocusMode ? CHAT_HORIZONTAL_SPACING : 3],
+      md: theme.spacing[CHAT_HORIZONTAL_SPACING],
     },
   },
   forwardListContentContainer: {
@@ -1645,7 +1655,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   streamItemWrapper: {
     width: "100%",
-    maxWidth: theme.contentMaxWidth,
+    maxWidth: resolveChatMaxContentWidth(theme.contentMaxWidth),
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
   },

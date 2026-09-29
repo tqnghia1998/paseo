@@ -17,7 +17,9 @@ import { withUnistyles } from "react-native-unistyles";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import type { Theme } from "@/styles/theme";
+import { CHAT_WIDE_MIN_WIDTH, getChatHorizontalSpacing } from "@/constants/layout";
+import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
+import { SPACING, type Theme } from "@/styles/theme";
 import { WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import {
@@ -319,6 +321,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const isActiveRef = useRef(isActive);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
+  const [isNarrowChat, setIsNarrowChat] = useState(true);
   const handleScrollContainerRef = useCallback((node: HTMLElement | null) => {
     scrollContainerRef.current = node;
   }, []);
@@ -941,12 +944,19 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     if (!scrollContainer || typeof ResizeObserver === "undefined") {
       return;
     }
+    const updateChatWidth = () => {
+      if (isEmbeddedFocusMode && scrollContainer.clientWidth > 0) {
+        setIsNarrowChat(scrollContainer.clientWidth < CHAT_WIDE_MIN_WIDTH);
+      }
+    };
+    updateChatWidth();
 
     if (!pendingResumeGeometryCheckRef.current) {
       updateScrollMetrics();
       evaluateHistoryStart();
     }
     const observer = new ResizeObserver(() => {
+      updateChatWidth();
       const nextGeometry = getObservedViewportGeometry(scrollContainer);
       if (pendingResumeGeometryCheckRef.current) {
         pendingResumeGeometryCheckRef.current = false;
@@ -1169,17 +1179,24 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   ]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
+    // The DOM strategy owns its gutter independently of the native list styles.
+    let horizontalPadding: number = SPACING[4];
+    if (isEmbeddedFocusMode) {
+      horizontalPadding = SPACING[getChatHorizontalSpacing(isNarrowChat)];
+    } else if (isMobileBreakpoint) {
+      horizontalPadding = SPACING[2];
+    }
     return {
       display: "flex",
       flexDirection: "column",
       minHeight: "100%",
       paddingTop: CONTENT_PADDING_TOP_PX,
       paddingBottom: 16,
-      paddingLeft: isMobileBreakpoint ? 8 : 16,
-      paddingRight: isMobileBreakpoint ? 8 : 16,
+      paddingLeft: horizontalPadding,
+      paddingRight: horizontalPadding,
       boxSizing: "border-box",
     };
-  }, [isMobileBreakpoint]);
+  }, [isMobileBreakpoint, isNarrowChat]);
   const scrollContainerStyle = useMemo((): CSSProperties => {
     const overlayScrollbarEnabled = scrollEnabled && !isMobileBreakpoint;
     return {

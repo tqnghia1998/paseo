@@ -98,6 +98,8 @@ import {
   AttachmentThumbnail,
 } from "@/components/attachment-pill";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
+import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
+import { getLiveDesignRewindText } from "@/embedded-live-design";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { isWeb, isNative } from "@/constants/platform";
 import type { AgentCapabilityFlags } from "@getpaseo/protocol/agent-types";
@@ -122,6 +124,7 @@ interface UserMessageProps {
   message: string;
   images?: UserMessageImageAttachment[];
   attachments?: AgentAttachment[];
+  renderFullContent?: boolean;
   timestamp: number;
   capabilities?: AgentCapabilityFlags;
   client?: DaemonClient | null;
@@ -430,6 +433,7 @@ export const UserMessage = memo(function UserMessage({
   message,
   images = [],
   attachments = [],
+  renderFullContent = false,
   timestamp,
   capabilities,
   client,
@@ -442,6 +446,30 @@ export const UserMessage = memo(function UserMessage({
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const [lightboxMetadata, setLightboxMetadata] = useState<UserMessageImageAttachment | null>(null);
+  const [liveDesignContext, setLiveDesignContext] = useState<string | null>(null);
+  const closeLiveDesignContext = useCallback(() => setLiveDesignContext(null), []);
+  const getLiveDesignContext = useCallback(() => liveDesignContext ?? "", [liveDesignContext]);
+  const liveDesignHeader = useMemo(
+    () => ({
+      title: "Live Design context",
+      actions: (
+        <TurnCopyButton
+          getContent={getLiveDesignContext}
+          accessibilityLabel={t("common.actions.copy")}
+        />
+      ),
+    }),
+    [getLiveDesignContext, t],
+  );
+  const attachmentOpenHandlers = useMemo(
+    () =>
+      attachments.map((attachment) =>
+        attachment.type === "text" && attachment.title === "Live Design context"
+          ? () => setLiveDesignContext(attachment.text)
+          : undefined,
+      ),
+    [attachments],
+  );
   const handleLightboxClose = useCallback(() => setLightboxMetadata(null), []);
   const lightboxSource = useMemo<ImageLightboxSource | null>(
     () => (lightboxMetadata ? { type: "attachment", metadata: lightboxMetadata } : null),
@@ -451,6 +479,19 @@ export const UserMessage = memo(function UserMessage({
   const hasText = message.trim().length > 0;
   const hasImages = images.length > 0;
   const hasAttachments = attachments.length > 0;
+  const expandedContext = useMemo(
+    () =>
+      renderFullContent
+        ? attachments
+            .flatMap((attachment) =>
+              attachment.type === "text" && attachment.title === "Live Design context"
+                ? [attachment.text]
+                : [],
+            )
+            .join("\n\n")
+        : "",
+    [attachments, renderFullContent],
+  );
   const showTrailingRow = !isPending && hasText && (isCompact || isNative || isHovered);
   const formattedTimestamp = useMemo(
     () => formatMessageTimestamp(new Date(timestamp)),
@@ -530,6 +571,8 @@ export const UserMessage = memo(function UserMessage({
                 return (
                   <AttachmentFrame
                     key={`${attachment.type}:${"number" in attachment ? attachment.number : index}`}
+                    onPress={attachmentOpenHandlers[index]}
+                    accessibilityLabel={content.title}
                   >
                     <AttachmentLabel
                       icon={content.icon}
@@ -546,6 +589,11 @@ export const UserMessage = memo(function UserMessage({
               {message}
             </Text>
           ) : null}
+          {expandedContext ? (
+            <Text selectable style={liveDesignContextStyles.text} dataSet={MESSAGE_TEXT_DATASET}>
+              {expandedContext}
+            </Text>
+          ) : null}
         </View>
         {hasText ? (
           <View
@@ -560,7 +608,7 @@ export const UserMessage = memo(function UserMessage({
               <RewindMenu
                 capabilities={capabilities}
                 isPending={rewindMutation.isPending}
-                rewoundText={message}
+                rewoundText={getLiveDesignRewindText(message, attachments)}
                 onRewind={handleRewind}
               />
             ) : null}
@@ -573,9 +621,31 @@ export const UserMessage = memo(function UserMessage({
         ) : null}
       </View>
       <AttachmentLightbox source={lightboxSource} onClose={handleLightboxClose} />
+      {liveDesignContext !== null ? (
+        <AdaptiveModalSheet
+          visible
+          onClose={closeLiveDesignContext}
+          desktopMaxWidth={800}
+          testID="live-design-context-viewer"
+          header={liveDesignHeader}
+        >
+          <Text selectable style={liveDesignContextStyles.text}>
+            {liveDesignContext}
+          </Text>
+        </AdaptiveModalSheet>
+      ) : null}
     </View>
   );
 });
+
+const liveDesignContextStyles = StyleSheet.create((theme) => ({
+  text: {
+    color: theme.colors.foreground,
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.sm,
+    flexShrink: 1,
+  },
+}));
 
 interface AssistantTurnFooterProps {
   getContent: () => string;

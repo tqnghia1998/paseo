@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { i18n } from "@/i18n/i18next";
 import { getAgentAttachmentPillContent } from "./attachment-pill-content";
+import { buildEmbeddedLiveDesignAttachment } from "@/embedded-live-design";
 
 describe("agent attachment pill content", () => {
+  it("presents Live Design evidence as a text attachment label", () => {
+    const { attachment } = buildEmbeddedLiveDesignAttachment([{ comment: "Tighten spacing" }]);
+    const content = getAgentAttachmentPillContent(attachment, i18n.t);
+    expect(content.title).toBe("Live Design context");
+    expect(content.subtitle).toBe(i18n.t("message.attachments.text"));
+    expect(content.title).not.toContain("Tighten spacing");
+  });
   it("presents external resources with their provider identity", () => {
     const content = getAgentAttachmentPillContent(
       {

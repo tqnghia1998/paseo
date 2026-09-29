@@ -2,12 +2,13 @@ import { useCallback, useState } from "react";
 import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import { FOOTER_HEIGHT } from "@/constants/layout";
+import { FOOTER_HEIGHT, resolveComposerMaxContentWidth } from "@/constants/layout";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { KeyboardTranslateView } from "@/keyboard/shift";
 import { Button } from "@/components/ui/button";
 import type { Theme } from "@/styles/theme";
 import { toErrorMessage } from "@/utils/error-messages";
+import { useChatGutter } from "@/hooks/use-chat-gutter";
 
 interface ArchivedAgentCalloutProps {
   serverId: string;
@@ -15,6 +16,7 @@ interface ArchivedAgentCalloutProps {
 }
 
 export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCalloutProps) {
+  const chatGutter = useChatGutter();
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -35,7 +37,7 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
 
   return (
     <KeyboardTranslateView style={styles.container}>
-      <View style={styles.inputAreaContainer}>
+      <View style={[styles.inputAreaContainer, chatGutter.style]} onLayout={chatGutter.onLayout}>
         <View style={styles.inputAreaContent}>
           <View style={styles.calloutStack}>
             <View style={styles.callout}>
@@ -73,11 +75,11 @@ const styles = StyleSheet.create((theme: Theme) => ({
     alignItems: "center",
     width: "100%",
     overflow: "visible",
-    padding: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
   },
   inputAreaContent: {
     width: "100%",
-    maxWidth: theme.contentMaxWidth,
+    maxWidth: resolveComposerMaxContentWidth(theme.contentMaxWidth),
   },
   callout: {
     flexDirection: "row",
