@@ -137,6 +137,12 @@ fs.copyFileSync(
 );
 
 console.log("5. Copying static web-ui assets...");
+const builtinPluginsDest = path.join(DEST_DIR, "builtin-plugins");
+fs.rmSync(builtinPluginsDest, { recursive: true, force: true });
+fs.cpSync(path.join(ROOT_DIR, "packages/server/dist/server/builtin-plugins"), builtinPluginsDest, {
+  recursive: true,
+  filter: (source) => path.basename(source) !== "tsconfig.json",
+});
 const webUiSrc = path.join(ROOT_DIR, "packages/server/dist/server/web-ui");
 const webUiDest = path.join(DEST_DIR, "web-ui");
 fs.rmSync(webUiDest, { recursive: true, force: true });
@@ -157,7 +163,13 @@ fs.cpSync(nodePtySrc, path.join(runtimeNmTmp, "node-pty"), { recursive: true });
 
 const sherpaPackage = "sherpa-onnx-node";
 const sherpaPlatformPackage = `sherpa-onnx-${SHERPA_PLATFORM}-${process.arch}`;
-for (const packageName of [sherpaPackage, sherpaPlatformPackage]) {
+for (const packageName of [
+  sherpaPackage,
+  sherpaPlatformPackage,
+  "typescript",
+  "esbuild",
+  `@esbuild/${process.platform}-${process.arch}`,
+]) {
   const source = path.join(ROOT_DIR, "node_modules", packageName);
   if (!fs.existsSync(source)) {
     throw new Error(`Could not find the ${packageName} runtime package`);
