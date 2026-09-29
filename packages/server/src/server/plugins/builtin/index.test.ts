@@ -55,6 +55,14 @@ test("listed built-ins resolve to matching manifests and compile", async () => {
   }
 });
 
+test("standalone bundles resolve built-ins beside the server entrypoint", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "paseo-builtin-standalone-"));
+  roots.push(root);
+  const plugins = path.join(root, "builtin-plugins");
+  await mkdir(plugins);
+  expect(resolveBuiltinPluginsRoot(pathToFileURL(path.join(root, "server.mjs")))).toBe(plugins);
+});
+
 test("listed client bundle is published while plugins are disabled; unlisted directory is inert", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "paseo-builtin-fixture-"));
   roots.push(root);

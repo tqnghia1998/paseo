@@ -27,6 +27,9 @@ const requiredRuntimePackages = [
   "node-pty",
   "sherpa-onnx-node",
   `sherpa-onnx-${sherpaPlatform}-${process.arch}`,
+  "typescript",
+  "esbuild",
+  `@esbuild/${process.platform}-${process.arch}`,
 ];
 
 if (
