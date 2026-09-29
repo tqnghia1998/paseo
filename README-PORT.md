@@ -63,6 +63,7 @@ not in the environment inherited by providers, external commands, or terminals.
 - `web-ui/` — Static web client bundle
 - `runtime-node-modules.tgz` — Native runtime bindings archive (PTY and speech)
 - `bridge-plugin.bundle.mjs` — OpenCode bridge runtime artifact
+- `builtin-plugins/` — Usage-source plugins loaded beside the standalone server; the runtime archive also includes TypeScript, esbuild, and its platform binary so loading does not depend on the consumer's installed packages.
 
 ---
 
