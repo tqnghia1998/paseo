@@ -18,9 +18,15 @@ Paseo Web is packaged as a lightweight, self-contained standalone server that em
 
 Both consumer surfaces use one **Embedded Focus Mode** backed by the same standalone build. The Paseo left tab inside Space App Vibing and the Live Design drawer's **Agent** tab render the same workspace tabs, content, and interactions for the selected worktree.
 
+Embedded conversations fill their parent pane through `resolveChatMaxContentWidth`. At pane widths of 960px and above (`CHAT_WIDE_MIN_WIDTH`), 96px outer gutters leave room for the left-side conversation jumper; narrower panes use 16px edge insets and hide the jumper. The existing 8px inner message inset remains. `getChatHorizontalSpacing` and `useChatGutter` share this responsive policy across the web transcript, composers, draft controls, trackers, and callouts. Message inputs stay centered and capped at 960px through `resolveComposerMaxContentWidth`. Standard Paseo keeps its configured content width and padding.
+
+The raw DOM transcript in `agent-stream/strategy-web.tsx` measures its own viewport and applies the responsive gutter independently of the native list styles in `view.tsx`; preserve this path, including virtualized rows and turn footers.
+
 The `?embedded-live-design=1` query enables Live Design messaging only; it does not enable a separate policy, presentation, or distribution. When the host asks whether Paseo is ready to receive notes, the workspace focuses the nearest agent/draft tab by tab order or creates a draft if none exists. The build-wide invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true`; do not remove it or the guards in `packages/app/src/embedded-focus-mode.ts` when resolving upstream changes.
 
 Live Design handoff is text-only. Obsolete host messages containing `images` or `imageGrant` are rejected, without submitting their text. Ordinary Paseo image attachments remain available through the composer.
+
+Sent Live Design context attachments open a read-only, scrollable viewer with Copy and Close actions. Conversation Find temporarily reveals the selected message's context inline so matches remain searchable and keyboard navigation stays in the conversation. The context collapses when Find closes or moves to another message. The short message and attachment contents are unchanged by viewing or searching them.
 
 ---
 

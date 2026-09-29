@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { ComposerDock } from "@/composer/dock";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
+import { useChatGutter } from "@/hooks/use-chat-gutter";
 import invariant from "tiny-invariant";
 import { Composer } from "@/composer";
 import { useComposerEditingSession, useComposerFullscreen } from "@/composer/editing-session";
@@ -41,7 +42,11 @@ import {
   useWorkspaceAttachmentsStore,
 } from "@/attachments/workspace-attachments-store";
 import type { UserMessageImageAttachment } from "@/types/stream";
-import { COMPACT_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import {
+  COMPACT_CONTENT_WIDTH,
+  resolveComposerMaxContentWidth,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import {
   buildWorkspaceTabPersistenceKey,
@@ -303,6 +308,7 @@ export function WorkspaceDraftAgentTab({
   onOpenWorkspaceFile,
   onOpenImportSheet,
 }: WorkspaceDraftAgentTabProps) {
+  const chatGutter = useChatGutter();
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -605,7 +611,7 @@ export function WorkspaceDraftAgentTab({
     [composerState.agentControls, handleDropdownCloseFocus, isSubmitting],
   );
   const dockContent = (
-    <View style={styles.contentContainer}>
+    <View style={styles.contentContainer} onLayout={chatGutter.onLayout}>
       {isSubmitting && draftAgent ? (
         <View style={styles.streamContainer}>
           <AgentStreamView
@@ -620,7 +626,10 @@ export function WorkspaceDraftAgentTab({
           />
         </View>
       ) : (
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.configScrollContent}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.configScrollContent, chatGutter.style]}
+        >
           <View style={styles.configSection}>
             {formErrorMessage ? (
               <View style={styles.errorContainer}>
@@ -639,7 +648,7 @@ export function WorkspaceDraftAgentTab({
         {dockContent}
         <View style={animatedStaticStyles.inputAreaWrapper} onLayout={onInputAreaLayout}>
           {importPillPress && !isComposerFullscreen ? (
-            <View style={styles.importPillRow}>
+            <View style={[styles.importPillRow, chatGutter.style]}>
               <View style={styles.importPillContent}>
                 <ComposerImportPill onPress={importPillPress} />
               </View>
@@ -702,7 +711,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
   },
   configScrollContent: {
-    paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[4],
     paddingBottom: theme.spacing[6],
   },
@@ -711,7 +719,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   importPillRow: {
     width: "100%",
-    paddingHorizontal: theme.spacing[4],
     paddingTop: {
       xs: COMPOSER_PILL_CLEARANCE.compact,
       md: COMPOSER_PILL_CLEARANCE.wide,
@@ -724,7 +731,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   importPillContent: {
     width: "100%",
-    maxWidth: theme.contentMaxWidth,
+    maxWidth: resolveComposerMaxContentWidth(theme.contentMaxWidth),
     flexDirection: "row",
   },
   errorContainer: {

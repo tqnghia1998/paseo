@@ -26,6 +26,27 @@ import {
 } from "./embedded-focus-mode";
 
 describe("embedded focus mode", () => {
+  it("fills embedded chat while capping composer surfaces", async () => {
+    const layout = await import("./constants/layout");
+    expect(layout.resolveChatMaxContentWidth(1400)).toBe("100%");
+    expect(layout.resolveComposerMaxContentWidth(1400)).toBe(960);
+    expect(layout.CHAT_HORIZONTAL_SPACING).toBe(24);
+  });
+
+  it("preserves the configured standard Paseo content width", async () => {
+    vi.resetModules();
+    vi.stubEnv("EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS", "false");
+    try {
+      const layout = await import("./constants/layout");
+      expect(layout.resolveChatMaxContentWidth(1400)).toBe(1400);
+      expect(layout.resolveComposerMaxContentWidth(1400)).toBe(1400);
+      expect(layout.CHAT_HORIZONTAL_SPACING).toBe(4);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
   it("locks every standalone embed while limiting chat presentation to Live Design", () => {
     expect(shouldUseEmbeddedFocusMode(true)).toBe(true);
     expect(shouldUseEmbeddedFocusMode(false)).toBe(false);
