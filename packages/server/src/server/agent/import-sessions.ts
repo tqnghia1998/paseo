@@ -130,12 +130,17 @@ export async function listImportableProviderSessions(
   );
   const importedHandles = importedSessions.handles;
   const query = normalizeImportSessionQuery(request.query);
-  const listingLimit = query ? IMPORT_SESSION_SEARCH_SCAN_LIMIT : limit + importedSessions.count;
+  // Providers may return sessions from other directories even when given cwd.
+  // Keep enough candidates for the daemon's realpath-aware filter to run.
+  const needsDeepScan = Boolean(query || request.cwd);
+  const listingLimit = needsDeepScan
+    ? IMPORT_SESSION_SEARCH_SCAN_LIMIT
+    : limit + importedSessions.count;
 
   const listing = await agentManager.listImportableSessions({
     limit: listingLimit,
     ...(query ? { query } : {}),
-    ...(query ? { scanLimit: IMPORT_SESSION_SEARCH_SCAN_LIMIT } : {}),
+    ...(needsDeepScan ? { scanLimit: IMPORT_SESSION_SEARCH_SCAN_LIMIT } : {}),
     providerFilter,
     cwd: request.cwd,
   });

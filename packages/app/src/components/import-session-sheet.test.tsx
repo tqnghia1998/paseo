@@ -222,6 +222,7 @@ interface RenderOptions {
   onImported?: (agent: Awaited<ReturnType<DaemonClient["importAgent"]>>) => void;
   cwd?: string | null;
   workspaceId?: string;
+  allowShowAllDirectories?: boolean;
   supportsSearch?: boolean;
   projects?: Array<{ iconWorkingDir: string; projectName: string }>;
   snapshot?: {
@@ -265,6 +266,7 @@ function renderSheet(
         serverId="server-1"
         cwd={cwd}
         workspaceId={options?.workspaceId}
+        allowShowAllDirectories={options?.allowShowAllDirectories}
         onClose={options?.onClose ?? vi.fn()}
         onImportedAgent={options?.onImportedAgent ?? vi.fn()}
         onImported={options?.onImported}
@@ -966,6 +968,34 @@ describe("ImportSessionSheet", () => {
     });
     await screen.findByText("This workspace");
     screen.getByTestId("import-session-show-all");
+  });
+
+  it("keeps embedded workspace imports scoped without a Show all action", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [],
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        workspaceId: "ws-current",
+        allowShowAllDirectories: false,
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("codex")] },
+      },
+    );
+
+    await screen.findByText("This workspace");
+    expect(screen.queryByTestId("import-session-show-all")).toBeNull();
+    expect(fetchRecentProviderSessions).toHaveBeenCalledWith({
+      cwd: "/repo/paseo",
+      providers: ["codex"],
+      limit: 15,
+    });
   });
 
   it("lists unscoped rows newest first and names each row's folder", async () => {
