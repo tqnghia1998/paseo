@@ -66,6 +66,7 @@ interface ImportSessionSheetProps {
   serverId: string | null;
   cwd?: string | null;
   workspaceId?: string | null;
+  allowShowAllDirectories?: boolean;
   onClose: () => void;
   /** The agent belongs to the workspace the sheet was opened from; open it here. */
   onImportedAgent?: (agentId: string) => void;
@@ -235,10 +236,12 @@ function ProviderErrorBannerRow({
 function ScopeSubtitle({
   hostLabel,
   isScoped,
+  allowShowAllDirectories,
   onShowAll,
 }: {
   hostLabel: string;
   isScoped: boolean;
+  allowShowAllDirectories: boolean;
   onShowAll: () => void;
 }) {
   const { t } = useTranslation();
@@ -249,7 +252,7 @@ function ScopeSubtitle({
           ? t("importSession.scope.workspace")
           : t("importSession.scope.host", { host: hostLabel })}
       </Text>
-      {isScoped ? (
+      {isScoped && allowShowAllDirectories ? (
         <Button
           variant="ghost"
           size="sm"
@@ -476,6 +479,7 @@ export function ImportSessionSheet({
   serverId,
   cwd,
   workspaceId,
+  allowShowAllDirectories = true,
   onClose,
   onImportedAgent,
   onImported,
@@ -492,7 +496,7 @@ export function ImportSessionSheet({
   const [pageLimit, setPageLimit] = useState(PER_PROVIDER_LIMIT);
   const [selectedProvider, setSelectedProvider] = useState<string>(ALL_FILTER_VALUE);
 
-  const scopeCwd = isShowingAllDirectories ? null : (cwd ?? null);
+  const scopeCwd = allowShowAllDirectories && isShowingAllDirectories ? null : (cwd ?? null);
   const supportsSearch = useHostFeature(serverId, "importSessionSearch");
   const query = useDebouncedValue(supportsSearch ? searchInput : "", SEARCH_DEBOUNCE_MS).trim();
 
@@ -747,6 +751,7 @@ export function ImportSessionSheet({
         <ScopeSubtitle
           hostLabel={hostLabel}
           isScoped={scopeCwd !== null}
+          allowShowAllDirectories={allowShowAllDirectories}
           onShowAll={handleShowAll}
         />
       ),
@@ -772,7 +777,17 @@ export function ImportSessionSheet({
         />
       ),
     }),
-    [handleRefresh, handleShowAll, hostLabel, isRefreshing, scopeCwd, supportsSearch, t, visible],
+    [
+      allowShowAllDirectories,
+      handleRefresh,
+      handleShowAll,
+      hostLabel,
+      isRefreshing,
+      scopeCwd,
+      supportsSearch,
+      t,
+      visible,
+    ],
   );
 
   const isSnapshotUnsupported = requiresHostUpgrade;
