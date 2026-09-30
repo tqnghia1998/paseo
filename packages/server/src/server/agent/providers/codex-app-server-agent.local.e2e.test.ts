@@ -356,9 +356,13 @@ describe("Codex app-server provider (local e2e)", () => {
     30_000,
   );
 
-  test.runIf(isCodexInstalled())(
-    "surfaces request_user_input from the app-server as question permissions and timeline tool calls",
-    async () => {
+  test.runIf(isCodexInstalled()).each([
+    { modeId: "full-access", planMode: false },
+    { modeId: "auto", planMode: false },
+    { modeId: "auto", planMode: true },
+  ])(
+    "surfaces request_user_input as an unanswered question in $modeId with plan=$planMode",
+    async ({ modeId, planMode }) => {
       const cwd = mkdtempSync(path.join(os.tmpdir(), "codex-app-server-question-cwd-"));
       const codexHome = mkdtempSync(path.join(os.tmpdir(), "codex-app-server-question-home-"));
       const mockServer = await startMockResponsesServer([
@@ -374,7 +378,7 @@ describe("Codex app-server provider (local e2e)", () => {
           {
             provider: "codex",
             cwd,
-            modeId: "auto",
+            modeId,
             model: "mock-model",
             thinkingOptionId: "medium",
           },
@@ -386,7 +390,7 @@ describe("Codex app-server provider (local e2e)", () => {
         );
 
         try {
-          await session.setFeature?.("plan_mode", true);
+          await session.setFeature?.("plan_mode", planMode);
 
           const events: AgentStreamEvent[] = [];
           session.subscribe((event) => {
@@ -445,6 +449,9 @@ describe("Codex app-server provider (local e2e)", () => {
             ],
           });
 
+          expect(session.getPendingPermissions()).toEqual([permissionEvent.request]);
+          expect(mockServer.requestBodies).toHaveLength(1);
+
           const runningQuestionCall = events.find(
             (event) =>
               event.type === "timeline" &&
@@ -459,7 +466,7 @@ describe("Codex app-server provider (local e2e)", () => {
             behavior: "allow",
             updatedInput: {
               answers: {
-                Confirm: "Yes (Recommended)",
+                Confirm: "No",
               },
             },
           });
@@ -485,16 +492,19 @@ describe("Codex app-server provider (local e2e)", () => {
           }
           expect(completedQuestionCall.item.metadata).toMatchObject({
             answers: {
-              confirm_path: ["Yes (Recommended)"],
+              confirm_path: ["No"],
             },
           });
-          expect(
-            mockServer.requestBodies.some(
-              (body) =>
-                body.includes('"type":"function_call_output"') &&
-                body.includes('"call_id":"call1"'),
-            ),
-          ).toBe(true);
+          expect(mockServer.requestBodies).toHaveLength(2);
+          const followUp = JSON.parse(mockServer.requestBodies[1]) as {
+            input: Array<{ type: string; call_id?: string; output?: string }>;
+          };
+          const answerOutput = followUp.input.find(
+            (item) => item.type === "function_call_output" && item.call_id === "call1",
+          )?.output;
+          expect(JSON.parse(answerOutput ?? "null")).toEqual({
+            answers: { confirm_path: { answers: ["No"] } },
+          });
 
           const finalAssistantMessage = [...events]
             .toReversed()
