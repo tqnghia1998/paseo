@@ -13,7 +13,7 @@ Paseo Web is packaged as a standalone server that embeds:
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions.
 4. **Local Speech Worker (`worker-process.js`)**: Isolated worker for embedded dictation and voice mode.
 5. **Built-in usage plugins (`builtin-plugins/`)**: The daemon's usage sources, with runtime compilers included in the dependency archive.
-6. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, command-center navigation, and agent-profile/provider management. Fork in a new tab and Import Session remain available within the selected worktree.
+6. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, command-center navigation, and agent-profile/provider management. Fork in a new tab and Import Session remain available within the selected worktree; the embedded importer cannot widen its list to other directories.
 
 ### Canonical embedded mode
 
