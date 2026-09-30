@@ -15,11 +15,16 @@ This Paseo version accepts these keys:
 
 - **Codex:** `approval_policy`, `sandbox_mode`,
   `sandbox_workspace_write.{writable_roots,network_access,exclude_slash_tmp,exclude_tmpdir_env_var}`,
-  `web_search`, `features.multi_agent_v2`, and `features.network_proxy`. A network proxy object may
+  `web_search`, `features.default_mode_request_user_input`, `features.multi_agent_v2`, and `features.network_proxy`. A network proxy object may
   contain `enabled`, `proxy_url`, `socks_url`, `enable_socks5`, `enable_socks5_udp`,
   `allow_local_binding`, `allow_upstream_proxy`, `dangerously_allow_all_unix_sockets`,
   `dangerously_allow_non_loopback_proxy`, `domains`, and `unix_sockets`. See the
   [Codex configuration reference](https://developers.openai.com/codex/config-reference).
+  The Vibing fork enables `default_mode_request_user_input` for user-visible sessions because
+  Paseo already handles native questions, but Codex otherwise restricts them to Plan mode.
+  Set that provider option to `false` to opt out. This does not write the user's Codex config
+  or change command approvals; hidden utility agents retain their configured behavior.
+  Ordinary assistant text is not converted into a question.
 - **Claude:** `allowedTools`, `disallowedTools`, `additionalDirectories`, `extraArgs`, `sandbox`, and
   `settings`. `providerOptions.extraArgs` passes the SDK's documented
   [`Options.extraArgs`](https://platform.claude.com/docs/en/agent-sdk/typescript#options) map

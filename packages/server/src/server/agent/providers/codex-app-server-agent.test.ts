@@ -857,6 +857,77 @@ process.stdin.on("data", (chunk) => {
 }
 
 describe("Codex app-server provider", () => {
+  test("does not implicitly enable Default-mode questions for hidden utility agents", async () => {
+    const appServer = createFakeCodexAppServer();
+    const session = await createProviderWithFakeAppServer(appServer).createSession(
+      createConfig({ internal: true, providerOptions: { features: { multi_agent_v2: true } } }),
+    );
+    try {
+      await session.startTurn("generate a branch name");
+      const start = await appServer.waitForRequest("thread/start");
+      const turn = await appServer.waitForTurnStart();
+      expect(start.config).toEqual({ features: { multi_agent_v2: true } });
+      expect(turn.config).toEqual({ features: { multi_agent_v2: true } });
+      appServer.assertNoErrors();
+    } finally {
+      await session.close();
+    }
+  });
+
+  test.each([undefined, true, false])(
+    "preserves Default-mode question configuration %s across new and resumed sessions",
+    async (enabled) => {
+      const config = createConfig({
+        providerOptions: {
+          features: {
+            multi_agent_v2: true,
+            ...(enabled === undefined ? {} : { default_mode_request_user_input: enabled }),
+          },
+        },
+      });
+      const expectedConfig = {
+        features: {
+          default_mode_request_user_input: enabled ?? true,
+          multi_agent_v2: true,
+        },
+      };
+      const firstServer = createFakeCodexAppServer();
+      const first = await createProviderWithFakeAppServer(firstServer).createSession(config);
+      let handle: NonNullable<ReturnType<AgentSession["describePersistence"]>>;
+      try {
+        await first.startTurn("first question");
+        handle = first.describePersistence()!;
+        await expect(firstServer.waitForRequest("thread/start")).resolves.toMatchObject({
+          config: expectedConfig,
+        });
+        await expect(firstServer.waitForTurnStart()).resolves.toMatchObject({
+          config: expectedConfig,
+        });
+        firstServer.assertNoErrors();
+      } finally {
+        await first.close();
+      }
+
+      const secondServer = createFakeCodexAppServer();
+      const resumed = await createProviderWithFakeAppServer(secondServer).resumeSession(
+        handle,
+        config,
+      );
+      try {
+        await expect(secondServer.waitForRequest("thread/resume")).resolves.toMatchObject({
+          config: expectedConfig,
+        });
+        await resumed.startTurn("another question");
+        await expect(secondServer.waitForTurnStart()).resolves.toMatchObject({
+          config: expectedConfig,
+        });
+        secondServer.assertNoErrors();
+      } finally {
+        await resumed.close();
+      }
+    },
+  );
+
   test("getAvailableModes includes auto-review when the Codex version supports it", async () => {
     const session = createSession({}, { autoReviewEnabled: true });
 
@@ -2294,6 +2365,7 @@ describe("Codex app-server provider", () => {
       {
         threadId: "thread-1",
         beforeTurnId: "turn-second",
+        config: { features: { default_mode_request_user_input: true } },
         cwd: "/workspace/project",
         model: "gpt-5.4",
         serviceTier: null,
@@ -2350,6 +2422,7 @@ describe("Codex app-server provider", () => {
       {
         threadId: "thread-1",
         beforeTurnId: "turn-first",
+        config: { features: { default_mode_request_user_input: true } },
         cwd: "/workspace/project",
         model: "gpt-5.4",
         serviceTier: null,
@@ -2481,6 +2554,7 @@ describe("Codex app-server provider", () => {
       OPENAI_BASE_URL: "https://custom-relay.example.com",
     });
     expect(capturedThreadStartConfig(capturedRequests)).toEqual({
+      features: { default_mode_request_user_input: true },
       model_provider: "codex-iisb",
       model_providers: {
         "codex-iisb": {
@@ -2501,6 +2575,7 @@ describe("Codex app-server provider", () => {
     );
 
     expect(capturedThreadStartConfig(capturedRequests)).toEqual({
+      features: { default_mode_request_user_input: true },
       model_provider: "codex-custom",
       model_providers: {
         "codex-custom": expect.objectContaining({
@@ -5622,7 +5697,13 @@ describe("Codex app-server provider", () => {
     expect(session.currentThreadId).toBe("archived-thread-id");
     expect(requests).toEqual([
       { method: "thread/loaded/list", params: {} },
-      { method: "thread/resume", params: { threadId: "archived-thread-id" } },
+      {
+        method: "thread/resume",
+        params: {
+          threadId: "archived-thread-id",
+          config: { features: { default_mode_request_user_input: true } },
+        },
+      },
     ]);
   });
 

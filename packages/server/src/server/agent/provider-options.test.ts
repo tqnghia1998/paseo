@@ -16,6 +16,11 @@ const hubPolicy = {
 };
 
 describe("provider-owned option schemas", () => {
+  test.each([true, false])("accepts Codex Default-mode questions set to %s", (enabled) => {
+    const options = { features: { default_mode_request_user_input: enabled } };
+    expect(CodexProviderOptionsSchema.parse(options)).toEqual(options);
+  });
+
   test("accepts Codex native workspace-write and network policy nesting", () => {
     expect(
       CodexProviderOptionsSchema.parse({

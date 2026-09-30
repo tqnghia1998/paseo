@@ -51,6 +51,7 @@ export const CodexProviderOptionsSchema = z
     web_search: z.enum(["disabled", "cached", "indexed", "live"]).optional(),
     features: z
       .object({
+        default_mode_request_user_input: z.boolean().optional(),
         network_proxy: z.union([z.boolean(), NetworkPolicySchema]).optional(),
         multi_agent_v2: z.boolean().optional(),
       })
