@@ -5836,6 +5836,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     const innerConfig: Record<string, unknown> = {};
     const { service_tier: _tier, plan_mode: _plan, ...codexConfig } = this.providerOptions;
     Object.assign(innerConfig, codexConfig);
+    // Hidden utility agents have no user to answer a question.
+    if (!this.config.internal) {
+      innerConfig.features = {
+        default_mode_request_user_input: true,
+        ...this.providerOptions.features,
+      };
+    }
     if (this.deps.customCodexConfig) {
       Object.assign(innerConfig, this.deps.customCodexConfig);
     }
