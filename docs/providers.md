@@ -34,6 +34,11 @@ Exact MCP preapproval is a separate daemon-owned contract. A new provider must f
 closed for Hub unattended execution until it can approve one exact injected MCP
 server and tool identity without approving native tools.
 
+The Vibing fork enables Codex `features.default_mode_request_user_input` for user-visible
+sessions so native questions work outside Plan mode. Set the provider option to `false` to opt
+out. Hidden utility agents retain their configured behavior. This does not write global Codex
+configuration, change command approvals, or turn ordinary assistant text into questions.
+
 ## Core adapter patterns
 
 ### ACP (Agent Client Protocol) -- recommended
