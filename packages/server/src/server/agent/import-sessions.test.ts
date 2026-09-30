@@ -246,7 +246,8 @@ test("listImportableProviderSessions filters, sorts, limits, and projects import
   });
 
   expect(listImportableSessions).toHaveBeenCalledWith({
-    limit: 4,
+    limit: 500,
+    scanLimit: 500,
     providerFilter: new Set(["codex"]),
     cwd,
   });
@@ -314,12 +315,46 @@ test("listImportableProviderSessions looks past already-imported rows to fill th
   });
 
   expect(listImportableSessions).toHaveBeenCalledWith({
-    limit: 2,
+    limit: 500,
+    scanLimit: 500,
     providerFilter: new Set(["claude"]),
     cwd,
   });
   expect(result.entries.map((entry) => entry.providerHandleId)).toEqual(["available"]);
   expect(result.filteredAlreadyImportedCount).toBe(1);
+});
+
+test("listImportableProviderSessions scans past other worktrees before limiting scoped results", async () => {
+  const cwd = "/tmp/project";
+  const sessions = [
+    makeImportableSession({
+      sessionId: "other-1",
+      cwd: "/tmp/elsewhere",
+      lastActivityAt: "2026-04-30T12:03:00.000Z",
+    }),
+    makeImportableSession({
+      sessionId: "other-2",
+      cwd: "/tmp/elsewhere",
+      lastActivityAt: "2026-04-30T12:02:00.000Z",
+    }),
+    makeImportableSession({
+      sessionId: "ours",
+      cwd,
+      lastActivityAt: "2026-04-30T12:01:00.000Z",
+    }),
+  ];
+  const listImportableSessions = vi.fn(async (options?: { limit?: number }) =>
+    makeImportableSessionsResult(sessions.slice(0, options?.limit)),
+  );
+
+  const result = await listImportableProviderSessions({
+    request: makeRequest({ cwd, providers: ["codex"], limit: 1 }),
+    agentManager: { listAgents: () => [], listImportableSessions },
+    agentStorage: { list: async () => [] },
+    providerSnapshotManager: { getProviderLabel: () => "Codex" },
+  });
+
+  expect(result.entries.map((entry) => entry.providerHandleId)).toEqual(["ours"]);
 });
 
 test("listImportableProviderSessions requests a bounded deep scan for search results", async () => {
