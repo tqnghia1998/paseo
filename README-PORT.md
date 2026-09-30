@@ -118,6 +118,7 @@ After syncing from `getpaseo/paseo`, verify all of the following before regenera
 - The `?folder=` bootstrap still uses `openProject` rather than direct workspace creation.
 - Focus Mode remains locked and its exit controls remain unavailable.
 - Codex terminal interactions stay on their parent Shell card with separate input and output. Preserve `codex/terminal-interactions.ts`, the optional shell `stdin` protocol field, and its renderer when syncing provider changes; mirrored events must not erase repeated input.
+- Preserve Default-mode Codex questions through the session-local `default_mode_request_user_input` feature and its explicit provider-option opt-out; see [provider options](docs/providers.md#provider-native-session-options). Run the local `codex-app-server-agent.local.e2e.test.ts` question cases after changing this path, including Full Access. Do not replace questions with auto-approvals or infer them from assistant prose.
 - The built-in registry resolves beside `server.mjs`, all listed plugin sources ship, and the archive contains TypeScript, esbuild, and its target binary. Do not restore checkout-only plugin tsconfigs.
 - Run focused source checks, then rebuild and run the consumer guard. The full build copies the runner automatically; do not hand-edit generated artifacts.
 
