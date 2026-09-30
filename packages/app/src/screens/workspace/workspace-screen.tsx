@@ -3875,6 +3875,7 @@ function WorkspaceScreenContent({
           serverId={normalizedServerId}
           cwd={workspaceDirectory}
           workspaceId={normalizedWorkspaceId}
+          allowShowAllDirectories={!isEmbeddedFocusMode}
           onClose={closeImportSheet}
           onImportedAgent={handleImportedAgent}
           onImported={navigateToImportedAgent}
