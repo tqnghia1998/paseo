@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { ComposerAttachment } from "@/attachments/types";
-import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { AgentAttachment, AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 
 export function getLiveDesignRewindText(message: string, attachments: AgentAttachment[]): string {
   const parts = [message];
@@ -202,8 +203,49 @@ const embeddingOrigin = (): string | null => {
 export function shouldSettleLiveDesignTurn(
   status: "idle" | "error" | "permission" | "timeout",
   hasResolvedAgent: boolean,
+  final: Pick<
+    AgentSnapshotPayload,
+    "status" | "activeTurn" | "pendingPermissions" | "lastError"
+  > | null,
+  waitError?: string | null,
 ): boolean {
-  return status === "idle" || (status === "error" && hasResolvedAgent);
+  return (
+    hasResolvedAgent &&
+    final !== null &&
+    (final.status === "idle" || final.status === "error") &&
+    !final.activeTurn &&
+    final.pendingPermissions.length === 0 &&
+    ((status === "idle" && final.status === "idle") ||
+      (status === "error" &&
+        (final.status === "error" ||
+          (Boolean(final.lastError?.trim()) && waitError === final.lastError))))
+  );
+}
+
+export async function waitForLiveDesignTurn(
+  client: Pick<DaemonClient, "waitForFinish">,
+  agentId: string,
+  hasResolvedAgent = true,
+): Promise<"succeeded" | "failed" | "unknown" | null> {
+  if (!hasResolvedAgent) return null;
+  let waitForActive = true;
+  for (;;) {
+    const result = await client
+      .waitForFinish(agentId, 0, {
+        waitForActive,
+        waitThroughPermission: true,
+      })
+      .catch(() => null);
+    const final = result?.final;
+    if (final?.status === "closed" && !final.activeTurn && final.pendingPermissions.length === 0)
+      return "unknown";
+    if (result && shouldSettleLiveDesignTurn(result.status, true, result.final, result.error))
+      return result.status === "idle" ? "succeeded" : "failed";
+    // A wait error is not a failed turn. Resume observation until the agent finishes.
+    if (final?.status === "running" || final?.activeTurn || final?.pendingPermissions.length)
+      waitForActive = false;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
 }
 
 function publishResult(

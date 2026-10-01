@@ -120,7 +120,7 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
-import { shouldSettleLiveDesignTurn, useEmbeddedLiveDesignSend } from "@/embedded-live-design";
+import { useEmbeddedLiveDesignSend, waitForLiveDesignTurn } from "@/embedded-live-design";
 import { isEmbeddedLiveDesignMessaging } from "@/embedded-focus-mode";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
@@ -1762,17 +1762,12 @@ function ComposerContentImpl({
           const resolvedAgentId = resolvedDraftAgentId ?? agentId;
           onAgentResolved(resolvedAgentId);
           if (!client) return;
-          const result = await client.waitForFinish(resolvedAgentId, 0, {
-            waitForActive: true,
-            waitThroughPermission: true,
-          });
-          if (
-            shouldSettleLiveDesignTurn(
-              result.status,
-              resolveLiveDesignAgentId === undefined || Boolean(resolvedDraftAgentId),
-            )
-          )
-            await onTurnFinished(result.status === "idle" ? "succeeded" : "failed");
+          const outcome = await waitForLiveDesignTurn(
+            client,
+            resolvedAgentId,
+            resolveLiveDesignAgentId === undefined || Boolean(resolvedDraftAgentId),
+          );
+          if (outcome) await onTurnFinished(outcome);
         };
         const result = await sendMessageWithContent(
           text,
@@ -1792,12 +1787,12 @@ function ComposerContentImpl({
     resumePending: useStableEvent(
       async (onTurnFinished: (outcome?: "succeeded" | "failed" | "unknown") => Promise<void>) => {
         if (!client) return;
-        const result = await client.waitForFinish(agentId, 0, {
-          waitForActive: true,
-          waitThroughPermission: true,
-        });
-        if (shouldSettleLiveDesignTurn(result.status, resolveLiveDesignAgentId === undefined))
-          await onTurnFinished(result.status === "idle" ? "succeeded" : "failed");
+        const outcome = await waitForLiveDesignTurn(
+          client,
+          agentId,
+          resolveLiveDesignAgentId === undefined,
+        );
+        if (outcome) await onTurnFinished(outcome);
       },
     ),
   });
