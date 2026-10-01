@@ -114,7 +114,7 @@ After syncing from `getpaseo/paseo`, verify all of the following before regenera
 - `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true` is still injected by `scripts/build-daemon-web-ui.mjs`.
 - Embedded guards still gate project/workspace navigation, sidebars, workspace headers, command center, route-changing shortcuts, and model-management escape paths; Fork in a new tab and Import Session remain scoped to the selected worktree.
 - Tooltips dismiss their global portal and cancel pending hover timers when their retained panel becomes inactive; run `components/ui/tooltip.browser.test.tsx` to verify hidden-chat suspension and return.
-- Preserve the empty-pane New Agent fallback, persisted model choices, queue checkpoints, text attachments, and request-correlated Live Design outcomes across remounts.
+- Preserve the empty-pane New Agent fallback, persisted model choices, queue checkpoints, text attachments, and request-correlated Live Design outcomes across remounts. Wait errors must not settle running notes: require a resolved terminal snapshot without an active turn or pending permissions, retry observation errors, report confirmed closure as unknown, and preserve completion observation across composer and draft-agent transitions.
 - The `?folder=` bootstrap still uses `openProject` rather than direct workspace creation.
 - Focus Mode remains locked and its exit controls remain unavailable.
 - Codex terminal interactions stay on their parent Shell card with separate input and output. Preserve `codex/terminal-interactions.ts`, the optional shell `stdin` protocol field, and its renderer when syncing provider changes; mirrored events must not erase repeated input.
