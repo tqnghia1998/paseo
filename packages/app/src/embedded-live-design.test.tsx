@@ -16,6 +16,7 @@ import {
   shouldSettleLiveDesignTurn,
   useEmbeddedLiveDesignActivation,
   useEmbeddedLiveDesignSend,
+  waitForLiveDesignTurn,
 } from "./embedded-live-design";
 
 const originalParent = window.parent;
@@ -49,6 +50,7 @@ function host() {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   Object.defineProperty(window, "parent", { configurable: true, value: originalParent });
   Object.defineProperty(document, "referrer", { configurable: true, value: originalReferrer });
@@ -215,8 +217,8 @@ describe("embedded Live Design bridge", () => {
       }),
     );
     await parent.send(message);
-    submit.mock.calls[0][2]("agent");
     first.unmount();
+    submit.mock.calls[0][2]("agent");
     const activateConversation = vi.fn();
     const activation = renderHook(() =>
       useEmbeddedLiveDesignActivation({
@@ -249,6 +251,37 @@ describe("embedded Live Design bridge", () => {
       origin,
     );
     resumed.unmount();
+  });
+
+  it("records completion while its conversation is inactive and replays it on return", async () => {
+    const parent = host();
+    const submit = vi.fn().mockResolvedValue(undefined);
+    const hook = renderHook(() =>
+      useEmbeddedLiveDesignSend({
+        agentId: "agent",
+        enabled: true,
+        workspaceId: "workspace",
+        submit,
+      }),
+    );
+    await parent.send(message);
+    hook.unmount();
+    await submit.mock.calls[0][1]("succeeded");
+    expect(sessionStorage.getItem("paseo:live-design-pending")).toBe("[]");
+    parent.postMessage.mockClear();
+    const activation = renderHook(() =>
+      useEmbeddedLiveDesignActivation({
+        enabled: true,
+        workspaceId: "workspace",
+        activateConversation: vi.fn(),
+      }),
+    );
+    await parent.send({ type: "space:paseo-live-design-completion-sync-request" });
+    expect(parent.postMessage).toHaveBeenCalledWith(
+      { type: "paseo:live-design-completed", requestId: "request-1", outcome: "succeeded" },
+      origin,
+    );
+    activation.unmount();
   });
 
   it("correlates new-agent readiness and activates only for the trusted host", async () => {
@@ -327,10 +360,153 @@ describe("embedded Live Design bridge", () => {
   });
 
   it("settles terminal errors but not unresolved drafts or active turns", () => {
-    expect(shouldSettleLiveDesignTurn("idle", false)).toBe(true);
-    expect(shouldSettleLiveDesignTurn("error", true)).toBe(true);
-    expect(shouldSettleLiveDesignTurn("error", false)).toBe(false);
-    expect(shouldSettleLiveDesignTurn("permission", true)).toBe(false);
-    expect(shouldSettleLiveDesignTurn("timeout", true)).toBe(false);
+    const final = { status: "idle" as const, activeTurn: null, pendingPermissions: [] };
+    expect(shouldSettleLiveDesignTurn("idle", true, final)).toBe(true);
+    expect(shouldSettleLiveDesignTurn("idle", false, final)).toBe(false);
+    expect(shouldSettleLiveDesignTurn("error", true, { ...final, status: "error" })).toBe(true);
+    expect(
+      shouldSettleLiveDesignTurn(
+        "error",
+        true,
+        { ...final, lastError: "Turn failed" },
+        "Turn failed",
+      ),
+    ).toBe(true);
+    expect(
+      shouldSettleLiveDesignTurn(
+        "error",
+        true,
+        { ...final, lastError: "Old failure" },
+        "Wait failed",
+      ),
+    ).toBe(false);
+    expect(shouldSettleLiveDesignTurn("error", true, final)).toBe(false);
+    expect(shouldSettleLiveDesignTurn("error", false, final)).toBe(false);
+    expect(shouldSettleLiveDesignTurn("permission", true, final)).toBe(false);
+    expect(shouldSettleLiveDesignTurn("timeout", true, final)).toBe(false);
   });
+
+  it.each([
+    null,
+    { status: "idle" as const, activeTurn: null, pendingPermissions: [] },
+    { status: "running" as const, activeTurn: null, pendingPermissions: [] },
+    {
+      status: "idle" as const,
+      activeTurn: { turnId: "turn-1", startedAt: null },
+      pendingPermissions: [],
+    },
+  ])(
+    "does not fail a Live Design note when waiting errors without a finished agent: %j",
+    (final) => {
+      expect(shouldSettleLiveDesignTurn("error", true, final)).toBe(false);
+    },
+  );
+
+  it("reconnects observation after the wait RPC rejects", async () => {
+    vi.useFakeTimers();
+    const waitForFinish = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Connection closed"))
+      .mockResolvedValueOnce({
+        status: "idle",
+        final: { status: "idle", activeTurn: null, pendingPermissions: [] },
+      });
+    const completed = vi.fn();
+    const waiting = waitForLiveDesignTurn({ waitForFinish }, "agent").then(completed);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await waiting;
+    expect(completed).toHaveBeenCalledWith("succeeded");
+    expect(waitForFinish).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports an unknown outcome when the agent closes without a terminal turn", async () => {
+    const waitForFinish = vi.fn().mockResolvedValue({
+      status: "idle",
+      final: { status: "closed", activeTurn: null, pendingPermissions: [] },
+    });
+    expect(await waitForLiveDesignTurn({ waitForFinish }, "agent")).toBe("unknown");
+    expect(waitForFinish).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits through pending permissions before reporting completion", async () => {
+    vi.useFakeTimers();
+    const final = {
+      status: "idle" as const,
+      activeTurn: null,
+      pendingPermissions: [
+        {
+          id: "permission",
+          provider: "codex" as const,
+          name: "question",
+          kind: "question" as const,
+        },
+      ],
+    };
+    expect(shouldSettleLiveDesignTurn("idle", true, final)).toBe(false);
+    const waitForFinish = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "permission", final })
+      .mockResolvedValueOnce({ status: "idle", final: { ...final, pendingPermissions: [] } });
+    const completed = vi.fn();
+    const waiting = waitForLiveDesignTurn({ waitForFinish }, "agent").then(completed);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(completed).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await waiting;
+    expect(completed).toHaveBeenCalledWith("succeeded");
+    expect(waitForFinish).toHaveBeenLastCalledWith("agent", 0, {
+      waitForActive: false,
+      waitThroughPermission: true,
+    });
+  });
+
+  it("still waits for the turn to start after an observation error on an idle agent", async () => {
+    vi.useFakeTimers();
+    const waitForFinish = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "error",
+        final: { status: "idle", activeTurn: null, pendingPermissions: [] },
+      })
+      .mockResolvedValueOnce({
+        status: "idle",
+        final: { status: "idle", activeTurn: null, pendingPermissions: [] },
+      });
+    const waiting = waitForLiveDesignTurn({ waitForFinish }, "agent");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await waiting).toBe("succeeded");
+    expect(waitForFinish).toHaveBeenLastCalledWith("agent", 0, {
+      waitForActive: true,
+      waitThroughPermission: true,
+    });
+  });
+
+  it.each(["idle", "error"] as const)(
+    "keeps waiting through observation errors, then reports a terminal %s turn",
+    async (status) => {
+      vi.useFakeTimers();
+      const waitForFinish = vi
+        .fn()
+        .mockResolvedValueOnce({ status: "error", final: null })
+        .mockResolvedValueOnce({
+          status: "error",
+          final: { status: "running", activeTurn: null, pendingPermissions: [] },
+        })
+        .mockResolvedValueOnce({
+          status,
+          final: { status, activeTurn: null, pendingPermissions: [] },
+        });
+      const completed = vi.fn();
+      const waiting = waitForLiveDesignTurn({ waitForFinish }, "agent").then(completed);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(completed).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1_000);
+      await waiting;
+      expect(completed).toHaveBeenCalledWith(status === "idle" ? "succeeded" : "failed");
+      expect(waitForFinish).toHaveBeenLastCalledWith("agent", 0, {
+        waitForActive: false,
+        waitThroughPermission: true,
+      });
+    },
+  );
 });
