@@ -58,7 +58,6 @@ import {
   fileChangesToPreview,
   mapCodexToolCallEnvelope,
   mapCodexToolCallFromThreadItem,
-  normalizeCommandExecutionCommand,
   splitCodexMcpToolResultImages,
 } from "./codex/tool-call-mapper.js";
 import { normalizeCodexFilePath } from "./codex/tool-call-detail-parser.js";
