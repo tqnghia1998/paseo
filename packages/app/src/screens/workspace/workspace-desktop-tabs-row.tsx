@@ -225,8 +225,6 @@ function TabLabelMeasurement({
   );
 }
 
-type PanePanelKinds = readonly WorkspaceTabDescriptor["kind"][];
-
 interface WorkspaceNewTabButtonProps {
   panePanelKinds: PanePanelKinds;
   host: PaneHost;
@@ -273,9 +271,6 @@ function WorkspaceNewTabButton({
 }
 
 function WorkspacePaneToolbarActions({
-  panePanelKinds,
-  host,
-  launchPurpose,
   showNewTabButton,
   showSplitActions,
   showMaximizeAction,
@@ -287,9 +282,6 @@ function WorkspacePaneToolbarActions({
   onSplitDown,
   onTogglePaneMaximized,
 }: {
-  panePanelKinds: PanePanelKinds;
-  host: PaneHost;
-  launchPurpose: WorkspaceTabLaunchPurpose;
   showNewTabButton: boolean;
   showSplitActions: boolean;
   showMaximizeAction: boolean;
@@ -1074,8 +1066,6 @@ export function WorkspaceDesktopTabsRow(props: WorkspaceDesktopTabsRowProps) {
 }
 
 function ResolvedWorkspaceDesktopTabsRow({
-  host = "main",
-  launchPurpose = "primary",
   paneId,
   isFocused = false,
   ownsKeyboardShortcuts = isFocused,
@@ -1153,8 +1143,6 @@ function ResolvedWorkspaceDesktopTabsRow({
     }),
     [exitFocusModeWidth, focusModeEnabled, showPaneMaximizeAction, showPaneSplitActions],
   );
-
-  const panePanelKinds = useMemo(() => tabs.map(({ tab }) => tab.kind), [tabs]);
 
   const fallbackTabLabels = useMemo(
     () => ({
@@ -1479,9 +1467,6 @@ function ResolvedWorkspaceDesktopTabsRow({
         />
       </View>
       <WorkspacePaneToolbarActions
-        panePanelKinds={panePanelKinds}
-        host={host}
-        launchPurpose={launchPurpose}
         showNewTabButton={layout.requiresHorizontalScrollFallback}
         showSplitActions={showPaneSplitActions}
         showMaximizeAction={showPaneMaximizeAction}
