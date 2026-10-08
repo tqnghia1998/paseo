@@ -765,6 +765,7 @@ export const useSessionStore = create<SessionStore>()(
 
       // Session management
       initializeSession: (serverId, client, clientGeneration) => {
+        if (get().sessions[serverId]) return;
         set((prev) => {
           if (prev.sessions[serverId]) {
             return prev;

@@ -664,6 +664,17 @@ describe("normalizeWorkspaceDescriptor", () => {
 });
 
 describe("queued messages", () => {
+  it("does not restore the queue again when initializing an existing session", () => {
+    const load = vi.spyOn(queuedMessagePersistence, "load").mockResolvedValue(new Map());
+    try {
+      initializeTestSession();
+      initializeTestSession();
+      expect(load).toHaveBeenCalledTimes(1);
+    } finally {
+      load.mockRestore();
+    }
+  });
+
   it("persists queue changes while retaining the in-memory queue", () => {
     initializeTestSession();
     const store = useSessionStore.getState();
