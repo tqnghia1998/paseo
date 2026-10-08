@@ -57,7 +57,6 @@ import { CodexAsyncQuestions, codexAsyncQuestionToTimeline } from "./codex/async
 import {
   mapCodexToolCallEnvelope,
   mapCodexToolCallFromThreadItem,
-  normalizeCommandExecutionCommand,
   splitCodexMcpToolResultImages,
 } from "./codex/tool-call-mapper.js";
 import {
