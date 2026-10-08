@@ -64,7 +64,6 @@ import {
   fileChangesToPreview,
   mapCodexToolCallEnvelope,
   mapCodexToolCallFromThreadItem,
-  normalizeCommandExecutionCommand,
   normalizeCollabAgentChildStatus,
   splitCodexMcpToolResultImages,
 } from "./codex/tool-call-mapper.js";
