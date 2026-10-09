@@ -1043,4 +1043,15 @@ test("re-opening a directory with duplicate active records prefers recent agent 
   expect((await activityProvisioning.findOrCreateWorkspaceForDirectory(repo)).workspaceId).toBe(
     twin.workspaceId,
   );
+
+  const background = createPersistedWorkspaceRecord({
+    ...twin,
+    workspaceId: "wks_test_background_twin",
+    background: true,
+  });
+  await workspaceRegistry.upsert(background);
+  activity.set(background.workspaceId, new Date(Date.parse(twinCreatedAt) + 60_000));
+  expect((await activityProvisioning.findOrCreateWorkspaceForDirectory(repo)).workspaceId).toBe(
+    twin.workspaceId,
+  );
 });
