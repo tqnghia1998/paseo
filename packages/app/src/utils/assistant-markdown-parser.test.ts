@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createAssistantMarkdownParser } from "./assistant-markdown-parser";
+import { createMarkdownParser } from "./markdown-parser";
 
 describe("createAssistantMarkdownParser", () => {
   it("keeps bold text bold through every partial closing marker", () => {
@@ -165,5 +166,37 @@ describe("createAssistantMarkdownParser", () => {
     const parser = createAssistantMarkdownParser();
 
     expect(parser.render("[x](javascript:alert(1))")).not.toContain("href");
+  });
+
+  it("renders unresolved web citations without leaking provider reference IDs", () => {
+    const parser = createAssistantMarkdownParser();
+    const citation = "\uE200cite\uE202turn511321view1\uE202turn446758search3\uE201";
+
+    expect(parser.renderInline(`AI tracing.${citation}`)).toBe("AI tracing.[source unavailable]");
+    expect(parser.render(`- Frontend.${citation}\n- AI.${citation}`)).toBe(
+      "<ul>\n<li>Frontend.[source unavailable]</li>\n<li>AI.[source unavailable]</li>\n</ul>\n",
+    );
+  });
+
+  it("hides every partial citation while streaming and reveals its fallback when complete", () => {
+    const parser = createAssistantMarkdownParser({ streaming: true });
+    const citation = "\uE200cite\uE202turn511321view1\uE202turn446758search3\uE201";
+
+    for (let length = 1; length < citation.length; length++) {
+      expect(parser.renderInline("AI tracing." + citation.slice(0, length))).toBe("AI tracing.");
+    }
+    expect(parser.renderInline("AI tracing." + citation)).toBe("AI tracing.[source unavailable]");
+  });
+
+  it("preserves citation syntax in literal code and non-assistant markdown", () => {
+    const citation = "\uE200cite\uE202turn511321view1\uE201";
+    expect(createMarkdownParser({ linkify: true }).renderInline(citation)).toBe(citation);
+    for (const streaming of [false, true]) {
+      const parser = createAssistantMarkdownParser({ streaming });
+      expect(parser.renderInline("`" + citation + "`")).toBe(`<code>${citation}</code>`);
+      expect(parser.render("```text\n" + citation + "\n```")).toBe(
+        `<pre><code class="language-text">${citation}\n</code></pre>\n`,
+      );
+    }
   });
 });
