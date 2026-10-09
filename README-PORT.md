@@ -25,6 +25,8 @@ The raw DOM transcript in `agent-stream/strategy-web.tsx` measures its own viewp
 
 Tooltips must dismiss their global portal and cancel pending hover timers when their retained panel becomes inactive, before `RetainedChatContent` freezes the source chat. The first-fork empty pill was the fork tooltip's portal, not the conversation jumper or workspace diff pill. Preserve the real-browser regression in `components/ui/tooltip.browser.test.tsx`.
 
+Assistant prose displays unresolved provider web citations as `[source unavailable]`; the transcript has no citation-ID-to-source lookup. Preserve the assistant-only parser rule and its unit/browser regressions, including hidden partial streaming markers and unchanged literal code. Stored transcript text and file previews are unchanged.
+
 The `?embedded-live-design=1` query enables Live Design messaging, not a second build or focus policy. It also retains the desktop tab row at compact widths. When the host asks whether Paseo is ready to receive notes, the workspace focuses the nearest agent/draft tab by tab order (earlier tab on a tie) or creates a draft if none exists. Send new agent always creates a fresh draft. The build-wide invariant is `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true`; preserve it and the guards in `packages/app/src/embedded-focus-mode.ts` when resolving upstream changes.
 
 Embedded empty panes open a focused New Agent draft instead of the generic New Tab launcher, including after closing the last conversation tab or remounting. After persisted form preferences load, an empty model selection defaults to the first available model in Codex, Claude, OpenCode, then Pi order; an explicit selection is preserved.
