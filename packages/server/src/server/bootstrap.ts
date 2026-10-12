@@ -229,6 +229,7 @@ import { createWebUiMiddleware } from "./web-ui.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
 import { workspaceIdsOnCheckout } from "./workspace-directory.js";
+import { getRunningWorktreePaths } from "./embedded-worktree-activity.js";
 import { configureGitProcessPolicy } from "../utils/run-git-command.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
@@ -1402,6 +1403,24 @@ export async function createPaseoDaemon(
     void (async () => {
       try {
         await handleWorktreeCleanup(req, res);
+      } catch (error) {
+        next(error);
+      }
+    })();
+  });
+  app.get("/api/worktrees/activity", (req, res, next) => {
+    const token = config.worktreeCleanupToken;
+    const isLoopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(
+      req.socket.remoteAddress ?? "",
+    );
+    if (!token || !isLoopback || req.header("x-paseo-worktree-cleanup-token") !== token) {
+      res.status(403).end();
+      return;
+    }
+    void (async () => {
+      try {
+        const workspaces = await workspaceRegistry.list();
+        res.json({ runningPaths: getRunningWorktreePaths(agentManager.listAgents(), workspaces) });
       } catch (error) {
         next(error);
       }
