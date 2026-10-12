@@ -1029,7 +1029,10 @@ function WorkspaceScreenContent({
   const isMobile = useIsCompactFormFactor();
   const canRenderDesktopPaneSplits = supportsDesktopPaneSplits();
   const layoutMode = useWorkspaceLayoutStore((state) => state.layoutMode);
-  const usesDesktopWorkspaceTabs = shouldUseDesktopWorkspaceTabs(isMobile);
+  const usesDesktopWorkspaceTabs = shouldUseDesktopWorkspaceTabs(
+    isMobile,
+    isEmbeddedLiveDesignMessaging,
+  );
   const hasMacTrafficLights = useHasWindowChromeObstruction("top-left");
   const explorerToggleOwner = resolveWorkspaceExplorerToggleOwner({
     isMobile,
@@ -3434,99 +3437,103 @@ function WorkspaceScreenContent({
       handleOpenUrlInBrowserTab,
     ],
   );
-  const compactWorkspaceHeader = useMemo(
-    () =>
-      isMobile ? (
-        <CompactWorkspaceHeader
-          isLoading={isWorkspaceHeaderLoading}
-          title={workspaceHeaderTitle}
-          subtitle={workspaceHeaderSubtitle}
-          isSubtitleDistinct={isWorkspaceHeaderSubtitleDistinct}
-          serverId={normalizedServerId}
-          onToggleExplorer={handleToggleExplorerSidebar}
-          explorerToggleLabel={explorerSidebarToggleLabel}
-          explorerToggleAccessibilityState={explorerSidebarToggleAccessibilityState}
-        >
-          <MobileWorkspaceTabSwitcher
-            tabs={tabs}
-            activeTabKey={activeTabKey}
-            normalizedServerId={normalizedServerId}
-            normalizedWorkspaceId={normalizedWorkspaceId}
-            onSelectSwitcherTab={handleSelectSwitcherTab}
-            createTerminalDisabled={createTerminalDisabled}
-            onCreateDraftTab={handleCreateDraftTab}
-            onCreateTerminal={handleCreateTerminal}
-            onCopyResumeCommand={handleCopyResumeCommand}
-            onCopyAgentId={handleCopyAgentId}
-            onCopyTerminalId={handleCopyTerminalId}
-            onCopyFilePath={handleCopyFilePath}
-            onReloadAgent={handleReloadAgent}
-            onRenameTab={handleRenameTab}
-            onCloseTab={handleCloseTabById}
-            onCloseTabsAbove={handleCloseTabsToLeft}
-            onCloseTabsBelow={handleCloseTabsToRight}
-            onCloseOtherTabs={handleCloseOtherTabs}
-          />
-          <WorkspaceHeaderMenuMobile
-            normalizedServerId={normalizedServerId}
-            normalizedWorkspaceId={normalizedWorkspaceId}
-            scripts={compactHeaderScripts}
-            currentBranchName={currentBranchName}
-            showWorkspaceSetup={showWorkspaceSetup}
-            showCreateBrowserTab={showCreateBrowserTab}
-            createTerminalDisabled={createTerminalDisabled}
-            importAgentDisabled={!canOpenImportSheet}
-            copyPathDisabled={!workspaceDirectory}
-            onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
-            onCreateBrowser={handleCreateBrowserTab}
-            onOpenImportSheet={openImportSheet}
-            onCopyWorkspacePath={handleCopyWorkspacePath}
-            onCopyBranchName={handleCopyBranchName}
-            onOpenSetupTab={handleOpenSetupTab}
-          />
-        </CompactWorkspaceHeader>
-      ) : null,
-    [
-      activeTabKey,
-      canOpenImportSheet,
-      compactHeaderScripts,
-      createTerminalDisabled,
-      currentBranchName,
-      explorerSidebarToggleAccessibilityState,
-      explorerSidebarToggleLabel,
-      handleCloseOtherTabs,
-      handleCloseTabById,
-      handleCloseTabsToLeft,
-      handleCloseTabsToRight,
-      handleCopyAgentId,
-      handleCopyBranchName,
-      handleCopyFilePath,
-      handleCopyResumeCommand,
-      handleCopyTerminalId,
-      handleCopyWorkspacePath,
-      handleCreateBrowserTab,
-      handleCreateDraftTab,
-      handleCreateTerminal,
-      handleCreateTerminalWithProfile,
-      handleOpenSetupTab,
-      handleReloadAgent,
-      handleRenameTab,
-      handleSelectSwitcherTab,
-      handleToggleExplorerSidebar,
-      isMobile,
-      isWorkspaceHeaderLoading,
-      isWorkspaceHeaderSubtitleDistinct,
-      normalizedServerId,
-      normalizedWorkspaceId,
-      openImportSheet,
-      showCreateBrowserTab,
-      showWorkspaceSetup,
-      tabs,
-      workspaceDirectory,
-      workspaceHeaderSubtitle,
-      workspaceHeaderTitle,
-    ],
-  );
+  const compactWorkspaceHeader = useMemo(() => {
+    if (!isMobile) return null;
+    const tabSwitcher = (
+      <MobileWorkspaceTabSwitcher
+        tabs={tabs}
+        activeTabKey={activeTabKey}
+        normalizedServerId={normalizedServerId}
+        normalizedWorkspaceId={normalizedWorkspaceId}
+        onSelectSwitcherTab={handleSelectSwitcherTab}
+        createTerminalDisabled={createTerminalDisabled}
+        onCreateDraftTab={handleCreateDraftTab}
+        onCreateTerminal={handleCreateTerminal}
+        onCopyResumeCommand={handleCopyResumeCommand}
+        onCopyAgentId={handleCopyAgentId}
+        onCopyTerminalId={handleCopyTerminalId}
+        onCopyFilePath={handleCopyFilePath}
+        onReloadAgent={handleReloadAgent}
+        onRenameTab={handleRenameTab}
+        onCloseTab={handleCloseTabById}
+        onCloseTabsAbove={handleCloseTabsToLeft}
+        onCloseTabsBelow={handleCloseTabsToRight}
+        onCloseOtherTabs={handleCloseOtherTabs}
+      />
+    );
+    if (isEmbeddedFocusMode) return tabSwitcher;
+    return (
+      <CompactWorkspaceHeader
+        isLoading={isWorkspaceHeaderLoading}
+        title={workspaceHeaderTitle}
+        subtitle={workspaceHeaderSubtitle}
+        isSubtitleDistinct={isWorkspaceHeaderSubtitleDistinct}
+        serverId={normalizedServerId}
+        onToggleExplorer={handleToggleExplorerSidebar}
+        explorerToggleLabel={explorerSidebarToggleLabel}
+        explorerToggleAccessibilityState={explorerSidebarToggleAccessibilityState}
+      >
+        {tabSwitcher}
+        <WorkspaceHeaderMenuMobile
+          normalizedServerId={normalizedServerId}
+          normalizedWorkspaceId={normalizedWorkspaceId}
+          scripts={compactHeaderScripts}
+          currentBranchName={currentBranchName}
+          showWorkspaceSetup={showWorkspaceSetup}
+          showCreateBrowserTab={showCreateBrowserTab}
+          createTerminalDisabled={createTerminalDisabled}
+          importAgentDisabled={!canOpenImportSheet}
+          copyPathDisabled={!workspaceDirectory}
+          onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
+          onCreateBrowser={handleCreateBrowserTab}
+          onOpenImportSheet={openImportSheet}
+          onCopyWorkspacePath={handleCopyWorkspacePath}
+          onCopyBranchName={handleCopyBranchName}
+          onOpenSetupTab={handleOpenSetupTab}
+        />
+      </CompactWorkspaceHeader>
+    );
+  }, [
+    activeTabKey,
+    canOpenImportSheet,
+    compactHeaderScripts,
+    createTerminalDisabled,
+    currentBranchName,
+    explorerSidebarToggleAccessibilityState,
+    explorerSidebarToggleLabel,
+    handleCloseOtherTabs,
+    handleCloseTabById,
+    handleCloseTabsToLeft,
+    handleCloseTabsToRight,
+    handleCopyAgentId,
+    handleCopyBranchName,
+    handleCopyFilePath,
+    handleCopyResumeCommand,
+    handleCopyTerminalId,
+    handleCopyWorkspacePath,
+    handleCreateBrowserTab,
+    handleCreateDraftTab,
+    handleCreateTerminal,
+    handleCreateTerminalWithProfile,
+    handleOpenSetupTab,
+    handleReloadAgent,
+    handleRenameTab,
+    handleSelectSwitcherTab,
+    handleToggleExplorerSidebar,
+    isMobile,
+    isWorkspaceHeaderLoading,
+    isWorkspaceHeaderSubtitleDistinct,
+    normalizedServerId,
+    normalizedWorkspaceId,
+    openImportSheet,
+    showCreateBrowserTab,
+    showWorkspaceSetup,
+    tabs,
+    workspaceDirectory,
+    workspaceHeaderSubtitle,
+    workspaceHeaderTitle,
+  ]);
+
   const desktopSplitContent = useMemo(() => {
     if (!canRenderDesktopPaneSplits || !workspaceLayout || !persistenceKey) {
       return null;
