@@ -2,18 +2,22 @@ import { describe, expect, it } from "vitest";
 import {
   createEmbeddedAgentActivityEvent,
   isEmbeddedAgentActivityRequest,
-  isWorkspaceActivityRunning,
+  isEmbeddedWorkspaceRunning,
 } from "./embedded-agent-activity";
 
 describe("embedded agent activity", () => {
-  it("uses canonical workspace activity and effective turn state", () => {
-    expect(isWorkspaceActivityRunning(undefined, false)).toBe(false);
+  it("keeps a workspace running when another conversation becomes idle", () => {
+    const agents = [
+      { id: "running", workspaceId: "workspace" },
+      { id: "latest-idle", workspaceId: "workspace" },
+      { id: "other", workspaceId: "different" },
+      { id: "archived", workspaceId: "workspace", archivedAt: new Date() },
+    ];
+    expect(isEmbeddedWorkspaceRunning(agents, "workspace", (id) => id === "running")).toBe(true);
     expect(
-      isWorkspaceActivityRunning({ agentId: "agent-1", status: "running", enteredAt: null }, false),
-    ).toBe(true);
-    expect(
-      isWorkspaceActivityRunning({ agentId: "agent-1", status: "done", enteredAt: null }, true),
-    ).toBe(true);
+      isEmbeddedWorkspaceRunning(agents, "workspace", (id) => id === "other" || id === "archived"),
+    ).toBe(false);
+    expect(isEmbeddedWorkspaceRunning(agents, "workspace", () => false)).toBe(false);
   });
 
   it("creates the host activity event contract", () => {
