@@ -54,6 +54,53 @@ describe("paseo daemon bootstrap", () => {
     vi.restoreAllMocks();
   });
 
+  test("embedded worktree activity observes live turns without an iframe and requires the host token", async () => {
+    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "paseo-embedded-activity-"));
+    let finishTurn = () => {};
+    let turnStarted = () => {};
+    const started = new Promise<void>((resolve) => {
+      turnStarted = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      finishTurn = resolve;
+    });
+    const daemonHandle = await createTestPaseoDaemon({
+      worktreeCleanupToken: "activity-host-token",
+      agentClients: createTestAgentClients({
+        onStartTurn: () => turnStarted(),
+        beforeTurnComplete: () => held,
+      }),
+    });
+    const url = `http://127.0.0.1:${daemonHandle.port}/api/worktrees/activity`;
+    try {
+      expect((await fetch(url)).status).toBe(403);
+      expect(
+        (
+          await fetch(url, {
+            headers: { "x-paseo-worktree-cleanup-token": "wrong" },
+          })
+        ).status,
+      ).toBe(403);
+      const headers = { "x-paseo-worktree-cleanup-token": "activity-host-token" };
+      expect(await (await fetch(url, { headers })).json()).toEqual({ runningPaths: [] });
+      const agent = await daemonHandle.daemon.agentManager.createAgent(
+        { provider: "codex", cwd: agentCwd, modeId: "full-access" },
+        undefined,
+        { workspaceId: undefined },
+      );
+      const running = daemonHandle.daemon.agentManager.runAgent(agent.id, "hello");
+      await started;
+      expect(await (await fetch(url, { headers })).json()).toEqual({ runningPaths: [agentCwd] });
+      finishTurn();
+      await running;
+      expect(await (await fetch(url, { headers })).json()).toEqual({ runningPaths: [] });
+    } finally {
+      finishTurn();
+      await daemonHandle.close();
+      await rm(agentCwd, { recursive: true, force: true });
+    }
+  });
+
   test("removes persisted agents for missing external worktrees at startup", async () => {
     const paseoHomeRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-worktree-cleanup-"));
     const paseoHome = path.join(paseoHomeRoot, ".paseo");

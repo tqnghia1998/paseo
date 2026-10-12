@@ -1,8 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { usePathname } from "expo-router";
 import { isWeb } from "@/constants/platform";
-import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
-import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
+import { selectAgentTurnPresentation, useSessionStore, type Agent } from "@/stores/session-store";
 import {
   parseHostAgentRouteFromPathname,
   parseHostWorkspaceRouteFromPathname,
@@ -11,11 +10,16 @@ import {
 export const EMBEDDED_AGENT_ACTIVITY_EVENT_TYPE = "paseo:agent-activity";
 export const EMBEDDED_AGENT_ACTIVITY_REQUEST_TYPE = "space:paseo-agent-activity-request";
 
-export function isWorkspaceActivityRunning(
-  activity: WorkspaceAgentActivity | undefined,
-  isTurnActive: boolean,
+export function isEmbeddedWorkspaceRunning(
+  agents: Iterable<Pick<Agent, "id" | "workspaceId" | "archivedAt">>,
+  workspaceId: string,
+  isTurnActive: (agentId: string) => boolean,
 ): boolean {
-  return activity?.status === "running" || isTurnActive;
+  for (const agent of agents) {
+    if (!agent.archivedAt && agent.workspaceId === workspaceId && isTurnActive(agent.id))
+      return true;
+  }
+  return false;
 }
 
 export function createEmbeddedAgentActivityEvent(running: boolean) {
@@ -52,15 +56,16 @@ export function EmbeddedAgentActivityBridge() {
     if (!agentRoute) return null;
     return state.sessions[agentRoute.serverId]?.agents.get(agentRoute.agentId)?.workspaceId ?? null;
   });
-  const activity = useSessionStore((state) => {
-    if (!serverId || !workspaceId) return undefined;
-    return state.sessions[serverId]?.workspaceAgentActivity.get(workspaceId);
+  const running = useSessionStore((state) => {
+    if (!serverId || !workspaceId) return false;
+    const session = state.sessions[serverId];
+    if (!session) return false;
+    return isEmbeddedWorkspaceRunning(
+      session.agents.values(),
+      workspaceId,
+      (agentId) => selectAgentTurnPresentation(session, agentId).isActive,
+    );
   });
-  const isTurnActive = useSessionStore((state) => {
-    if (!serverId || !activity) return false;
-    return selectAgentTurnPresentation(state.sessions[serverId], activity.agentId).isActive;
-  });
-  const running = isWorkspaceActivityRunning(activity, isTurnActive);
 
   useEffect(() => {
     if (!isWeb) return;
