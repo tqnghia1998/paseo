@@ -17,6 +17,7 @@ import type { AgentProfile } from "@getpaseo/protocol/messages";
 import type { TailscaleNetwork } from "../listeners.js";
 
 interface TestPaseoDaemonOptions {
+  worktreeCleanupToken?: string;
   daemonVersion?: string;
   desktopManaged?: boolean;
   downloadTokenTtlMs?: number;
@@ -196,6 +197,7 @@ async function prepareTestDaemonConfig(
   const listenHost = options.listen ?? "127.0.0.1";
   const listenPort = options.listenPort ?? 0;
   const config: PaseoDaemonConfig = {
+    worktreeCleanupToken: options.worktreeCleanupToken,
     listen: `${listenHost}:${listenPort}`,
     paseoHome,
     daemonVersion: options.daemonVersion,
