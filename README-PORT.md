@@ -141,6 +141,8 @@ pnpm exec vitest run scripts/paseo-web/paseoWebBundle.test.ts
 
 `server/routes/paseo.ts` owns two independent runtimes: the shared Paseo tab instance and the Live Design instance, each with its own port and persistent home. They use the same bundle, but their conversations do not share state. `src/components/PaseoWeb.tsx` owns the workspace iframe and activity bridge.
 
+The host also polls `/api/worktrees/activity` with its existing isolated worktree capability token. Keep this endpoint loopback-only and token-gated: it restores feature indicators after host refresh without mounting inactive iframes or starting agents. Internal agents and archived workspaces do not contribute. Running state comes from live turns rather than persisted lifecycle records. Both iframe messages and snapshots consider every live conversation in the workspace, so a newer idle conversation cannot hide a running one.
+
 Worktree deletion cleans matching agent persistence from both runtime homes; startup also prunes agents whose working directories no longer exist. Preserve cleanup-token isolation when changing the runner. Refreshing the bundle does not restart running daemons.
 
 Vibing's `AGENTS.md` contains the host-side fork overlay checklist; `PROJECT_DOCUMENTATION.md` owns host lifecycle and packaging details.
