@@ -7074,9 +7074,11 @@ describe("Codex importable sessions", () => {
         cursor?: string;
         cwd?: string;
         sortKey?: string;
+        archived?: boolean;
       };
       const recencyKey = params.sortKey === "updated_at" ? "updatedAt" : "createdAt";
       const matching = threads
+        .filter((thread) => (thread.archived === true) === Boolean(params.archived))
         .filter((thread) => !params.cwd || thread.cwd === params.cwd)
         .sort((a, b) => Number(b[recencyKey]) - Number(a[recencyKey]));
       const offset = Number(params.cursor ?? 0);
@@ -7103,6 +7105,67 @@ describe("Codex importable sessions", () => {
       updatedAt: count - index,
     }));
   }
+
+  test("lists natively archived sessions across pages alongside active sessions by recent use", async () => {
+    const archivedThreads = threadsUsedInReverseCreationOrder(125).map((thread) =>
+      Object.assign(thread, { id: `archived-${thread.id}`, archived: true }),
+    );
+    const activeThreads = [
+      { id: "active-newest", cwd: "/workspace/project-a", updatedAt: 130 },
+      { id: "active-middle", cwd: "/workspace/project-a", updatedAt: 20.5 },
+    ];
+    const appServer = createFakeCodexAppServer({
+      "thread/list": cappedThreadListHandler([
+        ...activeThreads,
+        ...archivedThreads,
+        { id: "other-worktree", cwd: "/workspace/project-b", updatedAt: 200, archived: true },
+      ]),
+    });
+    const provider = createProviderWithFakeAppServer(appServer);
+
+    const sessions = await provider.listImportableSessions({
+      limit: 120,
+      scanLimit: 500,
+      cwd: "/workspace/project-a",
+    });
+
+    expect(sessions.map((session) => session.providerHandleId)).toEqual(
+      [...activeThreads, ...archivedThreads]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, 120)
+        .map((thread) => thread.id),
+    );
+    appServer.assertNoErrors();
+  });
+
+  test("keeps one session when a thread is archived between the active and archived scans", async () => {
+    const appServer = createFakeCodexAppServer({
+      "thread/list": (input) => {
+        const { archived } = (input ?? {}) as { archived?: boolean };
+        return {
+          data: [
+            { id: "moving-thread", cwd: "/workspace/project-a", updatedAt: 3 },
+            {
+              id: archived ? "archived-thread" : "active-thread",
+              cwd: "/workspace/project-a",
+              updatedAt: archived ? 2 : 1,
+            },
+          ],
+          nextCursor: null,
+        };
+      },
+    });
+    const provider = createProviderWithFakeAppServer(appServer);
+
+    const sessions = await provider.listImportableSessions({ limit: 20 });
+
+    expect(sessions.map((session) => session.providerHandleId)).toEqual([
+      "moving-thread",
+      "archived-thread",
+      "active-thread",
+    ]);
+    appServer.assertNoErrors();
+  });
 
   test("fills the requested window across the pages Codex caps at 100 rows", async () => {
     const threads = threadsUsedInReverseCreationOrder(250);
@@ -7304,7 +7367,7 @@ describe("Codex importable sessions", () => {
       "thread-a2",
     ]);
     expect(sessions.every((session) => session.cwd === "/workspace/project-a")).toBe(true);
-    expect(sessions[0]).toEqual(
+    expect(sessions.find((session) => session.providerHandleId === "thread-a1")).toEqual(
       expect.objectContaining({
         providerHandleId: "thread-a1",
         title: "Named first A session",
@@ -7326,7 +7389,11 @@ describe("Codex importable sessions", () => {
       },
       {
         method: "thread/list",
-        params: { limit: 50, sortKey: "updated_at", cwd: "/workspace/project-a" },
+        params: { limit: 50, sortKey: "updated_at", archived: false, cwd: "/workspace/project-a" },
+      },
+      {
+        method: "thread/list",
+        params: { limit: 50, sortKey: "updated_at", archived: true, cwd: "/workspace/project-a" },
       },
     ]);
   });

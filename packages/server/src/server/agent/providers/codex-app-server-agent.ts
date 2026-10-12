@@ -986,7 +986,7 @@ const CodexModelListResponseSchema = z.object({
 async function readCodexThreadWindow(
   client: Pick<CodexAppServerClientLike, "request">,
   logger: Logger,
-  window: { limit: number; cwd?: string; modelProviders?: string[] },
+  window: { limit: number; archived: boolean; cwd?: string; modelProviders?: string[] },
 ): Promise<Array<Record<string, unknown>>> {
   // A thread updated while the scan is paging moves under `updated_at` order
   // and can come back on a later page, so identify each one and keep it once.
@@ -1001,6 +1001,7 @@ async function readCodexThreadWindow(
         // which drops an old conversation that is still being worked in.
         // Older Codex builds ignore the unknown key and keep that order.
         sortKey: "updated_at",
+        archived: window.archived,
         ...(window.cwd ? { cwd: window.cwd } : {}),
         ...(window.modelProviders ? { modelProviders: window.modelProviders } : {}),
         ...(cursor ? { cursor } : {}),
@@ -7354,31 +7355,47 @@ export class CodexAppServerAgentClient implements AgentClient {
       // unless told otherwise, lists only the provider its own config selects.
       // A custom provider runs under its own id, so ask for exactly that one.
       const customProviderConfig = this.customProviderConfig();
-      const allThreads = await readCodexThreadWindow(client, this.logger, {
-        limit: listLimit,
-        cwd: options?.cwd,
-        ...(customProviderConfig ? { modelProviders: [customProviderConfig.model_provider] } : {}),
-      });
-      const threads = filterCodexThreadsByCwd(allThreads, options?.cwd);
-      return threads.slice(0, limit).map((thread) => {
-        const threadId = typeof thread.id === "string" ? thread.id : "";
-        const cwd = typeof thread.cwd === "string" ? thread.cwd : process.cwd();
-        const preview = typeof thread.preview === "string" ? thread.preview : null;
-        const title = typeof thread.name === "string" && thread.name.trim() ? thread.name : preview;
+      const allThreads = new Map<unknown, Record<string, unknown>>();
+      // Codex lists active and archived threads separately. Closing a Paseo
+      // agent archives its native thread, so both windows must be importable.
+      for (const archived of [false, true]) {
+        const windowThreads = await readCodexThreadWindow(client, this.logger, {
+          limit: listLimit,
+          archived,
+          cwd: options?.cwd,
+          ...(customProviderConfig
+            ? { modelProviders: [customProviderConfig.model_provider] }
+            : {}),
+        });
+        for (const thread of windowThreads) {
+          const identity = typeof thread.id === "string" ? thread.id : thread;
+          allThreads.set(identity, thread);
+        }
+      }
+      const threads = filterCodexThreadsByCwd([...allThreads.values()], options?.cwd);
+      return threads
+        .map((thread) => {
+          const threadId = typeof thread.id === "string" ? thread.id : "";
+          const cwd = typeof thread.cwd === "string" ? thread.cwd : process.cwd();
+          const preview = typeof thread.preview === "string" ? thread.preview : null;
+          const title =
+            typeof thread.name === "string" && thread.name.trim() ? thread.name : preview;
 
-        return {
-          providerHandleId: threadId,
-          cwd,
-          title,
-          firstPromptPreview: preview,
-          lastPromptPreview: preview,
-          lastActivityAt: new Date(
-            ((typeof thread.updatedAt === "number" ? thread.updatedAt : undefined) ??
-              (typeof thread.createdAt === "number" ? thread.createdAt : undefined) ??
-              0) * 1000,
-          ),
-        };
-      });
+          return {
+            providerHandleId: threadId,
+            cwd,
+            title,
+            firstPromptPreview: preview,
+            lastPromptPreview: preview,
+            lastActivityAt: new Date(
+              ((typeof thread.updatedAt === "number" ? thread.updatedAt : undefined) ??
+                (typeof thread.createdAt === "number" ? thread.createdAt : undefined) ??
+                0) * 1000,
+            ),
+          };
+        })
+        .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime())
+        .slice(0, limit);
     } finally {
       await client.dispose();
     }
