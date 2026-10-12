@@ -90,13 +90,14 @@ describe("Codex custom provider import list", () => {
   });
 
   test.each([
-    { providerId: "my-codex", seedLegacy: false, seedBuiltin: false },
-    { providerId: "ollama", seedLegacy: false, seedBuiltin: false },
-    { providerId: "my-codex", seedLegacy: true, seedBuiltin: false },
-    { providerId: "ollama", seedLegacy: false, seedBuiltin: true },
+    { providerId: "my-codex", seedLegacy: false, seedBuiltin: false, archived: false },
+    { providerId: "ollama", seedLegacy: false, seedBuiltin: false, archived: false },
+    { providerId: "my-codex", seedLegacy: true, seedBuiltin: false, archived: false },
+    { providerId: "ollama", seedLegacy: false, seedBuiltin: true, archived: false },
+    { providerId: "my-codex", seedLegacy: false, seedBuiltin: false, archived: true },
   ])(
-    "lists and imports sessions for $providerId (legacy: $seedLegacy, native: $seedBuiltin)",
-    async ({ providerId, seedLegacy, seedBuiltin }) => {
+    "lists and imports sessions for $providerId (legacy: $seedLegacy, native: $seedBuiltin, archived: $archived)",
+    async ({ providerId, seedLegacy, seedBuiltin, archived }) => {
       const codexHome = mkdtempSync(path.join(os.tmpdir(), "codex-custom-import-home-"));
       const cwd = mkdtempSync(path.join(os.tmpdir(), "codex-custom-import-cwd-"));
       cleanups.push(() => rmSync(codexHome, { recursive: true, force: true }));
@@ -157,6 +158,11 @@ describe("Codex custom provider import list", () => {
       });
       try {
         await session.run("hello from the custom provider");
+        if (archived) {
+          const handle = session.describePersistence()!;
+          await session.close();
+          await customCodex.archiveNativeSession(handle);
+        }
       } finally {
         await session.close();
       }
