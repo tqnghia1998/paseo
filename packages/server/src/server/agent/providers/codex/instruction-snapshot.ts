@@ -17,13 +17,18 @@ function readReceipt(value: unknown): InstructionReceipt | null {
 
 export class CodexInstructionSnapshot {
   private receipt: InstructionReceipt | null;
-  private readonly digest: string;
+  private digest = "";
 
   constructor(
-    private readonly instructions: string | undefined,
+    private instructions: string | undefined,
     receipt: unknown,
   ) {
     this.receipt = readReceipt(receipt);
+    this.setInstructions(instructions);
+  }
+
+  setInstructions(instructions: string | undefined): void {
+    this.instructions = instructions;
     this.digest = createHash("sha256")
       .update(JSON.stringify({ version: 1, instructions: instructions ?? "" }))
       .digest("hex");
