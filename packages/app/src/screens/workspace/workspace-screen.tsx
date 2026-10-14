@@ -3639,7 +3639,7 @@ function WorkspaceScreenContent({
     handleResizePaneSplit,
     handleReorderTabsInPane,
   ]);
-  const desktopContent = desktopSplitContent ?? content;
+  const desktopContent = isMobile ? content : (desktopSplitContent ?? content);
   const rendersDesktopSplitContent = !isMobile && desktopSplitContent !== null;
 
   const workspacePanelTabIds = useMemo(
@@ -3653,8 +3653,21 @@ function WorkspaceScreenContent({
     composerFullscreen: useComposerTabFullscreen(workspacePanelKey, activeTabId),
   });
 
-  // Sheets opened from the compact column present inside it, so their panels read the workspace
-  // providers, and they cover the compact header as a modal.
+  // Compact Live Design keeps desktop tabs, but opened files and subagents still use sheets.
+  const workspaceSheetContent = isMobile ? (
+    <StreamTopOverlayProvider value={0}>
+      <SheetTabs
+        workspaceKey={persistenceKey}
+        serverId={normalizedServerId}
+        workspaceId={normalizedWorkspaceId}
+        isWorkspaceFocused={isRouteFocused}
+        buildContent={buildSheetPaneContentModel}
+        onCloseTab={handleCloseTabById}
+      />
+    </StreamTopOverlayProvider>
+  ) : null;
+
+  // The sheet is the column's last child, so it covers the compact header as a modal.
   const workspaceCenterColumn = !usesDesktopWorkspaceTabs ? (
     <WorkspacePanelProviders
       launcher={newTabLauncher}
@@ -3672,57 +3685,51 @@ function WorkspaceScreenContent({
             </StreamTopOverlayProvider>
           )}
         </FloatingHeaderLayout>
-        <SheetTabs
-          workspaceKey={persistenceKey}
-          serverId={normalizedServerId}
-          workspaceId={normalizedWorkspaceId}
-          isWorkspaceFocused={isRouteFocused}
-          buildContent={buildSheetPaneContentModel}
-          onCloseTab={handleCloseTabById}
-        />
+        {workspaceSheetContent}
       </SheetHostScope>
     </WorkspacePanelProviders>
   ) : (
-    <View style={styles.centerColumn}>
-      {rendersDesktopSplitContent ? null : renderWorkspaceScreenHeader()}
+    <WorkspacePanelProviders
+      launcher={newTabLauncher}
+      workspaceKey={workspacePanelKey}
+      tabIds={workspacePanelTabIds}
+    >
+      <SheetHostScope style={styles.centerColumn}>
+        {rendersDesktopSplitContent ? null : renderWorkspaceScreenHeader()}
 
-      {shouldRenderDesktopPaneFallback ||
-      (usesDesktopWorkspaceTabs && !rendersDesktopSplitContent) ? (
-        <NewTabLauncherProvider value={newTabLauncher}>
-          <WorkspaceDesktopTabsRow
-            paneId={focusedPaneIdOrUndefined}
-            isFocused={isRouteFocused}
-            tabs={desktopTabRowItems}
-            normalizedServerId={normalizedServerId}
-            normalizedWorkspaceId={normalizedWorkspaceId}
-            setHoveredCloseTabKey={setHoveredCloseTabKey}
-            onNavigateTab={navigateToTabId}
-            onCloseTab={handleCloseTabById}
-            onCopyResumeCommand={handleCopyResumeCommand}
-            onCopyAgentId={handleCopyAgentId}
-            onCopyTerminalId={handleCopyTerminalId}
-            onCopyFilePath={handleCopyFilePath}
-            onReloadAgent={handleReloadAgent}
-            onRenameTab={handleRenameTab}
-            onCloseTabsToLeft={handleCloseTabsToLeft}
-            onCloseTabsToRight={handleCloseTabsToRight}
-            onCloseOtherTabs={handleCloseOtherTabs}
-            onCreateNewTab={handleCreateNewTab}
-            onReorderTabs={handleReorderTabsInFocusedPane}
-          />
-        </NewTabLauncherProvider>
-      ) : null}
+        {shouldRenderDesktopPaneFallback ||
+        (usesDesktopWorkspaceTabs && !rendersDesktopSplitContent) ? (
+          <NewTabLauncherProvider value={newTabLauncher}>
+            <WorkspaceDesktopTabsRow
+              paneId={focusedPaneIdOrUndefined}
+              isFocused={isRouteFocused}
+              tabs={desktopTabRowItems}
+              normalizedServerId={normalizedServerId}
+              normalizedWorkspaceId={normalizedWorkspaceId}
+              setHoveredCloseTabKey={setHoveredCloseTabKey}
+              onNavigateTab={navigateToTabId}
+              onCloseTab={handleCloseTabById}
+              onCopyResumeCommand={handleCopyResumeCommand}
+              onCopyAgentId={handleCopyAgentId}
+              onCopyTerminalId={handleCopyTerminalId}
+              onCopyFilePath={handleCopyFilePath}
+              onReloadAgent={handleReloadAgent}
+              onRenameTab={handleRenameTab}
+              onCloseTabsToLeft={handleCloseTabsToLeft}
+              onCloseTabsToRight={handleCloseTabsToRight}
+              onCloseOtherTabs={handleCloseOtherTabs}
+              onCreateNewTab={handleCreateNewTab}
+              onReorderTabs={handleReorderTabsInFocusedPane}
+            />
+          </NewTabLauncherProvider>
+        ) : null}
 
-      <View style={styles.centerContent}>
-        <WorkspacePanelProviders
-          launcher={newTabLauncher}
-          workspaceKey={workspacePanelKey}
-          tabIds={workspacePanelTabIds}
-        >
+        <View style={styles.centerContent}>
           <View style={styles.content}>{desktopContent}</View>
-        </WorkspacePanelProviders>
-      </View>
-    </View>
+        </View>
+        {workspaceSheetContent}
+      </SheetHostScope>
+    </WorkspacePanelProviders>
   );
 
   const openMarkdownFile = useStableEvent((target: InlinePathTarget) => {
