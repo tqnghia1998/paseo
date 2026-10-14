@@ -3609,7 +3609,7 @@ function WorkspaceScreenContent({
     handleResizePaneSplit,
     handleReorderTabsInPane,
   ]);
-  const desktopContent = desktopSplitContent ?? content;
+  const desktopContent = isMobile ? content : (desktopSplitContent ?? content);
   const rendersDesktopSplitContent = !isMobile && desktopSplitContent !== null;
 
   const workspacePanelTabIds = useMemo(
@@ -3623,7 +3623,15 @@ function WorkspaceScreenContent({
     composerFullscreen: useComposerTabFullscreen(workspacePanelKey, activeTabId),
   });
 
+  // Compact Live Design keeps desktop tabs, but opened files and subagents still use sheets.
+  const workspaceSheetContent = isMobile ? (
+    <StreamTopOverlayProvider value={0}>
+      <SheetTabs onCloseTab={handleCloseTabById} />
+    </StreamTopOverlayProvider>
+  ) : null;
+
   // Compact sheets escape to the app overlay host, above both sidebars.
+
   const workspaceCenterColumn = !usesDesktopWorkspaceTabs ? (
     <View style={styles.centerColumn}>
       <FloatingHeaderLayout
@@ -3636,7 +3644,7 @@ function WorkspaceScreenContent({
           </StreamTopOverlayProvider>
         )}
       </FloatingHeaderLayout>
-      <SheetTabs onCloseTab={handleCloseTabById} />
+      {workspaceSheetContent}
     </View>
   ) : (
     <View style={styles.centerColumn}>
@@ -3672,6 +3680,7 @@ function WorkspaceScreenContent({
       <View style={styles.centerContent}>
         <View style={styles.content}>{desktopContent}</View>
       </View>
+      {workspaceSheetContent}
     </View>
   );
 
