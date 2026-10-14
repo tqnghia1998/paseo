@@ -195,6 +195,11 @@ const CODEX_BUILTIN_MODEL_PROVIDER_IDS = new Set([
   "amazon-bedrock-runtime",
   "gcp",
 ]);
+const CODEX_QUESTION_INSTRUCTIONS =
+  "Use request_user_input for user questions and wait for the user's answer before continuing. " +
+  "Do not use request_user_input_async or send_user_message_async to ask questions; those tools return before the user answers. " +
+  "If request_user_input is unavailable, ask the question in your final message and end the turn. " +
+  "Never assume a default answer or treat a preselected option as the user's response.";
 // Codex treats most app-server client names as the model-request originator.
 // This reserved Codex name is non-originating, so requests keep Codex's default
 // CLI identity instead of showing up as Paseo in provider usage logs.
@@ -3808,7 +3813,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private resolvedWorkspaceWrite: NonNullable<
     CodexProviderOptions["sandbox_workspace_write"]
   > | null = null;
-  private configuredDeveloperInstructions: string | undefined;
+  private resolvedNativeDeveloperInstructions: string | undefined;
   private resolvedSandboxPolicy: Record<string, unknown> | null = null;
   private currentThreadId: string | null = null;
   // Codex writes a new thread's rollout at its first turn. Until then the thread exists only
@@ -3964,7 +3969,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       validateProviderOptions("codex", CodexProviderOptionsSchema, config.providerOptions) ?? {};
     this.config = config;
     this.instructionSnapshot = new CodexInstructionSnapshot(
-      composeAgentSystemPrompt(config),
+      this.buildDeveloperInstructions(),
       resumeHandle?.metadata?.paseoInstructionReceipt,
     );
     this.harnessEnvironment = deps.environment ?? buildCodexAppServerEnv();
@@ -4072,6 +4077,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         CodexModelListResponseSchema.parse(await client.request("model/list", {})).data ?? [];
       this.normalizeSpeed();
       await this.loadResolvedConfig();
+      this.instructionSnapshot.setInstructions(this.buildDeveloperInstructions());
       await this.loadCollaborationModes();
       await this.loadSkills();
 
@@ -4108,25 +4114,29 @@ export class CodexAppServerAgentSession implements AgentSession {
       const response = toObjectRecord(
         await this.client.request("config/read", { cwd: this.config.cwd ?? null }),
       );
-      const config = toObjectRecord(response?.config);
-      this.resolvedWorkspaceWrite = readSandboxWorkspaceWrite(config?.sandbox_workspace_write);
-      this.configuredDeveloperInstructions =
-        typeof config?.developer_instructions === "string"
-          ? config.developer_instructions
-          : undefined;
+      const config = z
+        .object({
+          developer_instructions: z.string().nullish(),
+          sandbox_workspace_write: z.unknown().optional(),
+        })
+        .parse(response?.config);
+      this.resolvedWorkspaceWrite = readSandboxWorkspaceWrite(config.sandbox_workspace_write);
+      this.resolvedNativeDeveloperInstructions = config.developer_instructions ?? undefined;
     } catch (error) {
+      const paseoInstructions = composeSystemPromptParts(
+        this.config.systemPrompt,
+        this.config.daemonAppendSystemPrompt,
+      );
+      if (!this.config.internal && !paseoInstructions) {
+        throw new Error(
+          "Cannot preserve native Codex developer instructions: configuration read failed",
+          {
+            cause: error,
+          },
+        );
+      }
       this.logger.debug({ error }, "Failed to read resolved Codex config");
     }
-  }
-
-  /**
-   * Codex uses a thread's developerInstructions in place of the developer_instructions in its
-   * config, so Paseo's instructions carry the configured ones ahead of them.
-   */
-  private threadDeveloperInstructions(): string | undefined {
-    const paseoInstructions = composeAgentSystemPrompt(this.config);
-    if (!paseoInstructions) return undefined;
-    return composeSystemPromptParts(this.configuredDeveloperInstructions, paseoInstructions);
   }
 
   private rememberResolvedSandboxPolicy(response: unknown): void {
@@ -4584,7 +4594,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       // the unnamespaced key emitted by earlier Paseo versions.
       params.modelProvider = this.deps.customCodexConfig.model_provider;
     }
-    const developerInstructions = this.threadDeveloperInstructions();
+    const developerInstructions = this.buildDeveloperInstructions();
     if (developerInstructions) {
       params.developerInstructions = developerInstructions;
     }
@@ -4756,7 +4766,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (options?.outputSchema) {
       params.outputSchema = normalizeCodexOutputSchema(options.outputSchema);
     }
-    const developerInstructions = composeAgentSystemPrompt(this.config);
+    const developerInstructions = this.buildDeveloperInstructions();
     const codexConfig = this.buildCodexInnerConfig();
     if (codexConfig) {
       params.config = codexConfig;
@@ -5549,7 +5559,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       model: this.config.model ?? null,
       serviceTier: this.serviceTier,
       config: this.buildCodexInnerConfig(),
-      developerInstructions: this.threadDeveloperInstructions(),
+      developerInstructions: this.buildDeveloperInstructions(),
       userMessageTurns: this.codexUserMessageTurns(),
       threadRollbackAvailable: this.threadRollbackAvailable,
       setThreadId: async (threadId) => {
@@ -6108,7 +6118,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     const approvalPolicy = this.hasWorkflowModeOverride ? preset.approvalPolicy : undefined;
     const sandbox = this.hasWorkflowModeOverride ? preset.sandbox : undefined;
     const innerConfig = this.buildCodexInnerConfig();
-    const developerInstructions = this.threadDeveloperInstructions();
+    const developerInstructions = this.buildDeveloperInstructions();
     const params: Record<string, unknown> = {
       model,
       cwd: this.config.cwd ?? null,
@@ -6124,6 +6134,21 @@ export class CodexAppServerAgentSession implements AgentSession {
       params.approvalsReviewer = preset.approvalsReviewer;
     }
     return { params, approvalPolicy, sandbox };
+  }
+
+  private buildDeveloperInstructions(modeInstructions?: string | null): string | undefined {
+    const paseoInstructions = composeSystemPromptParts(
+      this.config.systemPrompt,
+      this.config.daemonAppendSystemPrompt,
+    );
+    const nativeInstructions = this.config.internal
+      ? undefined
+      : this.resolvedNativeDeveloperInstructions;
+    return composeSystemPromptParts(
+      modeInstructions,
+      paseoInstructions ?? nativeInstructions,
+      this.config.internal ? undefined : CODEX_QUESTION_INSTRUCTIONS,
+    );
   }
 
   private buildCodexInnerConfig(): Record<string, unknown> | null {
