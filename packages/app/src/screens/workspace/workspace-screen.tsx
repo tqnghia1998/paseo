@@ -3606,7 +3606,7 @@ function WorkspaceScreenContent({
     handleResizePaneSplit,
     handleReorderTabsInPane,
   ]);
-  const desktopContent = desktopSplitContent ?? content;
+  const desktopContent = isMobile ? content : (desktopSplitContent ?? content);
   const rendersDesktopSplitContent = !isMobile && desktopSplitContent !== null;
 
   const workspacePanelTabIds = useMemo(
@@ -3619,6 +3619,20 @@ function WorkspaceScreenContent({
     activeTab: activeTabDescriptor,
     composerFullscreen: useComposerTabFullscreen(workspacePanelKey, activeTabId),
   });
+
+  // Compact Live Design keeps desktop tabs, but opened files and subagents still use sheets.
+  const workspaceSheetContent = isMobile ? (
+    <StreamTopOverlayProvider value={0}>
+      <SheetTabs
+        workspaceKey={persistenceKey}
+        serverId={normalizedServerId}
+        workspaceId={normalizedWorkspaceId}
+        isWorkspaceFocused={isRouteFocused}
+        buildContent={buildSheetPaneContentModel}
+        onCloseTab={handleCloseTabById}
+      />
+    </StreamTopOverlayProvider>
+  ) : null;
 
   // Compact sheets use the shared workspace scope, above both center and Explorer.
   const workspaceCenterColumn = !usesDesktopWorkspaceTabs ? (
@@ -3633,14 +3647,7 @@ function WorkspaceScreenContent({
           </StreamTopOverlayProvider>
         )}
       </FloatingHeaderLayout>
-      <SheetTabs
-        workspaceKey={persistenceKey}
-        serverId={normalizedServerId}
-        workspaceId={normalizedWorkspaceId}
-        isWorkspaceFocused={isRouteFocused}
-        buildContent={buildSheetPaneContentModel}
-        onCloseTab={handleCloseTabById}
-      />
+      {workspaceSheetContent}
     </View>
   ) : (
     <View style={styles.centerColumn}>
@@ -3676,6 +3683,7 @@ function WorkspaceScreenContent({
       <View style={styles.centerContent}>
         <View style={styles.content}>{desktopContent}</View>
       </View>
+      {workspaceSheetContent}
     </View>
   );
 
