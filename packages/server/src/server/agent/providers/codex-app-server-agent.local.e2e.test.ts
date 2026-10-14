@@ -171,11 +171,14 @@ async function startMockResponsesServer(sequence: string[]): Promise<{
   };
 }
 
+const NATIVE_CODEX_INSTRUCTIONS = "Follow the team review conventions.";
+
 function writeMockCodexConfig(codexHome: string, serverUrl: string): void {
   writeFileSync(
     path.join(codexHome, "config.toml"),
     `
 model = "mock-model"
+developer_instructions = "${NATIVE_CODEX_INSTRUCTIONS}"
 approval_policy = "on-request"
 sandbox_mode = "read-only"
 
@@ -359,6 +362,14 @@ describe("Codex app-server provider (local e2e)", () => {
 
           expect(session.getPendingPermissions()).toEqual([permissionEvent.request]);
           expect(mockServer.requestBodies).toHaveLength(1);
+          expect(mockServer.requestBodies[0]).toContain(
+            "Use request_user_input for user questions",
+          );
+          expect(mockServer.requestBodies[0]).toContain("Do not use request_user_input_async");
+          expect(mockServer.requestBodies[0]).toContain(NATIVE_CODEX_INSTRUCTIONS);
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          expect(mockServer.requestBodies).toHaveLength(1);
+          expect(events.some((event) => event.type === "turn_completed")).toBe(false);
 
           const runningQuestionCall = events.find(
             (event) =>

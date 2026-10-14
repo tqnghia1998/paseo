@@ -657,6 +657,7 @@ function resultFor(method) {
   if (method === "collaborationMode/list") return { data: [] };
   if (method === "skills/list") return { data: [] };
   if (method === "model/list") return { data: [{ id: "profile-model", isDefault: true }] };
+  if (method === "config/read") return { config: {} };
   if (method === "thread/start") return { thread: { id: "thread-1" } };
   return {};
 }
@@ -772,6 +773,7 @@ let buffer = "";
 
 function resultFor(method, params) {
   if (method === "initialize") return {};
+  if (method === "config/read") return { config: {} };
   if (method === "collaborationMode/list") return { data: [] };
   if (method === "model/list") return { data: [] };
   if (method === "skills/list") {
@@ -826,6 +828,116 @@ process.stdin.on("data", (chunk) => {
 }
 
 describe("Codex app-server provider", () => {
+  test.each([undefined, "Paseo override"])(
+    "preserves native instructions unless Paseo supplies an override (%s)",
+    async (systemPrompt) => {
+      const nativeInstructions = "Follow the team's native Codex conventions.";
+      const config = createConfig({ systemPrompt });
+      const firstServer = createFakeCodexAppServer({
+        "config/read": () => ({ config: { developer_instructions: nativeInstructions } }),
+      });
+      const first = await createProviderWithFakeAppServer(firstServer).createSession(config);
+      let handle: NonNullable<ReturnType<AgentSession["describePersistence"]>>;
+      try {
+        await first.startTurn("first question");
+        handle = first.describePersistence()!;
+        for (const params of [
+          await firstServer.waitForRequest("thread/start"),
+          await firstServer.waitForTurnStart(),
+        ]) {
+          expect(params.developerInstructions).toContain(systemPrompt ?? nativeInstructions);
+          expect(params.developerInstructions).toContain(
+            "Use request_user_input for user questions",
+          );
+          if (systemPrompt) expect(params.developerInstructions).not.toContain(nativeInstructions);
+        }
+        firstServer.assertNoErrors();
+      } finally {
+        await first.close();
+      }
+      const secondServer = createFakeCodexAppServer({
+        "config/read": () => ({ config: { developer_instructions: nativeInstructions } }),
+      });
+      const resumed = await createProviderWithFakeAppServer(secondServer).resumeSession(
+        handle,
+        config,
+      );
+      try {
+        await resumed.startTurn("another question");
+        for (const params of [
+          await secondServer.waitForRequest("thread/resume"),
+          await secondServer.waitForTurnStart(),
+        ]) {
+          expect(params.developerInstructions).toContain(systemPrompt ?? nativeInstructions);
+          expect(params.developerInstructions).toContain(
+            "Use request_user_input for user questions",
+          );
+          if (systemPrompt) expect(params.developerInstructions).not.toContain(nativeInstructions);
+        }
+        secondServer.assertNoErrors();
+      } finally {
+        await resumed.close();
+      }
+    },
+  );
+
+  test("rejects unreadable native configuration before replacing instructions", async () => {
+    const appServer = createFakeCodexAppServer({
+      "config/read": () => ({
+        __jsonRpcError: { code: -32000, message: "Configuration unavailable" },
+      }),
+    });
+    await expect(
+      createProviderWithFakeAppServer(appServer).createSession(createConfig()),
+    ).rejects.toThrow("Cannot preserve native Codex developer instructions");
+    expect(appServer.requests().some((request) => request.method === "thread/start")).toBe(false);
+    appServer.assertNoErrors();
+  });
+
+  test.each([null, { developer_instructions: 42 }])(
+    "rejects invalid native instruction configuration (%s)",
+    async (nativeConfig) => {
+      const appServer = createFakeCodexAppServer({
+        "config/read": () => ({ config: nativeConfig }),
+      });
+      await expect(
+        createProviderWithFakeAppServer(appServer).createSession(createConfig()),
+      ).rejects.toThrow("Cannot preserve native Codex developer instructions");
+      expect(appServer.requests().some((request) => request.method === "thread/start")).toBe(false);
+      appServer.assertNoErrors();
+    },
+  );
+
+  test.each([
+    { internal: true },
+    { systemPrompt: "Paseo override" },
+    { daemonAppendSystemPrompt: "Daemon override" },
+  ])(
+    "keeps sessions that need no native instruction fallback available when config reading fails (%j)",
+    async (overrides) => {
+      const appServer = createFakeCodexAppServer({
+        "config/read": () => ({
+          __jsonRpcError: { code: -32000, message: "Configuration unavailable" },
+        }),
+      });
+      const session = await createProviderWithFakeAppServer(appServer).createSession(
+        createConfig(overrides),
+      );
+      try {
+        await session.startTurn("continue");
+        const start = await appServer.waitForRequest("thread/start");
+        if (overrides.internal) expect(start.developerInstructions).toBeUndefined();
+        else
+          expect(start.developerInstructions).toContain(
+            overrides.systemPrompt ?? overrides.daemonAppendSystemPrompt,
+          );
+        appServer.assertNoErrors();
+      } finally {
+        await session.close();
+      }
+    },
+  );
+
   test("does not implicitly enable Default-mode questions for hidden utility agents", async () => {
     const appServer = createFakeCodexAppServer();
     const session = await createProviderWithFakeAppServer(appServer).createSession(
@@ -837,6 +949,8 @@ describe("Codex app-server provider", () => {
       const turn = await appServer.waitForTurnStart();
       expect(start.config).toEqual({ features: { multi_agent_v2: true } });
       expect(turn.config).toEqual({ features: { multi_agent_v2: true } });
+      expect(start.developerInstructions).toBeUndefined();
+      expect(turn.developerInstructions).toBeUndefined();
       appServer.assertNoErrors();
     } finally {
       await session.close();
@@ -847,6 +961,8 @@ describe("Codex app-server provider", () => {
     "preserves Default-mode question configuration %s across new and resumed sessions",
     async (enabled) => {
       const config = createConfig({
+        systemPrompt: "Keep the user's project conventions.",
+        daemonAppendSystemPrompt: "Preserve unrelated changes.",
         providerOptions: {
           features: {
             multi_agent_v2: true,
@@ -868,9 +984,13 @@ describe("Codex app-server provider", () => {
         handle = first.describePersistence()!;
         await expect(firstServer.waitForRequest("thread/start")).resolves.toMatchObject({
           config: expectedConfig,
+          developerInstructions: expect.stringContaining(
+            "Use request_user_input for user questions",
+          ),
         });
         await expect(firstServer.waitForTurnStart()).resolves.toMatchObject({
           config: expectedConfig,
+          developerInstructions: expect.stringContaining("Do not use request_user_input_async"),
         });
         firstServer.assertNoErrors();
       } finally {
@@ -885,10 +1005,16 @@ describe("Codex app-server provider", () => {
       try {
         await expect(secondServer.waitForRequest("thread/resume")).resolves.toMatchObject({
           config: expectedConfig,
+          developerInstructions: expect.stringContaining(
+            "Use request_user_input for user questions",
+          ),
         });
         await resumed.startTurn("another question");
         await expect(secondServer.waitForTurnStart()).resolves.toMatchObject({
           config: expectedConfig,
+          developerInstructions: expect.stringContaining(
+            "Keep the user's project conventions.\n\nPreserve unrelated changes.",
+          ),
         });
         secondServer.assertNoErrors();
       } finally {
@@ -5779,6 +5905,9 @@ describe("Codex app-server provider", () => {
         params: {
           threadId: "archived-thread-id",
           config: { features: { default_mode_request_user_input: true } },
+          developerInstructions: expect.stringContaining(
+            "Use request_user_input for user questions",
+          ),
         },
       },
     ]);

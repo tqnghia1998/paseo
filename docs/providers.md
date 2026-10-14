@@ -39,6 +39,16 @@ sessions so native questions work outside Plan mode. Set the provider option to 
 out. Hidden utility agents retain their configured behavior. This does not write global Codex
 configuration, change command approvals, or turn ordinary assistant text into questions.
 
+User-visible Codex sessions also instruct the model to use blocking `request_user_input`
+and wait for the answer. Codex's `request_user_input_async` returns immediately, even when
+Paseo displays a question card; it must not be used when the user expects a pause. The policy
+is supplied on creation, resume, and each turn, preserving other developer instructions.
+When Paseo supplies no prompt override, retain the effective Codex `developer_instructions`
+from `config/read` before appending the policy. A failed read must reject startup rather
+than replace unknown native instructions. Explicit Paseo prompts keep their override behavior.
+If the blocking tool is unavailable, the model is instructed to ask in its final message
+and end the turn. This is a model instruction, not a transport-level block on async calls.
+
 ## Core adapter patterns
 
 ### ACP (Agent Client Protocol) -- recommended
