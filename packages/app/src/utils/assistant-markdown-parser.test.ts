@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createAssistantMarkdownParser } from "./assistant-markdown-parser";
+import {
+  createAssistantMarkdownParser,
+  normalizeAssistantCitations,
+} from "./assistant-markdown-parser";
 import { createMarkdownParser } from "./markdown-parser";
 
 describe("createAssistantMarkdownParser", () => {
@@ -63,5 +66,24 @@ describe("createAssistantMarkdownParser", () => {
         `<pre><code class="language-text">${citation}\n</code></pre>\n`,
       );
     }
+  });
+});
+
+describe("normalizeAssistantCitations", () => {
+  const citation = "\uE200cite\uE202turn511321view1\uE201";
+  it("adapts prose for the shared markdown renderer while preserving literal code and links", () => {
+    const source = `AI.${citation}\n\n- **Result${citation}**\n\n\`${citation}\`\n\n\`\`\`text\n${citation}\n\`\`\`\n\n[APMS](https://example.com/apms)`;
+    const result = normalizeAssistantCitations(source, false);
+    expect(result).toBe(
+      source
+        .replace(`AI.${citation}`, "AI.[source unavailable]")
+        .replace(`Result${citation}`, "Result[source unavailable]"),
+    );
+  });
+  it("hides partial streamed markers and reveals the fallback on completion", () => {
+    for (let length = 1; length < citation.length; length++) {
+      expect(normalizeAssistantCitations(`AI.${citation.slice(0, length)}`, true)).toBe("AI.");
+    }
+    expect(normalizeAssistantCitations(`AI.${citation}`, true)).toBe("AI.[source unavailable]");
   });
 });
