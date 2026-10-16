@@ -154,6 +154,26 @@ export default defineConfig({
         ".tsx",
         ".json",
       ],
+      plugins: [
+        {
+          name: "enriched-markdown-wasm-commonjs",
+          setup(build) {
+            // Metro accepts the package's CommonJS WASM factory inside its ESM
+            // package. Expose the same factory to Vite's dependency optimizer.
+            build.onLoad(
+              {
+                filter:
+                  /react-native-enriched-markdown[\\/]lib[\\/]module[\\/]web[\\/]wasm[\\/]md4c\.js$/,
+              },
+              ({ path: file }) => ({
+                contents: `${fs.readFileSync(file, "utf8")}\nexport default createMd4cModule;`,
+                loader: "js",
+              }),
+            );
+          },
+        },
+
+      ],
     },
     // Bundle the CJS dependencies of the excluded gesture-handler package for the browser.
     include: [
