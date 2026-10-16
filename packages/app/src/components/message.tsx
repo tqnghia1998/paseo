@@ -1,5 +1,6 @@
 import { useDisclosureHold } from "@/agent-stream/disclosure";
 import { MessagePreview, MessageSender } from "@/components/user-message";
+import { normalizeAssistantCitations } from "@/utils/assistant-markdown-parser";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { getAgentAttachmentPillContent } from "@/attachments/attachment-pill-content";
 import { AssistantForkMenu, type AssistantForkTarget } from "@/components/assistant-fork-menu";
@@ -1308,7 +1309,10 @@ export const AssistantMessage = memo(function AssistantMessage({
       onLayout={measureMessage}
     >
       <MarkdownRenderer
-        text={revealedMessage}
+        text={normalizeAssistantCitations(
+          revealedMessage,
+          phase !== "complete" || revealedMessage.length < renderedMessage.text.length,
+        )}
         agentCommands
         streaming={phase !== "complete" || revealedMessage.length < renderedMessage.text.length}
         client={client}
