@@ -200,6 +200,7 @@ import {
   isEmbeddedLiveDesignMessaging,
   shouldUseDesktopWorkspaceTabs,
 } from "@/embedded-focus-mode";
+import { useEmbeddedPromptActivation } from "@/embedded-prompt";
 import { useEmbeddedLiveDesignActivation } from "@/embedded-live-design";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
@@ -1623,6 +1624,10 @@ function WorkspaceScreenContent({
       uiTabs,
     ],
   );
+  useEmbeddedPromptActivation({
+    activateConversation: activateEmbeddedLiveDesignConversation,
+    enabled: isEmbeddedFocusMode && isRouteFocused && hasHydratedWorkspaceLayoutStore,
+  });
   useEmbeddedLiveDesignActivation({
     activateConversation: activateEmbeddedLiveDesignConversation,
     enabled: isEmbeddedLiveDesignMessaging && isRouteFocused && hasHydratedWorkspaceLayoutStore,
