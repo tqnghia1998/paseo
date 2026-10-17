@@ -136,6 +136,7 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
+import { useEmbeddedPromptInsert } from "@/embedded-prompt";
 import { useEmbeddedLiveDesignSend, waitForLiveDesignTurn } from "@/embedded-live-design";
 import { isEmbeddedLiveDesignMessaging } from "@/embedded-focus-mode";
 import { useStableEvent } from "@/hooks/use-stable-event";
@@ -1752,6 +1753,16 @@ function ComposerContentImpl({
       t,
     ],
   );
+
+  useEmbeddedPromptInsert({
+    workspaceId,
+    inputMode,
+    readOnly,
+    enabled: isWeb && isActiveComposer && !isComposerLocked,
+    getText: useStableEvent(() => messageInputRef.current?.getText() ?? textSource.getSnapshot()),
+    replaceText: replaceUserInput,
+    focus: useStableEvent(() => focusMessageInputWithPlatformStrategy(messageInputRef)),
+  });
 
   useEmbeddedLiveDesignSend({
     agentId,
