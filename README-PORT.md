@@ -139,6 +139,8 @@ pnpm exec vitest run scripts/paseo-web/paseoWebBundle.test.ts
 
 ## 5. Current Vibing Integration
 
+`embedded-prompt.ts` handles host prompt insertion in Embedded Focus Mode. Parent-origin/source-checked readiness requests activate the nearest conversation or create a draft; insertion appends to the active unlocked composer and focuses it without submitting or changing attachments. Readiness echoes a host request ID and composer ID; insertion targets that composer and acknowledges the request. The host retries unacknowledged requests, while the iframe deduplicates the latest 1024 delivered IDs across composer switches. Only editable workspace chat composers participate; terminal, read-only, and workspace-setup inputs are excluded. Keep its source tests and the consumer bundle guard when refreshing the fork.
+
 `server/routes/paseo.ts` owns two independent runtimes: the shared Paseo tab instance and the Live Design instance, each with its own port and persistent home. They use the same bundle, but their conversations do not share state. `src/components/PaseoWeb.tsx` owns the workspace iframe and activity bridge.
 
 The host also polls `/api/worktrees/activity` with its existing isolated worktree capability token. Keep this endpoint loopback-only and token-gated: it restores feature indicators after host refresh without mounting inactive iframes or starting agents. Internal agents and archived workspaces do not contribute. Running state comes from live turns rather than persisted lifecycle records. Both iframe messages and snapshots consider every live conversation in the workspace, so a newer idle conversation cannot hide a running one.
