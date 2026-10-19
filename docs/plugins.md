@@ -113,8 +113,12 @@ The packaged-app smoke check requires every listed built-in to start without rel
 account credentials.
 
 Built-ins run in process and remain active independently of `pluginsEnabled`. They are
-absent from the installed plugin list and source configuration; their client bundles
-appear in the plugin catalog. Editing one in development requires a daemon restart.
+absent from source configuration and the default installed-plugin RPC list. Hosts with
+`builtinPluginListing` support accept `includeBuiltins: true` to include their runtime status
+and startup errors. Settings lists them separately from additional plugins, with logs but no
+enable, reload, or remove controls. A loaded provider plugin may still need its executable or
+account configured. Their client bundles appear in the plugin catalog. Editing one in
+development requires a daemon restart.
 Directory, Git, and npm installs cannot use a built-in ID.
 
 A provider registration with `requiresConfiguration: true` participates only while its ID exists
