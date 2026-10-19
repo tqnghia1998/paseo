@@ -35,6 +35,29 @@ describe("embedded agent activity", () => {
     expect(isEmbeddedWorkspaceRunning(agents, "workspace", () => false)).toBe(false);
   });
 
+  it("observes same-directory scheduled workspaces without including siblings", () => {
+    const agents = [
+      { id: "scheduled", workspaceId: "run-one" },
+      { id: "sibling", workspaceId: "other" },
+    ];
+    expect(
+      isEmbeddedWorkspaceRunning(
+        agents,
+        "one",
+        (id) => id === "scheduled",
+        (id) => id === "one" || id === "run-one",
+      ),
+    ).toBe(true);
+    expect(
+      isEmbeddedWorkspaceRunning(
+        agents,
+        "one",
+        (id) => id === "sibling",
+        (id) => id === "one" || id === "run-one",
+      ),
+    ).toBe(false);
+  });
+
   it("creates the host activity event contract", () => {
     expect(createEmbeddedAgentActivityEvent(true)).toEqual({
       type: "paseo:agent-activity",

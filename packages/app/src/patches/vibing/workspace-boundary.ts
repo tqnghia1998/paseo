@@ -1,9 +1,17 @@
-import { buildHostWorkspaceRoute, parseHostWorkspaceRouteFromPathname } from "@/utils/host-routes";
+import { useSessionStore } from "@/stores/session-store";
+import { parsePluginSurfaceRoute } from "@/plugins/routes";
+import {
+  buildHostWorkspaceRoute,
+  parseHostWorkspaceRouteFromPathname,
+  parseHostAgentRouteFromPathname,
+} from "@/utils/host-routes";
 import { isEmbeddedFocusMode } from "./focus-mode";
 
 interface Workspace {
   serverId: string;
   workspaceId: string;
+  directory?: string;
+  projectId?: string;
 }
 const APP_SECTIONS = new Set([
   "general",
@@ -69,9 +77,16 @@ export function isEmbeddedRouteAllowed(path: string): boolean {
   const pathname = path.split(/[?#]/, 1)[0].replace(/\/$/, "") || "/";
   if (!workspace) return pathname === "/" || /^\/h\/[^/]+$/.test(pathname);
   const target = parseHostWorkspaceRouteFromPathname(pathname);
-  if (target)
-    return target.serverId === workspace.serverId && target.workspaceId === workspace.workspaceId;
-  if (pathname === "/settings") return true;
+  if (target) return isEmbeddedWorkspaceAllowed(target.serverId, target.workspaceId);
+  if (["/settings", "/sessions", "/schedules"].includes(pathname)) return true;
+  const plugin = parsePluginSurfaceRoute(pathname);
+  if (plugin) return plugin.serverId === workspace.serverId;
+  const agent = parseHostAgentRouteFromPathname(pathname);
+  if (agent) return agent.serverId === workspace.serverId;
+  return isEmbeddedSettingsRouteAllowed(pathname, workspace);
+}
+
+function isEmbeddedSettingsRouteAllowed(pathname: string, bound: Workspace): boolean {
   const segments = pathname
     .split("/")
     .slice(1)
@@ -84,7 +99,14 @@ export function isEmbeddedRouteAllowed(path: string): boolean {
     });
   if (segments[0] !== "settings") return false;
   if (segments.length === 2) return APP_SECTIONS.has(segments[1]);
-  if (segments[1] !== "hosts" || segments[2] !== workspace.serverId) return false;
+  if (segments[1] !== "hosts" || segments[2] !== bound.serverId) return false;
+  if (segments.length === 5 && segments[3] === "projects") {
+    const projectId =
+      bound.projectId ??
+      useSessionStore.getState().sessions[bound.serverId]?.workspaces?.get(bound.workspaceId)
+        ?.projectId;
+    return Boolean(projectId && segments[4] === projectId);
+  }
   return (
     (segments.length === 4 && HOST_SECTIONS.has(segments[3])) ||
     (segments.length === 6 && segments[3] === "plugins")
@@ -95,8 +117,11 @@ export function isEmbeddedWorkspaceAllowed(
   serverId: string,
   workspaceId: string | null | undefined,
 ): boolean {
-  return (
-    !isEmbeddedFocusMode ||
-    Boolean(workspace && workspace.serverId === serverId && workspace.workspaceId === workspaceId)
-  );
+  if (!isEmbeddedFocusMode) return true;
+  if (!workspace || workspace.serverId !== serverId || !workspaceId) return false;
+  if (workspace.workspaceId === workspaceId) return true;
+  const workspaces = useSessionStore.getState().sessions[serverId]?.workspaces;
+  const directory =
+    workspace.directory ?? workspaces?.get(workspace.workspaceId)?.workspaceDirectory;
+  return Boolean(directory && workspaces?.get(workspaceId)?.workspaceDirectory === directory);
 }
