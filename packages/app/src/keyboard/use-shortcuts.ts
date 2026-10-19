@@ -1,3 +1,4 @@
+import { isEmbeddedShortcutAllowed } from "@/patches/vibing/focus-mode";
 import { usesDesktopBindings } from "./internal/conventions";
 import { createKeyboardPipeline } from "./internal/pipeline";
 import { overlays } from "./internal/overlays";
@@ -55,7 +56,10 @@ export function useKeyboardShortcuts({
   const router = useRouter();
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
-  const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
+  const bindings = useMemo(
+    () => buildEffectiveBindings(overrides).filter((binding) => isEmbeddedShortcutAllowed(binding.action)),
+    [overrides],
+  );
   const isMac = getShortcutOs() === "mac";
   const openProjectPickerAction = useOpenAddProject();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();

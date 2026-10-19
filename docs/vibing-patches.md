@@ -24,7 +24,8 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
 | Agent activity                          | App: `agent-activity.tsx`; server: `worktree-activity.ts`, `worktree-runtime.ts` | App layout and daemon bootstrap                                                                                 | Colocated activity tests; embedded activity case in `bootstrap.smoke.test.ts`                         |
 | Embedded theme                          | App: `theme.ts`; `plugins/space-app-vibing-theme/`                               | App shell and native built-in plugin registry                                                                   | Colocated theme tests; built-in publication test; browser palette check                               |
 | Queue persistence                       | App: `queued-messages.ts`                                                        | Session initialization and queue writes                                                                         | Colocated queue tests; session-store and composer submission tests                                    |
-| Deleted worktree cleanup                | Server: `worktree-runtime.ts`                                                    | Daemon startup, cleanup API and offline runner                                                                  | Missing-worktree case in `bootstrap.smoke.test.ts`; runner token-isolation tests                      |
+| Worktree stop and deletion              | Server: `worktree-runtime.ts`                                                    | Daemon startup, cleanup API and offline runner                                                                  | Missing-worktree case in `bootstrap.smoke.test.ts`; runner token-isolation tests                      |
+| Editor remount recovery                 | App: `file-recovery.ts`                                                          | File editor model/view and panel close attributes                                                               | Recovery/model tests; iframe remount smoke                                                            |
 | Duplicate workspace recovery            | Server: `workspace-open.ts`                                                      | Session activity lookup and workspace provisioning                                                              | `workspace-provisioning-service.test.ts`                                                              |
 | Codex questions and native instructions | Server: `codex/questions.ts`                                                     | Codex config load and developer-instruction composition; the session-local feature default stays in the adapter | Codex provider unit tests and local question round trips                                              |
 | Interactive Codex shells                | Server: `codex/terminal-interactions.ts`                                         | Codex event mapping, optional protocol `stdin`, Shell card renderer                                             | Colocated terminal tests; Codex provider tests; tool-call schema/browser tests                        |
@@ -32,12 +33,19 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
 
 ## Contracts to preserve
 
-- Every standalone host uses Embedded Focus Mode. `?folder=` resolves through the
-  idempotent daemon `openProject` path on every entry and keeps its workspace/thread across
-  remounts. Empty panes open a focused New Agent draft. Persisted model choices
-  win over the Codex → Claude → OpenCode → Pi fallback. Standard builds retain
-  upstream navigation and the upstream fork menu. Embedded Fork uses that same
-  control with `directTarget="tab"`; it has no separate button implementation.
+- Every standalone host uses the same embedded workspace policy. `?folder=` resolves
+  through idempotent `openProject` and preserves workspace/thread identity. Native
+  headers, Explorer, New Tab launcher, splits, terminals, Git actions and configured
+  panels stay available. Global navigation, workspace archive and settings management
+  stay host-owned. The historical `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS` flag identifies
+  embedding; Focus Mode itself is optional. Panel-store version 17 clears legacy
+  forced focus once. Empty panes no longer create drafts automatically.
+- Embedded editors journal unsaved text in sessionStorage before accepting it.
+  Recovery is scoped by server/workspace/tab/path and lasts across iframe remounts
+  in the same top-level window. It is not cross-window or restart persistence.
+  Storage failures reject new edits; external changes retain conflict protection.
+  Explicit discard clears recovery, including late save callbacks. Ordinary unmount
+  keeps it. Standard builds use the upstream editor without the journal.
 - Live Design adds messaging to that same UI. Compact Live Design keeps desktop
   tabs and its compact file/subagent sheet host. Host requests select the nearest
   conversation, recover a pending agent, or explicitly create a fresh draft.
@@ -65,7 +73,12 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
   or configuration migration is required.
 - Worktree APIs stay loopback-only and host-token-gated. Startup pruning,
   archive/close/flush/delete ordering, directory-boundary matching and capability
-  removal before child processes are part of the cleanup contract.
+  removal before child processes are part of the cleanup contract. `/stop` releases
+  matching setup/agent/terminal resources without removing records; `/cleanup`
+  first stops, then archives/deletes. Failure blocks Vibing filesystem deletion.
+  Explicit terminal teardown force-signals the discovered process tree before its
+  root exits, including hangup-resistant jobs. Deliberately detached processes and
+  concurrent external process creation are not a complete ownership boundary.
 - Codex questions stay session-local, respect explicit feature opt-out, exclude
   internal agents and preserve native developer instructions. A native config
   read failure must not replace unknown instructions. Keep Default/Full Access,
