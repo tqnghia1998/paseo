@@ -217,3 +217,22 @@ it("acknowledges a retried request after a composer remount without appending tw
       .mock.calls.filter(([data]) => data.type === "paseo:prompt-inserted"),
   ).toHaveLength(2);
 });
+
+it("activates a prompt held while Settings returned to the workspace only once", async () => {
+  host();
+  const { rememberSettingsHandoff } = await import("./host-messages");
+  expect(
+    rememberSettingsHandoff({ type: "space:paseo-prompt-insert", text: "never queue sends" }),
+  ).toBe(false);
+  expect(
+    rememberSettingsHandoff({ type: "space:paseo-prompt-ready-request", requestId: "settings" }),
+  ).toBe(true);
+  const activateConversation = vi.fn();
+  const activation = renderHook(() =>
+    useEmbeddedPromptActivation({ enabled: true, activateConversation }),
+  );
+  expect(activateConversation).toHaveBeenCalledTimes(1);
+  activation.unmount();
+  renderHook(() => useEmbeddedPromptActivation({ enabled: true, activateConversation }));
+  expect(activateConversation).toHaveBeenCalledTimes(1);
+});

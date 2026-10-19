@@ -15,7 +15,6 @@ import {
   isEmbeddedShortcutAllowed,
   embeddedMessageInputFocusHintVisible,
   embeddedMessageInputFocusShortcutEnabled,
-  embeddedModelSelectorManagementEnabled,
   findNearestEmbeddedConversationTabId,
   preserveEmbeddedLiveDesignMessagingQuery,
   resolveEmbeddedModelSelection,
@@ -62,7 +61,6 @@ describe("embedded focus mode", () => {
   });
 
   it("keeps current-worktree workspace actions and session import available", () => {
-    expect(embeddedModelSelectorManagementEnabled()).toBe(false);
     expect(embeddedMessageInputFocusShortcutEnabled()).toBe(true);
     expect(
       embeddedMessageInputFocusHintVisible({
@@ -231,6 +229,11 @@ describe("full embedded workspace", () => {
 
   it("allows workspace tools but excludes global navigation shortcuts", () => {
     for (const action of [
+      "command-center.toggle",
+      "command-center.files",
+      "theme.cycle",
+      "settings.toggle",
+      "shortcuts.dialog.toggle",
       "workspace.tab.new",
       "workspace.tab.navigate.relative",
       "view.toggle.focus",
@@ -243,13 +246,25 @@ describe("full embedded workspace", () => {
       "workspace.navigate.index",
       "workspace.navigate.relative",
       "agent.new",
-      "settings.toggle",
-      "command-center.toggle",
-      "command-center.files",
       "sidebar.toggle.left",
       "sidebar.toggle.both",
     ]) {
       expect(isEmbeddedShortcutAllowed(action)).toBe(false);
     }
   });
+});
+
+it("retains Live Design messaging when its named iframe reloads Settings", async () => {
+  const name = window.name;
+  const search = window.location.search;
+  window.name = "paseo-workspace:live-design:test";
+  window.history.replaceState(null, "", "/settings/general");
+  vi.resetModules();
+  try {
+    expect((await import("./focus-mode")).isEmbeddedLiveDesignMessaging).toBe(true);
+  } finally {
+    window.name = name;
+    window.history.replaceState(null, "", `/${search}`);
+    vi.resetModules();
+  }
 });

@@ -1,5 +1,9 @@
 import { useEffect, useId } from "react";
-import { getEmbeddedHostOrigin, subscribeToHostMessages } from "./host-messages";
+import {
+  getEmbeddedHostOrigin,
+  subscribeToHostMessages,
+  takeSettingsHandoff,
+} from "./host-messages";
 
 const READY_REQUEST = "space:paseo-prompt-ready-request";
 const READY = "paseo:prompt-ready";
@@ -26,6 +30,8 @@ export function useEmbeddedPromptActivation(input: {
       if (data.type === READY_REQUEST && typeof data.requestId === "string" && data.requestId)
         activateConversation();
     };
+    const pending = takeSettingsHandoff(READY_REQUEST);
+    if (pending) handleMessage(pending);
     return subscribeToHostMessages(origin, handleMessage);
   }, [enabled, activateConversation]);
 }

@@ -1,3 +1,4 @@
+import { getEmbeddedWorkspace } from "./workspace-boundary";
 import { useEffect, useMemo } from "react";
 import { usePathname } from "expo-router";
 import { isWeb } from "@/constants/platform";
@@ -45,9 +46,13 @@ export function isEmbeddedAgentActivityRequest(data: unknown): boolean {
   );
 }
 
+export function resolveEmbeddedActivityWorkspace(pathname: string) {
+  return getEmbeddedWorkspace() ?? parseHostWorkspaceRouteFromPathname(pathname);
+}
+
 export function EmbeddedAgentActivityBridge() {
   const pathname = usePathname();
-  const workspaceRoute = useMemo(() => parseHostWorkspaceRouteFromPathname(pathname), [pathname]);
+  const workspaceRoute = useMemo(() => resolveEmbeddedActivityWorkspace(pathname), [pathname]);
   const agentRoute = useMemo(() => parseHostAgentRouteFromPathname(pathname), [pathname]);
   const serverId = workspaceRoute?.serverId ?? agentRoute?.serverId ?? null;
   const workspaceId = useSessionStore((state) => {

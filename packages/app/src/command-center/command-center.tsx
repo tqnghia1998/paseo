@@ -2,6 +2,8 @@ import { useOverlayRegistration, type KeyboardInputEvent } from "@/keyboard";
 import { Modal } from "@/components/ui/modal";
 import equal from "fast-deep-equal";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
+import { isEmbeddedWorkspaceAllowed } from "@/patches/vibing/workspace-boundary";
+
 import {
   FlatList,
   Pressable,
@@ -189,7 +191,7 @@ function useBuiltInRows(open: boolean): {
       };
       for (const host of project.hosts) {
         for (const workspace of host.workspaces) {
-          if (workspace.archivingAt) continue;
+          if (workspace.archivingAt || !isEmbeddedWorkspaceAllowed(host.serverId, workspace.id)) continue;
           allWorkspaces.push(
             preserve({
               kind: "workspace",
@@ -208,13 +210,14 @@ function useBuiltInRows(open: boolean): {
               run: createWorkspaceResultAction(host.serverId, workspace.id),
             }),
           );
+
         }
       }
     }
     const workspaceTitleByKey = new Map(
       allWorkspaces.map((workspace) => [workspace.id.slice("workspace:".length), workspace.title]),
     );
-    const agentRows = agents.map<CommandCenterAgentResult>((agent) => {
+    const agentRows = agents.filter((agent) => isEmbeddedWorkspaceAllowed(agent.serverId, agent.workspaceId)).map<CommandCenterAgentResult>((agent) => {
       const workspaceTitle = agent.workspaceId
         ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
         : undefined;
