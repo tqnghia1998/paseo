@@ -1,11 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  resolveEmbeddedActivityWorkspace,
   createEmbeddedAgentActivityEvent,
   isEmbeddedAgentActivityRequest,
   isEmbeddedWorkspaceRunning,
 } from "./agent-activity";
 
+vi.mock("./workspace-boundary", () => ({
+  getEmbeddedWorkspace: () => ({ serverId: "local", workspaceId: "bound" }),
+}));
+
 describe("embedded agent activity", () => {
+  it("keeps observing the bound worktree while Settings is open or a foreign route is rejected", () => {
+    expect(resolveEmbeddedActivityWorkspace("/settings/general")).toEqual({
+      serverId: "local",
+      workspaceId: "bound",
+    });
+    expect(resolveEmbeddedActivityWorkspace("/h/local/workspace/other")).toEqual({
+      serverId: "local",
+      workspaceId: "bound",
+    });
+  });
   it("keeps a workspace running when another conversation becomes idle", () => {
     const agents = [
       { id: "running", workspaceId: "workspace" },

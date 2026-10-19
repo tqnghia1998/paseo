@@ -2,6 +2,8 @@ import { useOverlayRegistration, type KeyboardInputEvent } from "@/keyboard";
 import { Modal } from "@/components/ui/modal";
 import equal from "fast-deep-equal";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
+import { isEmbeddedWorkspaceAllowed } from "@/patches/vibing/workspace-boundary";
+
 import {
   FlatList,
   Pressable,
@@ -237,9 +239,10 @@ function useWorkspaceRows(
       };
       for (const host of project.hosts) {
         for (const workspace of host.workspaces) {
-          if (workspace.archivingAt) continue;
+          if (workspace.archivingAt || !isEmbeddedWorkspaceAllowed(host.serverId, workspace.id)) continue;
           const key = `${host.serverId}:${workspace.id}`;
           rows.push(
+
             preserve({
               kind: "workspace",
               id: `workspace:${key}`,
@@ -262,9 +265,11 @@ function useWorkspaceRows(
               openAgent: createAgentResultAction(host.serverId),
             }),
           );
+
         }
       }
     }
+
     previousRows.current = nextRows;
     return rows;
   }, [agents, iconDataByProjectViewKey, open, projects, showHost]);
@@ -275,7 +280,7 @@ function useWorkspaceRows(
     return archivedWorkspaces.flatMap<CommandCenterWorkspaceResult>((workspace) => {
       const id = `workspace:${workspace.key}`;
       // The host's history can trail its workspace list; the active row wins.
-      if (activeIds.has(id)) return [];
+      if (activeIds.has(id) || !isEmbeddedWorkspaceAllowed(workspace.serverId, workspace.workspaceId)) return [];
       const project = workspace.projectKey
         ? getProjectSummaryForHostProject(projects, workspace.serverId, workspace.projectKey)
         : undefined;
