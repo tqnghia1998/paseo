@@ -3,7 +3,7 @@ import {
   createEmbeddedAgentActivityEvent,
   isEmbeddedAgentActivityRequest,
   isEmbeddedWorkspaceRunning,
-} from "./embedded-agent-activity";
+} from "./agent-activity";
 
 describe("embedded agent activity", () => {
   it("keeps a workspace running when another conversation becomes idle", () => {

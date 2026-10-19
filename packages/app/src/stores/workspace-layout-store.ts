@@ -67,7 +67,7 @@ import { isSheetTabModified, resolveCompactSheetPolicy } from "@/workspace-tabs/
 import { panelResourceKey, type CompactSheetPolicy } from "@/panels/panel-manifest";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 import { panelTargetSupportsHostForWorkspaceKey } from "@/plugins/workspace-panels/locations";
-import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 
 export {
   AMBIENT_PLACEMENT,

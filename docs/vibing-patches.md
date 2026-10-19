@@ -1,0 +1,107 @@
+# Vibing fork patches
+
+Start here when changing or rebasing the Space App Vibing fork. Custom behavior
+lives in ordinary source modules under `packages/app/src/patches/vibing/` and
+`packages/server/src/patches/vibing/`. Upstream files call those modules explicitly.
+Tests sit beside the patch they cover; integration tests stay with the upstream
+surface they exercise.
+
+Keep each patch tied to one product requirement. Prefer an upstream setting or
+extension point when it preserves the same behavior. Keep rendering and provider
+event plumbing in upstream files when extracting them would copy upstream code.
+
+## Patch map
+
+Paths in the module column are relative to the corresponding `src/patches/vibing/`
+directory. The upstream hooks column names the integration points to check after a
+rebase, rather than requiring reviewers to reconstruct them from commit history.
+
+| Patch                                   | Owned modules                                                                    | Upstream hooks                                                                                                  | Verification                                                                                          |
+| --------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Worktree entry and embedded navigation  | App: `focus-mode.ts`, `folder-workspace.ts`, `workspace-conversation.ts`         | Root/workspace routes, panel/workspace-layout stores, New Agent/model/import controls, fork menu                | Colocated focus, folder, and conversation tests; workspace-layout regressions; embedded browser smoke |
+| Host prompt insertion                   | App: `host-prompts.ts`, `host-messages.ts`, `composer-bridge.ts`                 | Workspace activation and composer                                                                               | Colocated host-prompt and composer-bridge tests                                                       |
+| Live Design requests                    | App: `live-design.ts`, `host-messages.ts`, `composer-bridge.ts`                  | Composer submission/queue callbacks, message context viewer and rewind                                          | Colocated Live Design and bridge tests; attachment/rewind tests; client/server wait regressions       |
+| Agent activity                          | App: `agent-activity.tsx`; server: `worktree-activity.ts`, `worktree-runtime.ts` | App layout and daemon bootstrap                                                                                 | Colocated activity tests; embedded activity case in `bootstrap.smoke.test.ts`                         |
+| Embedded theme                          | App: `theme.ts`; `plugins/space-app-vibing-theme/`                               | App shell and native built-in plugin registry                                                                   | Colocated theme tests; built-in publication test; browser palette check                               |
+| Queue persistence                       | App: `queued-messages.ts`                                                        | Session initialization and queue writes                                                                         | Colocated queue tests; session-store and composer submission tests                                    |
+| Deleted worktree cleanup                | Server: `worktree-runtime.ts`                                                    | Daemon startup, cleanup API and offline runner                                                                  | Missing-worktree case in `bootstrap.smoke.test.ts`; runner token-isolation tests                      |
+| Duplicate workspace recovery            | Server: `workspace-open.ts`                                                      | Session activity lookup and workspace provisioning                                                              | `workspace-provisioning-service.test.ts`                                                              |
+| Codex questions and native instructions | Server: `codex/questions.ts`                                                     | Codex config load and developer-instruction composition; the session-local feature default stays in the adapter | Codex provider unit tests and local question round trips                                              |
+| Interactive Codex shells                | Server: `codex/terminal-interactions.ts`                                         | Codex event mapping, optional protocol `stdin`, Shell card renderer                                             | Colocated terminal tests; Codex provider tests; tool-call schema/browser tests                        |
+| Standalone distribution                 | `scripts/bundle-paseo-web.mjs`, `scripts/paseo-web.js`                           | Root build command, embedded build flag, packaged version and built-in plugin discovery                         | Runner tests, full standalone build and Vibing bundle guard; see [porting guide](../README-PORT.md)   |
+
+## Contracts to preserve
+
+- Every standalone host uses Embedded Focus Mode. `?folder=` resolves through the
+  idempotent daemon `openProject` path on every entry and keeps its workspace/thread across
+  remounts. Empty panes open a focused New Agent draft. Persisted model choices
+  win over the Codex → Claude → OpenCode → Pi fallback. Standard builds retain
+  upstream navigation and the upstream fork menu. Embedded Fork uses that same
+  control with `directTarget="tab"`; it has no separate button implementation.
+- Live Design adds messaging to that same UI. Compact Live Design keeps desktop
+  tabs and its compact file/subagent sheet host. Host requests select the nearest
+  conversation, recover a pending agent, or explicitly create a fresh draft.
+- Host prompts append to the active editable composer without submitting. Parent
+  source/origin checks, composer/request IDs, acknowledgements and delivery
+  deduplication belong to `host-prompts.ts`. Its parent origin/source boundary is
+  shared with Live Design in `host-messages.ts`.
+- Vibing owns note formatting in `src/live-design/paseoMessage.ts`. Its iframe
+  message carries prepared `text` and `contextText`; Paseo wraps the latter as a
+  native `Live Design context` text attachment. Readiness advertises
+  `preparedText: true`; an older mounted iframe requires a reload before sending.
+  Keep attachments through drafts/queues, read-only viewing/search, rewind, and
+  request-correlated completion across remounts. Observation errors keep waiting;
+  only confirmed terminal snapshots settle a request. Legacy image grants and
+  image handoff remain rejected.
+- Queue stays the default active-turn Send behavior. Preserve synchronous draft
+  clearing, queue checkpoint merging/deduplication, and the one-time settings
+  migration. Alternate-send keyboard behavior stays upstream behavior.
+- Chat widths, gutters, tab geometry and metadata tooltips follow upstream. Use
+  Paseo's Appearance content-width setting for both transcript and composer.
+  The bundled theme uses the native `addTheme` palette, whose derived colors
+  intentionally replace the former full-token override. Only embedded builds
+  select it automatically. Native built-ins need an explicit Paseo version range
+  and a server entry even for a client-only palette; no user-plugin enablement
+  or configuration migration is required.
+- Worktree APIs stay loopback-only and host-token-gated. Startup pruning,
+  archive/close/flush/delete ordering, directory-boundary matching and capability
+  removal before child processes are part of the cleanup contract.
+- Codex questions stay session-local, respect explicit feature opt-out, exclude
+  internal agents and preserve native developer instructions. A native config
+  read failure must not replace unknown instructions. Keep Default/Full Access,
+  Default/normal-permissions and Plan question round trips.
+
+## Small edits that stay upstream
+
+Some fixes need the upstream execution path: active/archived Codex import
+pagination, terminal output event mapping, optional wait/protocol fields, Pi turn
+settlement, assistant-only citation normalization, retained-panel tooltip cleanup,
+text-attachment support, and tab/header/sheet rendering. Keep these edits local
+to their existing owner and preserve their regression tests. Moving an entire
+upstream component into the patch directory would create a second copy to rebase.
+
+## Rebase and verification
+
+Compare the fork with its incorporated upstream base, rather than treating newer
+upstream commits as custom changes:
+
+```bash
+git diff "$(git merge-base upstream/main HEAD)" -- packages/app/src packages/server/src
+```
+
+For each conflict, check the relevant row above, retain the smallest explicit
+hook, and run the tests for that row. Run these focused checks after reorganizing
+the modules:
+
+```bash
+npm run test --workspace=@getpaseo/app -- --project unit src/patches/vibing --bail=1 --maxWorkers=1
+npm run test:unit --workspace=@getpaseo/server -- src/patches/vibing src/server/agent/providers/codex-app-server-agent.test.ts src/server/session/workspace-provisioning/workspace-provisioning-service.test.ts --bail=1 --maxWorkers=1
+node --test scripts/paseo-web.test.mjs
+npm run typecheck
+npm run lint
+```
+
+Use the [porting guide](../README-PORT.md#2-bundling-commands-in-paseo-repo) to build
+the consumer bundle and run its guard. Verify workspace entry, prompt insertion,
+New Agent and compact Live Design in an isolated runtime before shipping. Module
+organization does not replace runtime or target-platform native checks.
