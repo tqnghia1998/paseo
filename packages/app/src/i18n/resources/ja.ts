@@ -2180,6 +2180,7 @@ export const ja: TranslationResources = {
     },
     groupInfo: "{{title}}について",
     sections: {
+      vibingCustomizations: "Vibing のカスタマイズ",
       general: "一般",
       chat: "チャット",
       appearance: "外観",

@@ -2195,6 +2195,7 @@ export const ar: TranslationResources = {
     },
     groupInfo: "حول{{title}}",
     sections: {
+      vibingCustomizations: "تخصيصات Vibing",
       general: "عام",
       chat: "الدردشة",
       appearance: "مظهر",
