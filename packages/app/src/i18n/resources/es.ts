@@ -2453,6 +2453,7 @@ export const es: TranslationResources = {
     },
     groupInfo: "Acerca de{{title}}",
     sections: {
+      vibingCustomizations: "Personalizaciones de Vibing",
       general: "General",
       hosts: "Hosts",
       chat: "Chat",

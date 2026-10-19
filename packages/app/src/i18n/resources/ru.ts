@@ -2438,6 +2438,7 @@ export const ru: TranslationResources = {
     },
     groupInfo: "О разделе «{{title}}»",
     sections: {
+      vibingCustomizations: "Изменения Vibing",
       general: "Основные",
       hosts: "Хосты",
       chat: "Чат",

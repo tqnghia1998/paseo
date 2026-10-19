@@ -2409,6 +2409,7 @@ export const ko: TranslationResources = {
     },
     groupInfo: "{{title}} 정보",
     sections: {
+      vibingCustomizations: "Vibing 사용자 지정",
       general: "일반",
       hosts: "호스트",
       chat: "채팅",

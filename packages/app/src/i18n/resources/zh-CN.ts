@@ -2374,6 +2374,7 @@ export const zhCN: TranslationResources = {
     },
     groupInfo: "关于 {{title}}",
     sections: {
+      vibingCustomizations: "Vibing 定制",
       general: "通用",
       hosts: "主机",
       chat: "聊天",

@@ -2427,6 +2427,7 @@ export const en = {
     },
     groupInfo: "About {{title}}",
     sections: {
+      vibingCustomizations: "Vibing customizations",
       general: "General",
       hosts: "Hosts",
       chat: "Chat",

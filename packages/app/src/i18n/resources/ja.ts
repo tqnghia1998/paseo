@@ -2422,6 +2422,7 @@ export const ja: TranslationResources = {
     },
     groupInfo: "{{title}}について",
     sections: {
+      vibingCustomizations: "Vibing のカスタマイズ",
       general: "一般",
       hosts: "ホスト",
       chat: "チャット",
