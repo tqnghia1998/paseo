@@ -1,6 +1,14 @@
 import { formatPluginInstallation } from "@getpaseo/protocol/plugin-source-reference";
 import { PluginSettingsMenuItems } from "@/plugins/settings";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -89,24 +97,28 @@ function PluginActionsMenu({
             {t("settings.plugins.logs.action")}
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem
-          onSelect={reload}
-          disabled={pending || !plugin.enabled}
-          status={pendingAction === "reload" ? "pending" : "idle"}
-          pendingLabel={t("settings.plugins.actions.reloading")}
-        >
-          {t("settings.plugins.actions.reload")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          destructive
-          leading={removeIcon}
-          onSelect={remove}
-          disabled={pending}
-          status={pendingAction === "remove" ? "pending" : "idle"}
-          pendingLabel={t("settings.plugins.actions.removing")}
-        >
-          {t("settings.plugins.actions.remove")}
-        </DropdownMenuItem>
+        {!plugin.builtin ? (
+          <DropdownMenuItem
+            onSelect={reload}
+            disabled={pending || !plugin.enabled}
+            status={pendingAction === "reload" ? "pending" : "idle"}
+            pendingLabel={t("settings.plugins.actions.reloading")}
+          >
+            {t("settings.plugins.actions.reload")}
+          </DropdownMenuItem>
+        ) : null}
+        {!plugin.builtin ? (
+          <DropdownMenuItem
+            destructive
+            leading={removeIcon}
+            onSelect={remove}
+            disabled={pending}
+            status={pendingAction === "remove" ? "pending" : "idle"}
+            pendingLabel={t("settings.plugins.actions.removing")}
+          >
+            {t("settings.plugins.actions.remove")}
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -140,7 +152,11 @@ function PluginRow({
   let badgeVariant: "success" | "error" | "muted" = "muted";
   if (status === "running") badgeVariant = "success";
   else if (status === "failed") badgeVariant = "error";
-  const statusLabel = t(`settings.plugins.status.${status}`);
+  const statusLabel = t(
+    plugin.builtin && status === "running"
+      ? "settings.plugins.builtinLoaded"
+      : `settings.plugins.status.${status}`,
+  );
   const statusBadge = useMemo(
     () => <StatusBadge label={statusLabel} variant={badgeVariant} />,
     [badgeVariant, statusLabel],
@@ -164,28 +180,32 @@ function PluginRow({
   )}`;
   return (
     <SettingsRow
-      label={plugin.id}
+      label={plugin.name ?? plugin.id}
       labelAccessory={statusBadge}
       hint={hint}
       error={clientError ?? plugin.error}
       testID={`plugin-row-${plugin.id}`}
     >
       <View style={styles.pluginControls} accessibilityLabel={`${plugin.id} ${statusLabel}`}>
-        <Switch
-          value={plugin.enabled}
-          onValueChange={toggle}
-          disabled={pending}
-          accessibilityLabel={toggleLabel}
-        />
-        <PluginActionsMenu
-          plugin={plugin}
-          serverId={serverId}
-          pending={pending}
-          pendingAction={pendingAction}
-          onAction={onAction}
-          onOpenLogs={onOpenLogs}
-          supportsLogs={supportsLogs}
-        />
+        {!plugin.builtin ? (
+          <Switch
+            value={plugin.enabled}
+            onValueChange={toggle}
+            disabled={pending}
+            accessibilityLabel={toggleLabel}
+          />
+        ) : null}
+        {!plugin.builtin || supportsLogs ? (
+          <PluginActionsMenu
+            plugin={plugin}
+            serverId={serverId}
+            pending={pending}
+            pendingAction={pendingAction}
+            onAction={onAction}
+            onOpenLogs={onOpenLogs}
+            supportsLogs={supportsLogs}
+          />
+        ) : null}
       </View>
     </SettingsRow>
   );
@@ -264,11 +284,58 @@ function PluginLogsSheet({
   );
 }
 
+function PluginList({
+  plugins,
+  renderRow,
+  emptyLabel,
+}: {
+  plugins: PluginListItem[];
+  renderRow(plugin: PluginListItem): ReactNode;
+  emptyLabel: string;
+}) {
+  return (
+    <SettingsCard>
+      {plugins.length ? (
+        plugins.map(renderRow)
+      ) : (
+        <View style={styles.empty}>
+          <Text style={settingsStyles.rowHint}>{emptyLabel}</Text>
+        </View>
+      )}
+    </SettingsCard>
+  );
+}
+
+function BuiltinPluginsSection({
+  supported,
+  pageState,
+  children,
+}: {
+  supported: boolean;
+  pageState: ReturnType<typeof resolvePluginPageState>;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
+  let content = null;
+  if (!supported) content = <Alert size="sm" title={t("settings.plugins.builtinUpdateTitle")} />;
+  else if (pageState !== "loading" && pageState !== "error") content = children;
+  return (
+    <SettingsSection
+      title={t("settings.plugins.builtinTitle")}
+      info={t("settings.plugins.builtinHint")}
+    >
+      {content}
+    </SettingsSection>
+  );
+}
+
 export function HostPluginsPage({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
   const supported = useHostFeature(serverId, "pluginManagement");
+  // COMPAT(builtinPluginListing): added in v0.12.0, remove gate after 2027-10-19.
+  const builtinListingSupported = useHostFeature(serverId, "builtinPluginListing");
   // COMPAT(pluginSourceInstallation): added in v0.8.0; remove gate after 2027-03-16 once daemon floor supports source identifiers.
   const sourceInstallSupported = useHostFeature(serverId, "pluginSourceInstallation");
   // COMPAT(pluginLogs): added in v0.4.0, remove gate after 2027-08-16.
@@ -276,7 +343,10 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
   const { config, patchConfig } = useDaemonConfig(serverId);
   const refreshQueue = useRef(Promise.resolve());
   useInstalledPlugins();
-  const queryKey = useMemo(() => pluginQueryKey(serverId), [serverId]);
+  const queryKey = useMemo(
+    () => [...pluginQueryKey(serverId), builtinListingSupported],
+    [serverId, builtinListingSupported],
+  );
   const [installForm] = useState(openPluginInstallForm);
   const installState = useSyncExternalStore(
     installForm.subscribe,
@@ -301,7 +371,7 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
     queryKey,
     queryFn: async () => {
       if (!client) throw new Error("Plugin host is offline");
-      return client.listPlugins();
+      return client.listPlugins({ includeBuiltins: builtinListingSupported });
     },
     enabled: Boolean(client && connected && supported),
     dataShape: "list",
@@ -409,6 +479,30 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
     void refetchPlugins();
   }, [refetchPlugins]);
   const closeLogs = useCallback(() => setLogsPluginId(null), []);
+  const inventory = plugins.data ?? [];
+  const builtins = inventory.filter((plugin) => plugin.builtin);
+  const additional = inventory.filter((plugin) => !plugin.builtin);
+
+  const renderPluginRow = useCallback(
+    (plugin: PluginListItem) => {
+      const clientError = pluginRegistry.getEvaluationError(serverId, plugin.id);
+      const pending = mutation.isPending && mutation.variables?.pluginId === plugin.id;
+      return (
+        <PluginRow
+          key={plugin.id}
+          serverId={serverId}
+          plugin={plugin}
+          clientError={clientError}
+          pending={mutation.isPending}
+          pendingAction={pending ? pluginRowAction(mutation.variables?.action) : undefined}
+          onAction={action}
+          onOpenLogs={setLogsPluginId}
+          supportsLogs={logsSupported}
+        />
+      );
+    },
+    [serverId, mutation.isPending, mutation.variables, action, logsSupported],
+  );
 
   if (pageState === "offline") {
     return (
@@ -440,37 +534,24 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
     );
   } else if (pageState !== "loading") {
     catalogContent = (
-      <SettingsCard>
-        {plugins.data?.length ? (
-          plugins.data.map((plugin) => {
-            const clientError = pluginRegistry.getEvaluationError(serverId, plugin.id);
-            const pending = mutation.isPending && mutation.variables?.pluginId === plugin.id;
-            return (
-              <PluginRow
-                key={plugin.id}
-                serverId={serverId}
-                plugin={plugin}
-                clientError={clientError}
-                pending={mutation.isPending}
-                pendingAction={pending ? pluginRowAction(mutation.variables?.action) : undefined}
-                onAction={action}
-                onOpenLogs={setLogsPluginId}
-                supportsLogs={logsSupported}
-              />
-            );
-          })
-        ) : (
-          <View style={styles.empty}>
-            <Text style={settingsStyles.rowHint}>{t("settings.plugins.states.empty")}</Text>
-          </View>
-        )}
-      </SettingsCard>
+      <PluginList
+        plugins={additional}
+        renderRow={renderPluginRow}
+        emptyLabel={t("settings.plugins.additionalEmpty")}
+      />
     );
   }
 
   return (
     <View>
-      <SettingsSection title={t("settings.plugins.title")}>
+      <BuiltinPluginsSection supported={builtinListingSupported} pageState={pageState}>
+        <PluginList
+          plugins={builtins}
+          renderRow={renderPluginRow}
+          emptyLabel={t("settings.plugins.builtinEmpty")}
+        />
+      </BuiltinPluginsSection>
+      <SettingsSection title={t("settings.plugins.additionalTitle")}>
         <Alert
           size="sm"
           variant="warning"

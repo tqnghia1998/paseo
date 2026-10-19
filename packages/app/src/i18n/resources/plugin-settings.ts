@@ -1,4 +1,12 @@
 const shared = {
+  builtinTitle: "Built-in plugins",
+  builtinHint:
+    "Included with Paseo and loaded automatically. The additional-plugin switch does not affect these integrations.",
+  builtinLoaded: "loaded",
+  builtinEmpty: "No built-in plugins reported by this host",
+  builtinUpdateTitle: "Update the host to view built-in plugins",
+  additionalTitle: "Additional plugins",
+  additionalEmpty: "No additional plugins installed",
   logs: {
     action: "Logs",
     title: "Logs: {{id}}",

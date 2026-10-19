@@ -489,7 +489,9 @@ export interface SessionOptions {
     wait: import("./plugins/lifecycle/index.js").PluginLifecycle["wait"];
     before: import("./plugins/lifecycle/index.js").PluginLifecycle["before"];
     emit: import("./plugins/lifecycle/index.js").PluginLifecycle["emit"];
-    listPlugins(): Promise<import("@getpaseo/protocol/messages").PluginListItem[]>;
+    listPlugins(options?: {
+      includeBuiltins?: boolean;
+    }): Promise<import("@getpaseo/protocol/messages").PluginListItem[]>;
     getLogs(pluginId: string): import("@getpaseo/protocol/messages").PluginLogEntry[];
     installDirectory(input: {
       path: string;
@@ -2555,7 +2557,10 @@ export class Session {
 
   private dispatchPluginMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     if (msg.type === "plugin.list.request") {
-      return (this.pluginRuntime?.listPlugins() ?? Promise.resolve([])).then((plugins) => {
+      return (
+        this.pluginRuntime?.listPlugins({ includeBuiltins: msg.includeBuiltins }) ??
+        Promise.resolve([])
+      ).then((plugins) => {
         this.emit({
           type: "plugin.list.response",
           payload: { requestId: msg.requestId, plugins },
