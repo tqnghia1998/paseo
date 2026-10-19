@@ -745,8 +745,9 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
               containerStyle={assistantTurnFooterStylesheet.copyButton}
             />
           ) : null}
-          {canFork ? <AssistantForkMenu onFork={handleFork} directTarget={isEmbeddedFocusMode ? "tab" : undefined} /> : null}
+          {canFork ? <AssistantForkMenu onFork={handleFork} allowWorkspaceFork={!isEmbeddedFocusMode} /> : null}
         </View>
+
       ) : null}
 
       {primaryLabel ? (
