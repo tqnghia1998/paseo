@@ -1,3 +1,4 @@
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import type { SidebarProjectEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { createProjectIconTarget, type ProjectIconTarget } from "@/projects/icon-target";
 
@@ -87,6 +88,7 @@ function resolveNewWorkspaceTarget(
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>,
   preferredServerId: string | null | undefined,
 ): SidebarProjectHostTarget | null {
+  if (isEmbeddedFocusMode) return null;
   let fallbackTarget: SidebarProjectHostTarget | null = null;
   for (const host of project.hosts) {
     if (

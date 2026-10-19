@@ -1,3 +1,5 @@
+import { scopeEmbeddedSidebarList } from "@/patches/vibing/sidebar";
+import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
 import { useTranslation } from "react-i18next";
 import React, { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import {
@@ -56,7 +58,10 @@ export function SidebarModelProvider({
   children: ReactNode;
 }) {
   const { t } = useTranslation();
-  const list = useSidebarWorkspacesList({ enabled: active });
+  const bound = getEmbeddedWorkspace();
+  const hostFilters = useMemo(() => (bound ? [bound.serverId] : undefined), [bound]);
+  const unscopedList = useSidebarWorkspacesList({ enabled: active, hostFilters });
+  const list = useMemo(() => scopeEmbeddedSidebarList(unscopedList), [unscopedList]);
   const showBackground = useSidebarViewStore((state) => state.showBackground);
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const labelFilter = useSidebarViewStore((state) => state.labelFilter);

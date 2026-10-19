@@ -1,3 +1,4 @@
+import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
 import { router, type Href } from "expo-router";
 import { navigateToLastWorkspace } from "@/stores/navigation-active-workspace-store";
 import {
@@ -35,6 +36,7 @@ export function returnFromSettings(view: SettingsView): void {
 
   let parent: Href = buildSettingsRoute();
   if (view.kind === "plugin") parent = buildSettingsHostSectionRoute(view.serverId, "plugins");
-  if (view.kind === "project") parent = buildProjectsSettingsRoute(view.serverId);
+  if (view.kind === "project" && !getEmbeddedWorkspace())
+    parent = buildProjectsSettingsRoute(view.serverId);
   router.dismissTo(parent as Href);
 }
