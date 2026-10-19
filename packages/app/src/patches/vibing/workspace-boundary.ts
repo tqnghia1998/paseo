@@ -1,4 +1,5 @@
 import { useSessionStore } from "@/stores/session-store";
+import { useSyncExternalStore } from "react";
 import { parsePluginSurfaceRoute } from "@/plugins/routes";
 import {
   buildHostWorkspaceRoute,
@@ -14,7 +15,6 @@ interface Workspace {
   projectId?: string;
 }
 const APP_SECTIONS = new Set([
-  "vibing-customizations",
   "general",
   "appearance",
   "sidebar",
@@ -50,9 +50,45 @@ function readWorkspace(): Workspace | null {
 }
 
 let workspace = readWorkspace();
+const workspaceListeners = new Set<() => void>();
+
+function subscribeEmbeddedWorkspace(listener: () => void): () => void {
+  workspaceListeners.add(listener);
+  return () => {
+    workspaceListeners.delete(listener);
+  };
+}
 
 export function getEmbeddedWorkspace(): Workspace | null {
   return workspace;
+}
+
+export function useEmbeddedWorkspace(): Workspace | null {
+  return useSyncExternalStore(
+    subscribeEmbeddedWorkspace,
+    getEmbeddedWorkspace,
+    getEmbeddedWorkspace,
+  );
+}
+
+export function getEmbeddedWorkspaceDirectory(): string | undefined {
+  if (!workspace) return undefined;
+  return (
+    workspace.directory ??
+    useSessionStore.getState().sessions[workspace.serverId]?.workspaces?.get(workspace.workspaceId)
+      ?.workspaceDirectory
+  );
+}
+
+interface RootCommand {
+  id: string;
+  importAvailable: boolean;
+}
+
+export function isEmbeddedRootCommandAllowed({ id, importAvailable }: RootCommand): boolean {
+  if (!isEmbeddedFocusMode) return true;
+  if (["add-project", "new-workspace", "home"].includes(id)) return false;
+  return id !== "import-session" || importAvailable;
 }
 
 export function bindEmbeddedWorkspace(selection: Workspace): void {
@@ -63,6 +99,7 @@ export function bindEmbeddedWorkspace(selection: Workspace): void {
   } catch {
     /* Keep the in-memory binding. */
   }
+  workspaceListeners.forEach((listener) => listener());
 }
 
 export function embeddedWorkspaceRoute(): string | null {
@@ -122,7 +159,6 @@ export function isEmbeddedWorkspaceAllowed(
   if (!workspace || workspace.serverId !== serverId || !workspaceId) return false;
   if (workspace.workspaceId === workspaceId) return true;
   const workspaces = useSessionStore.getState().sessions[serverId]?.workspaces;
-  const directory =
-    workspace.directory ?? workspaces?.get(workspace.workspaceId)?.workspaceDirectory;
+  const directory = getEmbeddedWorkspaceDirectory();
   return Boolean(directory && workspaces?.get(workspaceId)?.workspaceDirectory === directory);
 }

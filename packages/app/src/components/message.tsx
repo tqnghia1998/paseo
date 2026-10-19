@@ -728,10 +728,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
         />
       ) : null}
       {canFork ? (
-        <AssistantForkMenu
-          onFork={handleFork}
-          directTarget={isEmbeddedFocusMode ? "tab" : undefined}
-        />
+        <AssistantForkMenu onFork={handleFork} allowWorkspaceFork={!isEmbeddedFocusMode} />
       ) : null}
       {primaryLabel ? (
         <Pressable

@@ -25,7 +25,7 @@ describe("assistant fork destinations", () => {
     vi.unstubAllGlobals();
   });
 
-  it("forks directly into a tab and locks the trigger until the fork finishes", async () => {
+  it("keeps the native menu while excluding workspace forks and locking a pending tab fork", async () => {
     let finish!: () => void;
     const onFork = vi.fn(
       () =>
@@ -33,12 +33,20 @@ describe("assistant fork destinations", () => {
           finish = resolve;
         }),
     );
-    flushSync(() => root.render(<AssistantForkMenu directTarget="tab" onFork={onFork} />));
+    flushSync(() => root.render(<AssistantForkMenu allowWorkspaceFork={false} onFork={onFork} />));
 
     flushSync(() => trigger().click());
+    await expect
+      .poll(() => document.querySelector('[data-testid="assistant-fork-menu-new-tab"]'))
+      .not.toBeNull();
+    expect(onFork).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-testid="assistant-fork-menu-new-workspace"]')).toBeNull();
+    flushSync(() =>
+      document.querySelector<HTMLElement>('[data-testid="assistant-fork-menu-new-tab"]')!.click(),
+    );
     await expect.poll(() => onFork.mock.calls.length).toBe(1);
     expect(onFork).toHaveBeenCalledWith("tab");
-    expect(document.querySelector('[data-testid="assistant-fork-menu-content"]')).toBeNull();
+    expect(document.querySelector('[data-testid="assistant-fork-menu-content"]')).not.toBeNull();
     expect(trigger().getAttribute("aria-disabled")).toBe("true");
     flushSync(() => trigger().click());
     expect(onFork).toHaveBeenCalledTimes(1);
