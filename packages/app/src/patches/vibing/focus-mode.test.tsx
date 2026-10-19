@@ -237,18 +237,14 @@ describe("full embedded workspace", () => {
       "workspace.tab.new",
       "workspace.tab.navigate.relative",
       "view.toggle.focus",
+      "sidebar.toggle.left",
+      "sidebar.toggle.both",
       "sidebar.toggle.right",
       "message-input.action",
     ]) {
       expect(isEmbeddedShortcutAllowed(action)).toBe(true);
     }
-    for (const action of [
-      "workspace.navigate.index",
-      "workspace.navigate.relative",
-      "agent.new",
-      "sidebar.toggle.left",
-      "sidebar.toggle.both",
-    ]) {
+    for (const action of ["workspace.navigate.index", "workspace.navigate.relative", "agent.new"]) {
       expect(isEmbeddedShortcutAllowed(action)).toBe(false);
     }
   });

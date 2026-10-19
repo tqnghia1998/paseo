@@ -1,4 +1,3 @@
-import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { usePathname } from "expo-router";
 import { useMemo } from "react";
 import { useCommandCenterActions } from "@/command-center/provider";
@@ -53,7 +52,6 @@ export function PluginCommandCenterActions() {
     if (!client || !serverId || !stateSource) return [];
     return buildPluginCommandCenterContributions({
       plugins,
-      allowGlobal: !isEmbeddedFocusMode,
       state: stateSource,
       workspaceId: workspaceExists ? workspaceId : null,
       agentId: agentExists ? focusedAgentId : null,

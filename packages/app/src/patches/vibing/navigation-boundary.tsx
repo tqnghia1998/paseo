@@ -1,3 +1,4 @@
+import { parseHostWorkspaceRouteFromPathname } from "@/utils/host-routes";
 import { Text } from "react-native";
 import { useEffect, type ReactNode } from "react";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -28,7 +29,7 @@ export function EmbeddedNavigationBoundary({ children }: { children: ReactNode }
 export function useEmbeddedSettingsHandoff(): void {
   const pathname = usePathname();
   useEffect(() => {
-    if (!pathname.startsWith("/settings")) return;
+    if (parseHostWorkspaceRouteFromPathname(pathname)) return;
     const workspace = getEmbeddedWorkspace();
     const origin = getEmbeddedHostOrigin();
     if (!workspace || !origin) return;

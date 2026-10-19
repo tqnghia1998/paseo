@@ -54,7 +54,12 @@ export function useEmbeddedFolderWorkspace(input: FolderWorkspaceLaunchInput): s
         });
         if (cancelled || !workspace) return;
 
-        bindEmbeddedWorkspace({ serverId, workspaceId: workspace.id });
+        bindEmbeddedWorkspace({
+          serverId,
+          workspaceId: workspace.id,
+          directory: workspace.workspaceDirectory,
+          projectId: workspace.projectId,
+        });
         useSessionStore.getState().mergeWorkspaces(serverId, [workspace]);
         router.replace(
           preserveEmbeddedLiveDesignMessagingQuery(
