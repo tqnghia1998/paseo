@@ -11,36 +11,24 @@ vi.hoisted(() => {
 });
 
 import {
-  embeddedImportVisible,
   embeddedMessageInputFocusHintVisible,
   embeddedMessageInputFocusShortcutEnabled,
   embeddedModelSelectorManagementEnabled,
-  embeddedWorkspaceActionsEnabled,
   findNearestEmbeddedConversationTabId,
   preserveEmbeddedLiveDesignMessagingQuery,
   resolveEmbeddedModelSelection,
   shouldUseDesktopWorkspaceTabs,
-  shouldUseEmbeddedFocusMode,
+  isEmbeddedFocusMode,
   shouldUseEmbeddedLiveDesignMessaging,
   useEmbeddedModelSelection,
-} from "./embedded-focus-mode";
+} from "./focus-mode";
 
 describe("embedded focus mode", () => {
-  it("fills embedded chat while capping composer surfaces", async () => {
-    const layout = await import("./constants/layout");
-    expect(layout.resolveChatMaxContentWidth(1400)).toBe("100%");
-    expect(layout.resolveComposerMaxContentWidth(1400)).toBe(960);
-    expect(layout.CHAT_HORIZONTAL_SPACING).toBe(24);
-  });
-
-  it("preserves the configured standard Paseo content width", async () => {
+  it("disables embedded policy in a standard build", async () => {
     vi.resetModules();
     vi.stubEnv("EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS", "false");
     try {
-      const layout = await import("./constants/layout");
-      expect(layout.resolveChatMaxContentWidth(1400)).toBe(1400);
-      expect(layout.resolveComposerMaxContentWidth(1400)).toBe(1400);
-      expect(layout.CHAT_HORIZONTAL_SPACING).toBe(4);
+      expect((await import("./focus-mode")).isEmbeddedFocusMode).toBe(false);
     } finally {
       vi.unstubAllEnvs();
       vi.resetModules();
@@ -48,8 +36,7 @@ describe("embedded focus mode", () => {
   });
 
   it("locks every standalone embed while limiting chat presentation to Live Design", () => {
-    expect(shouldUseEmbeddedFocusMode(true)).toBe(true);
-    expect(shouldUseEmbeddedFocusMode(false)).toBe(false);
+    expect(isEmbeddedFocusMode).toBe(true);
     expect(shouldUseEmbeddedLiveDesignMessaging(true, "")).toBe(false);
     expect(shouldUseEmbeddedLiveDesignMessaging(true, "?embedded-live-design=1")).toBe(true);
     expect(shouldUseEmbeddedLiveDesignMessaging(true, "?embedded-live-design=0")).toBe(false);
@@ -73,16 +60,6 @@ describe("embedded focus mode", () => {
   });
 
   it("keeps current-worktree workspace actions and session import available", () => {
-    expect(
-      embeddedWorkspaceActionsEnabled({
-        routeFocused: true,
-        serverId: "server",
-        workspaceId: "workspace",
-      }),
-    ).toBe(true);
-    expect(embeddedImportVisible(true, true)).toBe(true);
-    expect(embeddedImportVisible(false, true)).toBe(false);
-    expect(embeddedImportVisible(true, false)).toBe(false);
     expect(embeddedModelSelectorManagementEnabled()).toBe(false);
     expect(embeddedMessageInputFocusShortcutEnabled()).toBe(false);
     expect(

@@ -24,6 +24,7 @@ import { STATUS_RING_HALO_INSET } from "@/components/status-ring/geometry";
 import { isWeb } from "@/constants/platform";
 import { usePanelAwareHorizontalScrollGesture } from "@/mobile-panels/gestures";
 
+
 import { getStatusDotColor } from "@/utils/status-dot-color";
 import { STATUS_INDICATOR_FILLED_DOT_SIZE } from "@/utils/status-indicator-geometry";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -73,6 +74,7 @@ export function ComposerTrackBar({ children }: { children: ReactNode }): ReactEl
           leftStyle={scrollBoundary.leftShadeStyle}
           rightStyle={scrollBoundary.rightShadeStyle}
         />
+
 
       </View>
     </View>
@@ -400,6 +402,7 @@ const styles = StyleSheet.create((theme) => {
       right: 0,
       bottom: 0,
       alignItems: "center",
+      paddingHorizontal: theme.spacing[4],
       paddingBottom: {
         xs: COMPOSER_PILL_CLEARANCE.compact,
         md: COMPOSER_PILL_CLEARANCE.wide,
@@ -420,6 +423,7 @@ const styles = StyleSheet.create((theme) => {
       maxWidth: "100%",
     },
     track: {
+
 
       flexDirection: "row",
       alignItems: "center",
