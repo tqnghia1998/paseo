@@ -1,3 +1,4 @@
+import { signalProcessTree } from "../utils/tree-kill.js";
 import * as pty from "node-pty";
 import xterm, { type Terminal as TerminalType } from "@xterm/headless";
 import { randomUUID } from "crypto";
@@ -1598,19 +1599,32 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     }
 
     try {
-      killPtyProcess();
+      // Explicit terminal teardown must stop jobs that ignore hangup before the shell exits.
+      // tree-kill discovers descendants before signaling, so they are not lost on reparenting.
+      await signalProcessTree(
+        {
+          pid: ptyProcess.pid,
+          kill: (signal) => {
+            killPtyProcess(signal as NodeJS.Signals);
+            return true;
+          },
+        },
+        "SIGKILL",
+      );
     } catch {
       // process may already be gone
     }
 
-    const exitedGracefully = await waitForProcessExit(gracefulTimeoutMs);
-    if (!exitedGracefully) {
+    const exited = await waitForProcessExit(gracefulTimeoutMs);
+    if (!exited) {
       try {
         killPtyProcess("SIGKILL");
       } catch {
         // process may already be gone
       }
-      await waitForProcessExit(forceTimeoutMs);
+      if (!(await waitForProcessExit(forceTimeoutMs))) {
+        throw new Error("Terminal process did not exit after forced stop");
+      }
     }
 
     // Finalize bookkeeping (idempotent if ptyProcess.onExit already fired).

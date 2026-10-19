@@ -1,3 +1,4 @@
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import React, { useCallback, useMemo } from "react";
 import { View } from "react-native";
 import { useRouter, type Href } from "expo-router";
@@ -301,13 +302,17 @@ export function WorkspaceHeaderMenuMobile({
             onCreateTerminalWithProfile={onCreateTerminalWithProfile}
           />
         ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          testID="workspace-header-edit-terminal-profiles"
-          onSelect={handleEditProfiles}
-        >
-          {t("workspace.tabs.actions.editTerminalProfiles")}
-        </DropdownMenuItem>
+        {!isEmbeddedFocusMode && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              testID="workspace-header-edit-terminal-profiles"
+              onSelect={handleEditProfiles}
+            >
+              {t("workspace.tabs.actions.editTerminalProfiles")}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

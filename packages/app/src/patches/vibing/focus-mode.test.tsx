@@ -11,6 +11,8 @@ vi.hoisted(() => {
 });
 
 import {
+  migrateEmbeddedPanelFocus,
+  isEmbeddedShortcutAllowed,
   embeddedMessageInputFocusHintVisible,
   embeddedMessageInputFocusShortcutEnabled,
   embeddedModelSelectorManagementEnabled,
@@ -61,14 +63,14 @@ describe("embedded focus mode", () => {
 
   it("keeps current-worktree workspace actions and session import available", () => {
     expect(embeddedModelSelectorManagementEnabled()).toBe(false);
-    expect(embeddedMessageInputFocusShortcutEnabled()).toBe(false);
+    expect(embeddedMessageInputFocusShortcutEnabled()).toBe(true);
     expect(
       embeddedMessageInputFocusHintVisible({
         isWeb: true,
         isInputFocused: false,
         hasValue: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("selects the first model from the highest-priority available provider", () => {
@@ -214,5 +216,40 @@ describe("embedded focus mode", () => {
         "changes",
       ),
     ).toBeUndefined();
+  });
+});
+
+describe("full embedded workspace", () => {
+  it("clears legacy forced focus once while preserving other panel state", () => {
+    const state = { desktop: { focusModeEnabled: true, agentListOpen: false }, sidebarWidth: 280 };
+    expect(migrateEmbeddedPanelFocus(state, 16)).toEqual({
+      desktop: { focusModeEnabled: false, agentListOpen: false },
+      sidebarWidth: 280,
+    });
+    expect(migrateEmbeddedPanelFocus(state, 17)).toEqual(state);
+  });
+
+  it("allows workspace tools but excludes global navigation shortcuts", () => {
+    for (const action of [
+      "workspace.tab.new",
+      "workspace.tab.navigate.relative",
+      "view.toggle.focus",
+      "sidebar.toggle.right",
+      "message-input.action",
+    ]) {
+      expect(isEmbeddedShortcutAllowed(action)).toBe(true);
+    }
+    for (const action of [
+      "workspace.navigate.index",
+      "workspace.navigate.relative",
+      "agent.new",
+      "settings.toggle",
+      "command-center.toggle",
+      "command-center.files",
+      "sidebar.toggle.left",
+      "sidebar.toggle.both",
+    ]) {
+      expect(isEmbeddedShortcutAllowed(action)).toBe(false);
+    }
   });
 });

@@ -10,14 +10,14 @@ Paseo Web is packaged as a standalone server that embeds:
 
 1. **Paseo Daemon (`server.mjs`)**: Node.js backend daemon with WebSocket RPCs, agent lifecycle management, and session state.
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
-3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions.
+3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions, with `shell-integration/` beside the bundled modules.
 4. **Local Speech Worker (`worker-process.js`)**: Isolated worker for embedded dictation and voice mode.
 5. **Built-in plugins (`builtin-plugins/`)**: The daemon's provider/usage sources and the native Space App Vibing theme, with runtime compilers included in the dependency archive.
-6. **Embedded Focus Mode**: The standalone build locks every host to the selected worktree by omitting project/Changes sidebars, their header controls, workspace switching, command-center navigation, and agent-profile/provider management. Fork in a new tab and Import Session remain available within the selected worktree; the embedded importer cannot widen its list to other directories. Codex imports include active and natively archived threads, merged by recent activity, so closing an agent tab does not remove its session from the importer. Already-open sessions remain excluded.
+6. **Embedded workspace**: Native workspace tools with host-owned global navigation. See the [patch contracts](docs/vibing-patches.md#contracts-to-preserve) for navigation, optional Focus Mode and editor recovery.
 
 ### Canonical embedded mode
 
-Both consumer surfaces use one **Embedded Focus Mode** backed by the same standalone build. The Paseo left tab inside Space App Vibing and the Live Design drawer's **Agent** tab render the same workspace tabs, content, and interactions for the selected worktree.
+Both consumer surfaces use one **embedded workspace policy** backed by the same standalone build. The Paseo left tab inside Space App Vibing and the Live Design drawer's **Agent** tab render the same workspace tabs, content, and interactions for the selected worktree.
 
 The [Vibing patch catalog](docs/vibing-patches.md) owns the module map, remaining
 upstream hooks, behavior contracts and focused checks. Read it before changing
@@ -91,7 +91,7 @@ Vibing uses a renderer-owned `iframe` in both browser and Electron builds. Paseo
 
 1. Detects the `?folder=` query parameter.
 2. Resolves it through the daemon's idempotent `openProject` path on every entry, preserving its workspace and agent thread on remount without a second frontend workspace cache.
-3. Enters **Embedded Focus Mode** directly.
+3. Opens the native workspace directly, with optional Focus Mode.
 4. Keeps the selected worktree's tabs/content in both hosts; Live Design messaging selects the nearest conversation or explicitly creates a fresh one.
 5. Dictation and voice mode are enabled by the standalone runner (`PASEO_DICTATION_ENABLED`/`PASEO_VOICE_MODE_ENABLED` in `scripts/paseo-web.js`); the host iframe must keep `microphone` in its `allow` list.
 
@@ -118,13 +118,13 @@ pnpm exec vitest run scripts/paseo-web/paseoWebBundle.test.ts
 
 ## 5. Current Vibing Integration
 
-`host-prompts.ts` handles host prompt insertion in Embedded Focus Mode. Parent-origin/source-checked readiness requests activate the nearest conversation or create a draft; insertion appends to the active unlocked composer and focuses it without submitting or changing attachments. Readiness echoes a host request ID and composer ID; insertion targets that composer and acknowledges the request. The host retries unacknowledged requests, while the iframe deduplicates the latest 1024 delivered IDs across composer switches. Only editable workspace chat composers participate; terminal, read-only, and workspace-setup inputs are excluded. Keep its source tests and the consumer bundle guard when refreshing the fork.
+`host-prompts.ts` handles host prompt insertion in embedded workspaces. Parent-origin/source-checked readiness requests activate the nearest conversation or create a draft; insertion appends to the active unlocked composer and focuses it without submitting or changing attachments. Readiness echoes a host request ID and composer ID; insertion targets that composer and acknowledges the request. The host retries unacknowledged requests, while the iframe deduplicates the latest 1024 delivered IDs across composer switches. Only editable workspace chat composers participate; terminal, read-only, and workspace-setup inputs are excluded. Keep its source tests and the consumer bundle guard when refreshing the fork.
 
 `server/routes/paseo.ts` owns two independent runtimes: the shared Paseo tab instance and the Live Design instance, each with its own port and persistent home. They use the same bundle, but their conversations do not share state. `src/components/PaseoWeb.tsx` owns the workspace iframe and activity bridge.
 
 The host also polls `/api/worktrees/activity` with its existing isolated worktree capability token. Keep this endpoint loopback-only and token-gated: it restores feature indicators after host refresh without mounting inactive iframes or starting agents. Internal agents and archived workspaces do not contribute. Running state comes from live turns rather than persisted lifecycle records. Both iframe messages and snapshots consider every live conversation in the workspace, so a newer idle conversation cannot hide a running one.
 
-Worktree deletion cleans matching agent persistence from both runtime homes; startup also prunes agents whose working directories no longer exist. Preserve cleanup-token isolation when changing the runner. Refreshing the bundle does not restart running daemons. Reload an already-mounted
+Offload calls `/api/worktrees/stop` in both running runtime homes and retains workspace/conversation records. Deletion requires successful cleanup before removing worktrees. Worktree deletion cleans matching agent persistence from both runtime homes; startup also prunes agents whose working directories no longer exist. Preserve cleanup-token isolation when changing the runner. Refreshing the bundle does not restart running daemons. Reload an already-mounted
 Live Design iframe after the prepared-text transport update; its readiness
 capability prevents sending the new payload to an older client.
 

@@ -1,3 +1,4 @@
+import { migrateEmbeddedPanelFocus } from "@/patches/vibing/focus-mode";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -69,7 +70,6 @@ export interface PanelState {
 
   // Actions
   toggleFocusMode: () => void;
-  enterFocusMode: () => void;
   exitFocusMode: () => void;
   showMobileAgent: () => void;
   showMobileAgentList: () => void;
@@ -103,12 +103,6 @@ function setMobilePanelTargetPatch(
   return mobilePanel === state.mobilePanel ? state : { mobilePanel };
 }
 
-function enableFocusMode(state: PanelState): PanelState | Pick<PanelState, "desktop"> {
-  return state.desktop.focusModeEnabled
-    ? state
-    : { desktop: { ...state.desktop, focusModeEnabled: true } };
-}
-
 export const usePanelStore = create<PanelState>()(
   persist(
     (set) => ({
@@ -131,11 +125,17 @@ export const usePanelStore = create<PanelState>()(
       treeRailWidth: DEFAULT_TREE_RAIL_WIDTH,
       fileTreeVisible: true,
 
-      toggleFocusMode: () => set(enableFocusMode),
+      toggleFocusMode: () =>
+        set((state) => ({
+          desktop: { ...state.desktop, focusModeEnabled: !state.desktop.focusModeEnabled },
+        })),
 
-      enterFocusMode: () => set(enableFocusMode),
-
-      exitFocusMode: () => {},
+      exitFocusMode: () =>
+        set((state) =>
+          state.desktop.focusModeEnabled
+            ? { desktop: { ...state.desktop, focusModeEnabled: false } }
+            : state,
+        ),
 
       showMobileAgent: () => set((state) => setMobilePanelTargetPatch(state, "agent")),
 
@@ -241,7 +241,8 @@ export const usePanelStore = create<PanelState>()(
       name: "panel-state",
       version: 17,
       storage: createValidatedPersistStorage(AsyncStorage, PanelPersistedStateSchema),
-      migrate: (persistedState, version) => migratePanelState(persistedState, version),
+      migrate: (persistedState, version) =>
+        migrateEmbeddedPanelFocus(migratePanelState(persistedState, version), version),
       partialize: (state) => ({
         desktop: state.desktop,
         expandedPathsByWorkspace: state.expandedPathsByWorkspace,

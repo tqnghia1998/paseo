@@ -65,6 +65,18 @@ export function FileEditorView({
     const values = initial.current;
     const view = new EditorView({
       parent: hostRef.current,
+      dispatchTransactions(transactions, editor) {
+        if (transactions.some((tr) => tr.docChanged && !tr.annotation(remoteUpdate))) {
+          const { lineSeparator } = values.model.getSnapshot();
+          const content = transactions[transactions.length - 1].newDoc.sliceString(
+            0,
+            undefined,
+            lineSeparator,
+          );
+          if (!values.model.edit(content)) return;
+        }
+        editor.update(transactions);
+      },
       state: EditorState.create({
         doc: values.content,
         extensions: [
@@ -75,13 +87,6 @@ export function FileEditorView({
           wrappingCompartment.of(wrappingForFile(values.filename)),
           themeCompartment.of(editorTheme(values.theme)),
           EditorView.updateListener.of((update) => {
-            if (
-              update.docChanged &&
-              !update.transactions.some((tr) => tr.annotation(remoteUpdate))
-            ) {
-              const { lineSeparator } = values.model.getSnapshot();
-              values.model.edit(update.state.doc.sliceString(0, undefined, lineSeparator));
-            }
             if (update.selectionSet || update.docChanged) {
               const head = update.state.selection.main.head;
               const line = update.state.doc.lineAt(head);

@@ -167,6 +167,23 @@ describe("git-actions-policy", () => {
     await i18n.changeLanguage("en");
   });
 
+  it("omits archive and keeps the next primary action when the host owns workspace lifecycle", () => {
+    const actions = buildGitActions(
+      createInput({
+        workspaceArchiveEnabled: false,
+        shouldPromoteArchive: true,
+        hasUncommittedChanges: true,
+        isPaseoOwnedWorktree: true,
+      }),
+    );
+    expect(actions.primary?.id).toBe("commit");
+    expect(actions.secondary.some((action) => action.id === "archive-workspace")).toBe(false);
+    expect(
+      buildGitActions(createInput({ workspaceArchiveEnabled: false, isPaseoOwnedWorktree: true }))
+        .primary,
+    ).toBeNull();
+  });
+
   it("shows only remote sync actions on the base branch", () => {
     const actions = buildGitActions(createInput({ hasRemote: true }));
 

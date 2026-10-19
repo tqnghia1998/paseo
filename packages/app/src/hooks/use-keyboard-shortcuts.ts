@@ -1,3 +1,4 @@
+import { isEmbeddedShortcutAllowed } from "@/patches/vibing/focus-mode";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter } from "expo-router";
 import { getIsElectronRuntime } from "@/constants/layout";
@@ -64,7 +65,13 @@ export function useKeyboardShortcuts({
   const router = useRouter();
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
-  const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
+  const bindings = useMemo(
+    () =>
+      buildEffectiveBindings(overrides).filter((binding) =>
+        isEmbeddedShortcutAllowed(binding.action),
+      ),
+    [overrides],
+  );
   const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
   const isDesktopApp = getIsElectronRuntime();
   const isMac = getShortcutOs() === "mac";
