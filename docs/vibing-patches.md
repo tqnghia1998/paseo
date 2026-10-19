@@ -33,6 +33,12 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
 
 ## Plugin boundary
 
+Embedded Settings → Vibing customizations provides a read-only catalog of shipped
+plugin changes, workspace integration patches, and provider/runtime fixes. It uses
+`packages/app/src/patches/vibing/customizations.tsx`; update it when this patch map
+changes. Implementation paths stay under its collapsed details row. The catalog
+does not inspect runtime health or change enablement.
+
 Settings → Plugins lists registered plugins, not every fork change. Of the bundled
 plugins, `space-app-vibing-theme` is added by this fork, and `codex-usage-source`
 contains the Enterprise allowance change. The other bundled provider and usage
