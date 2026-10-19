@@ -13,7 +13,8 @@ export default function contribute(client: PluginClientContext) {
       border: "#222225",
       accent: "#3a96dd",
       mutedForeground: "#a0a0a0",
-      ring: "#3a96dd",
+      // Paseo also uses ring for placeholders, muted controls and terminal bright black.
+      ring: "#6e6e6e",
     },
   });
 }
