@@ -1,7 +1,13 @@
 /** @vitest-environment jsdom */
 import { beforeEach, expect, it, vi } from "vitest";
 
+const workspaces = vi.hoisted(() => new Map<string, { workspaceDirectory: string }>());
+vi.mock("@/stores/session-store", () => ({
+  useSessionStore: { getState: () => ({ sessions: { local: { workspaces } } }) },
+}));
+
 beforeEach(() => {
+  workspaces.clear();
   vi.stubEnv("EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS", "true");
   vi.resetModules();
   sessionStorage.clear();
@@ -11,15 +17,20 @@ beforeEach(() => {
 
 it("allows shared settings but blocks other workspaces, hosts and project management", async () => {
   const boundary = await import("./workspace-boundary");
-  boundary.bindEmbeddedWorkspace({ serverId: "local", workspaceId: "one" });
+  boundary.bindEmbeddedWorkspace({ serverId: "local", workspaceId: "one", projectId: "repo" });
   for (const path of [
     "/h/local/workspace/one",
+    "/sessions",
+    "/schedules",
+    "/h/local/plugin/example/surface/home",
+    "/h/local/agent/agent-one",
     "/settings",
     "/settings/appearance",
     "/settings/shortcuts",
     "/settings/hosts/local/providers",
     "/settings/hosts/local/agents",
     "/settings/hosts/local/terminals",
+    "/settings/hosts/local/projects/repo",
     "/settings/hosts/local/plugins",
     "/settings/hosts/local/plugins/example/config",
   ]) {
@@ -28,11 +39,12 @@ it("allows shared settings but blocks other workspaces, hosts and project manage
   for (const path of [
     "/h/local/workspace/two",
     "/h/remote/workspace/one",
+    "/h/remote/plugin/example/surface/home",
+    "/h/remote/agent/agent-one",
     "/open-project",
-    "/sessions",
-    "/schedules",
     "/settings/hosts/remote/plugins",
     "/settings/hosts/local/projects",
+    "/settings/hosts/local/projects/other",
     "/settings/hosts/local/workspaces",
     "/settings/hosts/local/host",
     "/settings/hosts/local/connections",
@@ -80,4 +92,20 @@ it("filters command search to this workspace and rejects unbound agents", async 
   expect(boundary.isEmbeddedWorkspaceAllowed("local", "two")).toBe(false);
   expect(boundary.isEmbeddedWorkspaceAllowed("remote", "one")).toBe(false);
   expect(boundary.isEmbeddedWorkspaceAllowed("local", null)).toBe(false);
+});
+
+it("allows daemon-confirmed workspace records for the same directory without admitting sibling worktrees", async () => {
+  const boundary = await import("./workspace-boundary");
+  boundary.bindEmbeddedWorkspace({
+    serverId: "local",
+    workspaceId: "one",
+    directory: "/repo-worktrees/one",
+  });
+  workspaces.set("run-one", { workspaceDirectory: "/repo-worktrees/one" });
+  workspaces.set("two", { workspaceDirectory: "/repo-worktrees/one-sibling" });
+  expect(boundary.isEmbeddedWorkspaceAllowed("local", "run-one")).toBe(true);
+  expect(boundary.isEmbeddedRouteAllowed("/h/local/workspace/run-one")).toBe(true);
+  expect(boundary.isEmbeddedWorkspaceAllowed("local", "two")).toBe(false);
+  expect(boundary.isEmbeddedWorkspaceAllowed("local", "unresolved")).toBe(false);
+  expect(boundary.isEmbeddedWorkspaceAllowed("remote", "run-one")).toBe(false);
 });

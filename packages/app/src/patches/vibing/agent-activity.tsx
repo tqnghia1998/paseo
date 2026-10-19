@@ -1,4 +1,4 @@
-import { getEmbeddedWorkspace } from "./workspace-boundary";
+import { getEmbeddedWorkspace, isEmbeddedWorkspaceAllowed } from "./workspace-boundary";
 import { useEffect, useMemo } from "react";
 import { usePathname } from "expo-router";
 import { isWeb } from "@/constants/platform";
@@ -15,10 +15,13 @@ export function isEmbeddedWorkspaceRunning(
   agents: Iterable<Pick<Agent, "id" | "workspaceId" | "archivedAt">>,
   workspaceId: string,
   isTurnActive: (agentId: string) => boolean,
+  isWorkspaceAllowed?: (workspaceId: string | null | undefined) => boolean,
 ): boolean {
   for (const agent of agents) {
-    if (!agent.archivedAt && agent.workspaceId === workspaceId && isTurnActive(agent.id))
-      return true;
+    const belongs = isWorkspaceAllowed
+      ? isWorkspaceAllowed(agent.workspaceId)
+      : agent.workspaceId === workspaceId;
+    if (!agent.archivedAt && belongs && isTurnActive(agent.id)) return true;
   }
   return false;
 }
@@ -68,6 +71,7 @@ export function EmbeddedAgentActivityBridge() {
       session.agents.values(),
       workspaceId,
       (agentId) => selectAgentTurnPresentation(session, agentId).isActive,
+      getEmbeddedWorkspace() ? (id) => isEmbeddedWorkspaceAllowed(serverId, id) : undefined,
     );
   });
 
