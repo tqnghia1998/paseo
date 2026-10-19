@@ -31,6 +31,25 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
 | Interactive Codex shells                | Server: `codex/terminal-interactions.ts`                                                                                                                       | Codex event mapping, optional protocol `stdin`, Shell card renderer                                             | Colocated terminal tests; Codex provider tests; tool-call schema/browser tests                        |
 | Standalone distribution                 | `scripts/bundle-paseo-web.mjs`, `scripts/paseo-web.js`                                                                                                         | Root build command, embedded build flag, packaged version and built-in plugin discovery                         | Runner tests, full standalone build and Vibing bundle guard; see [porting guide](../README-PORT.md)   |
 
+## Plugin boundary
+
+Settings → Plugins lists registered plugins, not every fork change. Of the bundled
+plugins, `space-app-vibing-theme` is added by this fork, and `codex-usage-source`
+contains the Enterprise allowance change. The other bundled provider and usage
+plugins come from the incorporated upstream base.
+
+The patch map above records the remaining customizations. Native navigation guards,
+composer draft/queue integration, editor recovery, process cleanup, and provider
+protocol fixes still require their existing core hooks. The plugin API can add
+screens, panels, buttons, attachments, lifecycle observers, providers, and themes;
+it does not provide native routing policy or composer/editor persistence hooks.
+Do not label these patches as installed plugins merely to make them discoverable.
+
+The built-in inventory display itself extends core plugin management with an
+optional `builtinPluginListing` capability and opt-in list request; see the
+[built-in contract](plugins.md#built-in-plugins). It leaves the default configured
+plugin list unchanged.
+
 ## Contracts to preserve
 
 - Every standalone host uses the same embedded workspace policy. `?folder=` resolves
