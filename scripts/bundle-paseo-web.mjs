@@ -21,7 +21,11 @@ if (process.argv.includes("--runner-only")) {
 }
 
 console.log("1. Building frontend web UI...");
-execSync("node scripts/build-daemon-web-ui.mjs", { cwd: ROOT_DIR, stdio: "inherit" });
+execSync("node scripts/build-daemon-web-ui.mjs", {
+  cwd: ROOT_DIR,
+  stdio: "inherit",
+  env: { ...process.env, EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS: "true" },
+});
 
 console.log("2. Building server TypeScript...");
 execSync("npm run build:server", { cwd: ROOT_DIR, stdio: "inherit" });

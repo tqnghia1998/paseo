@@ -2,7 +2,6 @@ import { useSettingsContentPresented } from "@/navigation/settings-presentation"
 import { AppearanceText as Text } from "@/appearance/text";
 import { useHardwareKeyboardPresent } from "@/keyboard";
 import { useAddHost } from "@/hosts/add-host";
-import { VibingCustomizationsSection } from "@/patches/vibing/customizations";
 import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import {
   getEmbeddedWorkspace,
@@ -161,7 +160,6 @@ interface SidebarSectionItem {
   desktopOnly?: boolean;
   webOnly?: boolean;
   hardwareKeyboardOnly?: boolean;
-  embeddedOnly?: boolean;
   /** The page body, for pages that need nothing from the settings screen. */
   Content?: ComponentType;
 }
@@ -232,13 +230,6 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   },
   { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
-  {
-    id: "vibing-customizations",
-    labelKey: "settings.sections.vibingCustomizations",
-    icon: Blocks,
-    embeddedOnly: true,
-    Content: VibingCustomizationsSection,
-  },
 ];
 
 function isSectionAvailable(
@@ -249,8 +240,7 @@ function isSectionAvailable(
   if (item.hardwareKeyboardOnly && !hardwareKeyboardPresent) return false;
   return (
     (!item.desktopOnly || isDesktopApp || (isEmbeddedFocusMode && item.id === "shortcuts")) &&
-    (!item.webOnly || isWeb) &&
-    (!item.embeddedOnly || isEmbeddedFocusMode)
+    (!item.webOnly || isWeb)
   );
 }
 
