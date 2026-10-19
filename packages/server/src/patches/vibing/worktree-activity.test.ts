@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { getRunningWorktreePaths } from "./embedded-worktree-activity.js";
+import { getRunningWorktreePaths } from "./worktree-activity.js";
 
 it("reports live worktree activity without a connected workspace iframe", () => {
   const agents = [

@@ -216,7 +216,12 @@ import { createWebUiMiddleware } from "./web-ui.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { createGitMutationService } from "./session/git-mutation/git-mutation-service.js";
 import { workspaceIdsOnCheckout } from "./workspace-directory.js";
-import { getRunningWorktreePaths } from "./embedded-worktree-activity.js";
+import {
+  archiveMissingWorkspaces,
+  createWorktreeCleanup,
+  pruneMissingWorktreeAgents,
+  registerWorktreeRoutes,
+} from "../patches/vibing/worktree-runtime.js";
 import { configureGitProcessPolicy } from "../utils/run-git-command.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
@@ -999,14 +1004,8 @@ export async function createPaseoDaemon(
   );
   await agentStorage.initialize();
   await closeStaleAgentRecords(agentStorage);
-  const missingAgentIds = (await agentStorage.list())
-    .filter((agent) => !existsSync(agent.cwd))
-    .map((agent) => agent.id);
-  await Promise.all(missingAgentIds.map((agentId) => agentStorage.remove(agentId)));
-  logger.info(
-    { elapsed: elapsed(), removedMissingWorktreeAgents: missingAgentIds.length },
-    "Agent storage initialized",
-  );
+  const removedMissingWorktreeAgents = await pruneMissingWorktreeAgents(agentStorage);
+  logger.info({ elapsed: elapsed(), removedMissingWorktreeAgents }, "Agent storage initialized");
   await bootstrapWorkspaceRegistries({
     serverId,
     paseoHome: config.paseoHome,
@@ -1016,16 +1015,7 @@ export async function createPaseoDaemon(
     workspaceGitService,
     logger,
   });
-  const missingWorkspaceIds = (await workspaceRegistry.list())
-    .filter(
-      (workspace) => !workspace.archivedAt && !existsSync(workspace.worktreeRoot ?? workspace.cwd),
-    )
-    .map((workspace) => workspace.workspaceId);
-  await Promise.all(
-    missingWorkspaceIds.map((workspaceId) =>
-      workspaceRegistry.archive(workspaceId, new Date().toISOString()),
-    ),
-  );
+  await archiveMissingWorkspaces(workspaceRegistry);
   await workspaceLabelService.initialize();
   logger.info({ elapsed: elapsed() }, "Workspace registries bootstrapped");
   const teardownArchivedWorkspaceRuntime = (workspaceId: string): void => {
@@ -1271,98 +1261,19 @@ export async function createPaseoDaemon(
       },
       { scope: { kind: "workspace", workspaceId }, requestId },
     );
-  // Call before removing external worktrees so persisted agent sessions cannot
-  // later resume against a directory that no longer exists.
-  const cleanupWorktrees = async (paths: string[]): Promise<void> => {
-    const roots = [...new Set(paths.map((targetPath) => path.resolve(targetPath)))];
-    const isInDeletedWorktree = (candidatePath: string) =>
-      roots.some(
-        (root) => candidatePath === root || candidatePath.startsWith(`${root}${path.sep}`),
-      );
-    const workspaces = (await workspaceRegistry.list()).filter(
-      (workspace) =>
-        !workspace.archivedAt && isInDeletedWorktree(workspace.worktreeRoot ?? workspace.cwd),
-    );
-    const agentIds = new Set([
-      ...agentManager
-        .listAgents()
-        .filter((agent) => isInDeletedWorktree(agent.cwd))
-        .map((agent) => agent.id),
-      ...(await agentStorage.list())
-        .filter((agent) => isInDeletedWorktree(agent.cwd))
-        .map((agent) => agent.id),
-    ]);
-
-    for (const agentId of agentIds) {
-      agentStorage.beginDelete(agentId);
-    }
-    await Promise.all(
-      workspaces.map((workspace) =>
-        archiveWorkspaceByIdExternal(workspace.workspaceId, "embedded-worktree-cleanup"),
-      ),
-    );
-    await Promise.all(
-      [...agentIds].map((agentId) => agentManager.closeAgent(agentId).catch(() => undefined)),
-    );
-    await agentManager.flush();
-    await Promise.all(
-      [...agentIds].map(async (agentId) => {
-        await agentStorage.remove(agentId);
-        await agentManager.deleteAgentState(agentId);
-      }),
-    );
-  };
-  const handleWorktreeCleanup = async (req: express.Request, res: express.Response) => {
-    const token = config.worktreeCleanupToken;
-    const isLoopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(
-      req.socket.remoteAddress ?? "",
-    );
-    const paths = req.body?.paths;
-    if (!token || !isLoopback || req.header("x-paseo-worktree-cleanup-token") !== token) {
-      res.status(403).end();
-      return;
-    }
-    if (
-      !Array.isArray(paths) ||
-      paths.some((targetPath) => typeof targetPath !== "string" || !path.isAbsolute(targetPath))
-    ) {
-      res.status(400).json({ error: "paths must be absolute strings" });
-      return;
-    }
-    try {
-      await cleanupWorktrees(paths);
-      res.status(204).end();
-    } catch (error) {
-      logger.warn({ err: error }, "Failed to clean deleted worktree state");
-      res.status(500).json({ error: "Failed to clean deleted worktree state" });
-    }
-  };
-  app.post("/api/worktrees/cleanup", (req, res, next) => {
-    void (async () => {
-      try {
-        await handleWorktreeCleanup(req, res);
-      } catch (error) {
-        next(error);
-      }
-    })();
+  const cleanupWorktrees = createWorktreeCleanup({
+    agentManager,
+    agentStorage,
+    workspaceRegistry,
+    archiveWorkspace: archiveWorkspaceByIdExternal,
   });
-  app.get("/api/worktrees/activity", (req, res, next) => {
-    const token = config.worktreeCleanupToken;
-    const isLoopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(
-      req.socket.remoteAddress ?? "",
-    );
-    if (!token || !isLoopback || req.header("x-paseo-worktree-cleanup-token") !== token) {
-      res.status(403).end();
-      return;
-    }
-    void (async () => {
-      try {
-        const workspaces = await workspaceRegistry.list();
-        res.json({ runningPaths: getRunningWorktreePaths(agentManager.listAgents(), workspaces) });
-      } catch (error) {
-        next(error);
-      }
-    })();
+  registerWorktreeRoutes({
+    app,
+    token: config.worktreeCleanupToken,
+    logger,
+    agentManager,
+    workspaceRegistry,
+    cleanupWorktrees,
   });
   const hubAgentLifecycle = new CreateAgentLifecycleDispatch({
     paseoHome: config.paseoHome,

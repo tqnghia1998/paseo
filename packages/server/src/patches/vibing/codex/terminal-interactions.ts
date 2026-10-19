@@ -1,5 +1,5 @@
-import type { AgentTimelineItem } from "../../agent-sdk-types.js";
-import { extractCodexTerminalSessionId } from "../tool-call-mapper-utils.js";
+import type { AgentTimelineItem } from "../../../server/agent/agent-sdk-types.js";
+import { extractCodexTerminalSessionId } from "../../../server/agent/providers/tool-call-mapper-utils.js";
 
 type ToolCall = Extract<AgentTimelineItem, { type: "tool_call" }>;
 

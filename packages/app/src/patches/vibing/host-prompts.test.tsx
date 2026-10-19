@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
 });
-import { useEmbeddedPromptActivation, useEmbeddedPromptInsert } from "./embedded-prompt";
+import { useEmbeddedPromptActivation, useEmbeddedPromptInsert } from "./host-prompts";
 
 const originalParent = window.parent;
 const originalReferrer = document.referrer;

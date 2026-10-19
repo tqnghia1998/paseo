@@ -33,7 +33,6 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { usePanelStore } from "@/stores/panel-store";
 import { useHasFinePointer } from "@/hooks/use-fine-pointer";
-import { useChatGutter } from "@/hooks/use-chat-gutter";
 import { useShallow } from "zustand/shallow";
 import {
   ArrowUp,
@@ -48,7 +47,7 @@ import {
   Paperclip,
 } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
-import { FOOTER_HEIGHT, resolveComposerMaxContentWidth } from "@/constants/layout";
+import { FOOTER_HEIGHT } from "@/constants/layout";
 import {
   AgentControls,
   DraftAgentControls,
@@ -125,10 +124,7 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
-import { useEmbeddedPromptInsert } from "@/embedded-prompt";
-import { useEmbeddedLiveDesignSend, waitForLiveDesignTurn } from "@/embedded-live-design";
-import { isEmbeddedLiveDesignMessaging } from "@/embedded-focus-mode";
-import { useStableEvent } from "@/hooks/use-stable-event";
+import { useEmbeddedComposerBridge } from "@/patches/vibing/composer-bridge";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
@@ -1281,7 +1277,6 @@ function ComposerContentImpl({
   placeholder,
 }: ComposerContentProps) {
   const mode = resolveComposerInputMode(inputMode);
-  const chatGutter = useChatGutter();
   const { t } = useTranslation();
   const buttonIconSize = resolveComposerButtonIconSize();
   const client = useHostRuntimeClient(serverId);
@@ -1738,66 +1733,19 @@ function ComposerContentImpl({
     ],
   );
 
-  useEmbeddedPromptInsert({
+  useEmbeddedComposerBridge({
+    enabled: isWeb && isActiveComposer,
+    agentId,
     workspaceId,
     inputMode,
     readOnly,
-    enabled: isWeb && isActiveComposer && !isComposerLocked,
-    getText: useStableEvent(() => messageInputRef.current?.getText() ?? textSource.getSnapshot()),
+    isComposerLocked,
+    client,
+    resolveLiveDesignAgentId,
+    getText: () => messageInputRef.current?.getText() ?? textSource.getSnapshot(),
     replaceText: replaceUserInput,
-    focus: useStableEvent(() => focusMessageInputWithPlatformStrategy(messageInputRef)),
-  });
-
-  useEmbeddedLiveDesignSend({
-    agentId,
-    enabled: isWeb && isActiveComposer && isEmbeddedLiveDesignMessaging,
-    isDraft: resolveLiveDesignAgentId !== undefined,
-    workspaceId,
-    submit: useStableEvent(
-      async (
-        text: string,
-        onTurnFinished: (outcome?: "succeeded" | "failed" | "unknown") => Promise<void>,
-        onAgentResolved: (agentId: string) => void,
-        liveDesignAttachments: ComposerAttachment[],
-      ) => {
-        const waitForTurn = async () => {
-          const resolvedDraftAgentId = resolveLiveDesignAgentId?.();
-          const resolvedAgentId = resolvedDraftAgentId ?? agentId;
-          onAgentResolved(resolvedAgentId);
-          if (!client) return;
-          const outcome = await waitForLiveDesignTurn(
-            client,
-            resolvedAgentId,
-            resolveLiveDesignAgentId === undefined || Boolean(resolvedDraftAgentId),
-          );
-          if (outcome) await onTurnFinished(outcome);
-        };
-        const result = await sendMessageWithContent(
-          text,
-          liveDesignAttachments,
-          undefined,
-          undefined,
-          waitForTurn,
-        );
-        if (result === "failed" || result === "noop") {
-          throw new Error("Paseo could not send the Live Design notes");
-        }
-        if (result === "submitted") {
-          void waitForTurn().catch(() => undefined);
-        }
-      },
-    ),
-    resumePending: useStableEvent(
-      async (onTurnFinished: (outcome?: "succeeded" | "failed" | "unknown") => Promise<void>) => {
-        if (!client) return;
-        const outcome = await waitForLiveDesignTurn(
-          client,
-          agentId,
-          resolveLiveDesignAgentId === undefined,
-        );
-        if (outcome) await onTurnFinished(outcome);
-      },
-    ),
+    focus: () => focusMessageInputWithPlatformStrategy(messageInputRef),
+    sendMessage: sendMessageWithContent,
   });
 
   const handleSubmit = useCallback(
@@ -2390,11 +2338,10 @@ function ComposerContentImpl({
   const inputAreaContainerStyle = useMemo(
     () => [
       styles.inputAreaContainer,
-      !isFullscreen && chatGutter.style,
       isComposerLocked && styles.inputAreaLocked,
       isFullscreen && styles.inputAreaFullscreen,
     ],
-    [chatGutter.style, isComposerLocked, isFullscreen],
+    [isComposerLocked, isFullscreen],
   );
   const inputAreaContentStyle = useMemo(
     () => [styles.inputAreaContent, isFullscreen && styles.fullscreenFill],
@@ -2522,7 +2469,7 @@ function ComposerContentImpl({
       >
         <AttachmentLightbox source={lightboxSource} onClose={handleLightboxClose} />
         {/* Input area */}
-        <View style={inputAreaContainerStyle} onLayout={chatGutter.onLayout}>
+        <View style={inputAreaContainerStyle}>
           <View style={inputAreaContentStyle}>
             {isFullscreen ? null : queueList}
             {!isFullscreen && sendErrorNode}
@@ -2652,6 +2599,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     alignItems: "center",
     width: "100%",
     overflow: "visible",
+    paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[4],
   },
   inputAreaLocked: {
@@ -2672,7 +2620,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   inputAreaContent: {
     flexShrink: 1,
     width: "100%",
-    maxWidth: resolveComposerMaxContentWidth(theme.contentMaxWidth),
+    maxWidth: theme.contentMaxWidth,
     gap: theme.spacing[3],
   },
   messageInputContainer: {

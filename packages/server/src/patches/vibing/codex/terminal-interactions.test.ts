@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentTimelineItem } from "../../agent-sdk-types.js";
+import type { AgentTimelineItem } from "../../../server/agent/agent-sdk-types.js";
 import { CodexTerminalInteractions } from "./terminal-interactions.js";
 
 const shell: Extract<AgentTimelineItem, { type: "tool_call" }> = {

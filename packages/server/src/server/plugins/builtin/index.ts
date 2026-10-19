@@ -14,6 +14,7 @@ export const builtinPlugins = [
   "minimax-usage-source",
   "muse-provider",
   "opencode-go-usage-source",
+  "space-app-vibing-theme",
   "zai-usage-source",
 ] as const;
 

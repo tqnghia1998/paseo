@@ -51,7 +51,10 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
-import { composeSystemPromptParts } from "../system-prompt.js";
+import {
+  buildCodexDeveloperInstructions,
+  readNativeCodexConfig,
+} from "../../../patches/vibing/codex/questions.js";
 import { curateAgentActivity } from "../activity-curator.js";
 import { CodexAsyncQuestions, codexAsyncQuestionToTimeline } from "./codex/async-questions.js";
 import {
@@ -73,7 +76,7 @@ import {
 import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import { spawnProcess } from "../../../utils/spawn.js";
 import { nonEmptyString } from "./tool-call-mapper-utils.js";
-import { CodexTerminalInteractions } from "./codex/terminal-interactions.js";
+import { CodexTerminalInteractions } from "../../../patches/vibing/codex/terminal-interactions.js";
 import {
   buildCodexFeatures,
   CodexServiceTierSchema,
@@ -145,11 +148,6 @@ function isCodexAlreadyUnarchivedError(error: unknown, threadId: string): boolea
 const TURN_START_TIMEOUT_MS = 90 * 1000;
 const INTERRUPT_TIMEOUT_MS = 2_000;
 const CODEX_PROVIDER = "codex" as const;
-const CODEX_QUESTION_INSTRUCTIONS =
-  "Use request_user_input for user questions and wait for the user's answer before continuing. " +
-  "Do not use request_user_input_async or send_user_message_async to ask questions; those tools return before the user answers. " +
-  "If request_user_input is unavailable, ask the question in your final message and end the turn. " +
-  "Never assume a default answer or treat a preselected option as the user's response.";
 // Codex treats most app-server client names as the model-request originator.
 // This reserved Codex name is non-originating, so requests keep Codex's default
 // CLI identity instead of showing up as Paseo in provider usage logs.
@@ -3692,33 +3690,14 @@ export class CodexAppServerAgentSession implements AgentSession {
 
   private async loadResolvedConfig(): Promise<void> {
     if (!this.client) return;
-    try {
-      const response = toObjectRecord(
-        await this.client.request("config/read", { cwd: this.config.cwd ?? null }),
-      );
-      const config = z
-        .object({
-          developer_instructions: z.string().nullish(),
-          sandbox_workspace_write: z.unknown().optional(),
-        })
-        .parse(response?.config);
-      this.resolvedWorkspaceWrite = readSandboxWorkspaceWrite(config.sandbox_workspace_write);
-      this.resolvedNativeDeveloperInstructions = config.developer_instructions ?? undefined;
-    } catch (error) {
-      const paseoInstructions = composeSystemPromptParts(
-        this.config.systemPrompt,
-        this.config.daemonAppendSystemPrompt,
-      );
-      if (!this.config.internal && !paseoInstructions) {
-        throw new Error(
-          "Cannot preserve native Codex developer instructions: configuration read failed",
-          {
-            cause: error,
-          },
-        );
-      }
-      this.logger.debug({ error }, "Failed to read resolved Codex config");
-    }
+    const config = await readNativeCodexConfig({
+      client: this.client,
+      session: this.config,
+      logger: this.logger,
+    });
+    if (!config) return;
+    this.resolvedWorkspaceWrite = readSandboxWorkspaceWrite(config.sandbox_workspace_write);
+    this.resolvedNativeDeveloperInstructions = config.developer_instructions ?? undefined;
   }
 
   private rememberResolvedSandboxPolicy(response: unknown): void {
@@ -5369,18 +5348,11 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private buildDeveloperInstructions(modeInstructions?: string | null): string | undefined {
-    const paseoInstructions = composeSystemPromptParts(
-      this.config.systemPrompt,
-      this.config.daemonAppendSystemPrompt,
-    );
-    const nativeInstructions = this.config.internal
-      ? undefined
-      : this.resolvedNativeDeveloperInstructions;
-    return composeSystemPromptParts(
+    return buildCodexDeveloperInstructions({
+      session: this.config,
+      nativeInstructions: this.resolvedNativeDeveloperInstructions,
       modeInstructions,
-      paseoInstructions ?? nativeInstructions,
-      this.config.internal ? undefined : CODEX_QUESTION_INSTRUCTIONS,
-    );
+    });
   }
 
   private buildCodexInnerConfig(): Record<string, unknown> | null {

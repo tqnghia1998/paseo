@@ -1,3 +1,7 @@
+import {
+  coalesceWorkspaceOpen,
+  preferActiveWorkspaceByAgentActivity,
+} from "../../../patches/vibing/workspace-open.js";
 import type { PluginLifecycle } from "../../plugins/lifecycle/index.js";
 import { describeHookWorkspace } from "../../plugins/lifecycle/index.js";
 import { basename, resolve } from "node:path";
@@ -84,9 +88,6 @@ export interface WorkspaceProvisioningService {
 }
 
 export type WorkspaceProvisioningErrorCode = "unknown_project" | "archived_project";
-
-// Session instances are per socket, so concurrent iframe loads need one daemon-wide open.
-const workspaceOpenByKey = new Map<string, Promise<PersistedWorkspaceRecord>>();
 
 export class WorkspaceProvisioningError extends Error {
   constructor(
@@ -357,20 +358,11 @@ export function createWorkspaceProvisioningService(deps: {
   }
 
   async function findOrCreateWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord> {
-    const normalizedCwd = resolve(cwd);
-    const key = `${serverId ?? ""}\0${normalizedCwd}`;
-    const inFlight = workspaceOpenByKey.get(key);
-    if (inFlight) return inFlight;
-
-    const pending = findOrCreateWorkspaceForDirectoryUncoalesced(normalizedCwd);
-    workspaceOpenByKey.set(key, pending);
-    try {
-      return await pending;
-    } finally {
-      if (workspaceOpenByKey.get(key) === pending) {
-        workspaceOpenByKey.delete(key);
-      }
-    }
+    return coalesceWorkspaceOpen({
+      serverId,
+      cwd: resolve(cwd),
+      open: findOrCreateWorkspaceForDirectoryUncoalesced,
+    });
   }
 
   async function findOrCreateWorkspaceForDirectoryUncoalesced(
@@ -390,13 +382,7 @@ export function createWorkspaceProvisioningService(deps: {
     // ordering for ties and archived workspace recovery.
     const agentActivity =
       (await deps.getRecentAgentActivityByWorkspace?.()) ?? new Map<string, Date>();
-    const active = workspaces
-      .filter((workspace) => !workspace.archivedAt)
-      .sort(
-        (left, right) =>
-          (agentActivity.get(right.workspaceId)?.getTime() ?? 0) -
-          (agentActivity.get(left.workspaceId)?.getTime() ?? 0),
-      )[0];
+    const active = preferActiveWorkspaceByAgentActivity(workspaces, agentActivity);
     if (active) return refreshWorkspaceRecord(active);
     const archived = workspaces.find((workspace) => workspace.archivedAt);
     if (archived) {
