@@ -6,6 +6,7 @@ import {
   hashAccountKey,
   unavailable,
   type UsageAccount,
+  type UsageBalance,
   type UsageScope,
   toneFromUsedPct,
   windowFromReportedDuration,
@@ -34,6 +35,20 @@ const rateLimitSchema = z.object({
   primary_window: windowSchema.nullish(),
   secondary_window: windowSchema.nullish(),
 });
+const spendControlSchema = z.object({
+  reached: z.boolean().optional(),
+  individual_limit: z
+    .object({
+      unit: z.string().nullish(),
+      limit: number.nullish(),
+      used: number.nullish(),
+      remaining: number.nullish(),
+      used_percent: number.nullish(),
+      remaining_percent: number.nullish(),
+      reset_at: number.nullish(),
+    })
+    .nullish(),
+});
 const responseSchema = z.object({
   plan_type: z.string().optional(),
   email: z.string().optional(),
@@ -48,7 +63,8 @@ const responseSchema = z.object({
     )
     .nullish(),
   code_review_rate_limit: rateLimitSchema.nullish(),
-  credits: z.object({ balance: number.optional() }).nullish(),
+  credits: z.object({ balance: number.nullish() }).nullish(),
+  spend_control: spendControlSchema.nullish(),
 });
 
 interface Auth {
@@ -184,6 +200,60 @@ function usageWindows({
   });
 }
 
+function spendingAllowance(control: z.infer<typeof spendControlSchema> | null | undefined): {
+  windows: UsageWindow[];
+  balances: UsageBalance[];
+} {
+  const allowance = control?.individual_limit;
+  if (!allowance) return { windows: [], balances: [] };
+  const usedPct =
+    allowance.used_percent ??
+    (allowance.remaining_percent == null ? null : 100 - allowance.remaining_percent);
+  const tone = control.reached ? "danger" : toneFromUsedPct(usedPct);
+  const windows: UsageWindow[] =
+    usedPct == null
+      ? []
+      : [
+          {
+            id: "spending_allowance",
+            label: "Spending allowance",
+            shortLabel: "budget",
+            summary: true,
+            usedPct,
+            remainingPct: allowance.remaining_percent ?? Math.max(0, 100 - usedPct),
+            resetsAt:
+              allowance.reset_at == null ? null : new Date(allowance.reset_at * 1000).toISOString(),
+            tone,
+          },
+        ];
+  const balances: UsageBalance[] = [];
+  // The API reports dollars or credits. Never infer a unit or convert between them.
+  const unit = allowance.unit;
+  if (unit === "usd" || unit === "credits") {
+    if (allowance.used != null || (allowance.limit != null && allowance.remaining != null)) {
+      balances.push({
+        id: "spending",
+        label: "Spending",
+        unit,
+        used: allowance.used,
+        remaining: allowance.remaining,
+        limit: allowance.limit,
+        tone,
+      });
+    }
+    if (allowance.remaining != null) {
+      balances.push({
+        id: "spending_remaining",
+        label: "Remaining allowance",
+        unit,
+        remaining: allowance.remaining,
+        tone,
+      });
+    }
+  }
+  return { windows, balances };
+}
+
 export async function fetchUsage(
   input: CodexUsageInput,
   fetchApi: typeof fetch = fetch,
@@ -214,6 +284,7 @@ export async function fetchUsage(
   const text = await response.text();
   if (text.trim().startsWith("<")) throw new Error("Codex usage API returned HTML");
   const usage = responseSchema.parse(JSON.parse(text));
+  const spending = spendingAllowance(usage.spend_control);
   const windows = [
     ...usageWindows({ rateLimit: usage.rate_limit, summary: true }),
     ...(usage.additional_rate_limits ?? []).flatMap((limit) => {
@@ -231,25 +302,37 @@ export async function fetchUsage(
       rateLimit: usage.code_review_rate_limit,
       scope: { id: "code_review", label: "Code review" },
     }),
+    ...spending.windows,
   ];
   const balance = usage.credits?.balance;
   return {
     status: "available",
-    planLabel: usage.plan_type,
+    planLabel: usage.plan_type === "ent26" ? "Enterprise" : usage.plan_type,
     windows,
-    balances:
-      balance === undefined
+    balances: [
+      ...spending.balances,
+      ...(balance == null
         ? []
         : [
             {
               id: "credits",
               label: "Credits",
               remaining: balance,
-              unit: "credits",
+              unit: "credits" as const,
               tone: balanceToneFromRemaining(balance),
             },
-          ],
-    details: [],
+          ]),
+    ],
+    details: usage.spend_control?.reached
+      ? [
+          {
+            id: "spending_limit_reached",
+            label: "Spending allowance",
+            value: "Limit reached",
+            tone: "danger",
+          },
+        ]
+      : [],
   };
 }
 

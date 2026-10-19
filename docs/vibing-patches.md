@@ -99,6 +99,12 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
 
 ## Small edits that stay upstream
 
+The Codex usage plugin reads `spend_control.individual_limit` for Enterprise
+allowances, preserving the reported currency/credit unit, amounts, percentages,
+reset time and reached-limit status. Null credit balances stay unreported.
+Keep this in `plugins/codex-usage-source/server/usage.ts` with its regression tests;
+native usage windows/balances own rendering and sidebar pins.
+
 Some fixes need the upstream execution path: active/archived Codex import
 pagination, terminal output event mapping, optional wait/protocol fields, Pi turn
 settlement, assistant-only citation normalization, retained-panel tooltip cleanup,
