@@ -3340,9 +3340,9 @@ describe("workspace-layout-store actions", () => {
     expect(findPaneById(layout.root, "explorer")?.hidden).toBe(true);
   });
 
-  it("replaces the final embedded close with a focused New Agent draft", () => {
+  it("replaces the final embedded close with the native tool launcher", () => {
     const workspaceKey = createWorkspaceKey();
-    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds);
 
     const tabId = embeddedStore.getState().openTab({
       workspaceKey,
@@ -3362,13 +3362,13 @@ describe("workspace-layout-store actions", () => {
     const mainTab = collectAllTabs(layout.root).find(
       (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
     );
-    expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
+    expect(mainTab?.target).toEqual({ kind: "new_tab" });
     expect(findPaneById(layout.root, "main")?.focusedTabId).toBe(mainTab?.tabId);
   });
 
-  it("keeps the final embedded New Agent fallback after persistence and iframe remount", async () => {
+  it("keeps the final embedded tool launcher after persistence and iframe remount", async () => {
     const workspaceKey = createWorkspaceKey();
-    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds);
     const tabId = embeddedStore.getState().openTab({
       workspaceKey,
       target: { kind: "draft", draftId: "draft-1" },
@@ -3383,7 +3383,7 @@ describe("workspace-layout-store actions", () => {
       JSON.stringify({ state: partialize(embeddedStore.getState()), version: 2 }),
     );
 
-    const remountedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+    const remountedStore = createWorkspaceLayoutStore(workspaceLayoutIds);
     await remountedStore.persist.rehydrate();
     const restoredTab = collectAllTabs(
       remountedStore.getState().layoutByWorkspace[workspaceKey].root,
@@ -3394,7 +3394,7 @@ describe("workspace-layout-store actions", () => {
           tab.tabId,
         )?.id === "main",
     );
-    expect(restoredTab?.target).toEqual({ kind: "draft", draftId: restoredTab?.tabId });
+    expect(restoredTab?.target).toEqual({ kind: "new_tab" });
 
     remountedStore.getState().reconcileTabs(workspaceKey, {
       agentsHydrated: true,
@@ -3408,12 +3408,12 @@ describe("workspace-layout-store actions", () => {
     const mainTab = collectAllTabs(layout.root).find(
       (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
     );
-    expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
+    expect(mainTab?.target).toEqual({ kind: "new_tab" });
   });
 
-  it("seeds an empty embedded split pane with a New Agent draft", () => {
+  it("seeds an empty embedded split pane with the native tool launcher", () => {
     const workspaceKey = createWorkspaceKey();
-    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds);
     const initialTabId = embeddedStore.getState().openTab({
       workspaceKey,
       target: { kind: "draft", draftId: "draft-1" },
@@ -3426,18 +3426,17 @@ describe("workspace-layout-store actions", () => {
     });
 
     const layout = embeddedStore.getState().layoutByWorkspace[workspaceKey];
-    const pane = findPaneById(layout.root, paneId);
     const paneTab = collectAllTabs(layout.root).find(
       (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === paneId,
     );
     expect(initialTabId).toBe("draft-1");
-    expect(paneTab?.target).toEqual({ kind: "draft", draftId: pane?.focusedTabId });
+    expect(paneTab?.target).toEqual({ kind: "new_tab" });
   });
 
   it("keeps restored embedded split-pane placeholders closed", () => {
     const workspaceKey = createWorkspaceKey();
     const genericStore = createWorkspaceLayoutStore(workspaceLayoutIds);
-    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds);
 
     genericStore.getState().openTab({
       workspaceKey,
@@ -3466,9 +3465,9 @@ describe("workspace-layout-store actions", () => {
     expect(splitPaneTab?.target).toEqual({ kind: "new_tab" });
   });
 
-  it("seeds an embedded side pane with a New Agent draft", () => {
+  it("seeds an embedded side pane with the native tool launcher", () => {
     const workspaceKey = createWorkspaceKey();
-    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds);
     embeddedStore.getState().openTab({
       workspaceKey,
       target: { kind: "draft", draftId: "draft-1" },
@@ -3477,17 +3476,16 @@ describe("workspace-layout-store actions", () => {
 
     const paneId = embeddedStore.getState().ensureSidePane(workspaceKey);
     const layout = embeddedStore.getState().layoutByWorkspace[workspaceKey];
-    const pane = findPaneById(layout.root, paneId);
     const paneTab = collectAllTabs(layout.root).find(
       (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === paneId,
     );
 
-    expect(paneTab?.target).toEqual({ kind: "draft", draftId: pane?.focusedTabId });
+    expect(paneTab?.target).toEqual({ kind: "new_tab" });
   });
 
-  it("seeds a new embedded workspace with a New Agent draft", () => {
+  it("seeds a new embedded workspace with the native tool launcher", () => {
     const workspaceKey = createWorkspaceKey();
-    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds, true);
+    const embeddedStore = createWorkspaceLayoutStore(workspaceLayoutIds);
 
     embeddedStore.getState().reconcileTabs(workspaceKey, {
       agentsHydrated: true,
@@ -3501,7 +3499,7 @@ describe("workspace-layout-store actions", () => {
     const mainTab = collectAllTabs(layout.root).find(
       (tab) => findPaneContainingTab(layout.root, tab.tabId)?.id === "main",
     );
-    expect(mainTab?.target).toEqual({ kind: "draft", draftId: mainTab?.tabId });
+    expect(mainTab?.target).toEqual({ kind: "new_tab" });
   });
 
   it("persists explicit agent opens per workspace", () => {

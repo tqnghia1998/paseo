@@ -232,6 +232,7 @@ import { workspaceIdsOnCheckout } from "./workspace-directory.js";
 import {
   archiveMissingWorkspaces,
   createWorktreeCleanup,
+  createWorktreeStop,
   pruneMissingWorktreeAgents,
   registerWorktreeRoutes,
 } from "../patches/vibing/worktree-runtime.js";
@@ -1336,6 +1337,12 @@ export async function createPaseoDaemon(
     agentManager,
     workspaceRegistry,
     cleanupWorktrees,
+    stopWorktrees: createWorktreeStop({
+      agentManager,
+      workspaceRegistry,
+      terminalManager,
+      stopWorkspaceSetup: (id) => workspaceSetupRuntime.stop(id),
+    }),
   });
   const hubAgentLifecycle = new CreateAgentLifecycleDispatch({
     paseoHome: config.paseoHome,

@@ -15,6 +15,7 @@ import {
   mkdtempSync,
   mkdirSync,
   realpathSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -1290,3 +1291,43 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
     });
   });
 });
+
+it.skipIf(isPlatform("win32"))(
+  "stops a terminal's hangup-resistant background child when the workspace is offloaded",
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), "paseo-terminal-offload-"));
+    temporaryDirs.push(dir);
+    const script = join(dir, "parent.cjs");
+    const childPidFile = join(dir, "child.pid");
+    writeFileSync(
+      script,
+      `const {spawn}=require('node:child_process'); const fs=require('node:fs');
+    const child=spawn(process.execPath,['-e',\`process.on('SIGHUP',()=>{}); require('node:fs').writeFileSync(${JSON.stringify(childPidFile)},String(process.pid)); setInterval(()=>{},1000)\`],{stdio:'ignore'});
+    setInterval(()=>{},1000);`,
+    );
+    const session = trackSession(
+      await createTerminal({
+        cwd: dir,
+        workspaceId: "offload-test",
+        command: process.execPath,
+        args: [script],
+      }),
+    );
+    await expect.poll(() => existsSync(childPidFile)).toBe(true);
+    const childPid = Number(readFileSync(childPidFile, "utf8"));
+    const alive = () => {
+      try {
+        process.kill(childPid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    try {
+      await session.killAndWait();
+      await expect.poll(alive, { timeout: 2000 }).toBe(false);
+    } finally {
+      if (alive()) process.kill(childPid, "SIGKILL");
+    }
+  },
+);

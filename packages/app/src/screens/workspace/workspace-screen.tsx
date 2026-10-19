@@ -884,7 +884,7 @@ function shouldShowWorkspaceScreenHeader(input: {
   isFocusModeEnabled: boolean;
   isMobile: boolean;
 }): boolean {
-  return !isEmbeddedFocusMode && (!input.isFocusModeEnabled || input.isMobile);
+  return !input.isFocusModeEnabled || input.isMobile;
 }
 
 function buildWorkspaceTerminalScopeKey(serverId: string, workspaceId: string): string | null {
@@ -1400,6 +1400,15 @@ function WorkspaceScreenContent({
         return;
       }
 
+      if (
+        getPanelInstanceAttributes({
+          serverId: normalizedServerId,
+          workspaceId: normalizedWorkspaceId,
+          tabId: normalizedTabId,
+        }).discardChanges?.() === false
+      )
+        return;
+
       if (input.target?.kind === "agent") {
         unpinWorkspaceAgent(persistenceKey, input.target.agentId);
         hideWorkspaceAgent(persistenceKey, input.target.agentId);
@@ -1412,7 +1421,14 @@ function WorkspaceScreenContent({
       }
       closeWorkspaceTab(persistenceKey, normalizedTabId);
     },
-    [closeWorkspaceTab, hideWorkspaceAgent, persistenceKey, unpinWorkspaceAgent],
+    [
+      closeWorkspaceTab,
+      hideWorkspaceAgent,
+      persistenceKey,
+      unpinWorkspaceAgent,
+      normalizedServerId,
+      normalizedWorkspaceId,
+    ],
   );
 
   const focusedPaneTabState = useMemo(
@@ -2085,7 +2101,7 @@ function WorkspaceScreenContent({
     async (tabId: string) => {
       if (persistenceKey && sheets.some((sheet) => sheet.tab.tabId === tabId)) {
         if (await confirmDiscardModifiedTab(tabId)) {
-          closeWorkspaceTab(persistenceKey, tabId);
+          closeWorkspaceTabWithCleanup({ tabId });
         }
         return;
       }
@@ -2108,7 +2124,7 @@ function WorkspaceScreenContent({
     },
     [
       allTabDescriptorsById,
-      closeWorkspaceTab,
+      closeWorkspaceTabWithCleanup,
       confirmDiscardModifiedTab,
       handleCloseAgentTab,
       handleClosePassiveTab,
@@ -3336,7 +3352,7 @@ function WorkspaceScreenContent({
         <ScreenHeader
           left={
             <>
-              <SidebarMenuToggle />
+              {!isEmbeddedFocusMode && <SidebarMenuToggle />}
               <WorkspaceHeaderTitleBar
                 isLoading={isWorkspaceHeaderLoading}
                 title={workspaceHeaderTitle}
@@ -3419,7 +3435,6 @@ function WorkspaceScreenContent({
         onCloseOtherTabs={handleCloseOtherTabs}
       />
     );
-    if (isEmbeddedFocusMode) return tabSwitcher;
     return (
       <CompactWorkspaceHeader
         isLoading={isWorkspaceHeaderLoading}
