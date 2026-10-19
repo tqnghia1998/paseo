@@ -16,6 +16,7 @@ vi.mock("@/appearance/provider", () => ({ useContributedThemes: () => themes }))
 import { useEmbeddedTheme } from "./theme";
 
 afterEach(() => {
+  localStorage.clear();
   themes.options = [];
   themes.selected = null;
   themes.select.mockClear();
@@ -48,4 +49,15 @@ it("leaves standard Paseo appearance preferences alone", async () => {
   themes.options = [option];
   renderHook(() => useStandardTheme());
   expect(themes.select).not.toHaveBeenCalled();
+});
+
+it("keeps a user's later appearance choice across remounts", () => {
+  themes.options = [option];
+  const hook = renderHook(() => useEmbeddedTheme());
+  expect(themes.select).toHaveBeenCalledTimes(1);
+  themes.selected = null;
+  hook.rerender();
+  hook.unmount();
+  renderHook(() => useEmbeddedTheme());
+  expect(themes.select).toHaveBeenCalledTimes(1);
 });

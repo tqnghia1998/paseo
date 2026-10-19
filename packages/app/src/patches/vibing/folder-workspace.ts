@@ -1,3 +1,4 @@
+import { bindEmbeddedWorkspace } from "./workspace-boundary";
 import { useEffect } from "react";
 import { useRouter, type Href } from "expo-router";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -53,6 +54,7 @@ export function useEmbeddedFolderWorkspace(input: FolderWorkspaceLaunchInput): s
         });
         if (cancelled || !workspace) return;
 
+        bindEmbeddedWorkspace({ serverId, workspaceId: workspace.id });
         useSessionStore.getState().mergeWorkspaces(serverId, [workspace]);
         router.replace(
           preserveEmbeddedLiveDesignMessagingQuery(

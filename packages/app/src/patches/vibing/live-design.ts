@@ -1,5 +1,9 @@
 import { useEffect } from "react";
-import { getEmbeddedHostOrigin, subscribeToHostMessages } from "./host-messages";
+import {
+  getEmbeddedHostOrigin,
+  subscribeToHostMessages,
+  takeSettingsHandoff,
+} from "./host-messages";
 import type { ComposerAttachment } from "@/attachments/types";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { AgentAttachment, AgentSnapshotPayload } from "@getpaseo/protocol/messages";
@@ -228,6 +232,13 @@ export function useEmbeddedLiveDesignActivation(input: {
         if (pendingAgentId) activateConversation(pendingAgentId);
       }
     };
+    for (const type of [
+      EMBEDDED_LIVE_DESIGN_READY_REQUEST_TYPE,
+      EMBEDDED_LIVE_DESIGN_NEW_AGENT_REQUEST_TYPE,
+    ]) {
+      const pending = takeSettingsHandoff(type);
+      if (pending) handleMessage(pending);
+    }
     return subscribeToHostMessages(expectedOrigin, handleMessage);
   }, [activateConversation, enabled, workspaceId]);
 }

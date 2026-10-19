@@ -11,6 +11,7 @@ import { AddHostProvider, AddHostFlowHost } from "@/hosts/add-host";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useIsExplorerSidebarOpen } from "@/workspace-tabs/explorer-sidebar";
+import { useEmbeddedSettingsHandoff } from "@/patches/vibing/navigation-boundary";
 import { ComposerEditingSessionsProvider } from "@/composer/editing-session";
 import { SheetHostScope } from "@/components/ui/isolated-bottom-sheet-modal";
 import "@/styles/unistyles";
@@ -567,19 +568,19 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         {isEmbeddedFocusMode ? null : (
           <>
             <CommandCenterRootActions />
-            <CommandCenterWorkspaceActions />
-            <PluginCommandCenterActions />
-            <WorkspacePinShortcutHandler />
-            <WorkspaceRenameHost />
-            <CommandCenter />
             <AddProjectFlowHost />
             <HostChooserModal />
             <HostConfirmationSheet />
-            <ProviderSettingsHost />
             <WorkspaceSetupDialog />
-            <KeyboardShortcutsDialog />
           </>
         )}
+        <PluginCommandCenterActions />
+        <CommandCenterWorkspaceActions />
+        <WorkspacePinShortcutHandler />
+        <WorkspaceRenameHost />
+        <CommandCenter />
+        <ProviderSettingsHost />
+        <KeyboardShortcutsDialog />
         <AppDiagnosticHost />
         <ChangelogHost />
         <QuittingOverlay />
@@ -918,6 +919,7 @@ function WorkspaceRouteNavigationBridge() {
 
 function AppShell() {
   useEmbeddedTheme();
+  useEmbeddedSettingsHandoff();
   useEffect(() => {
     if (getDesktopHost()) void ensureOsNotificationPermission();
   }, []);

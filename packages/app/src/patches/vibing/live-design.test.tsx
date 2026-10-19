@@ -487,3 +487,41 @@ describe("embedded Live Design bridge", () => {
     },
   );
 });
+
+it("retains fresh-agent correlation through the Settings return", async () => {
+  const parent = host();
+  const { rememberSettingsHandoff } = await import("./host-messages");
+  rememberSettingsHandoff({
+    type: "space:paseo-live-design-new-agent-request",
+    requestId: "from-settings",
+  });
+  const activateConversation = vi.fn().mockReturnValue("settings-draft");
+  const activation = renderHook(() =>
+    useEmbeddedLiveDesignActivation({
+      enabled: true,
+      workspaceId: "workspace",
+      activateConversation,
+    }),
+  );
+  expect(activateConversation).toHaveBeenCalledExactlyOnceWith(undefined, true);
+  activation.unmount();
+  const composer = renderHook(() =>
+    useEmbeddedLiveDesignSend({
+      agentId: "settings-draft",
+      workspaceId: "workspace",
+      enabled: true,
+      isDraft: true,
+      submit: vi.fn(),
+    }),
+  );
+  expect(parent.postMessage).toHaveBeenCalledWith(
+    {
+      type: "paseo:live-design-ready",
+      preparedText: true,
+      requestId: "from-settings",
+      destination: { agentId: "settings-draft", workspaceId: "workspace", isDraft: true },
+    },
+    origin,
+  );
+  composer.unmount();
+});
