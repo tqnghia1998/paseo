@@ -9,7 +9,6 @@ import {
   resolveRetainedSelection,
   runAlternateSendAction,
   runDefaultSendAction,
-  resolveImmediateActiveTurnBehavior,
   runMessageInputKeyboardAction,
   stopRealtimeVoice,
 } from "./state";
@@ -208,14 +207,6 @@ describe("composer send behavior", () => {
       onQueue: () => undefined,
     };
   }
-
-  it("uses an explicit steer action regardless of the default send behavior", () => {
-    expect(resolveImmediateActiveTurnBehavior("interrupt", "steer")).toBe("steer");
-    expect(resolveImmediateActiveTurnBehavior("queue", "steer")).toBe("steer");
-    expect(resolveImmediateActiveTurnBehavior("steer")).toBe("steer");
-    expect(resolveImmediateActiveTurnBehavior("queue")).toBe("interrupt");
-    expect(resolveImmediateActiveTurnBehavior("interrupt")).toBe("interrupt");
-  });
 
   it("uses Enter to interrupt and Mod+Enter to queue when interrupt is selected", () => {
     const defaultAction = actions();

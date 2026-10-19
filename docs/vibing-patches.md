@@ -16,36 +16,40 @@ Paths in the module column are relative to the corresponding `src/patches/vibing
 directory. The upstream hooks column names the integration points to check after a
 rebase, rather than requiring reviewers to reconstruct them from commit history.
 
-| Patch                                   | Owned modules                                                                                                                                                  | Upstream hooks                                                                                                  | Verification                                                                                          |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Worktree entry and embedded navigation  | App: `focus-mode.ts`, `folder-workspace.ts`, `workspace-conversation.ts`, `workspace-boundary.ts`, `navigation-boundary.tsx`, `sidebar.ts`, `sidebar-hooks.ts` | Root/workspace routes, panel/workspace-layout stores, New Agent/model/import controls, fork menu                | Colocated focus, folder, and conversation tests; workspace-layout regressions; embedded browser smoke |
-| Host prompt insertion                   | App: `host-prompts.ts`, `host-messages.ts`, `composer-bridge.ts`                                                                                               | Workspace activation and composer                                                                               | Colocated host-prompt and composer-bridge tests                                                       |
-| Live Design requests                    | App: `live-design.ts`, `host-messages.ts`, `composer-bridge.ts`                                                                                                | Composer submission/queue callbacks, message context viewer and rewind                                          | Colocated Live Design and bridge tests; attachment/rewind tests; client/server wait regressions       |
-| Agent activity                          | App: `agent-activity.tsx`; server: `worktree-activity.ts`, `worktree-runtime.ts`                                                                               | App layout and daemon bootstrap                                                                                 | Colocated activity tests; embedded activity case in `bootstrap.smoke.test.ts`                         |
-| Embedded theme                          | App: `theme.ts`; `plugins/space-app-vibing-theme/`                                                                                                             | App shell and native built-in plugin registry                                                                   | Colocated theme tests; built-in publication test; browser palette check                               |
-| Queue persistence                       | App: `queued-messages.ts`                                                                                                                                      | Session initialization and queue writes                                                                         | Colocated queue tests; session-store and composer submission tests                                    |
-| Worktree stop and deletion              | Server: `worktree-runtime.ts`                                                                                                                                  | Daemon startup, cleanup API and offline runner                                                                  | Missing-worktree case in `bootstrap.smoke.test.ts`; runner token-isolation tests                      |
-| Editor remount recovery                 | App: `file-recovery.ts`                                                                                                                                        | File editor model/view and panel close attributes                                                               | Recovery/model tests; iframe remount smoke                                                            |
-| Duplicate workspace recovery            | Server: `workspace-open.ts`                                                                                                                                    | Session activity lookup and workspace provisioning                                                              | `workspace-provisioning-service.test.ts`                                                              |
-| Codex questions and native instructions | Server: `codex/questions.ts`                                                                                                                                   | Codex config load and developer-instruction composition; the session-local feature default stays in the adapter | Codex provider unit tests and local question round trips                                              |
-| Interactive Codex shells                | Server: `codex/terminal-interactions.ts`                                                                                                                       | Codex event mapping, optional protocol `stdin`, Shell card renderer                                             | Colocated terminal tests; Codex provider tests; tool-call schema/browser tests                        |
-| Standalone distribution                 | `scripts/bundle-paseo-web.mjs`, `scripts/paseo-web.js`                                                                                                         | Root build command, embedded build flag, packaged version and built-in plugin discovery                         | Runner tests, full standalone build and Vibing bundle guard; see [porting guide](../README-PORT.md)   |
+| Patch                                   | Owned modules                                                                                                                                                  | Upstream hooks                                                                                                  | Verification                                                                                                                 |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Worktree entry and embedded navigation  | App: `focus-mode.ts`, `folder-workspace.ts`, `workspace-conversation.ts`, `workspace-boundary.ts`, `navigation-boundary.tsx`, `sidebar.ts`, `sidebar-hooks.ts` | Root/workspace routes, panel/workspace-layout stores, root command actions, import controls, fork menu          | Colocated focus, folder, and conversation tests; `open-beside.test.ts`; workspace-layout regressions; embedded browser smoke |
+| Host prompt insertion                   | App: `host-prompts.ts`, `host-messages.ts`, `composer-bridge.ts`                                                                                               | Workspace activation and composer                                                                               | Colocated host-prompt and composer-bridge tests                                                                              |
+| Live Design requests                    | App: `live-design.ts`, `host-messages.ts`, `composer-bridge.ts`                                                                                                | Composer submission/queue callbacks, message context viewer and rewind                                          | Colocated Live Design and bridge tests; attachment/rewind tests; client/server wait regressions                              |
+| Agent activity                          | App: `agent-activity.tsx`; server: `worktree-activity.ts`, `worktree-runtime.ts`                                                                               | App layout and daemon bootstrap                                                                                 | Colocated activity tests; embedded activity case in `bootstrap.smoke.test.ts`                                                |
+| Embedded theme                          | App: `theme.ts`; `plugins/space-app-vibing-theme/`                                                                                                             | App shell and native built-in plugin registry                                                                   | Colocated theme tests; built-in publication test; browser palette check                                                      |
+| Queue persistence                       | App: `queued-messages.ts`                                                                                                                                      | Session initialization and queue writes                                                                         | Colocated queue tests; session-store and composer submission tests                                                           |
+| Worktree stop and deletion              | Server: `worktree-runtime.ts`                                                                                                                                  | Daemon startup, cleanup API and offline runner                                                                  | Missing-worktree case in `bootstrap.smoke.test.ts`; runner token-isolation tests                                             |
+| Editor remount recovery                 | App: `file-recovery.ts`                                                                                                                                        | File editor model/view and panel close attributes                                                               | Recovery/model tests; iframe remount smoke                                                                                   |
+| Duplicate workspace recovery            | Server: `workspace-open.ts`                                                                                                                                    | Session activity lookup and workspace provisioning                                                              | `workspace-provisioning-service.test.ts`                                                                                     |
+| Codex questions and native instructions | Server: `codex/questions.ts`                                                                                                                                   | Codex config load and developer-instruction composition; the session-local feature default stays in the adapter | Codex provider unit tests and local question round trips                                                                     |
+| Interactive Codex shells                | Server: `codex/terminal-interactions.ts`                                                                                                                       | Codex event mapping, optional protocol `stdin`, Shell card renderer                                             | Colocated terminal tests; Codex provider tests; tool-call schema/browser tests                                               |
+| Standalone distribution                 | `scripts/bundle-paseo-web.mjs`, `scripts/paseo-web.js`                                                                                                         | Root build command, embedded build flag, packaged version and built-in plugin discovery                         | Runner tests, full standalone build and Vibing bundle guard; see [porting guide](../README-PORT.md)                          |
 
 ## Plugin boundary
 
-Embedded Settings → Vibing customizations provides a read-only catalog of shipped
-plugin changes, workspace integration patches, and provider/runtime fixes. It uses
-`packages/app/src/patches/vibing/customizations.tsx`; update it when this patch map
+The native plugin settings screen registered by `space-app-vibing-theme` provides
+its read-only customization catalog. Update
+`plugins/space-app-vibing-theme/client/customizations.tsx` when this patch map
 changes. Implementation paths stay under its collapsed details row. The catalog
-does not inspect runtime health or change enablement. Its Open setting actions
-reuse Appearance and General → Default send. Live Design is configured in the
-outer Vibing Settings → Experiments page. Reliability and navigation patches do
-not get separate toggles.
+does not inspect runtime health or change enablement. It points to the native
+Appearance and General → Default send controls without adding app routes or
+cross-screen plugin navigation. Live Design is configured in outer Vibing
+Settings → Experiments. Reliability and navigation patches do not get toggles.
 
-Settings → Plugins lists registered plugins, not every fork change. Of the bundled
-plugins, `space-app-vibing-theme` is added by this fork, and `codex-usage-source`
-contains the Enterprise allowance change. The other bundled provider and usage
-plugins come from the incorporated upstream base.
+Embedded Settings → Plugins separates Vibing customizations, Paseo built-ins and
+additional plugins. `space-app-vibing-theme` is added by this fork, and
+`codex-usage-source` contains the Enterprise allowance change; their runtime rows
+appear under Vibing customizations, alongside a link to the full patch catalog.
+The other bundled provider and usage plugins come from the incorporated upstream
+base and stay under Paseo built-ins. Additional plugins retain their installation
+and lifecycle controls. Keep this display grouping in `plugin-inventory.ts`; it
+must not change which plugins load or their runtime status.
 
 The patch map above records the remaining customizations. Native navigation guards,
 composer draft/queue integration, editor recovery, process cleanup, and provider
@@ -69,8 +73,10 @@ plugin list unchanged.
   A worktree-qualified iframe name keys a sessionStorage navigation binding so
   Settings reload/return cannot select a sibling iframe's last workspace. The route
   boundary gates screen mounting, and navigation/search filter workspace targets.
-  The native sidebar, History, Schedules and plugin screens stay available. Scope
-  rows, imports and schedule targets to the bound worktree. Different Paseo
+  The native sidebar, History, Schedules and plugin screens stay available. Native
+  root command actions remain registered; only project creation, workspace creation
+  and Home are filtered. Import is unavailable until the bound directory resolves.
+  Scope rows, imports and schedule targets to the bound worktree. Different Paseo
   workspace records may share that directory (local scheduled runs); only daemon
   descriptors proving an exact directory match allow those records through. Other
   hosts, sibling paths and unresolved identities remain blocked. Scheduled runs
@@ -80,7 +86,9 @@ plugin list unchanged.
   index and other project settings remain unavailable.
   Shared settings may affect other workspaces; this is not a plugin/terminal sandbox. The historical `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS` flag identifies
   embedding; Focus Mode itself is optional. Panel-store version 17 clears legacy
-  forced focus once. Empty panes no longer create drafts automatically.
+  forced focus once. Focus Mode keeps native file-placement preferences and
+  conversation-parent relationships within the same workspace. Empty panes keep
+  the native launcher.
 - Embedded editors journal unsaved text in sessionStorage before accepting it.
   Recovery is scoped by server/workspace/tab/path and lasts across iframe remounts
   in the same top-level window. It is not cross-window or restart persistence.
@@ -104,7 +112,9 @@ plugin list unchanged.
   image handoff remain rejected.
 - Queue stays the default active-turn Send behavior. Preserve synchronous draft
   clearing, queue checkpoint merging/deduplication, and the one-time settings
-  migration. Alternate-send keyboard behavior stays upstream behavior.
+  migration. Sending controls and alternate-send keyboard behavior follow upstream.
+  Native saved provider/model preferences own selection; no provider-priority
+  fallback overrides them.
 - Chat widths, gutters, tab geometry and metadata tooltips follow upstream. Use
   Paseo's Appearance content-width setting for both transcript and composer.
   The bundled theme uses the native `addTheme` palette, whose derived colors

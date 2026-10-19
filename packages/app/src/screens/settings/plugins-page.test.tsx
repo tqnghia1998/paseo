@@ -193,7 +193,7 @@ describe("HostPluginsPage", () => {
       { ...plugin(), id: "codex-usage-source", builtin: true },
     ]);
     renderPage(client);
-    expect(await screen.findByText("Built-in plugins")).toBeDefined();
+    expect(await screen.findByText("Paseo built-ins")).toBeDefined();
     expect(await screen.findByText("codex-usage-source")).toBeDefined();
     expect(screen.getByText("loaded")).toBeDefined();
     expect(screen.queryByRole("switch", { name: "codex-usage-source: Disable" })).toBeNull();

@@ -1,7 +1,12 @@
 const shared = {
-  builtinTitle: "Built-in plugins",
+  builtinTitle: "Paseo built-ins",
   builtinHint:
-    "Included with Paseo and loaded automatically. The additional-plugin switch does not affect these integrations.",
+    "Standard Paseo provider and usage integrations. Loaded automatically; accounts appear when configured. The additional-plugin switch does not affect these integrations.",
+  vibingHint:
+    "Plugins added or extended for Vibing. View all customizations for the full catalog of plugin changes and workspace integration patches.",
+  vibingCatalog: "View all Vibing customizations",
+  vibingTitle: "Vibing customizations",
+  vibingEmpty: "No Vibing plugins reported by this host",
   builtinLoaded: "loaded",
   builtinEmpty: "No built-in plugins reported by this host",
   builtinUpdateTitle: "Update the host to view built-in plugins",
@@ -21,6 +26,14 @@ const shared = {
 export const pluginSettings = {
   ar: {
     ...shared,
+    vibingTitle: "تخصيصات Vibing",
+    builtinTitle: "إضافات Paseo المدمجة",
+    builtinHint:
+      "تكاملات المزوّدين والاستخدام القياسية في Paseo. تُحمّل تلقائيًا وتظهر الحسابات عند إعدادها. لا يؤثر مفتاح الإضافات الإضافية على هذه التكاملات.",
+    vibingHint:
+      "إضافات أُضيفت أو وُسّعت لتطبيق Vibing. اعرض جميع التخصيصات للاطلاع على تغييرات الإضافات وتكامل مساحة العمل.",
+    vibingCatalog: "عرض جميع تخصيصات Vibing",
+    vibingEmpty: "لم يُبلغ هذا المضيف عن أي إضافات Vibing",
     screens: {
       open: "فتح",
       offline: "اتصل بهذا المضيف لفتح إعدادات الإضافة.",
@@ -76,6 +89,14 @@ export const pluginSettings = {
   },
   es: {
     ...shared,
+    vibingTitle: "Personalizaciones de Vibing",
+    builtinTitle: "Plugins integrados de Paseo",
+    builtinHint:
+      "Integraciones estándar de proveedores y uso de Paseo. Se cargan automáticamente; las cuentas aparecen al configurarlas. El interruptor de plugins adicionales no afecta a estas integraciones.",
+    vibingHint:
+      "Plugins añadidos o ampliados para Vibing. Consulta todas las personalizaciones para ver los cambios de plugins e integración del espacio de trabajo.",
+    vibingCatalog: "Ver todas las personalizaciones de Vibing",
+    vibingEmpty: "Este host no informa de plugins de Vibing",
     screens: {
       open: "Abrir",
       offline: "Conéctate a este host para abrir los ajustes del plugin.",
@@ -131,6 +152,14 @@ export const pluginSettings = {
   },
   fr: {
     ...shared,
+    vibingTitle: "Personnalisations Vibing",
+    builtinTitle: "Plugins intégrés de Paseo",
+    builtinHint:
+      "Intégrations standard de fournisseurs et de suivi d’utilisation de Paseo. Chargées automatiquement ; les comptes apparaissent après configuration. Le bouton des plugins supplémentaires ne les affecte pas.",
+    vibingHint:
+      "Plugins ajoutés ou étendus pour Vibing. Consultez toutes les personnalisations pour voir les modifications des plugins et de l’intégration de l’espace de travail.",
+    vibingCatalog: "Voir toutes les personnalisations de Vibing",
+    vibingEmpty: "Aucun plugin Vibing signalé par cet hôte",
     screens: {
       open: "Ouvrir",
       offline: "Connectez-vous à cet hôte pour ouvrir les paramètres du plugin.",
@@ -186,6 +215,14 @@ export const pluginSettings = {
   },
   ja: {
     ...shared,
+    vibingTitle: "Vibing のカスタマイズ",
+    builtinTitle: "Paseo 組み込みプラグイン",
+    builtinHint:
+      "Paseo 標準のプロバイダーと使用量の連携です。自動で読み込まれ、設定済みのアカウントが表示されます。追加プラグインのスイッチはこれらの連携に影響しません。",
+    vibingHint:
+      "Vibing 用に追加・拡張されたプラグインです。プラグインの変更とワークスペース連携の一覧は、すべてのカスタマイズから確認できます。",
+    vibingCatalog: "Vibing のすべてのカスタマイズを表示",
+    vibingEmpty: "このホストから Vibing プラグインは報告されていません",
     screens: {
       open: "開く",
       offline: "このホストに接続してプラグイン設定を開いてください。",
@@ -241,6 +278,14 @@ export const pluginSettings = {
   },
   ko: {
     ...shared,
+    vibingTitle: "Vibing 사용자 지정",
+    builtinTitle: "Paseo 내장 플러그인",
+    builtinHint:
+      "Paseo의 표준 제공자 및 사용량 연동입니다. 자동으로 로드되며 설정된 계정이 표시됩니다. 추가 플러그인 스위치는 이 연동에 영향을 주지 않습니다.",
+    vibingHint:
+      "Vibing용으로 추가하거나 확장한 플러그인입니다. 전체 사용자 지정에서 플러그인 변경 및 작업 공간 연동 목록을 확인하세요.",
+    vibingCatalog: "Vibing 사용자 지정 모두 보기",
+    vibingEmpty: "이 호스트에서 보고한 Vibing 플러그인이 없습니다",
     screens: {
       open: "열기",
       offline: "플러그인 설정을 열려면 이 호스트에 연결하세요.",
@@ -295,6 +340,14 @@ export const pluginSettings = {
   },
   "pt-BR": {
     ...shared,
+    vibingTitle: "Personalizações do Vibing",
+    builtinTitle: "Plugins integrados do Paseo",
+    builtinHint:
+      "Integrações padrão de provedores e uso do Paseo. Carregadas automaticamente; as contas aparecem após a configuração. O controle de plugins adicionais não afeta essas integrações.",
+    vibingHint:
+      "Plugins adicionados ou ampliados para o Vibing. Veja todas as personalizações para consultar as alterações de plugins e integração do espaço de trabalho.",
+    vibingCatalog: "Ver todas as personalizações do Vibing",
+    vibingEmpty: "Nenhum plugin do Vibing informado por este host",
     screens: {
       open: "Abrir",
       offline: "Conecte-se a este host para abrir as configurações do plugin.",
@@ -350,6 +403,14 @@ export const pluginSettings = {
   },
   ru: {
     ...shared,
+    vibingTitle: "Изменения Vibing",
+    builtinTitle: "Встроенные плагины Paseo",
+    builtinHint:
+      "Стандартные интеграции провайдеров и статистики использования Paseo. Загружаются автоматически; настроенные аккаунты отображаются. Переключатель дополнительных плагинов на них не влияет.",
+    vibingHint:
+      "Плагины, добавленные или расширенные для Vibing. Откройте все настройки Vibing, чтобы увидеть изменения плагинов и интеграции рабочего пространства.",
+    vibingCatalog: "Все настройки Vibing",
+    vibingEmpty: "Этот хост не сообщает о плагинах Vibing",
     screens: {
       open: "Открыть",
       offline: "Подключитесь к этому хосту, чтобы открыть настройки плагина.",
@@ -405,6 +466,13 @@ export const pluginSettings = {
   },
   "zh-CN": {
     ...shared,
+    vibingTitle: "Vibing 定制",
+    builtinTitle: "Paseo 内置插件",
+    builtinHint:
+      "Paseo 标准的提供商和用量集成。自动加载，配置后显示账户。附加插件开关不会影响这些集成。",
+    vibingHint: "为 Vibing 添加或扩展的插件。查看所有定制，了解插件更改和工作区集成补丁。",
+    vibingCatalog: "查看所有 Vibing 定制",
+    vibingEmpty: "此主机未报告 Vibing 插件",
     screens: {
       open: "打开",
       offline: "连接到此主机以打开插件设置。",

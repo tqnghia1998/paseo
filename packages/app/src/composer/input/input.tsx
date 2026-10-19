@@ -60,10 +60,7 @@ import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
-import {
-  embeddedMessageInputFocusHintVisible,
-  isEmbeddedLiveDesignMessaging,
-} from "@/patches/vibing/focus-mode";
+import { isEmbeddedLiveDesignMessaging } from "@/patches/vibing/focus-mode";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useComposerHeight } from "./height";
 import { ComposerInputPresentation } from "./presentation";
@@ -948,7 +945,6 @@ interface SendMessageContext {
   onMinimizeHeight: () => void;
   preserveHeightOnSubmit: boolean;
   exitFullscreen: () => void;
-  activeTurnBehavior?: "steer";
 }
 
 function sendMessageImpl(ctx: SendMessageContext): void {
@@ -967,7 +963,6 @@ function sendMessageImpl(ctx: SendMessageContext): void {
     attachments: ctx.attachments,
     cwd: ctx.cwd,
     forceSend: ctx.isAgentRunning || undefined,
-    activeTurnBehavior: ctx.activeTurnBehavior,
   });
   // When the host preserves and locks the composer (e.g. new-workspace creation),
   // the text stays put — collapsing the height would clip it. Keep it grown.
@@ -1643,39 +1638,35 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       resetComposerHeight?.();
     }, [resetComposerHeight]);
 
-    const handleSendMessage = useCallback(
-      (activeTurnBehavior?: "steer") => {
-        const liveValue = textInputRef.current?.getText() ?? valueRef.current;
-        if (!preserveHeightOnSubmit) {
-          updateLiveTextPresence("");
-        }
-        sendMessageImpl({
-          value: liveValue,
-          attachments,
-          hasExternalContent,
-          allowEmptySubmit,
-          cwd,
-          isAgentRunning,
-          onSubmit,
-          onMinimizeHeight: minimizeInputHeight,
-          preserveHeightOnSubmit,
-          activeTurnBehavior,
-          exitFullscreen,
-        });
-      },
-      [
-        allowEmptySubmit,
+    const handleSendMessage = useCallback(() => {
+      const liveValue = textInputRef.current?.getText() ?? valueRef.current;
+      if (!preserveHeightOnSubmit) {
+        updateLiveTextPresence("");
+      }
+      sendMessageImpl({
+        value: liveValue,
         attachments,
-        cwd,
-        onSubmit,
-        isAgentRunning,
         hasExternalContent,
-        minimizeInputHeight,
+        allowEmptySubmit,
+        cwd,
+        isAgentRunning,
+        onSubmit,
+        onMinimizeHeight: minimizeInputHeight,
         preserveHeightOnSubmit,
         exitFullscreen,
-        updateLiveTextPresence,
-      ],
-    );
+      });
+    }, [
+      allowEmptySubmit,
+      attachments,
+      cwd,
+      onSubmit,
+      isAgentRunning,
+      hasExternalContent,
+      minimizeInputHeight,
+      preserveHeightOnSubmit,
+      updateLiveTextPresence,
+      exitFullscreen,
+    ]);
 
     const handleQueueMessage = useCallback(
       () =>
@@ -2021,14 +2012,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             fullscreen={isFullscreen}
             compact={isCompact}
             onRenderedLinesChange={setRenderedLines}
-            focusHintVisible={
-              !isFullscreen &&
-              embeddedMessageInputFocusHintVisible({
-                isWeb,
-                isInputFocused,
-                hasValue: Boolean(value),
-              })
-            }
+            focusHintVisible={!isFullscreen && isWeb && !isInputFocused && !value}
             focusInputKeys={focusInputKeys}
             focusHintLabel={t("composer.input.focusHint", {
               shortcut: focusInputKeys ? formatShortcut(focusInputKeys[0], getShortcutOs()) : "",

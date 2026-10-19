@@ -1,4 +1,3 @@
-import { VibingCustomizationsSection } from "@/patches/vibing/customizations";
 import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import {
   getEmbeddedWorkspace,
@@ -153,7 +152,6 @@ interface SidebarSectionItem {
   icon: ComponentType<{ size: number; color: string; strokeWidth?: number }>;
   desktopOnly?: boolean;
   webOnly?: boolean;
-  embeddedOnly?: boolean;
   /** The page body, for pages that need nothing from the settings screen. */
   Content?: ComponentType;
 }
@@ -224,20 +222,12 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   },
   { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
-  {
-    id: "vibing-customizations",
-    labelKey: "settings.sections.vibingCustomizations",
-    icon: Blocks,
-    embeddedOnly: true,
-    Content: VibingCustomizationsSection,
-  },
 ];
 
 function isSectionAvailable(item: SidebarSectionItem, isDesktopApp: boolean): boolean {
   return (
     (!item.desktopOnly || isDesktopApp || (isEmbeddedFocusMode && item.id === "shortcuts")) &&
-    (!item.webOnly || isWeb) &&
-    (!item.embeddedOnly || isEmbeddedFocusMode)
+    (!item.webOnly || isWeb)
   );
 }
 

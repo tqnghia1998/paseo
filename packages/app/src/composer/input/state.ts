@@ -5,13 +5,6 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 
 export type SendBehavior = ActiveTurnBehavior | "queue";
 
-export function resolveImmediateActiveTurnBehavior(
-  defaultSendBehavior: SendBehavior,
-  requestedBehavior?: ActiveTurnBehavior,
-): ActiveTurnBehavior {
-  return requestedBehavior ?? (defaultSendBehavior === "steer" ? "steer" : "interrupt");
-}
-
 export function resolveActiveSendBehavior(
   sendBehavior: SendBehavior,
   hasPendingPermission: boolean,

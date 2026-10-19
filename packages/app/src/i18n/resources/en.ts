@@ -2184,7 +2184,6 @@ export const en = {
     },
     groupInfo: "About {{title}}",
     sections: {
-      vibingCustomizations: "Vibing customizations",
       general: "General",
       chat: "Chat",
       appearance: "Appearance",
@@ -2288,9 +2287,14 @@ export const en = {
         unavailable: "This plugin settings screen is unavailable.",
         backToPlugins: "Back to plugins",
       },
-      builtinTitle: "Built-in plugins",
+      builtinTitle: "Paseo built-ins",
       builtinHint:
-        "Included with Paseo and loaded automatically. The additional-plugin switch does not affect these integrations.",
+        "Standard Paseo provider and usage integrations. Loaded automatically; accounts appear when configured. The additional-plugin switch does not affect these integrations.",
+      vibingHint:
+        "Plugins added or extended for Vibing. View all customizations for the full catalog of plugin changes and workspace integration patches.",
+      vibingCatalog: "View all Vibing customizations",
+      vibingTitle: "Vibing customizations",
+      vibingEmpty: "No Vibing plugins reported by this host",
       builtinLoaded: "loaded",
       builtinEmpty: "No built-in plugins reported by this host",
       builtinUpdateTitle: "Update the host to view built-in plugins",

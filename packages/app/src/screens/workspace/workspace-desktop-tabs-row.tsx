@@ -51,10 +51,7 @@ import { buttonControlHeight } from "@/components/ui/control-geometry";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-layout";
-import {
-  retainWorkspaceTabMeasuredWidth,
-  shouldShowInlineWorkspaceNewTab,
-} from "@/screens/workspace/workspace-tab-layout";
+import { retainWorkspaceTabMeasuredWidth } from "@/screens/workspace/workspace-tab-layout";
 import {
   WorkspaceTabPresentationResolver,
   WorkspaceTabIcon,
@@ -81,9 +78,9 @@ import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { formatCompactTimeAgoAsProse } from "@/utils/time";
-import { useSessionStore } from "@/stores/session-store";
 import { buildWorkspaceKeyboardHandlerId } from "@/keyboard/handler-id";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
+import { WorkspaceNewTabMenuContent } from "@/screens/workspace/workspace-new-tab-menu";
 import {
   paneContentToolbarTrailingPadding,
   ToolbarButton,
@@ -94,6 +91,8 @@ import {
   HorizontalScrollBoundaryShades,
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
+import { useSessionStore } from "@/stores/session-store";
+
 const DROPDOWN_WIDTH = 220;
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
 const PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING = 2;
@@ -218,47 +217,78 @@ function TabLabelMeasurement({
   );
 }
 
+type PanePanelKinds = readonly WorkspaceTabDescriptor["kind"][];
+
 interface WorkspaceNewTabButtonProps {
+  panePanelKinds: PanePanelKinds;
+  host: PaneHost;
+  launchPurpose: WorkspaceTabLaunchPurpose;
+  serverId: string;
+  paneId?: string;
   shortcutKeys: ShortcutKey[][] | null;
-  onPress: () => void;
   placement: "inline" | "toolbar";
 }
 
-function WorkspaceNewTabButton({ shortcutKeys, onPress, placement }: WorkspaceNewTabButtonProps) {
+function WorkspaceNewTabButton({
+  panePanelKinds,
+  host,
+  launchPurpose,
+  serverId,
+  paneId,
+  shortcutKeys,
+  placement,
+}: WorkspaceNewTabButtonProps) {
   const { t } = useTranslation();
-  const label = t("workspace.tabs.actions.newAgent");
-  const button = (
-    <ToolbarButton
-      label={label}
-      shortcut={shortcutKeys}
-      testID="workspace-new-tab-button"
-      style={placement === "inline" ? styles.inlineNewTabButton : undefined}
-      onPress={onPress}
-    >
-      <ThemedPlus size={14} uniProps={extraMutedColorMapping} />
-    </ToolbarButton>
+  const tooltipText = t("workspace.tabs.actions.newTab");
+  const menu = (
+    <DropdownMenu>
+      <ToolbarButton
+        kind="menu"
+        label={tooltipText}
+        shortcut={shortcutKeys}
+        testID="workspace-new-tab-button"
+        style={placement === "inline" ? styles.inlineNewTabButton : undefined}
+      >
+        <ThemedPlus size={14} uniProps={extraMutedColorMapping} />
+      </ToolbarButton>
+      <WorkspaceNewTabMenuContent
+        serverId={serverId}
+        purpose={launchPurpose}
+        host={host}
+        panePanelKinds={panePanelKinds}
+        paneId={paneId}
+      />
+    </DropdownMenu>
   );
 
-  return placement === "inline" ? <View style={styles.inlineAddButton}>{button}</View> : button;
+  return placement === "inline" ? <View style={styles.inlineAddButton}>{menu}</View> : menu;
 }
 
 function WorkspacePaneToolbarActions({
+  panePanelKinds,
+  host,
+  launchPurpose,
   showNewTabButton,
   showSplitActions,
   showMaximizeAction,
   paneMaximized,
+  serverId,
+  paneId,
   newTabShortcutKeys,
-  onCreateNewTab,
   onSplitRight,
   onSplitDown,
   onTogglePaneMaximized,
 }: {
+  panePanelKinds: PanePanelKinds;
+  host: PaneHost;
+  launchPurpose: WorkspaceTabLaunchPurpose;
   showNewTabButton: boolean;
   showSplitActions: boolean;
   showMaximizeAction: boolean;
   paneMaximized: boolean;
+  serverId: string;
+  paneId?: string;
   newTabShortcutKeys: ShortcutKey[][] | null;
-  onCreateNewTab: () => void;
   onSplitRight?: () => void;
   onSplitDown?: () => void;
   onTogglePaneMaximized?: () => void;
@@ -290,9 +320,13 @@ function WorkspacePaneToolbarActions({
     <ToolbarControls style={styles.paneSplitActions}>
       {showNewTabButton ? (
         <WorkspaceNewTabButton
+          panePanelKinds={panePanelKinds}
+          host={host}
+          launchPurpose={launchPurpose}
           placement="toolbar"
+          serverId={serverId}
+          paneId={paneId}
           shortcutKeys={newTabShortcutKeys}
-          onPress={onCreateNewTab}
         />
       ) : null}
       {maximizeActionVisible && onTogglePaneMaximized ? (
@@ -349,6 +383,35 @@ function WorkspacePaneToolbarActions({
         </DropdownMenu>
       ) : null}
     </ToolbarControls>
+  );
+}
+
+function WorkspaceExitFocusModeButton({
+  visible,
+  onPress,
+  onLayout,
+}: {
+  visible: boolean;
+  onPress: () => void;
+  onLayout: (event: LayoutChangeEvent) => void;
+}) {
+  const { t } = useTranslation();
+  const focusModeKeys = useShortcutKeys("toggle-focus");
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <View style={styles.exitFocusModeSlot} onLayout={onLayout}>
+      <ToolbarButton
+        label={t("workspace.tabs.actions.exitFocusMode")}
+        shortcut={focusModeKeys}
+        testID="workspace-exit-focus-mode"
+        onPress={onPress}
+      >
+        <ThemedX size={14} uniProps={mutedColorMapping} />
+      </ToolbarButton>
+    </View>
   );
 }
 
@@ -487,6 +550,8 @@ export interface WorkspaceDesktopTabsRowProps {
   onTogglePaneMaximized?: () => void;
   onSplitRight?: () => void;
   onSplitDown?: () => void;
+  focusModeEnabled: boolean;
+  onExitFocusMode: () => void;
 }
 
 interface ResolvedWorkspaceDesktopTabsRowProps extends Omit<WorkspaceDesktopTabsRowProps, "tabs"> {
@@ -953,6 +1018,8 @@ export function WorkspaceDesktopTabsRow(props: WorkspaceDesktopTabsRowProps) {
 }
 
 function ResolvedWorkspaceDesktopTabsRow({
+  host = "main",
+  launchPurpose = "primary",
   paneId,
   isFocused = false,
   ownsKeyboardShortcuts = isFocused,
@@ -982,12 +1049,15 @@ function ResolvedWorkspaceDesktopTabsRow({
   onTogglePaneMaximized,
   onSplitRight,
   onSplitDown,
+  focusModeEnabled,
+  onExitFocusMode,
 }: ResolvedWorkspaceDesktopTabsRowProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const newTabKeys = useShortcutKeys("workspace-tab-new");
   const [tabsContainerWidth, setTabsContainerWidth] = useState<number>(0);
   const tabsScrollRef = useRef<ScrollView>(null);
+  const [exitFocusModeWidth, setExitFocusModeWidth] = useState<number>(0);
   const tabScrollBoundary = useHorizontalScrollBoundary();
   const [labelMeasurements, setLabelMeasurements] = useState(
     () => new Map<string, WorkspaceTabLabelMeasurement>(),
@@ -998,12 +1068,17 @@ function ResolvedWorkspaceDesktopTabsRow({
     updateMeasuredWidth(setTabsContainerWidth, event);
   }, []);
 
+  const handleExitFocusModeLayout = useCallback((event: LayoutChangeEvent) => {
+    updateMeasuredWidth(setExitFocusModeWidth, event);
+  }, []);
+
   const layoutMetrics = useMemo(
     () => ({
       rowHorizontalInset: 0,
       actionsReservedWidth: Math.max(
         0,
         DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH +
+          (focusModeEnabled ? exitFocusModeWidth : 0) +
           (showPaneSplitActions ? PANE_SPLIT_ACTIONS_RESERVED_WIDTH : 0) +
           (showPaneMaximizeAction ? PANE_MAXIMIZE_ACTION_RESERVED_WIDTH : 0),
       ),
@@ -1016,8 +1091,10 @@ function ResolvedWorkspaceDesktopTabsRow({
       tabHorizontalPadding: TAB_CHIP_HORIZONTAL_PADDING,
       closeButtonWidth: TAB_CLOSE_BUTTON_RESERVED_WIDTH,
     }),
-    [showPaneMaximizeAction, showPaneSplitActions],
+    [exitFocusModeWidth, focusModeEnabled, showPaneMaximizeAction, showPaneSplitActions],
   );
+
+  const panePanelKinds = useMemo(() => tabs.map(({ tab }) => tab.kind), [tabs]);
 
   const fallbackTabLabels = useMemo(
     () => ({
@@ -1305,6 +1382,11 @@ function ResolvedWorkspaceDesktopTabsRow({
           />
         ))}
       </View>
+      <WorkspaceExitFocusModeButton
+        visible={focusModeEnabled}
+        onPress={onExitFocusMode}
+        onLayout={handleExitFocusModeLayout}
+      />
       <View style={styles.tabsScrollContainer}>
         <Animated.ScrollView
           ref={tabsScrollRef}
@@ -1330,14 +1412,15 @@ function ResolvedWorkspaceDesktopTabsRow({
             getItemData={getTabDragData}
             renderItem={renderTab}
           />
-          {shouldShowInlineWorkspaceNewTab(
-            displayedTabs.length,
-            layout.requiresHorizontalScrollFallback,
-          ) ? (
+          {!layout.requiresHorizontalScrollFallback ? (
             <WorkspaceNewTabButton
+              panePanelKinds={panePanelKinds}
+              host={host}
+              launchPurpose={launchPurpose}
               placement="inline"
+              serverId={normalizedServerId}
+              paneId={paneId}
               shortcutKeys={newTabKeys}
-              onPress={createNewTab}
             />
           ) : null}
         </Animated.ScrollView>
@@ -1350,12 +1433,16 @@ function ResolvedWorkspaceDesktopTabsRow({
         />
       </View>
       <WorkspacePaneToolbarActions
+        panePanelKinds={panePanelKinds}
+        host={host}
+        launchPurpose={launchPurpose}
         showNewTabButton={layout.requiresHorizontalScrollFallback}
         showSplitActions={showPaneSplitActions}
         showMaximizeAction={showPaneMaximizeAction}
         paneMaximized={paneMaximized}
+        serverId={normalizedServerId}
+        paneId={paneId}
         newTabShortcutKeys={newTabKeys}
-        onCreateNewTab={createNewTab}
         onSplitRight={onSplitRight}
         onSplitDown={onSplitDown}
         onTogglePaneMaximized={onTogglePaneMaximized}
@@ -1537,6 +1624,14 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: TAB_ROW_PADDING_HORIZONTAL,
+  },
+  exitFocusModeSlot: {
+    alignSelf: "stretch",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: theme.spacing[0.5],
+    borderRightWidth: 1,
+    borderRightColor: theme.colors.border,
   },
   inlineAddButton: {
     flexDirection: "row",

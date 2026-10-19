@@ -172,26 +172,28 @@ function useBuiltInRows(open: boolean): {
     const workspaceTitleByKey = new Map(
       allWorkspaces.map((workspace) => [workspace.id.slice("workspace:".length), workspace.title]),
     );
-    const agentRows = agents.filter((agent) => isEmbeddedWorkspaceAllowed(agent.serverId, agent.workspaceId)).map<CommandCenterAgentResult>((agent) => {
-      const workspaceTitle = agent.workspaceId
-        ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
-        : undefined;
-      return {
-        kind: "agent",
-        id: `agent:${agent.serverId}:${agent.id}`,
-        agent,
-        title: agent.title || t("shell.commandCenter.newAgent"),
-        subtitle: joinSubtitleParts([
-          showHost ? agent.serverLabel : null,
-          workspaceTitle ?? shortenPath(agent.cwd),
-        ]),
-        activityAt: agent.lastActivityAt,
-        run: () => {
-          clearCommandCenterFocusRestoreElement();
-          navigateToAgent({ serverId: agent.serverId, agentId: agent.id });
-        },
-      };
-    });
+    const agentRows = agents
+      .filter((agent) => isEmbeddedWorkspaceAllowed(agent.serverId, agent.workspaceId))
+      .map<CommandCenterAgentResult>((agent) => {
+        const workspaceTitle = agent.workspaceId
+          ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
+          : undefined;
+        return {
+          kind: "agent",
+          id: `agent:${agent.serverId}:${agent.id}`,
+          agent,
+          title: agent.title || t("shell.commandCenter.newAgent"),
+          subtitle: joinSubtitleParts([
+            showHost ? agent.serverLabel : null,
+            workspaceTitle ?? shortenPath(agent.cwd),
+          ]),
+          activityAt: agent.lastActivityAt,
+          run: () => {
+            clearCommandCenterFocusRestoreElement();
+            navigateToAgent({ serverId: agent.serverId, agentId: agent.id });
+          },
+        };
+      });
     return { workspaces: allWorkspaces, agents: agentRows };
   }, [agents, iconDataByProjectViewKey, open, projects, showHost, t]);
 }

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
+import { compilePlugin } from "../../../server/src/server/plugins/compiler";
 import { runPluginClientBundle, type PluginClientRuntime } from "./evaluate";
 
 const runtime = {
@@ -29,6 +31,24 @@ function bundle(body: string): string {
 }
 
 describe("evaluatePluginClientBundle", () => {
+  it("registers the bundled Vibing catalog through native plugin settings and releases it with its theme", async () => {
+    const root = new URL("../../../../plugins/space-app-vibing-theme/", import.meta.url);
+    const { clientBundle } = await compilePlugin({
+      client: fileURLToPath(new URL("index.client.ts", root)),
+      server: fileURLToPath(new URL("index.server.ts", root)),
+    });
+    const plugin = evaluatePluginClientBundle("space-app-vibing-theme", clientBundle!);
+    expect(plugin.settingsScreens.map(({ id, title }) => ({ id, title }))).toEqual([
+      { id: "customizations", title: "Vibing customizations" },
+    ]);
+    expect(plugin.themes.map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: "dark", name: "Space App Vibing" },
+    ]);
+    await plugin.cleanup();
+    expect(plugin.settingsScreens).toEqual([]);
+    expect(plugin.themes).toEqual([]);
+  });
+
   it("releases button registrations when client setup throws", () => {
     let active = 0;
     function addButton() {
