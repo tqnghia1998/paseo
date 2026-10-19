@@ -2327,6 +2327,7 @@ export const en = {
     },
     groupInfo: "About {{title}}",
     sections: {
+      vibingCustomizations: "Vibing customizations",
       general: "General",
       chat: "Chat",
       appearance: "Appearance",
