@@ -1,4 +1,8 @@
 import { Text, View } from "react-native";
+import { useCallback } from "react";
+import { useRouter } from "expo-router";
+import { Button } from "@/components/ui/button";
+import { buildSettingsSectionRoute, type SettingsSectionSlug } from "@/utils/host-routes";
 import {
   SettingsCard,
   SettingsCollapsibleRow,
@@ -7,13 +11,21 @@ import {
 } from "@/components/settings";
 import { settingsStyles } from "@/styles/settings";
 
+interface Customization {
+  title: string;
+  description: string;
+  source: string;
+  settingsSection?: SettingsSectionSlug;
+}
+
 // This describes shipped source changes. Runtime plugin health belongs to Plugins.
-const sections = [
+const sections: { title: string; entries: Customization[] }[] = [
   {
     title: "Plugin changes",
     entries: [
       {
         title: "Vibing theme",
+        settingsSection: "appearance",
         description:
           "Adds the Space App Vibing palette as a built-in plugin. A small embedding patch selects it once; later appearance choices are preserved.",
         source: "plugins/space-app-vibing-theme/ · packages/app/src/patches/vibing/theme.ts",
@@ -45,7 +57,7 @@ const sections = [
       {
         title: "Live Design requests",
         description:
-          "Sends preview notes as text context, supports fresh agents, and reports correlated completion back to Vibing. Context survives drafts, queues and conversation rewind.",
+          "Sends preview notes as text context, supports fresh agents, and reports correlated completion back to Vibing. Context survives drafts, queues and conversation rewind. Configure Live Design in Vibing Settings → Experiments → Live Design.",
         source: "packages/app/src/patches/vibing/live-design.ts · composer-bridge.ts",
       },
       {
@@ -57,8 +69,9 @@ const sections = [
       },
       {
         title: "Queued message recovery",
+        settingsSection: "general",
         description:
-          "Checkpoints queued messages across iframe remounts. Queue is the default action while an agent is running.",
+          "Checkpoints queued messages across iframe remounts. Queue is the default action while an agent is running. Change Default send in General settings; queued-message recovery stays enabled.",
         source:
           "packages/app/src/patches/vibing/queued-messages.ts · packages/app/src/hooks/use-settings/migrations.ts",
       },
@@ -114,19 +127,47 @@ const sections = [
   },
 ];
 
+function OpenCustomizationSetting({
+  section,
+  title,
+}: {
+  section: SettingsSectionSlug;
+  title: string;
+}) {
+  const router = useRouter();
+  const open = useCallback(
+    () => router.push(buildSettingsSectionRoute(section)),
+    [router, section],
+  );
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onPress={open}
+      accessibilityLabel={`Open setting for ${title}`}
+    >
+      Open setting
+    </Button>
+  );
+}
+
 export function VibingCustomizationsSection() {
   return (
     <View testID="vibing-customizations">
       <Text style={[settingsStyles.rowHint, settingsStyles.section]}>
         Source changes included in this Vibing build. This catalog is read-only; runtime plugin
-        status and additional-plugin controls are under Plugins. Other bundled provider and usage
-        plugins come from upstream Paseo.
+        status and additional-plugin controls are under Plugins. Open setting takes you to an
+        existing control. Other bundled provider and usage plugins come from upstream Paseo.
       </Text>
       {sections.map((section) => (
         <SettingsSection key={section.title} title={section.title}>
           <SettingsCard>
             {section.entries.map((entry) => (
-              <SettingsRow key={entry.title} label={entry.title} hint={entry.description} />
+              <SettingsRow key={entry.title} label={entry.title} hint={entry.description}>
+                {entry.settingsSection ? (
+                  <OpenCustomizationSetting section={entry.settingsSection} title={entry.title} />
+                ) : null}
+              </SettingsRow>
             ))}
           </SettingsCard>
         </SettingsSection>
