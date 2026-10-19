@@ -36,8 +36,7 @@
     "packages/cli"
   ],
   "scripts": {
-    "dev": "concurrently --kill-others --names daemon,app --prefix-colors cyan,magenta \"npm run dev:server\" \"npm run dev:app\"",
-    "dev:all": "npm run dev",
+    "dev": "npm run dev:server",
     "dev:win": "powershell ./scripts/dev.ps1",
     "dev:server": "cross-env PASEO_LISTEN=127.0.0.1:6768 ./scripts/dev-daemon.sh",
     "dev:server:watch": "npm run dev --workspace=@getpaseo/server -- --watch-dependencies",

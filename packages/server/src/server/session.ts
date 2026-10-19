@@ -8812,13 +8812,10 @@ export class Session {
         source,
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.startsWith("Agent not found:")) {
-        this.sessionLogger.error(
-          { err: error, agentId: msg.agentId },
-          "Failed to handle fetch_agent_timeline_request",
-        );
-      }
+      this.sessionLogger.error(
+        { err: error, agentId: msg.agentId },
+        "Failed to handle fetch_agent_timeline_request",
+      );
       this.emitForSource(
         {
           type: "fetch_agent_timeline_response",
@@ -8839,7 +8836,7 @@ export class Session {
             hasNewer: false,
             ...(msg.mergeWindow === true ? { mergeWindow: true } : {}),
             entries: [],
-            error: message,
+            error: error instanceof Error ? error.message : String(error),
           },
         },
         source,
