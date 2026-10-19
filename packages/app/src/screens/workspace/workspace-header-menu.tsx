@@ -316,15 +316,13 @@ export function WorkspaceHeaderMenuMobile({
             onCreateTerminalWithProfile={onCreateTerminalWithProfile}
           />
         ))}
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            testID="workspace-header-edit-terminal-profiles"
-            onSelect={handleEditProfiles}
-          >
-            {t("workspace.tabs.actions.editTerminalProfiles")}
-          </DropdownMenuItem>
-        </>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          testID="workspace-header-edit-terminal-profiles"
+          onSelect={handleEditProfiles}
+        >
+          {t("workspace.tabs.actions.editTerminalProfiles")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

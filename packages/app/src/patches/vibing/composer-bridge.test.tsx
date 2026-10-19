@@ -22,7 +22,7 @@ function setup(result: "queued" | "submitted", resolveLiveDesignAgentId?: () => 
   );
   let queuedSubmission: (() => Promise<void>) | undefined;
   const sendMessage = vi.fn<BridgeInput["sendMessage"]>(
-    async (_text, _attachments, _force, _behavior, onSubmitted) => {
+    async (_text, _attachments, _force, onSubmitted) => {
       queuedSubmission = onSubmitted;
       return result;
     },
@@ -84,7 +84,6 @@ it("sends text context and starts observing the submitted conversation", async (
   expect(h.sendMessage).toHaveBeenCalledWith(
     "Apply this Live Design note.",
     [expect.objectContaining({ kind: "text" })],
-    undefined,
     undefined,
     expect.any(Function),
   );

@@ -2217,7 +2217,6 @@ export const ptBR: TranslationResources = {
     },
     groupInfo: "Sobre {{title}}",
     sections: {
-      vibingCustomizations: "Personalizações do Vibing",
       general: "Geral",
       chat: "Chat",
       appearance: "Aparência",

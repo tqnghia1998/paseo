@@ -39,6 +39,9 @@ import { openPluginInstallForm } from "@/screens/settings/plugin-install-form-mo
 import { pluginRegistry, useInstalledPlugins } from "@/plugins/registry";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
+import { VibingPluginsSection } from "@/patches/vibing/customizations";
+import { groupPluginInventory } from "@/patches/vibing/plugin-inventory";
 
 const pluginQueryKey = (serverId: string) => ["plugins", serverId] as const;
 const PLUGIN_SOURCE_DOCS_URL = "https://paseo.sh/docs/plugins/reference#plugin-sources";
@@ -323,6 +326,7 @@ function BuiltinPluginsSection({
     <SettingsSection
       title={t("settings.plugins.builtinTitle")}
       info={t("settings.plugins.builtinHint")}
+      testID="paseo-builtin-plugins"
     >
       {content}
     </SettingsSection>
@@ -479,9 +483,10 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
     void refetchPlugins();
   }, [refetchPlugins]);
   const closeLogs = useCallback(() => setLogsPluginId(null), []);
-  const inventory = plugins.data ?? [];
-  const builtins = inventory.filter((plugin) => plugin.builtin);
-  const additional = inventory.filter((plugin) => !plugin.builtin);
+  const { vibing, paseo, additional } = groupPluginInventory({
+    plugins: plugins.data ?? [],
+    embedded: isEmbeddedFocusMode,
+  });
 
   const renderPluginRow = useCallback(
     (plugin: PluginListItem) => {
@@ -544,14 +549,25 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
 
   return (
     <View>
+      <VibingPluginsSection
+        serverId={serverId}
+        supported={builtinListingSupported}
+        pageState={pageState}
+      >
+        <PluginList
+          plugins={vibing}
+          renderRow={renderPluginRow}
+          emptyLabel={t("settings.plugins.vibingEmpty")}
+        />
+      </VibingPluginsSection>
       <BuiltinPluginsSection supported={builtinListingSupported} pageState={pageState}>
         <PluginList
-          plugins={builtins}
+          plugins={paseo}
           renderRow={renderPluginRow}
           emptyLabel={t("settings.plugins.builtinEmpty")}
         />
       </BuiltinPluginsSection>
-      <SettingsSection title={t("settings.plugins.additionalTitle")}>
+      <SettingsSection title={t("settings.plugins.additionalTitle")} testID="additional-plugins">
         <Alert
           size="sm"
           variant="warning"

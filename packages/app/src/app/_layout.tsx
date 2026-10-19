@@ -416,7 +416,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     explorerVisible: isWorkspaceRoute && explorerVisible,
     isSettingsRoute: pathname.includes("/settings"),
   });
-  const navigationChromeEnabled = chromeEnabled;
   const desktopSidebarMounted = hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled;
   const desktopSidebarVisible = resolveDesktopSidebarVisibility({
     chromeEnabled,
@@ -433,12 +432,12 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const appChromeLayout = resolveDesktopAppChromeLayout({
     desktopSidebarRendered: desktopSidebarVisible,
     hasTopLeftWindowControls,
-    sidebarControlsEnabled: navigationChromeEnabled && !isWorkspaceFocusModeEnabled,
+    sidebarControlsEnabled: chromeEnabled && !isWorkspaceFocusModeEnabled,
   });
   const sidebarChrome = (
     <SidebarChrome
-      mounted={isCompactLayout ? navigationChromeEnabled : desktopSidebarMounted}
-      visible={isCompactLayout ? navigationChromeEnabled : desktopSidebarVisible}
+      mounted={isCompactLayout ? chromeEnabled : desktopSidebarMounted}
+      visible={isCompactLayout ? chromeEnabled : desktopSidebarVisible}
       keyboardShortcutsEnabled={keyboardShortcutsEnabled}
     />
   );
@@ -458,7 +457,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
           {themedSidebarChrome}
         </WindowChromeRegion>
       ) : null}
-      <WorkspaceExplorerOpenGesture enabled={navigationChromeEnabled && isCompactLayout}>
+      <WorkspaceExplorerOpenGesture enabled={chromeEnabled && isCompactLayout}>
         <WindowChromeRegion
           corners={isCompactLayout && chromeEnabled ? "both" : appChromeLayout.contentCorners}
         >
@@ -496,9 +495,9 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <UpdateCalloutSource />
         <LegacyAgentSkillsMigration />
         <WorktreeSetupCalloutSource />
+        <CommandCenterRootActions />
         {isEmbeddedFocusMode ? null : (
           <>
-            <CommandCenterRootActions />
             <AddProjectFlowHost />
             <HostChooserModal />
             <HostConfirmationSheet />
@@ -520,7 +519,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   );
 
   return (
-    <AppContainerLifetime compactGesturesEnabled={navigationChromeEnabled && isCompactLayout}>
+    <AppContainerLifetime compactGesturesEnabled={chromeEnabled && isCompactLayout}>
       <SheetHostScope enabled={isCompactLayout}>{surface}</SheetHostScope>
     </AppContainerLifetime>
   );

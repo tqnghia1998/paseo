@@ -1,7 +1,8 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
+import { VibingCustomizations } from "./client/customizations.js";
 
 export default function contribute(client: PluginClientContext) {
-  return client.addTheme({
+  const removeTheme = client.addTheme({
     id: "dark",
     name: "Space App Vibing",
     appearance: "dark",
@@ -17,4 +18,14 @@ export default function contribute(client: PluginClientContext) {
       ring: "#6e6e6e",
     },
   });
+  const removeSettings = client.addSettingsScreen({
+    id: "customizations",
+    title: "Vibing customizations",
+    icon: "Blocks",
+    Component: VibingCustomizations,
+  });
+  return () => {
+    removeSettings();
+    removeTheme();
+  };
 }

@@ -34,6 +34,9 @@ Run from the Paseo checkout with its npm dependencies installed. Use an absolute
 PASEO_WEB_DEST_DIR=/absolute/consumer/worktree/scripts/paseo-web npm run build:web
 ```
 
+The fork bundler supplies `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true` to its web
+export; shared Paseo build commands keep their native behavior.
+
 For changes limited to `scripts/paseo-web.js`, refresh an existing bundle without
 rebuilding or replacing its backend, native archive, or UI:
 

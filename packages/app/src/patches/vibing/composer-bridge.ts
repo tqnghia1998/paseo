@@ -23,7 +23,6 @@ interface ComposerBridgeInput {
     text: string,
     attachments: ComposerAttachment[],
     forceSend?: boolean,
-    activeTurnBehavior?: "steer",
     onQueuedMessageSubmitted?: () => Promise<void>,
   ) => Promise<AgentInputSubmitResult>;
 }
@@ -77,13 +76,7 @@ export function useEmbeddedComposerBridge(input: ComposerBridgeInput): void {
           );
           if (outcome) await onTurnFinished(outcome);
         };
-        const result = await sendMessage(
-          text,
-          liveDesignAttachments,
-          undefined,
-          undefined,
-          waitForTurn,
-        );
+        const result = await sendMessage(text, liveDesignAttachments, undefined, waitForTurn);
         if (result === "failed" || result === "noop") {
           throw new Error("Paseo could not send the Live Design notes");
         }

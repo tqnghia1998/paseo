@@ -238,6 +238,7 @@ function useBuiltInRows(open: boolean): {
       });
     });
     previousRows.current = nextRows;
+
     return { workspaces: allWorkspaces, agents: agentRows };
   }, [agents, iconDataByProjectViewKey, open, projects, showHost, t]);
 }

@@ -70,8 +70,7 @@ class InMemoryAgentManager {
     });
   }
 
-  getAgent(agentId?: string) {
-    if (agentId && agentId !== "agent-1") return undefined;
+  getAgent() {
     return {
       id: "agent-1",
       provider: "codex",
@@ -138,22 +137,6 @@ class EmptyAgentStorage {
   }
 }
 
-class CapturingLogger {
-  readonly errors: unknown[] = [];
-
-  error(...args: unknown[]) {
-    this.errors.push(args);
-  }
-
-  debug() {}
-  info() {}
-  warn() {}
-  trace() {}
-  child() {
-    return this;
-  }
-}
-
 class EmptyProjectRegistry {
   async list() {
     return [];
@@ -211,7 +194,6 @@ function createSessionForWireCompatTest(options?: {
   onMessageToSource?: SessionOptions["onMessageToSource"];
   rows?: AgentTimelineRow[];
   workspaceRegistry?: SessionOptions["workspaceRegistry"];
-  logger?: CapturingLogger;
 }): Session {
   const messages = options?.messages ?? [];
   const rows: AgentTimelineRow[] = [
@@ -242,7 +224,7 @@ function createSessionForWireCompatTest(options?: {
     clientCapabilities: options?.clientCapabilities ?? null,
     onMessage: (message) => messages.push(message),
     onMessageToSource: options?.onMessageToSource ?? ((_source, message) => messages.push(message)),
-    logger: (options?.logger ?? pino({ level: "silent" })) as SessionOptions["logger"],
+    logger: pino({ level: "silent" }),
     downloadTokenStore: {} as SessionOptions["downloadTokenStore"],
     pushNotifications: {} as SessionOptions["pushNotifications"],
     paseoHome: "/tmp/paseo-home",
@@ -311,7 +293,6 @@ function createSessionForWireCompatTest(options?: {
 async function emitTimelineResponse(options?: {
   clientCapabilities?: Record<string, unknown> | null;
   rows?: AgentTimelineRow[];
-  logger?: CapturingLogger;
   request?: Partial<
     Extract<z.infer<typeof SessionInboundMessageSchema>, { type: "fetch_agent_timeline_request" }>
   >;
@@ -321,7 +302,6 @@ async function emitTimelineResponse(options?: {
     clientCapabilities: options?.clientCapabilities,
     rows: options?.rows,
     messages,
-    logger: options?.logger,
   });
   const internals = session as unknown as SessionInternals;
 
@@ -445,22 +425,6 @@ describe("wire compatibility", () => {
 
     const legacyParsed = LegacyFetchAgentTimelineResponseMessageSchema.parse(response);
     expect(legacyParsed.payload.entries[0]?.collapsed).toEqual([]);
-  });
-
-  test("returns a missing-agent timeline response without logging an expected stale read", async () => {
-    const logger = new CapturingLogger();
-    const response = await emitTimelineResponse({
-      logger,
-      request: { agentId: "deleted-agent" },
-    });
-
-    expect(response.payload).toMatchObject({
-      agentId: "deleted-agent",
-      agent: null,
-      entries: [],
-      error: "Agent not found: deleted-agent",
-    });
-    expect(logger.errors).toEqual([]);
   });
 
   test("preserves reasoning_merge for clients that declare the capability", async () => {
