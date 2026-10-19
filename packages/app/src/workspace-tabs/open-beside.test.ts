@@ -10,6 +10,7 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
 
 import { DEFAULT_APP_SETTINGS } from "@/hooks/use-settings";
 import { setPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
+import { usePanelStore } from "@/stores/panel-store";
 import {
   collectAllPanes,
   collectAllTabs,
@@ -172,5 +173,71 @@ describe("opening beside", () => {
     expect(useWorkspaceLayoutStore.getState().sidePaneIdByWorkspace[WORKSPACE_KEY]).toBeFalsy();
     expect(paneIdHolding(preferredTabId)).toBe("main");
     expect(paneIdHolding(besideTabId)).toBe("main");
+  });
+});
+
+describe("preferred file placement during Focus Mode", () => {
+  beforeEach(() => {
+    usePanelStore.setState((state) => ({
+      desktop: { ...state.desktop, focusModeEnabled: true },
+    }));
+  });
+
+  afterEach(() => {
+    usePanelStore.getState().exitFocusMode();
+  });
+
+  it("keeps the chat-file side preference and original main tab", () => {
+    const store = useWorkspaceLayoutStore.getState();
+    const originalTabId = store.openTab({
+      workspaceKey: WORKSPACE_KEY,
+      target: { kind: "file", path: "src/open.ts" },
+      intent: "reveal",
+    });
+
+    const tabId = openPreferredWorkspaceTarget({
+      workspaceKey: WORKSPACE_KEY,
+      target: { kind: "file", path: "src/chat-link.ts" },
+      source: "chatFiles",
+      preferences: { ...DEFAULT_APP_SETTINGS.openInSidePane, chatFiles: true },
+      parentTabId: originalTabId,
+    });
+
+    const state = useWorkspaceLayoutStore.getState();
+    const root = state.layoutByWorkspace[WORKSPACE_KEY].root;
+    const sidePaneId = state.sidePaneIdByWorkspace[WORKSPACE_KEY];
+    expect(sidePaneId).toEqual(expect.any(String));
+    expect(findPaneById(root, sidePaneId!)?.tabIds).toContain(tabId);
+    expect(findPaneById(root, "main")?.tabIds).toEqual([originalTabId]);
+  });
+
+  it("keeps explorer previews in the preferred side pane instead of replacing the main file", () => {
+    const store = useWorkspaceLayoutStore.getState();
+    const originalTabId = store.openTab({
+      workspaceKey: WORKSPACE_KEY,
+      target: { kind: "file", path: "src/open.ts" },
+      intent: "reveal",
+    });
+
+    const tabId = openPreferredWorkspacePreview({
+      workspaceKey: WORKSPACE_KEY,
+      serverId: "server-1",
+      workspaceId: "workspace-1",
+      explorerSidebarPaneId: "explorer",
+      lastMainPaneId: "main",
+      target: { kind: "file", path: "src/preview.ts" },
+      source: "explorerFiles",
+      preferences: { ...DEFAULT_APP_SETTINGS.openInSidePane, explorerFiles: true },
+    });
+
+    const state = useWorkspaceLayoutStore.getState();
+    const root = state.layoutByWorkspace[WORKSPACE_KEY].root;
+    const sidePaneId = state.sidePaneIdByWorkspace[WORKSPACE_KEY];
+    expect(sidePaneId).toEqual(expect.any(String));
+    expect(findPaneById(root, sidePaneId!)?.tabIds).toContain(tabId);
+    expect(collectAllTabs(root).find((tab) => tab.tabId === originalTabId)?.target).toEqual({
+      kind: "file",
+      path: "src/open.ts",
+    });
   });
 });
