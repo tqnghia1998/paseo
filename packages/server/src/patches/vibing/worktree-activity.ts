@@ -1,6 +1,6 @@
 import path from "node:path";
-import type { ManagedAgent } from "./agent/agent-manager.js";
-import type { PersistedWorkspaceRecord } from "./workspace-registry.js";
+import type { ManagedAgent } from "../../server/agent/agent-manager.js";
+import type { PersistedWorkspaceRecord } from "../../server/workspace-registry.js";
 
 export function getRunningWorktreePaths(
   agents: ReadonlyArray<

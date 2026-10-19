@@ -63,6 +63,26 @@ test("standalone bundles resolve built-ins beside the server entrypoint", async 
   expect(resolveBuiltinPluginsRoot(pathToFileURL(path.join(root, "server.mjs")))).toBe(plugins);
 });
 
+test("embedded theme is published with user plugins disabled", async () => {
+  const daemon = await createTestPaseoDaemon({
+    pluginsEnabled: false,
+    builtinPlugins: new BuiltinPluginLoader(resolveBuiltinPluginsRoot(), [
+      "space-app-vibing-theme",
+    ]),
+  });
+  const client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
+  try {
+    await client.connect();
+    const catalog = await client.getPluginCatalog();
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]?.id).toBe("space-app-vibing-theme");
+    expect(catalog[0]?.clientBundle).toContain("Space App Vibing");
+  } finally {
+    await client.close();
+    await daemon.close();
+  }
+}, 60_000);
+
 test("listed client bundle is published while plugins are disabled; unlisted directory is inert", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "paseo-builtin-fixture-"));
   roots.push(root);

@@ -14,7 +14,7 @@ import {
 } from "./session-store";
 import type { StreamItem } from "../types/stream";
 import { reduceTurnLiveness, type TurnLivenessTransition } from "@/timeline/turn-liveness";
-import { queuedMessagePersistence } from "./queued-message-store";
+import { queuedMessagePersistence } from "../patches/vibing/queued-messages";
 
 function createTestAgent(agentId: string): Agent {
   return {

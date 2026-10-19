@@ -55,7 +55,7 @@ import {
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { useCurrentOverlayLayer } from "@/lib/overlay-root";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { embeddedModelSelectorManagementEnabled } from "@/embedded-focus-mode";
+import { embeddedModelSelectorManagementEnabled } from "@/patches/vibing/focus-mode";
 import {
   groupProfilesByProviderModel,
   resolveInitialModelBrowserView,

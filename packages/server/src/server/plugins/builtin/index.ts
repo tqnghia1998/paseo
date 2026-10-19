@@ -15,6 +15,7 @@ export const builtinPlugins = [
   "muse-provider",
   "opencode-go-usage-source",
   "worktree-include",
+  "space-app-vibing-theme",
   "zai-usage-source",
 ] as const;
 
