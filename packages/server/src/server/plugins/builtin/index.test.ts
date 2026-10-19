@@ -97,6 +97,9 @@ test("listed client bundle is published while plugins are disabled; unlisted dir
   try {
     await client.connect();
     expect(await client.listPlugins()).toEqual([]);
+    expect(await client.listPlugins({ includeBuiltins: true })).toMatchObject([
+      { id: "listed", builtin: true, enabled: true, status: "running" },
+    ]);
     const catalog = await client.getPluginCatalog();
     expect(catalog.map(({ id }) => id)).toEqual(["listed"]);
     expect(catalog[0]?.clientBundle).toContain("builtin-client-marker");

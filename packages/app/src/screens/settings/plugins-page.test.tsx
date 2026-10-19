@@ -17,6 +17,7 @@ const runtime = vi.hoisted(() => ({
   connected: true,
   supported: true,
   logsSupported: true,
+  builtinListingSupported: true,
   client: null as DaemonClient | null,
 }));
 
@@ -28,6 +29,7 @@ vi.mock("@/runtime/host-runtime", () => ({
 vi.mock("@/runtime/host-features", () => ({
   useHostFeature: (_serverId: string, feature: string) => {
     if (feature === "pluginLogs") return runtime.logsSupported;
+    if (feature === "builtinPluginListing") return runtime.builtinListingSupported;
     return runtime.supported;
   },
 }));
@@ -150,6 +152,7 @@ describe("HostPluginsPage", () => {
     runtime.connected = true;
     runtime.supported = true;
     runtime.logsSupported = true;
+    runtime.builtinListingSupported = true;
     runtime.client = null;
     vi.stubGlobal(
       "confirm",
@@ -180,7 +183,38 @@ describe("HostPluginsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     await waitFor(() => expect(client.listPlugins).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText("No plugins configured")).toBeDefined();
+    expect(await screen.findByText("No additional plugins installed")).toBeDefined();
+  });
+
+  it("shows built-ins as loaded while additional plugins are disabled, with logs and no lifecycle controls", async () => {
+    const client = createClient();
+    client.getDaemonConfig.mockResolvedValue({ config: { pluginsEnabled: false } });
+    client.listPlugins.mockResolvedValue([
+      { ...plugin(), id: "codex-usage-source", builtin: true },
+    ]);
+    renderPage(client);
+    expect(await screen.findByText("Built-in plugins")).toBeDefined();
+    expect(await screen.findByText("codex-usage-source")).toBeDefined();
+    expect(screen.getByText("loaded")).toBeDefined();
+    expect(screen.queryByRole("switch", { name: "codex-usage-source: Disable" })).toBeNull();
+    expect(client.listPlugins).toHaveBeenCalledWith({ includeBuiltins: true });
+    expect(screen.getByText("No additional plugins installed")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Actions for codex-usage-source" }));
+    expect(screen.getByRole("menuitem", { name: "Logs" })).toBeDefined();
+    expect(screen.queryByRole("menuitem", { name: "Reload" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Remove" })).toBeNull();
+  });
+
+  it("keeps additional plugins available when the host cannot list built-ins", async () => {
+    runtime.builtinListingSupported = false;
+    const client = createClient();
+    client.listPlugins.mockResolvedValue([plugin()]);
+    renderPage(client);
+
+    expect(await screen.findByText("example")).toBeDefined();
+    expect(screen.getByText("Update the host to view built-in plugins")).toBeDefined();
+    expect(client.listPlugins).toHaveBeenCalledWith({ includeBuiltins: false });
+    expect(screen.getByRole("switch", { name: "example: Disable" })).toBeDefined();
   });
 
   it.each([

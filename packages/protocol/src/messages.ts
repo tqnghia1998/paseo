@@ -1460,6 +1460,7 @@ export const PluginCatalogGetRequestSchema = z.object({
 export const PluginListRequestSchema = z.object({
   type: z.literal("plugin.list.request"),
   requestId: z.string(),
+  includeBuiltins: z.boolean().optional(),
 });
 
 export const PluginLogsGetRequestSchema = z.object({
@@ -3681,6 +3682,8 @@ export const ServerInfoStatusPayloadSchema = z
         plugins: z.boolean().optional(),
         // COMPAT(pluginManagement): added in v0.4.0, remove gate after 2027-08-14.
         pluginManagement: z.boolean().optional(),
+        // COMPAT(builtinPluginListing): added in v0.12.0, remove gate after 2027-10-19.
+        builtinPluginListing: z.boolean().optional(),
         // COMPAT(pluginLogs): added in v0.4.0, remove gate after 2027-08-16.
         pluginLogs: z.boolean().optional(),
         // COMPAT(pluginGitManagement): added in v0.7.0, remove gate after 2027-08-26.
@@ -6751,6 +6754,7 @@ export const PluginNpmInstallationSchema = z.object({
 
 export const PluginListItemSchema = z.object({
   id: PluginIdSchema,
+  builtin: z.boolean().optional(),
   name: z.string().optional(),
   icon: z.string().optional(),
   media: z.array(z.string()).optional(),
