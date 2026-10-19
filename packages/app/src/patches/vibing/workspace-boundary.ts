@@ -14,6 +14,7 @@ interface Workspace {
   projectId?: string;
 }
 const APP_SECTIONS = new Set([
+  "vibing-customizations",
   "general",
   "appearance",
   "sidebar",
