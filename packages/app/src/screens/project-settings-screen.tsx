@@ -35,7 +35,11 @@ import { useProjects } from "@/hooks/use-projects";
 import type { ProjectEditFormSnapshot } from "@/projects/edit-form";
 import { useProjectIcons } from "@/projects/icons";
 import { createProjectIconTarget } from "@/projects/icon-target";
-import { useHostRuntimeClient, useHostRuntimeSnapshot } from "@/runtime/host-runtime";
+import {
+  isHostRuntimeDirectoryLoading,
+  useHostRuntimeClient,
+  useHostRuntimeSnapshot,
+} from "@/runtime/host-runtime";
 import { useHostFeature } from "@/runtime/host-features";
 import { useToast } from "@/contexts/toast-context";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -123,10 +127,23 @@ export default function ProjectSettingsScreen({
     selectedHost.repoRoot.trim().length > 0;
 
   if (!project || !selectedHost || !client || !canEdit) {
+    if (
+      selectedSnapshot &&
+      !isHostGone &&
+      (isHostRuntimeDirectoryLoading(selectedSnapshot) ||
+        selectedSnapshot?.connectionStatus === "connecting")
+    ) {
+      return (
+        <View style={styles.centered}>
+          <LoadingSpinner color={ResolveSpinnerColor()} />
+        </View>
+      );
+    }
     return (
       <NoEditableTarget
         onBackToProjects={onBackToProjects}
         showBackToProjects={showBackToProjects}
+        hostOffline={isHostGone}
       />
     );
   }
@@ -146,15 +163,19 @@ export default function ProjectSettingsScreen({
 function NoEditableTarget({
   onBackToProjects,
   showBackToProjects,
+  hostOffline = false,
 }: {
   onBackToProjects: () => void;
   showBackToProjects: boolean;
+  hostOffline?: boolean;
 }) {
   const { t } = useTranslation();
   return (
     <View style={styles.noTargetContainer}>
       {showBackToProjects ? <BackToProjectsButton onPress={onBackToProjects} /> : null}
-      <Text style={styles.noTargetText}>{t("settings.project.noEditableTarget")}</Text>
+      <Text style={styles.noTargetText}>
+        {t(hostOffline ? "agentPanel.states.reconnecting" : "settings.project.noEditableTarget")}
+      </Text>
       {showBackToProjects ? (
         <Button
           testID="project-settings-back-button"
@@ -372,6 +393,7 @@ function renderContent({
       <NoEditableTarget
         onBackToProjects={onBackToProjects}
         showBackToProjects={showBackToProjects}
+        hostOffline
       />
     );
   }
