@@ -74,7 +74,7 @@ export function useEmbeddedModelSelection(input: {
 }
 
 export function embeddedMessageInputFocusShortcutEnabled(): boolean {
-  return !isEmbeddedFocusMode;
+  return true;
 }
 
 export function embeddedMessageInputFocusHintVisible(input: {
@@ -112,4 +112,29 @@ export function findNearestEmbeddedConversationTabId(
     if (!nearest || distance < nearest.distance) nearest = { distance, tabId: tab.tabId };
   });
   return nearest?.tabId;
+}
+
+// The historical build flag identifies embedding, not the user's Focus Mode preference.
+export function migrateEmbeddedPanelFocus<T extends { desktop?: { focusModeEnabled?: boolean } }>(
+  state: T,
+  version: number,
+): T {
+  if (!isEmbeddedFocusMode || version >= 17 || !state.desktop) return state;
+  return { ...state, desktop: { ...state.desktop, focusModeEnabled: false } };
+}
+
+// Filter before shortcut resolution so host/global bindings are not consumed by the iframe.
+export function isEmbeddedShortcutAllowed(action: string): boolean {
+  return (
+    !isEmbeddedFocusMode ||
+    action.startsWith("workspace.tab.") ||
+    action.startsWith("workspace.pane.") ||
+    [
+      "workspace.terminal.new",
+      "sidebar.toggle.right",
+      "view.toggle.focus",
+      "message-input.action",
+      "agent.interrupt",
+    ].includes(action)
+  );
 }

@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useRouter, type Href } from "expo-router";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { usePanelStore } from "@/stores/panel-store";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 import { preserveEmbeddedLiveDesignMessagingQuery } from "./focus-mode";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
@@ -37,7 +36,6 @@ export function useEmbeddedFolderWorkspace(input: FolderWorkspaceLaunchInput): s
   const folderParam = getFolderParam(folder);
   const router = useRouter();
   const client = useHostRuntimeClient(targetServerId ?? "");
-  const enterFocusMode = usePanelStore((state) => state.enterFocusMode);
 
   useEffect(() => {
     if (!folderParam || !targetServerId || !client) return;
@@ -56,7 +54,6 @@ export function useEmbeddedFolderWorkspace(input: FolderWorkspaceLaunchInput): s
         if (cancelled || !workspace) return;
 
         useSessionStore.getState().mergeWorkspaces(serverId, [workspace]);
-        enterFocusMode();
         router.replace(
           preserveEmbeddedLiveDesignMessagingQuery(
             buildHostWorkspaceRoute(serverId, workspace.id),
@@ -73,7 +70,7 @@ export function useEmbeddedFolderWorkspace(input: FolderWorkspaceLaunchInput): s
     return () => {
       cancelled = true;
     };
-  }, [client, embeddedLiveDesignMessaging, enterFocusMode, folderParam, router, targetServerId]);
+  }, [client, embeddedLiveDesignMessaging, folderParam, router, targetServerId]);
 
   return folderParam;
 }

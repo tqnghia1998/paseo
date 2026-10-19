@@ -137,6 +137,14 @@ fs.copyFileSync(
 );
 
 console.log("5. Copying static web-ui assets...");
+// Bundled terminal modules resolve these files beside server.mjs and the terminal worker.
+const shellIntegrationDest = path.join(DEST_DIR, "shell-integration");
+fs.rmSync(shellIntegrationDest, { recursive: true, force: true });
+fs.cpSync(
+  path.join(ROOT_DIR, "packages/server/dist/server/terminal/shell-integration"),
+  shellIntegrationDest,
+  { recursive: true },
+);
 const builtinPluginsDest = path.join(DEST_DIR, "builtin-plugins");
 fs.rmSync(builtinPluginsDest, { recursive: true, force: true });
 fs.cpSync(path.join(ROOT_DIR, "packages/server/dist/server/builtin-plugins"), builtinPluginsDest, {
