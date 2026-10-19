@@ -157,6 +157,7 @@ export interface BuildGitActionsInput extends SyncRemotes {
   aheadOfOrigin: number | null;
   behindOfOrigin: number | null;
   shouldPromoteArchive: boolean;
+  workspaceArchiveEnabled?: boolean;
   shipDefault: "merge" | "pr";
   runtime: Record<GitActionId, GitActionRuntimeState>;
 }
@@ -382,7 +383,7 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
   if (!input.isOnBaseBranch) {
     secondaryIds.push(...getFeatureActionIds(input));
   }
-  secondaryIds.push("archive-workspace");
+  if (input.workspaceArchiveEnabled !== false) secondaryIds.push("archive-workspace");
 
   return {
     primary,
@@ -406,7 +407,7 @@ export function actionsWithoutPrimary(gitActions: GitActions): GitAction[] {
 }
 
 function getPrimaryActionId(input: BuildGitActionsInput): GitActionId | null {
-  if (input.shouldPromoteArchive) {
+  if (input.workspaceArchiveEnabled !== false && input.shouldPromoteArchive) {
     return "archive-workspace";
   }
   if (input.hasUncommittedChanges) {
@@ -442,7 +443,7 @@ function getPrimaryActionId(input: BuildGitActionsInput): GitActionId | null {
 
   // Only Paseo-owned worktrees get Archive as a fallback primary action.
   // Regular Git checkouts should not show the destructive archive CTA by default.
-  if (input.isPaseoOwnedWorktree) {
+  if (input.workspaceArchiveEnabled !== false && input.isPaseoOwnedWorktree) {
     return "archive-workspace";
   }
 
