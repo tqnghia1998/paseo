@@ -37,7 +37,11 @@ import { useProjects } from "@/hooks/use-projects";
 import type { ProjectEditFormSnapshot } from "@/projects/edit-form";
 import { useProjectIcons } from "@/projects/icons";
 import { createProjectIconTarget } from "@/projects/icon-target";
-import { useHostRuntimeClient, useHostRuntimeSnapshot } from "@/runtime/host-runtime";
+import {
+  isHostRuntimeDirectoryLoading,
+  useHostRuntimeClient,
+  useHostRuntimeSnapshot,
+} from "@/runtime/host-runtime";
 import { useHostFeature } from "@/runtime/host-features";
 import { useToast } from "@/contexts/toast-context";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -123,7 +127,21 @@ export default function ProjectSettingsScreen({
     selectedHost.repoRoot.trim().length > 0;
 
   if (!project || !selectedHost || !client || !canEdit) {
-    return <NoProject onBackToProjects={onBackToProjects} />;
+    if (
+      selectedSnapshot &&
+      !isHostGone &&
+      (isHostRuntimeDirectoryLoading(selectedSnapshot) ||
+        selectedSnapshot?.connectionStatus === "connecting")
+    ) {
+      return (
+        <View style={styles.centered}>
+          <LoadingSpinner color={ResolveSpinnerColor()} />
+        </View>
+      );
+    }
+    return (
+      <NoProject onBackToProjects={onBackToProjects} hostOffline={isHostGone} />
+    );
   }
 
   return (
@@ -138,23 +156,37 @@ export default function ProjectSettingsScreen({
 }
 
 /** A project page with no project to name: the title is the way back to Projects. */
-function NoProject({ onBackToProjects }: { onBackToProjects: () => void }) {
+function NoProject({
+  onBackToProjects,
+  hostOffline,
+}: {
+  onBackToProjects: () => void;
+  hostOffline: boolean;
+}) {
   const parent = useProjectsParent(onBackToProjects);
   return (
     <>
       <SettingsDetailHeader parent={parent} />
-      <NoEditableTarget onBackToProjects={onBackToProjects} />
+      <NoEditableTarget onBackToProjects={onBackToProjects} hostOffline={hostOffline} />
     </>
   );
 }
 
-function NoEditableTarget({ onBackToProjects }: { onBackToProjects: () => void }) {
+function NoEditableTarget({
+  onBackToProjects,
+  hostOffline = false,
+}: {
+  onBackToProjects: () => void;
+  hostOffline?: boolean;
+}) {
   const { t } = useTranslation();
   // The compact back header already goes back to Projects.
   const isCompact = useIsCompactFormFactor();
   return (
     <View style={styles.noTargetContainer}>
-      <Text style={styles.noTargetText}>{t("settings.project.noEditableTarget")}</Text>
+      <Text style={styles.noTargetText}>
+        {t(hostOffline ? "agentPanel.states.reconnecting" : "settings.project.noEditableTarget")}
+      </Text>
       {isCompact ? null : (
         <Button
           testID="project-settings-back-button"
@@ -367,7 +399,7 @@ function renderContent({
   }
 
   if (isHostGone) {
-    return <NoEditableTarget onBackToProjects={onBackToProjects} />;
+    return <NoEditableTarget onBackToProjects={onBackToProjects} hostOffline />;
   }
 
   if (!loadedConfig) {
