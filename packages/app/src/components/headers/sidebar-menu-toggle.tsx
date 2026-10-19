@@ -1,3 +1,4 @@
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -106,7 +107,7 @@ export function SidebarMenuToggle({ style, ...props }: SidebarMenuToggleProps = 
     [resolvedStyle],
   );
 
-  if (!isMobile && !ownsTopLeft) {
+  if (isEmbeddedFocusMode || (!isMobile && !ownsTopLeft)) {
     return null;
   }
 
