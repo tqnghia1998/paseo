@@ -1,4 +1,3 @@
-import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import {
   createContext,
   useCallback,
@@ -237,13 +236,11 @@ export function useWorkspaceTabLaunchCatalog(input: {
           panelKind: "terminal",
           launch: launchSelection({ kind: "terminal", profile }),
         })),
-        accessory: isEmbeddedFocusMode
-          ? undefined
-          : {
-              id: "edit-terminal-profiles",
-              label: t("workspace.tabs.actions.editTerminalProfiles"),
-              run: editTerminalProfiles,
-            },
+        accessory: {
+          id: "edit-terminal-profiles",
+          label: t("workspace.tabs.actions.editTerminalProfiles"),
+          run: editTerminalProfiles,
+        },
       });
     }
     if (surface !== "menu") return groups;

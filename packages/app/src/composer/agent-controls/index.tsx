@@ -104,10 +104,7 @@ import {
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
-import {
-  embeddedModelSelectorManagementEnabled,
-  useEmbeddedModelSelection,
-} from "@/patches/vibing/focus-mode";
+import { useEmbeddedModelSelection } from "@/patches/vibing/focus-mode";
 
 interface AgentControlOption {
   id: string;
@@ -188,27 +185,6 @@ interface AgentControlsProps {
   serverId: string;
   onDropdownClose?: () => void;
   isCompactLayout?: boolean;
-}
-
-interface EmbeddedAgentProfileControls {
-  agentProfiles: AgentProfilePicker | null;
-  onApplyAgentProfile?: (profileId: string) => void;
-  onEditAgentProfiles?: () => void;
-  onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
-  onEditAgentProfile?: (profileId: string) => void;
-}
-
-function resolveEmbeddedAgentProfileControls(
-  controls: EmbeddedAgentProfileControls,
-): EmbeddedAgentProfileControls {
-  if (embeddedModelSelectorManagementEnabled()) return controls;
-  return {
-    agentProfiles: null,
-    onApplyAgentProfile: undefined,
-    onEditAgentProfiles: undefined,
-    onCreateAgentProfile: undefined,
-    onEditAgentProfile: undefined,
-  };
 }
 
 function AgentControlCommandCenterRegistration({
@@ -591,13 +567,7 @@ function ControlledAgentControls({
     }
   }, [updateDensityForWidth]);
 
-  const embeddedProfileControls = resolveEmbeddedAgentProfileControls({
-    agentProfiles,
-    onApplyAgentProfile,
-    onEditAgentProfiles,
-    onCreateAgentProfile,
-    onEditAgentProfile,
-  });
+
 
 
   const fallbackModelSelectorProviders = useMemo(
@@ -689,16 +659,17 @@ function ControlledAgentControls({
             thinkingItems={items.thinking}
             effortKeys={effortKeys}
             featureItems={items.features}
-            onApplyAgentProfile={embeddedProfileControls.onApplyAgentProfile}
-            onEditAgentProfiles={embeddedProfileControls.onEditAgentProfiles}
-            onCreateAgentProfile={embeddedProfileControls.onCreateAgentProfile}
-            onEditAgentProfile={embeddedProfileControls.onEditAgentProfile}
+            onApplyAgentProfile={onApplyAgentProfile}
+            onEditAgentProfiles={onEditAgentProfiles}
+            onCreateAgentProfile={onCreateAgentProfile}
+            onEditAgentProfile={onEditAgentProfile}
+
 
             onDropdownClose={onDropdownClose}
             onModelSelectorOpen={onModelSelectorOpen}
             onRetryModelProvider={onRetryModelProvider}
             isRetryingModelProvider={isRetryingModelProvider}
-            agentProfiles={embeddedProfileControls.agentProfiles}
+            agentProfiles={agentProfiles}
             disabled={disabled}
             isModelLoading={isModelLoading}
             canSelectModel={canSelectModel}
@@ -723,16 +694,17 @@ function ControlledAgentControls({
             thinkingItems={items.thinking}
             effortKeys={effortKeys}
             featureItems={items.features}
-            onApplyAgentProfile={embeddedProfileControls.onApplyAgentProfile}
-            onEditAgentProfiles={embeddedProfileControls.onEditAgentProfiles}
-            onCreateAgentProfile={embeddedProfileControls.onCreateAgentProfile}
-            onEditAgentProfile={embeddedProfileControls.onEditAgentProfile}
+            onApplyAgentProfile={onApplyAgentProfile}
+            onEditAgentProfiles={onEditAgentProfiles}
+            onCreateAgentProfile={onCreateAgentProfile}
+            onEditAgentProfile={onEditAgentProfile}
+
 
             onDropdownClose={onDropdownClose}
             onModelSelectorOpen={onModelSelectorOpen}
             onRetryModelProvider={onRetryModelProvider}
             isRetryingModelProvider={isRetryingModelProvider}
-            agentProfiles={embeddedProfileControls.agentProfiles}
+            agentProfiles={agentProfiles}
             disabled={disabled}
             isModelLoading={isModelLoading}
             canSelectModel={canSelectModel}

@@ -1,3 +1,4 @@
+import { EmbeddedNavigationBoundary } from "@/patches/vibing/navigation-boundary";
 import { Stack } from "expo-router";
 import {
   isValidElement,
@@ -55,7 +56,11 @@ function ThemedStackBase({
         isValidElement(content)
       )
         return content;
-      return <AppearanceStyleBoundary>{content}</AppearanceStyleBoundary>;
+      return (
+        <EmbeddedNavigationBoundary>
+          <AppearanceStyleBoundary>{content}</AppearanceStyleBoundary>
+        </EmbeddedNavigationBoundary>
+      );
     },
     [nestedNavigatorScreens, screenOwnedAppearance],
   );
