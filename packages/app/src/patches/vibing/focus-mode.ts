@@ -1,12 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
 
-export const EMBEDDED_FOCUS_BUILD_MARKER = "space-app-vibing-embedded-focus";
-
-export function shouldUseEmbeddedFocusMode(isEmbeddedBuild: boolean): boolean {
-  return isEmbeddedBuild && EMBEDDED_FOCUS_BUILD_MARKER.length > 0;
-}
-
 export function shouldUseEmbeddedLiveDesignMessaging(
   isEmbeddedFocusMode: boolean,
   search: string,
@@ -21,9 +15,7 @@ export function shouldUseDesktopWorkspaceTabs(
   return !isCompact || isLiveDesignMessaging;
 }
 
-export const isEmbeddedFocusMode = shouldUseEmbeddedFocusMode(
-  process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS === "true",
-);
+export const isEmbeddedFocusMode = process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS === "true";
 
 export const isEmbeddedLiveDesignMessaging = shouldUseEmbeddedLiveDesignMessaging(
   isEmbeddedFocusMode,
@@ -36,18 +28,6 @@ export function preserveEmbeddedLiveDesignMessagingQuery(route: string, enabled:
 
 export function selectEmbeddedFocusMode<T>(embedded: T, standard: T): T {
   return isEmbeddedFocusMode ? embedded : standard;
-}
-
-export function embeddedWorkspaceActionsEnabled(input: {
-  routeFocused: boolean;
-  serverId: string;
-  workspaceId: string;
-}): boolean {
-  return input.routeFocused && Boolean(input.serverId && input.workspaceId);
-}
-
-export function embeddedImportVisible(routeFocused: boolean, importVisible: boolean): boolean {
-  return routeFocused && importVisible;
 }
 
 export function embeddedModelSelectorManagementEnabled(): boolean {

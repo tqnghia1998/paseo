@@ -1,16 +1,16 @@
 import { describe, expect, test } from "vitest";
 import { restoreComposerTextIfEmpty } from "./composer-restore";
 import { shouldRestoreComposerForRewindMode } from "./rewind-mode";
-import {
-  buildEmbeddedLiveDesignAttachment,
-  buildEmbeddedLiveDesignPrompt,
-  getLiveDesignRewindText,
-} from "@/embedded-live-design";
+import { getLiveDesignRewindText } from "@/patches/vibing/live-design";
 
 test("rewinding Live Design restores editable note context without replacing a draft", () => {
-  const notes = [{ comment: "Make Save red", requestedScope: "this-instance" as const }];
-  const message = buildEmbeddedLiveDesignPrompt(notes);
-  const attachment = buildEmbeddedLiveDesignAttachment(notes).attachment;
+  const message = "Apply this Live Design note.";
+  const attachment = {
+    type: "text" as const,
+    mimeType: "text/plain" as const,
+    title: "Live Design context",
+    text: 'Prepared context: [{"comment":"Make Save red"}]',
+  };
   const rewoundText = getLiveDesignRewindText(message, [attachment]);
   expect(restoreComposerTextIfEmpty({ currentText: "", rewoundText })).toBe(
     `${message}\n\n${attachment.text}`,

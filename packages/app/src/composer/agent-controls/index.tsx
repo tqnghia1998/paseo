@@ -102,7 +102,7 @@ import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import {
   embeddedModelSelectorManagementEnabled,
   useEmbeddedModelSelection,
-} from "@/embedded-focus-mode";
+} from "@/patches/vibing/focus-mode";
 
 interface AgentControlOption {
   id: string;
