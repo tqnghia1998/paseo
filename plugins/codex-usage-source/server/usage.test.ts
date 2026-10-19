@@ -117,6 +117,105 @@ test("coerces credit balance and marks a 96 percent window dangerous", async () 
   ]);
 });
 
+test("reports Enterprise user spending allowance when credit balance and rate windows are null", async () => {
+  const report = await fetchUsage(authInput(fixtureHome), async () =>
+    Response.json({
+      plan_type: "ent26",
+      rate_limit: null,
+      credits: { has_credits: true, unlimited: false, balance: null },
+      spend_control: {
+        reached: false,
+        individual_limit: {
+          source: "account_user_spend_controls",
+          unit: "usd",
+          limit: "1000.00",
+          used: "670.00",
+          remaining: "330.00",
+          used_percent: 67,
+          remaining_percent: 33,
+          reset_at: 1793491200,
+        },
+      },
+    }),
+  );
+  expect(report).toMatchObject({
+    status: "available",
+    planLabel: "Enterprise",
+    windows: [
+      {
+        id: "spending_allowance",
+        label: "Spending allowance",
+        summary: true,
+        usedPct: 67,
+        remainingPct: 33,
+        resetsAt: "2026-11-01T00:00:00.000Z",
+        tone: "ok",
+      },
+    ],
+    balances: [
+      { id: "spending", used: 670, remaining: 330, limit: 1000, unit: "usd" },
+      { id: "spending_remaining", remaining: 330, unit: "usd" },
+    ],
+  });
+});
+
+test("does not turn an unreported credit balance or allowance into zero", async () => {
+  const report = await fetchUsage(authInput(fixtureHome), async () =>
+    Response.json({
+      credits: { balance: null },
+      spend_control: {
+        individual_limit: {
+          unit: "usd",
+          limit: null,
+          used: null,
+          remaining: null,
+          used_percent: null,
+          remaining_percent: null,
+          reset_at: null,
+        },
+      },
+    }),
+  );
+  expect(report).toMatchObject({ status: "available", balances: [], windows: [] });
+});
+
+test.each(["credits", "unsupported"])(
+  "preserves spending units (%s) and the reached-limit signal",
+  async (unit) => {
+    const report = await fetchUsage(authInput(fixtureHome), async () =>
+      Response.json({
+        rate_limit: { primary_window: { used_percent: 10, limit_window_seconds: 18000 } },
+        spend_control: {
+          reached: true,
+          individual_limit: {
+            unit,
+            limit: "500",
+            used: "50",
+            remaining: "450",
+            used_percent: 10,
+            remaining_percent: 90,
+          },
+        },
+      }),
+    );
+    expect(report).toMatchObject({
+      windows: [
+        { id: "five_hour", usedPct: 10 },
+        { id: "spending_allowance", usedPct: 10, remainingPct: 90, resetsAt: null, tone: "danger" },
+      ],
+    });
+    if (report.status !== "available") throw new Error("Expected available usage");
+    expect(report.balances).toEqual(
+      unit === "credits"
+        ? [
+            expect.objectContaining({ used: 50, remaining: 450, limit: 500, unit, tone: "danger" }),
+            expect.objectContaining({ remaining: 450, unit, tone: "danger" }),
+          ]
+        : [],
+    );
+  },
+);
+
 test("summarizes the session and weekly windows by default, not code review", async () => {
   const report = await fetchUsage(
     authInput(fixtureHome),
