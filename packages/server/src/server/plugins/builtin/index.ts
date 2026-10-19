@@ -19,6 +19,7 @@ export const builtinPlugins = [
   "opencode-go-usage-source",
   "openrouter-host-usage-source",
   "worktree-include",
+  "space-app-vibing-theme",
   "zai-usage-source",
 ] as const;
 

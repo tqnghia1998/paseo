@@ -74,7 +74,7 @@ import {
   syncPaneTabFocusHistory,
   type PaneTabFocusHistory,
 } from "@/stores/workspace-tab-focus-policy";
-import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 
 export {
   AMBIENT_PLACEMENT,

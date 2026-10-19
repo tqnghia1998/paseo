@@ -146,10 +146,7 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
-import { useEmbeddedPromptInsert } from "@/embedded-prompt";
-import { useEmbeddedLiveDesignSend, waitForLiveDesignTurn } from "@/embedded-live-design";
-import { isEmbeddedLiveDesignMessaging } from "@/embedded-focus-mode";
-import { useStableEvent } from "@/hooks/use-stable-event";
+import { useEmbeddedComposerBridge } from "@/patches/vibing/composer-bridge";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type { AgentMetric } from "@getpaseo/protocol/agent-types";
 import type {
@@ -1889,66 +1886,19 @@ function ComposerContentImpl({
     ],
   );
 
-  useEmbeddedPromptInsert({
+  useEmbeddedComposerBridge({
+    enabled: isWeb && isActiveComposer,
+    agentId,
     workspaceId,
     inputMode,
     readOnly,
-    enabled: isWeb && isActiveComposer && !isComposerLocked,
-    getText: useStableEvent(() => messageInputRef.current?.getText() ?? textSource.getSnapshot()),
+    isComposerLocked,
+    client,
+    resolveLiveDesignAgentId,
+    getText: () => messageInputRef.current?.getText() ?? textSource.getSnapshot(),
     replaceText: replaceUserInput,
-    focus: useStableEvent(() => focusMessageInputWithPlatformStrategy(messageInputRef)),
-  });
-
-  useEmbeddedLiveDesignSend({
-    agentId,
-    enabled: isWeb && isActiveComposer && isEmbeddedLiveDesignMessaging,
-    isDraft: resolveLiveDesignAgentId !== undefined,
-    workspaceId,
-    submit: useStableEvent(
-      async (
-        text: string,
-        onTurnFinished: (outcome?: "succeeded" | "failed" | "unknown") => Promise<void>,
-        onAgentResolved: (agentId: string) => void,
-        liveDesignAttachments: ComposerAttachment[],
-      ) => {
-        const waitForTurn = async () => {
-          const resolvedDraftAgentId = resolveLiveDesignAgentId?.();
-          const resolvedAgentId = resolvedDraftAgentId ?? agentId;
-          onAgentResolved(resolvedAgentId);
-          if (!client) return;
-          const outcome = await waitForLiveDesignTurn(
-            client,
-            resolvedAgentId,
-            resolveLiveDesignAgentId === undefined || Boolean(resolvedDraftAgentId),
-          );
-          if (outcome) await onTurnFinished(outcome);
-        };
-        const result = await sendMessageWithContent(
-          text,
-          liveDesignAttachments,
-          undefined,
-          undefined,
-          waitForTurn,
-        );
-        if (result === "failed" || result === "noop") {
-          throw new Error("Paseo could not send the Live Design notes");
-        }
-        if (result === "submitted") {
-          void waitForTurn().catch(() => undefined);
-        }
-      },
-    ),
-    resumePending: useStableEvent(
-      async (onTurnFinished: (outcome?: "succeeded" | "failed" | "unknown") => Promise<void>) => {
-        if (!client) return;
-        const outcome = await waitForLiveDesignTurn(
-          client,
-          agentId,
-          resolveLiveDesignAgentId === undefined,
-        );
-        if (outcome) await onTurnFinished(outcome);
-      },
-    ),
+    focus: () => focusMessageInputWithPlatformStrategy(messageInputRef),
+    sendMessage: sendMessageWithContent,
   });
 
   const handleSubmit = useCallback(

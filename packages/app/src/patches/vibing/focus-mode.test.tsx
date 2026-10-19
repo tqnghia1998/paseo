@@ -11,24 +11,32 @@ vi.hoisted(() => {
 });
 
 import {
-  embeddedImportVisible,
   embeddedMessageInputFocusHintVisible,
   embeddedMessageInputFocusShortcutEnabled,
   embeddedModelSelectorManagementEnabled,
-  embeddedWorkspaceActionsEnabled,
   findNearestEmbeddedConversationTabId,
   preserveEmbeddedLiveDesignMessagingQuery,
   resolveEmbeddedModelSelection,
   shouldUseDesktopWorkspaceTabs,
-  shouldUseEmbeddedFocusMode,
+  isEmbeddedFocusMode,
   shouldUseEmbeddedLiveDesignMessaging,
   useEmbeddedModelSelection,
-} from "./embedded-focus-mode";
+} from "./focus-mode";
 
 describe("embedded focus mode", () => {
+  it("disables embedded policy in a standard build", async () => {
+    vi.resetModules();
+    vi.stubEnv("EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS", "false");
+    try {
+      expect((await import("./focus-mode")).isEmbeddedFocusMode).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
   it("locks every standalone embed while limiting chat presentation to Live Design", () => {
-    expect(shouldUseEmbeddedFocusMode(true)).toBe(true);
-    expect(shouldUseEmbeddedFocusMode(false)).toBe(false);
+    expect(isEmbeddedFocusMode).toBe(true);
     expect(shouldUseEmbeddedLiveDesignMessaging(true, "")).toBe(false);
     expect(shouldUseEmbeddedLiveDesignMessaging(true, "?embedded-live-design=1")).toBe(true);
     expect(shouldUseEmbeddedLiveDesignMessaging(true, "?embedded-live-design=0")).toBe(false);
@@ -52,16 +60,6 @@ describe("embedded focus mode", () => {
   });
 
   it("keeps current-worktree workspace actions and session import available", () => {
-    expect(
-      embeddedWorkspaceActionsEnabled({
-        routeFocused: true,
-        serverId: "server",
-        workspaceId: "workspace",
-      }),
-    ).toBe(true);
-    expect(embeddedImportVisible(true, true)).toBe(true);
-    expect(embeddedImportVisible(false, true)).toBe(false);
-    expect(embeddedImportVisible(true, false)).toBe(false);
     expect(embeddedModelSelectorManagementEnabled()).toBe(false);
     expect(embeddedMessageInputFocusShortcutEnabled()).toBe(false);
     expect(

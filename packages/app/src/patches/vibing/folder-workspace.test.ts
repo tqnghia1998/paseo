@@ -27,8 +27,6 @@ describe("openFolderWorkspace", () => {
 
     await expect(
       openFolderWorkspace({
-        sessions: {},
-        serverId: "server-1",
         folderPath: "/workspace/repo-worktrees/feature-test",
         client: { openProject },
       }),
@@ -37,22 +35,28 @@ describe("openFolderWorkspace", () => {
     expect(openProject).toHaveBeenCalledWith("/workspace/repo-worktrees/feature-test");
   });
 
-  it("reuses an already hydrated workspace without another daemon request", async () => {
-    const openProject = vi.fn();
+  it("resolves the current canonical workspace on every folder entry", async () => {
+    const openProject = vi
+      .fn()
+      .mockResolvedValueOnce({ workspace: existingWorkspace, error: null })
+      .mockResolvedValueOnce({
+        workspace: { ...existingWorkspace, id: "workspace-canonical" },
+        error: null,
+      });
+
+    await openFolderWorkspace({
+      folderPath: "/workspace/repo-worktrees/feature-test/",
+      client: { openProject },
+    });
 
     await expect(
       openFolderWorkspace({
-        sessions: {
-          "server-1": {
-            workspaces: new Map([[existingWorkspace.id, existingWorkspace]]),
-          },
-        },
-        serverId: "server-1",
         folderPath: "/workspace/repo-worktrees/feature-test/",
         client: { openProject },
       }),
-    ).resolves.toBe(existingWorkspace);
+    ).resolves.toMatchObject({ id: "workspace-canonical" });
 
-    expect(openProject).not.toHaveBeenCalled();
+    expect(openProject).toHaveBeenCalledWith("/workspace/repo-worktrees/feature-test/");
+    expect(openProject).toHaveBeenCalledTimes(2);
   });
 });
