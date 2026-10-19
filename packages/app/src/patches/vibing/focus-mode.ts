@@ -17,9 +17,16 @@ export function shouldUseDesktopWorkspaceTabs(
 
 export const isEmbeddedFocusMode = process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS === "true";
 
+function embeddedMessagingSearch(): string {
+  if (!isEmbeddedFocusMode || typeof window === "undefined") return "";
+  if (typeof window.name === "string" && window.name.startsWith("paseo-workspace:live-design:"))
+    return "?embedded-live-design=1";
+  return window.location.search;
+}
+
 export const isEmbeddedLiveDesignMessaging = shouldUseEmbeddedLiveDesignMessaging(
   isEmbeddedFocusMode,
-  typeof window === "undefined" ? "" : window.location.search,
+  embeddedMessagingSearch(),
 );
 
 export function preserveEmbeddedLiveDesignMessagingQuery(route: string, enabled: boolean): string {
@@ -28,10 +35,6 @@ export function preserveEmbeddedLiveDesignMessagingQuery(route: string, enabled:
 
 export function selectEmbeddedFocusMode<T>(embedded: T, standard: T): T {
   return isEmbeddedFocusMode ? embedded : standard;
-}
-
-export function embeddedModelSelectorManagementEnabled(): boolean {
-  return !isEmbeddedFocusMode;
 }
 
 const EMBEDDED_PROVIDER_PRIORITY = ["codex", "claude", "opencode", "pi"];
@@ -130,6 +133,11 @@ export function isEmbeddedShortcutAllowed(action: string): boolean {
     action.startsWith("workspace.tab.") ||
     action.startsWith("workspace.pane.") ||
     [
+      "command-center.toggle",
+      "command-center.files",
+      "theme.cycle",
+      "settings.toggle",
+      "shortcuts.dialog.toggle",
       "workspace.terminal.new",
       "sidebar.toggle.right",
       "view.toggle.focus",
