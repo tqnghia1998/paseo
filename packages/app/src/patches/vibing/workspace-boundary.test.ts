@@ -27,6 +27,7 @@ it("allows shared settings but blocks other workspaces, hosts and project manage
     "/settings",
     "/settings/appearance",
     "/settings/shortcuts",
+    "/settings/vibing-customizations",
     "/settings/hosts/local/providers",
     "/settings/hosts/local/agents",
     "/settings/hosts/local/terminals",

@@ -2349,6 +2349,7 @@ export const fr: TranslationResources = {
     },
     groupInfo: "À propos de {{title}}",
     sections: {
+      vibingCustomizations: "Personnalisations Vibing",
       general: "Général",
       chat: "Discussion",
       appearance: "Apparence",
