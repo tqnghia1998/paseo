@@ -83,7 +83,8 @@ import Animated, {
 import Svg, { Defs, Rect, Stop, LinearGradient as SvgLinearGradient } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
-import { getLiveDesignRewindText } from "@/embedded-live-design";
+import { getLiveDesignRewindText } from "@/patches/vibing/live-design";
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { capAssistantMessageForRender, getUtf8ByteLength } from "./assistant-message-render-limit";
 import { getTurnDurationLabel } from "./assistant-turn-footer-label";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
@@ -725,7 +726,12 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
           containerStyle={assistantTurnFooterStylesheet.copyButton}
         />
       ) : null}
-      {canFork ? <AssistantForkMenu onFork={handleFork} /> : null}
+      {canFork ? (
+        <AssistantForkMenu
+          onFork={handleFork}
+          directTarget={isEmbeddedFocusMode ? "tab" : undefined}
+        />
+      ) : null}
       {primaryLabel ? (
         <Pressable
           onPress={handlePress}

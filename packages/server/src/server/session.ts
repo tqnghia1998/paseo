@@ -1,5 +1,6 @@
 import { type WorkspaceRuntimeStore } from "./workspace-runtime-store/index.js";
 import type { AgentMessageDelivery } from "./agent/agent-messages/index.js";
+import { getRecentWorkspaceAgentActivity } from "../patches/vibing/workspace-open.js";
 import { AgentDirectory } from "./agent/directory.js";
 import { ConnectedHostSession } from "./connected-hosts/index.js";
 import type { ConnectedHosts } from "./connected-hosts/index.js";
@@ -956,30 +957,11 @@ export class Session {
       projectRegistry: this.projectRegistry,
       workspaceGitService: this.workspaceGitService,
       isDirectory: (path) => this.filesystem.isDirectory(path),
-      getRecentAgentActivityByWorkspace: async () => {
-        // Merge persisted records (survive restarts, include closed agents) with live
-        // agents. agent-projections persists lastActivityAt as agent.updatedAt.
-        const activity = new Map<string, Date>();
-        const consider = (
-          workspaceId: string | undefined,
-          at: Date | string | null | undefined,
-        ) => {
-          if (!workspaceId || at === null || at === undefined) return;
-          const time = typeof at === "string" ? Date.parse(at) : at.getTime();
-          if (!Number.isFinite(time)) return;
-          const previous = activity.get(workspaceId);
-          if (!previous || time > previous.getTime()) {
-            activity.set(workspaceId, new Date(time));
-          }
-        };
-        for (const record of await this.agentStorage.list()) {
-          consider(record.workspaceId, record.lastActivityAt ?? record.updatedAt);
-        }
-        for (const agent of this.agentManager.listAgents()) {
-          consider(agent.workspaceId, agent.updatedAt);
-        }
-        return activity;
-      },
+      getRecentAgentActivityByWorkspace: () =>
+        getRecentWorkspaceAgentActivity({
+          agentStorage: this.agentStorage,
+          agentManager: this.agentManager,
+        }),
       logger: this.sessionLogger,
     });
     this.workspaceRecovery = createWorkspaceRecoveryService({

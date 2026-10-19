@@ -44,11 +44,7 @@ import { useAgentDescriptor } from "@/agent-presentation";
 import { useToastHost, type ToastApi, type ToastState } from "@/components/toast-host";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
-import {
-  COMPACT_CONTENT_WIDTH,
-  resolveChatMaxContentWidth,
-  useIsCompactFormFactor,
-} from "@/constants/layout";
+import { COMPACT_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
@@ -62,7 +58,6 @@ import {
 } from "@/hooks/use-agent-screen-state-machine";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
-import { useChatGutter } from "@/hooks/use-chat-gutter";
 import { reconcileMissingAgentStateWithPresentAgent } from "@/panels/agent-panel-load-state";
 import { TimelineSyncStatus } from "@/timeline/sync-status";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
@@ -1304,10 +1299,9 @@ function TimelineSyncErrorCallout({
   isRetrying: boolean;
   onRetry: () => void;
 }) {
-  const chatGutter = useChatGutter();
   const { t } = useTranslation();
   return (
-    <View style={[styles.timelineSyncCalloutRail, chatGutter.style]} onLayout={chatGutter.onLayout}>
+    <View style={styles.timelineSyncCalloutRail}>
       <View style={styles.timelineSyncCalloutContent}>
         <View style={styles.timelineSyncCallout} testID="agent-timeline-sync-error">
           <Text style={styles.timelineSyncCalloutText}>
@@ -1721,11 +1715,12 @@ const styles = StyleSheet.create((theme) => ({
   timelineSyncCalloutRail: {
     width: "100%",
     alignItems: "center",
+    paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[2],
   },
   timelineSyncCalloutContent: {
     width: "100%",
-    maxWidth: resolveChatMaxContentWidth(theme.contentMaxWidth),
+    maxWidth: theme.contentMaxWidth,
   },
   timelineSyncCallout: {
     flexDirection: "row",

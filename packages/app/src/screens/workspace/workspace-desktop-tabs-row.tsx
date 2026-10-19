@@ -79,10 +79,9 @@ import type { Theme } from "@/styles/theme";
 import { RenderProfile } from "@/utils/render-profiler";
 import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
-import {
-  formatAgentTooltipTitle,
-  normalizeAgentTooltipTitle,
-} from "@/screens/workspace/agent-tooltip-title";
+import { useCompactTimeAgo } from "@/hooks/use-time-ago";
+import { formatCompactTimeAgoAsProse } from "@/utils/time";
+import { useSessionStore } from "@/stores/session-store";
 import { buildWorkspaceKeyboardHandlerId } from "@/keyboard/handler-id";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import {
@@ -121,6 +120,7 @@ const TAB_MIN_WIDTH = 64;
 const TAB_MAX_WIDTH = 160;
 const TAB_CLOSE_BUTTON_RESERVED_WIDTH = 0;
 const TAB_LABEL_LAYOUT_ALLOWANCE = 4;
+const AGENT_TOOLTIP_TITLE_MAX_LENGTH = 80;
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedX = withUnistyles(X);
@@ -147,6 +147,50 @@ function updateMeasuredWidth(
 ) {
   const nextWidth = Math.round(event.nativeEvent.layout.width);
   setWidth((current) => retainWorkspaceTabMeasuredWidth(current, nextWidth));
+}
+
+function normalizeAgentTooltipTitle(title: string): string {
+  return title.replace(/\s+/g, " ").trim();
+}
+
+function formatAgentTooltipTitle(singleLineTitle: string): string {
+  if (singleLineTitle.length <= AGENT_TOOLTIP_TITLE_MAX_LENGTH) return singleLineTitle;
+  return `${singleLineTitle.slice(0, AGENT_TOOLTIP_TITLE_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+function AgentTabTooltipBody({
+  serverId,
+  agentId,
+  title,
+}: {
+  serverId: string;
+  agentId: string;
+  title: string;
+}) {
+  const lastActivityAt = useSessionStore((state) => {
+    const session = state.sessions[serverId];
+    const agent = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId) ?? null;
+    return state.agentLastActivity.get(agentId) ?? agent?.lastActivityAt ?? null;
+  });
+  const compactActivity = useCompactTimeAgo(lastActivityAt);
+  const activity = formatCompactTimeAgoAsProse(compactActivity);
+
+  return (
+    <View style={styles.tooltipAgentContent}>
+      <Text style={styles.agentTooltipTitle} numberOfLines={1} ellipsizeMode="tail">
+        {title}
+      </Text>
+      <View style={styles.tooltipAgentMetadata}>
+        <Text style={styles.tooltipAgentId}>{agentId.slice(0, 7)}</Text>
+        {activity ? (
+          <>
+            <Text style={styles.tooltipAgentSeparator}>·</Text>
+            <Text style={styles.tooltipAgentActivity}>{activity}</Text>
+          </>
+        ) : null}
+      </View>
+    </View>
+  );
 }
 
 function TabLabelMeasurement({
@@ -618,6 +662,7 @@ function TabChip({
   isClosingTab,
   presentation,
   tooltipLabel,
+  accessibilityLabel,
   resolvedTab,
   setHoveredCloseTabKey,
   onNavigateTab,
@@ -639,6 +684,7 @@ function TabChip({
   isClosingTab: boolean;
   presentation: WorkspaceTabPresentation;
   tooltipLabel: string;
+  accessibilityLabel: string;
   resolvedTab: WorkspaceDesktopTabActions;
   setHoveredCloseTabKey: Dispatch<SetStateAction<string | null>>;
   onNavigateTab: (tabId: string) => void;
@@ -752,7 +798,7 @@ function TabChip({
               style={tabChipStyle}
               onPress={handleNavigateTab}
               accessibilityRole="button"
-              accessibilityLabel={tooltipLabel}
+              accessibilityLabel={accessibilityLabel}
               accessibilityState={tabAccessibilityState}
               aria-selected={isActive}
             >
@@ -775,10 +821,11 @@ function TabChip({
             testID={`workspace-tab-tooltip-${testIdentity}`}
           >
             {tab.target.kind === "agent" ? (
-              <View style={styles.tooltipAgentRow}>
-                <Text style={styles.newTabTooltipText}>{tooltipLabel}</Text>
-                <Text style={styles.tooltipAgentId}>{tab.target.agentId.slice(0, 7)}</Text>
-              </View>
+              <AgentTabTooltipBody
+                serverId={serverId}
+                agentId={tab.target.agentId}
+                title={tooltipLabel}
+              />
             ) : (
               <Text style={styles.newTabTooltipText}>{tooltipLabel}</Text>
             )}
@@ -1444,6 +1491,7 @@ function ResolvedDesktopTabChip({
         isClosingTab={item.isClosingTab}
         presentation={presentation}
         tooltipLabel={tooltipLabel}
+        accessibilityLabel={accessibilityLabel}
         resolvedTab={resolvedTab}
         setHoveredCloseTabKey={setHoveredCloseTabKey}
         onNavigateTab={onNavigateTab}
@@ -1504,9 +1552,9 @@ const styles = StyleSheet.create((theme) => ({
     marginRight: PANE_SPLIT_ACTIONS_OUTER_MARGIN,
   },
   tab: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    height: buttonControlHeight.xs,
     paddingHorizontal: TAB_CHIP_HORIZONTAL_PADDING,
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius.md,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
@@ -1628,12 +1676,28 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
   },
-  tooltipAgentRow: {
+  tooltipAgentContent: {
+    gap: theme.spacing[0.5],
+    maxWidth: 420,
+  },
+  agentTooltipTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+  },
+  tooltipAgentMetadata: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
+    gap: theme.spacing[1],
   },
   tooltipAgentId: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  tooltipAgentSeparator: {
+    color: theme.colors.foregroundExtraMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  tooltipAgentActivity: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },

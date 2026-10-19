@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createQueuedMessagePersistence, type QueuedMessageStorage } from "./queued-message-store";
+import { createQueuedMessagePersistence, type QueuedMessageStorage } from "./queued-messages";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
 
 function createStorage(): QueuedMessageStorage {

@@ -146,13 +146,11 @@ export const AgentTracks = memo(function AgentTracks({
         agentId={agentId}
         compact={isCompact}
       />
-      {hasWorkspaceDiffStat ? (
-        <WorkspaceDiffStatPill
-          serverId={serverId}
-          workspaceId={workspaceId}
-          onPress={handleOpenChanges}
-        />
-      ) : null}
+      <WorkspaceDiffStatPill
+        serverId={serverId}
+        workspaceId={workspaceId}
+        onPress={handleOpenChanges}
+      />
     </ComposerTrackBar>
   );
 });

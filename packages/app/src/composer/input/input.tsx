@@ -65,7 +65,7 @@ import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import {
   embeddedMessageInputFocusHintVisible,
   isEmbeddedLiveDesignMessaging,
-} from "@/embedded-focus-mode";
+} from "@/patches/vibing/focus-mode";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useComposerHeight } from "./height";
 import { ComposerInputPresentation } from "./presentation";
@@ -822,7 +822,7 @@ function SendButtonTooltip({
   sendTooltipLabel: string;
 }) {
   if (!shouldShow) return null;
-  const button = (
+  return (
     <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger
         onPress={canPressLoadingButton ? onSubmitLoadingPress : onDefaultSendAction}
@@ -846,8 +846,6 @@ function SendButtonTooltip({
       </TooltipContent>
     </Tooltip>
   );
-
-  return button;
 }
 
 type PrimaryActionKind = "send" | "active" | "none";

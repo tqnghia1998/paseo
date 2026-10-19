@@ -1,6 +1,5 @@
 import { useUnistyles } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
-import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
 
 export const FOOTER_HEIGHT = 75;
 
@@ -14,21 +13,6 @@ export const HEADER_TOP_PADDING_MOBILE = 8;
 
 // Measured composer width; independent of the window's compact/wide breakpoint.
 export const COMPACT_CONTENT_WIDTH = 500;
-
-export const CHAT_HORIZONTAL_SPACING = isEmbeddedFocusMode ? 24 : 4;
-export const CHAT_WIDE_MIN_WIDTH = 960;
-
-export function resolveChatMaxContentWidth(contentMaxWidth: number): number | "100%" {
-  return isEmbeddedFocusMode ? "100%" : contentMaxWidth;
-}
-
-export function resolveComposerMaxContentWidth(contentMaxWidth: number): number {
-  return isEmbeddedFocusMode ? CHAT_WIDE_MIN_WIDTH : contentMaxWidth;
-}
-
-export function getChatHorizontalSpacing(isNarrow: boolean) {
-  return isNarrow ? 4 : CHAT_HORIZONTAL_SPACING;
-}
 
 // Settings navigation can shrink below its preferred width to preserve the detail
 // minimum. Both targets must fit before Settings shares width with app navigation.

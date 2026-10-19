@@ -83,3 +83,21 @@ export function createQueuedMessagePersistence(storage: QueuedMessageStorage) {
 }
 
 export const queuedMessagePersistence = createQueuedMessagePersistence(AsyncStorage);
+
+export type QueuedMessages = Map<string, QueuedMessage[]>;
+
+export function mergeQueuedMessages(
+  checkpoint: QueuedMessages,
+  pending: QueuedMessages,
+): QueuedMessages {
+  const merged = new Map(checkpoint);
+  for (const [agentId, messages] of pending) {
+    const persisted = merged.get(agentId) ?? [];
+    const persistedIds = new Set(persisted.map((message) => message.id));
+    const additions = messages.filter((message) => !persistedIds.has(message.id));
+    if (persisted.length > 0 || additions.length > 0) {
+      merged.set(agentId, [...persisted, ...additions]);
+    }
+  }
+  return merged;
+}

@@ -23,12 +23,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  CHAT_HORIZONTAL_SPACING,
-  resolveChatMaxContentWidth,
-  useIsCompactFormFactor,
-} from "@/constants/layout";
-import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Check, ChevronDown, X } from "lucide-react-native";
@@ -1750,7 +1745,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   contentWrapper: {
     width: "100%",
-    maxWidth: resolveChatMaxContentWidth(theme.contentMaxWidth),
+    maxWidth: theme.contentMaxWidth,
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
   },
@@ -1758,8 +1753,8 @@ const stylesheet = StyleSheet.create((theme) => ({
     paddingVertical: 0,
     flexGrow: 1,
     paddingHorizontal: {
-      xs: theme.spacing[isEmbeddedFocusMode ? CHAT_HORIZONTAL_SPACING : 3],
-      md: theme.spacing[CHAT_HORIZONTAL_SPACING],
+      xs: theme.spacing[3],
+      md: theme.spacing[4],
     },
   },
   forwardListContentContainer: {
@@ -1771,7 +1766,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   streamItemWrapper: {
     width: "100%",
-    maxWidth: resolveChatMaxContentWidth(theme.contentMaxWidth),
+    maxWidth: theme.contentMaxWidth,
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
   },
