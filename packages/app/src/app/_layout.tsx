@@ -414,11 +414,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     explorerVisible: isWorkspaceRoute && explorerVisible,
     isSettingsRoute: pathname.includes("/settings"),
   });
-  const navigationChromeEnabled = selectEmbeddedFocusMode(false, chromeEnabled);
-  const desktopSidebarMounted = selectEmbeddedFocusMode(
-    false,
-    hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled,
-  );
+  const navigationChromeEnabled = chromeEnabled;
+  const desktopSidebarMounted = hasMountedDesktopSidebar && !isWorkspaceFocusModeEnabled;
   const desktopSidebarVisible = resolveDesktopSidebarVisibility({
     chromeEnabled,
     isCompactLayout,
@@ -475,9 +472,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     <View style={layoutStyles.surfaceFill}>
       {workspaceChrome}
       <AppearanceStyleBoundary>
-        {!isEmbeddedFocusMode &&
-        !isCompactLayout &&
-        appChromeLayout.sidebarToggleOwner === "window" ? (
+        {!isCompactLayout && appChromeLayout.sidebarToggleOwner === "window" ? (
           <WindowChromeRegion corners="top-left">
             <WindowChromeSafeArea
               placement="inline"

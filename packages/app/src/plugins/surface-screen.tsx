@@ -1,3 +1,5 @@
+import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
+import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { router, useLocalSearchParams } from "expo-router";
 import type { PluginIcon, PluginScreenParams, PluginScreenProps } from "@getpaseo/plugin/client";
 import type { PluginTheme } from "@getpaseo/plugin";
@@ -147,7 +149,11 @@ export function PluginSurfaceScreen() {
   const filterHosts = useMemo(() => {
     if (!identity) return [];
     const serverIds = getPluginSurfaceContributionServerIds(installations, pluginId, identity);
-    return hosts.filter((candidate) => serverIds.includes(candidate.serverId));
+    const bound = getEmbeddedWorkspace();
+    return hosts.filter(
+      (candidate) =>
+        serverIds.includes(candidate.serverId) && (!bound || candidate.serverId === bound.serverId),
+    );
   }, [hosts, identity, installations, pluginId]);
   const title = useMemo(() => {
     if (surface && plugin)
@@ -159,6 +165,11 @@ export function PluginSurfaceScreen() {
   }, [params, plugin, pluginId, sidebarItem, surface]);
   const icon = sidebarItem?.icon ?? null;
   const close = useCallback(() => {
+    const bound = getEmbeddedWorkspace();
+    if (bound) {
+      navigateToWorkspace(bound);
+      return;
+    }
     if (router.canGoBack()) router.back();
     else router.replace(`/h/${encodeURIComponent(serverId)}`);
   }, [serverId]);

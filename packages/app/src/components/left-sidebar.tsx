@@ -1,3 +1,4 @@
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { router } from "expo-router";
 import {
   CircleGauge,
@@ -41,7 +42,7 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
-import { useImportSession } from "@/hooks/use-import-session";
+import { useWorktreeImportSession } from "@/patches/vibing/sidebar-hooks";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import {
   type SidebarProjectEntry,
@@ -163,7 +164,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   }, [isRevalidating, isManualRefresh]);
 
   const openProjectPicker = useOpenAddProject();
-  const { open: openImportSession, sheet: importSessionSheet } = useImportSession();
+  const { open: openImportSession, sheet: importSessionSheet } = useWorktreeImportSession();
 
   const handleOpenProjectMobile = useCallback(() => {
     showMobileAgent();
@@ -436,19 +437,23 @@ function SidebarFooter({
       <View style={styles.footerContainer} testID="sidebar-footer">
         <SidebarFooterRows onBeforeNavigate={onBeforeNavigate} />
         <View style={styles.sidebarFooter} testID="sidebar-footer-bottom-line">
-          <FooterIconButton
-            onPress={handleOpenProject}
-            testID="sidebar-add-project"
-            label={labels.addProject}
-            icon={FolderPlus}
-            shortcutKeys={newAgentKeys}
-          />
+          {!isEmbeddedFocusMode && (
+            <FooterIconButton
+              onPress={handleOpenProject}
+              testID="sidebar-add-project"
+              label={labels.addProject}
+              icon={FolderPlus}
+              shortcutKeys={newAgentKeys}
+            />
+          )}
           <SidebarUsageIcon label={labels.usage} />
-          <SidebarHostPicker
-            label={labels.hosts}
-            onAddHost={handleAddHost}
-            onOpenHostSettings={handleOpenHostSettings}
-          />
+          {!isEmbeddedFocusMode && (
+            <SidebarHostPicker
+              label={labels.hosts}
+              onAddHost={handleAddHost}
+              onOpenHostSettings={handleOpenHostSettings}
+            />
+          )}
           <View style={styles.footerSpacer} />
           <SidebarHelpMenu />
           <FooterIconButton

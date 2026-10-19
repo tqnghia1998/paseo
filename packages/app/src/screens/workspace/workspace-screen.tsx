@@ -3349,7 +3349,7 @@ function WorkspaceScreenContent({
         <ScreenHeader
           left={
             <>
-              {!isEmbeddedFocusMode && <SidebarMenuToggle />}
+              <SidebarMenuToggle />
               <WorkspaceHeaderTitleBar
                 isLoading={isWorkspaceHeaderLoading}
                 title={workspaceHeaderTitle}

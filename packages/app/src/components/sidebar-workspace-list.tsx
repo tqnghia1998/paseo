@@ -1,3 +1,5 @@
+import { isEmbeddedRouteAllowed } from "@/patches/vibing/workspace-boundary";
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   View,
@@ -585,16 +587,18 @@ function ProjectMenuItems({
         path={projectPath}
         testID={`sidebar-project-menu-open-folder-${projectViewKey}`}
       />
-      <ProjectMenuItem
-        surface={surface}
-        testID={`sidebar-project-menu-remove-${projectViewKey}`}
-        leading={trash2LeadingIcon}
-        status={removeProjectStatus}
-        pendingLabel={t("sidebar.project.actions.removing")}
-        onSelect={onRemoveProject}
-      >
-        {t("sidebar.project.actions.remove")}
-      </ProjectMenuItem>
+      {!isEmbeddedFocusMode && (
+        <ProjectMenuItem
+          surface={surface}
+          testID={`sidebar-project-menu-remove-${projectViewKey}`}
+          leading={trash2LeadingIcon}
+          status={removeProjectStatus}
+          pendingLabel={t("sidebar.project.actions.removing")}
+          onSelect={onRemoveProject}
+        >
+          {t("sidebar.project.actions.remove")}
+        </ProjectMenuItem>
+      )}
     </>
   );
 }
@@ -876,7 +880,10 @@ function ProjectHeaderRow({
   const isMobileBreakpoint = useIsCompactFormFactor();
   const localDaemonServerId = useLocalDaemonServerId();
   const projectPath = resolveSidebarProjectLocalPath(project, localDaemonServerId);
-  const settingsTarget = project.hosts[0] ?? null;
+  const settingsTarget =
+    project.hosts.find((host) =>
+      isEmbeddedRouteAllowed(buildProjectSettingsRoute(host.serverId, host.projectId)),
+    ) ?? null;
   const handleBeginWorkspaceSetup = useCallback(() => {
     if (!worktreeTarget) {
       return;
@@ -1267,7 +1274,7 @@ function WorkspaceRowWithMenu({
   });
 
   const handleArchive = useCallback(() => {
-    if (isArchiving) {
+    if (isEmbeddedFocusMode || isArchiving) {
       return;
     }
     archiveController.archive();

@@ -11,6 +11,7 @@ interface UseImportSessionOptions {
   serverId?: string;
   cwd?: string;
   workspaceId?: string;
+  allowShowAllDirectories?: boolean;
 }
 
 interface UseImportSessionResult {
@@ -51,6 +52,7 @@ export function useImportSession({
   serverId,
   cwd,
   workspaceId,
+  allowShowAllDirectories,
 }: UseImportSessionOptions = {}): UseImportSessionResult {
   const { t } = useTranslation();
   const chooseHost = useHostChooser();
@@ -86,6 +88,7 @@ export function useImportSession({
         serverId={importServerId}
         cwd={cwd}
         workspaceId={workspaceId}
+        allowShowAllDirectories={allowShowAllDirectories}
         onClose={close}
         onImported={navigateToImportedAgent}
       />

@@ -1,3 +1,5 @@
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
+import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
 import { useCallback, useMemo } from "react";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { AppSettings } from "@/hooks/use-settings/storage";
@@ -26,14 +28,22 @@ export interface UseSidebarNavItemsReturn<Section extends SidebarSection> {
 export function useSidebarNavItems<Section extends SidebarSection>(
   section: Section,
 ): UseSidebarNavItemsReturn<Section> {
-  const plugins = useInstalledPlugins();
+  const installed = useInstalledPlugins();
+  const bound = getEmbeddedWorkspace();
+  const plugins = useMemo(
+    () => installed.filter((plugin) => !isEmbeddedFocusMode || plugin.serverId === bound?.serverId),
+    [installed, bound],
+  );
   const { settings, updateSettings } = useAppSettings();
   const field = PREFERENCE_FIELDS[section];
   const preferences = settings[field];
   const pluginGroups = useMemo(() => groupPluginSidebarItems(plugins, section), [plugins, section]);
 
   const items = useMemo(
-    () => resolveSidebarNavItems({ section, pluginGroups, preferences }),
+    () =>
+      resolveSidebarNavItems({ section, pluginGroups, preferences }).filter(
+        (item) => !isEmbeddedFocusMode || item.kind === "plugin" || item.id !== "new-workspace",
+      ),
     [pluginGroups, preferences, section],
   );
 
