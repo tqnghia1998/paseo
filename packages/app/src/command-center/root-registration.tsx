@@ -22,7 +22,8 @@ import { useToast } from "@/contexts/toast-context";
 import { getDesktopHost } from "@/desktop/host";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
-import { useImportSession } from "@/hooks/use-import-session";
+import { useWorktreeImportSession } from "@/patches/vibing/sidebar-hooks";
+import { isEmbeddedRootCommandAllowed } from "@/patches/vibing/workspace-boundary";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import { useHardwareKeyboardPresent } from "@/keyboard";
 import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
@@ -122,7 +123,11 @@ export function CommandCenterRootActions() {
   const { overrides } = useKeyboardShortcutOverrides();
   const shortcutsAvailable = useHardwareKeyboardPresent();
   const openAddProject = useOpenAddProject();
-  const { open: openImportSession, sheet: importSessionSheet } = useImportSession();
+  const {
+    open: openImportSession,
+    sheet: importSessionSheet,
+    isAvailable: importAvailable,
+  } = useWorktreeImportSession();
   const settingsRoute = useMemo<Href>(() => buildSettingsRoute(), []);
   const homeRoute = useMemo<Href>(() => buildOpenProjectRoute(), []);
   const sessionsRoute = useMemo<Href>(() => buildSessionsRoute(), []);
@@ -364,10 +369,13 @@ export function CommandCenterRootActions() {
       }),
     );
 
-    return availableActions;
+    return availableActions.filter(({ id }) =>
+      isEmbeddedRootCommandAllowed({ id, importAvailable }),
+    );
   }, [
     browserHostLabel,
     groupMode,
+    importAvailable,
     homeRoute,
     keyboardActionDispatcher,
     openAddProject,

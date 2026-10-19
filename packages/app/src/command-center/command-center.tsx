@@ -324,6 +324,7 @@ function useWorkspaceRows(
     // are no sign that the list is complete.
     loading: agentsLoading || projectsLoading || workspacesArriving,
   };
+
 }
 
 /**

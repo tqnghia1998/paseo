@@ -129,7 +129,8 @@ import {
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { useIsInputLive } from "./input/use-input-live";
-import { resolveActiveSendBehavior, resolveImmediateActiveTurnBehavior } from "./input/state";
+import { resolveActiveSendBehavior } from "./input/state";
+
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
@@ -1679,12 +1680,7 @@ function ComposerContentImpl({
   }, [focusInput, onFocusInput]);
 
   const submitMessage = useCallback(
-    async (
-      text: string,
-      submitAttachments: ComposerAttachment[],
-      activeTurnBehavior?: "steer",
-      messageId?: string,
-    ) => {
+    async (text: string, submitAttachments: ComposerAttachment[], messageId?: string) => {
       onMessageSent?.();
       if (onSubmitMessageRef.current) {
         await onSubmitMessageRef.current({ text, attachments: submitAttachments, cwd });
@@ -1697,7 +1693,7 @@ function ComposerContentImpl({
         agentIdRef.current,
         text,
         submitAttachments,
-        resolveImmediateActiveTurnBehavior(appSettings.sendBehavior, activeTurnBehavior),
+        appSettings.sendBehavior === "steer" ? "steer" : "interrupt",
         messageId,
       );
     },
@@ -1819,7 +1815,6 @@ function ComposerContentImpl({
       outgoingMessage: string,
       outgoingAttachments: ComposerAttachment[],
       forceSend?: boolean,
-      activeTurnBehavior?: "steer",
       onQueuedMessageSubmitted?: () => Promise<void>,
     ) => {
       const result = await submitAgentInput({
@@ -1841,7 +1836,7 @@ function ComposerContentImpl({
           if (submitBehavior !== "preserve-and-lock") {
             beginSubmit(submitAttachments);
           }
-          await submitMessage(submitText, submitAttachments, activeTurnBehavior);
+          await submitMessage(submitText, submitAttachments);
         },
         clearDraft,
         setUserInput: replaceUserInput,
@@ -1912,12 +1907,7 @@ function ComposerContentImpl({
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      void sendMessageWithContent(
-        payload.text,
-        outgoingAttachments,
-        payload.forceSend,
-        payload.activeTurnBehavior,
-      );
+      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
     },
     [
       attachments,
@@ -2140,7 +2130,7 @@ function ComposerContentImpl({
         messageId: id,
         queue: queueWriter,
         submitMessage: ({ text, attachments: queuedAttachments, messageId }) =>
-          submitMessage(text, queuedAttachments, undefined, messageId),
+          submitMessage(text, queuedAttachments, messageId),
         failedToSendMessage: t("composer.errors.failedToSend"),
       });
       if (result.status === "failed") {
