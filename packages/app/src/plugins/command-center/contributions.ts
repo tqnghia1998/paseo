@@ -8,6 +8,7 @@ import { createPluginCapabilities, type PluginNavigation } from "../actions";
 
 export interface PluginCommandCenterSource {
   plugins: readonly InstalledPlugin[];
+  allowGlobal?: boolean;
   state: PluginClientStateSource;
   workspaceId: string | null;
   agentId: string | null;
@@ -21,6 +22,7 @@ export function buildPluginCommandCenterContributions(
   const contributions: CommandCenterContribution[] = [];
   for (const plugin of source.plugins) {
     for (const [rank, item] of plugin.commandCenterItems.entries()) {
+      if (source.allowGlobal === false && item.context === "global") continue;
       if (item.context === "workspace" && !source.workspaceId) continue;
       if (item.context === "agent" && (!source.workspaceId || !source.agentId)) continue;
       const run = async () => {

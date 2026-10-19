@@ -1,3 +1,8 @@
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
+import {
+  getEmbeddedWorkspace,
+  isEmbeddedHostSectionAllowed,
+} from "@/patches/vibing/workspace-boundary";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import {
@@ -220,7 +225,10 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
 ];
 
 function isSectionAvailable(item: SidebarSectionItem, isDesktopApp: boolean): boolean {
-  return (!item.desktopOnly || isDesktopApp) && (!item.webOnly || isWeb);
+  return (
+    (!item.desktopOnly || isDesktopApp || (isEmbeddedFocusMode && item.id === "shortcuts")) &&
+    (!item.webOnly || isWeb)
+  );
 }
 
 interface HostSectionItem {
@@ -975,61 +983,67 @@ function SettingsSidebar({
       </SidebarGroup>
       {hasHosts ? (
         <SidebarGroup label={t("settings.groups.host")}>
-          <HostPicker
-            activeServerId={activeHostServerId}
-            sortedHosts={sortedHosts}
-            onSelectHost={onSelectHost}
-            onAddHost={onAddHost}
-            enableBuiltInDaemonOption={enableBuiltInDaemonOption}
-          />
-          {HOST_SECTION_ITEMS.map((item) => (
-            <SidebarHostSectionButton
-              key={item.id}
-              itemId={item.id}
-              label={t(item.labelKey)}
-              icon={item.icon}
-              isSelected={selectedHostSection === item.id}
-              onSelect={onSelectHostSection}
+          {!isEmbeddedFocusMode && (
+            <HostPicker
+              activeServerId={activeHostServerId}
+              sortedHosts={sortedHosts}
+              onSelectHost={onSelectHost}
+              onAddHost={onAddHost}
+              enableBuiltInDaemonOption={enableBuiltInDaemonOption}
             />
-          ))}
+          )}
+          {HOST_SECTION_ITEMS.filter((item) => isEmbeddedHostSectionAllowed(item.id)).map(
+            (item) => (
+              <SidebarHostSectionButton
+                key={item.id}
+                itemId={item.id}
+                label={t(item.labelKey)}
+                icon={item.icon}
+                isSelected={selectedHostSection === item.id}
+                onSelect={onSelectHostSection}
+              />
+            ),
+          )}
         </SidebarGroup>
       ) : (
-        <SidebarGroup>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("settings.addHost")}
-            onPress={onAddHost}
-            testID="settings-add-host"
-            style={sidebarItemStyle}
-          >
-            <Plus
-              size={densityIconSize(rt, "md")}
-              color={theme.colors.foregroundMuted}
-              strokeWidth={SIDEBAR_ICON_STROKE_WIDTH}
-            />
-            <Text style={sidebarStyles.label} numberOfLines={1}>
-              {t("settings.addHost")}
-            </Text>
-          </Pressable>
-          {enableBuiltInDaemonOption.visible ? (
+        !isEmbeddedFocusMode && (
+          <SidebarGroup>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={t("settings.enableBuiltInDaemon")}
-              onPress={enableBuiltInDaemonOption.onPress}
-              testID="settings-enable-built-in-daemon"
+              accessibilityLabel={t("settings.addHost")}
+              onPress={onAddHost}
+              testID="settings-add-host"
               style={sidebarItemStyle}
             >
-              <Server
+              <Plus
                 size={densityIconSize(rt, "md")}
                 color={theme.colors.foregroundMuted}
                 strokeWidth={SIDEBAR_ICON_STROKE_WIDTH}
               />
               <Text style={sidebarStyles.label} numberOfLines={1}>
-                {t("settings.enableBuiltInDaemon")}
+                {t("settings.addHost")}
               </Text>
             </Pressable>
-          ) : null}
-        </SidebarGroup>
+            {enableBuiltInDaemonOption.visible ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("settings.enableBuiltInDaemon")}
+                onPress={enableBuiltInDaemonOption.onPress}
+                testID="settings-enable-built-in-daemon"
+                style={sidebarItemStyle}
+              >
+                <Server
+                  size={densityIconSize(rt, "md")}
+                  color={theme.colors.foregroundMuted}
+                  strokeWidth={SIDEBAR_ICON_STROKE_WIDTH}
+                />
+                <Text style={sidebarStyles.label} numberOfLines={1}>
+                  {t("settings.enableBuiltInDaemon")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </SidebarGroup>
+        )
       )}
     </>
   );
@@ -1117,6 +1131,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   // The host the four sections scope to: the host on the active view, otherwise
   // the picker choice, otherwise the connected local daemon, otherwise the first host.
   const activeHostServerId = useMemo(() => {
+    const embedded = getEmbeddedWorkspace();
+    if (embedded) return embedded.serverId;
     if (view.kind === "host" || view.kind === "project" || view.kind === "plugin")
       return view.serverId;
     return resolveActiveHostServerId({
