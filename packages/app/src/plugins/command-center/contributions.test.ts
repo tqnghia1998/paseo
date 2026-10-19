@@ -173,6 +173,14 @@ describe("plugin Command Center contributions", () => {
         agentId: agent.id,
       }).map((item) => item.id),
     ).toEqual(["review:global", "review:workspace", "review:agent"]);
+    expect(
+      buildPluginCommandCenterContributions({
+        ...common,
+        workspaceId: workspace.id,
+        agentId: agent.id,
+        allowGlobal: false,
+      }).map((item) => item.id),
+    ).toEqual(["review:workspace", "review:agent"]);
   });
 
   it("supplies the direct API, typed RPC, snapshots, and narrow navigation", async () => {

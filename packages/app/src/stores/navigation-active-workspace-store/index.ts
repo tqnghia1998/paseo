@@ -1,5 +1,12 @@
 import { revealWorkspaceTab } from "@/workspace-tabs/navigation";
 import { usePanelStore } from "@/stores/panel-store";
+import {
+  embeddedWorkspaceRoute,
+  getEmbeddedWorkspace,
+  isEmbeddedRouteAllowed,
+} from "@/patches/vibing/workspace-boundary";
+import { buildHostWorkspaceRoute } from "@/utils/host-routes";
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, usePathname } from "expo-router";
 import { useEffect, useSyncExternalStore } from "react";
@@ -69,10 +76,17 @@ export function getIsLastWorkspaceSelectionHydrated(): boolean {
 }
 
 export function navigateToWorkspace(input: NavigateToWorkspaceInput): string {
+  if (!isEmbeddedRouteAllowed(buildHostWorkspaceRoute(input.serverId, input.workspaceId)))
+    return embeddedWorkspaceRoute() ?? "";
   return navigateToWorkspacePure(input, navigateDeps());
 }
 
 export function navigateToLastWorkspace(): boolean {
+  const embedded = getEmbeddedWorkspace();
+  if (embedded) {
+    navigateToWorkspace(embedded);
+    return true;
+  }
   return navigateToLastWorkspacePure({
     ...navigateDeps(),
     getLastWorkspaceSelection: () => lastWorkspaceSelectionStore.getSelection(),

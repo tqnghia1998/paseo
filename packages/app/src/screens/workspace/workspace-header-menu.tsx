@@ -98,8 +98,22 @@ function WorkspaceHeaderWorkspaceActionItems({
   onOpenSetupTab,
 }: WorkspaceHeaderWorkspaceActions) {
   const { t } = useTranslation();
+  const router = useRouter();
+  const openSettings = useCallback(() => router.push("/settings"), [router]);
   return (
     <>
+      {isEmbeddedFocusMode && (
+        <>
+          <DropdownMenuItem
+            leading={MENU_SETTINGS_ICON}
+            onSelect={openSettings}
+            testID="workspace-header-settings"
+          >
+            {t("settings.title")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>
+      )}
       <DropdownMenuItem
         testID="workspace-header-copy-path"
         leading={MENU_COPY_ICON}
@@ -302,17 +316,15 @@ export function WorkspaceHeaderMenuMobile({
             onCreateTerminalWithProfile={onCreateTerminalWithProfile}
           />
         ))}
-        {!isEmbeddedFocusMode && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              testID="workspace-header-edit-terminal-profiles"
-              onSelect={handleEditProfiles}
-            >
-              {t("workspace.tabs.actions.editTerminalProfiles")}
-            </DropdownMenuItem>
-          </>
-        )}
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            testID="workspace-header-edit-terminal-profiles"
+            onSelect={handleEditProfiles}
+          >
+            {t("workspace.tabs.actions.editTerminalProfiles")}
+          </DropdownMenuItem>
+        </>
       </DropdownMenuContent>
     </DropdownMenu>
   );
