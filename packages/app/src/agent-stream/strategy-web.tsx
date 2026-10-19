@@ -22,9 +22,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useTranslation } from "react-i18next";
 import { getStreamItemMessageId, type StreamItem } from "@/types/stream";
-import { CHAT_WIDE_MIN_WIDTH, getChatHorizontalSpacing } from "@/constants/layout";
-import { isEmbeddedFocusMode } from "@/embedded-focus-mode";
-import { SPACING, type Theme } from "@/styles/theme";
+import type { Theme } from "@/styles/theme";
 import { WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import { estimateStreamItemHeight } from "./web-virtualization";
@@ -335,7 +333,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const isActiveRef = useRef(isActive);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
-  const [isNarrowChat, setIsNarrowChat] = useState(true);
   const handleScrollContainerRef = useCallback((node: HTMLElement | null) => {
     scrollContainerRef.current = node;
   }, []);
@@ -975,12 +972,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     if (!scrollContainer || typeof ResizeObserver === "undefined") {
       return;
     }
-    const updateChatWidth = () => {
-      if (isEmbeddedFocusMode && scrollContainer.clientWidth > 0) {
-        setIsNarrowChat(scrollContainer.clientWidth < CHAT_WIDE_MIN_WIDTH);
-      }
-    };
-    updateChatWidth();
 
     if (!pendingResumeGeometryCheckRef.current) {
       updateScrollMetrics();
@@ -990,7 +981,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       flushSync(() => {
         measureVirtualizedRows();
       });
-      updateChatWidth();
       const nextGeometry = getObservedViewportGeometry(scrollContainer);
       if (pendingResumeGeometryCheckRef.current) {
         pendingResumeGeometryCheckRef.current = false;
@@ -1238,9 +1228,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   ]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
-    const gutter = isEmbeddedFocusMode
-      ? SPACING[getChatHorizontalSpacing(isNarrowChat)]
-      : isMobileBreakpoint ? 8 : 16;
+    const gutter = isMobileBreakpoint ? 8 : 16;
     const leftGutter = gutter + outlineInset;
     // Balance the outline gutter using only the space the capped column has left over.
     const rightGutter =
@@ -1257,7 +1245,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       paddingRight: rightGutter,
       boxSizing: "border-box",
     };
-  }, [contentMaxWidth, isMobileBreakpoint, isNarrowChat, outlineInset]);
+  }, [contentMaxWidth, isMobileBreakpoint, outlineInset]);
   const scrollContainerStyle = useMemo((): CSSProperties => {
     const overlayScrollbarEnabled = scrollEnabled && !isMobileBreakpoint;
     return {

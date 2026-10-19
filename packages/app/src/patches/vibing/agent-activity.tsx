@@ -31,7 +31,6 @@ export function createEmbeddedAgentActivityEvent(running: boolean) {
 
 function publishEmbeddedAgentActivity(running: boolean): void {
   const event = createEmbeddedAgentActivityEvent(running);
-  console.info(JSON.stringify(event));
   if (window.parent !== window) {
     window.parent.postMessage(event, "*");
   }

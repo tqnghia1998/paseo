@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -14,12 +14,25 @@ function createTempDir(): string {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const dir of createdDirs.splice(0, createdDirs.length)) {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
 describe("resolveDaemonVersion", () => {
+  it("ignores inherited version variables in favor of packaged daemon metadata", () => {
+    vi.stubEnv("PASEO_DAEMON_VERSION", "0.0.0-override");
+    vi.stubEnv("npm_package_version", "0.0.0-host");
+    const root = createTempDir();
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "@getpaseo/server", version: "9.8.7" }),
+    );
+
+    expect(resolveDaemonVersion(pathToFileURL(path.join(root, "server.mjs")).href)).toBe("9.8.7");
+  });
+
   it("resolves server version by walking up to @getpaseo/server package.json", () => {
     const root = createTempDir();
     writeFileSync(
