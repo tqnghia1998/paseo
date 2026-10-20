@@ -60,6 +60,12 @@ retain Find and citation handling. Saved Chat presentation preferences win.
 Attachment rows and interactive Shell input remain native even when users enable
 enhanced messages. Preserve these boundaries when updating the vendored plugin.
 
+Vibing exposes Bots as its own workspace tool beside Paseo. Its `view=bots` entry
+opens the plugin directly after binding the worktree; a distinct iframe name keeps
+its navigation independent of Paseo. The dedicated view omits outer Paseo chrome,
+and embedded Paseo omits its workspace header while retaining Agent tabs and New
+tab at all widths. The in-Paseo Bots shortcut/sidebar entry is removed.
+
 Embedded local Bots conversations use the host's native chat panel and composer
 inside the Bots screen, so timeline renderers (including Beautiful Chat and
 Mermaid), composer plugins, attachments, rewind and queued messages follow the
@@ -104,22 +110,21 @@ plugin list unchanged.
 
 - Every standalone host uses the same embedded workspace policy. `?folder=` resolves
   through idempotent `openProject` and preserves workspace/thread identity. Native
-  headers and Agent conversation tabs stay available. Empty workspaces and panes
+  Agent conversation tabs stay available; embedded Paseo omits its top workspace header. Empty workspaces and panes
   open Agent composers; New tab creates a fresh Agent draft directly. Embedded
   launch menus offer Agent only, with Terminal, Explorer, Diff, Browser and other
   tool controls omitted. The view projects saved tool tabs out without deleting
   their layout or unsaved state, and restores focus to a visible conversation. Global host/project navigation and workspace archive stay host-owned. Shared
-  settings use the native screens; the workspace header and shortcut provide entry.
+  settings use the native screens and keyboard commands.
   A worktree-qualified iframe name keys a sessionStorage navigation binding so
   Settings reload/return cannot select a sibling iframe's last workspace. The route
   boundary gates screen mounting, and navigation/search filter workspace targets.
   The native sidebar starts closed when no panel preference is saved; the menu
-  button reopens it and saved open/closed choices survive reload. History,
+  shortcut reopens it and saved open/closed choices survive reload. History,
   Search, Schedules and plugin screens stay available. The redundant Workspaces
   section and setup callout are omitted; native standalone sidebars retain them.
-  A labeled Bots button beside the menu opens the bundled Bots screen on the
-  bound host without requiring the sidebar. It appears only while that screen
-  is registered, and compact navigation dismisses the sidebar overlay. Native
+  Bots opens from its sibling Vibing workspace tool, using the bound host and a
+  separate navigation identity. Native
   root command actions remain registered; only project creation, workspace creation
   and Home are filtered. Import is unavailable until the bound directory resolves.
   Scope rows, imports and schedule targets to the bound worktree. Different Paseo

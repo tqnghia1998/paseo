@@ -1,5 +1,6 @@
 import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
 import { embeddedBotChatProps } from "@/patches/vibing/bot-chat";
+import { EmbeddedPluginHeader } from "@/patches/vibing/sidebar-controls";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { router, useLocalSearchParams } from "expo-router";
 import type { PluginIcon, PluginScreenParams, PluginScreenProps } from "@getpaseo/plugin/client";
@@ -230,17 +231,19 @@ export function PluginSurfaceScreen() {
 
   return (
     <View style={styles.screen}>
-      {compact ? (
-        <CompactHeader
-          navigation="back"
-          onBack={close}
-          title={title}
-          titleTestID="plugin-surface-title"
-          actions={hostFilter}
-        />
-      ) : (
-        <ScreenHeader left={headerLeft} right={headerRight} />
-      )}
+      <EmbeddedPluginHeader pluginId={pluginId}>
+        {compact ? (
+          <CompactHeader
+            navigation="back"
+            onBack={close}
+            title={title}
+            titleTestID="plugin-surface-title"
+            actions={hostFilter}
+          />
+        ) : (
+          <ScreenHeader left={headerLeft} right={headerRight} />
+        )}
+      </EmbeddedPluginHeader>
       <View style={styles.body}>
         {plugin && surface && client ? (
           <SurfaceErrorBoundary
