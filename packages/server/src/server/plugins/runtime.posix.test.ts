@@ -257,6 +257,30 @@ afterEach(async () => {
 });
 
 describe("PluginRuntime", () => {
+  it("gives plugin workers the owning daemon home without changing the parent environment", async () => {
+    const directory = await createPlugin(
+      "home-scope",
+      `
+      import { defineRpc } from "@getpaseo/plugin";
+      import { z } from "zod";
+      export default function contribute(server) {
+        server.handle(defineRpc({ name: "home.read", input: z.object({}), output: z.string() }),
+          () => process.env.PASEO_HOME ?? "");
+        return () => {};
+      }
+    `,
+    );
+    const parentHome = process.env.PASEO_HOME;
+    const runtime = createTestRuntime({ paseoHome: directory });
+    try {
+      await runtime.startPlugin("home-scope", directory);
+      expect(await runtime.invoke("home-scope", "home.read", {})).toBe(directory);
+      expect(process.env.PASEO_HOME).toBe(parentHome);
+    } finally {
+      await runtime.stopAll();
+    }
+  });
+
   it.each([
     { specifier: "@getpaseo/plugin", moduleDirectory: "shared" },
     { specifier: "@getpaseo/plugin", moduleDirectory: "server" },

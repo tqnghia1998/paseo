@@ -44,7 +44,7 @@ Settings → Experiments. Reliability and navigation patches do not get toggles.
 
 Embedded Settings → Plugins separates Vibing customizations, Paseo built-ins and
 additional plugins. `space-app-vibing-theme` and the vendored third-party
-`beautiful-chat` are added by this fork, and
+`beautiful-chat`, `mermaid`, `paseo-bots` and `annotations` are added by this fork, and
 `codex-usage-source` contains the Enterprise allowance change; their runtime rows
 appear under Vibing customizations, alongside a link to the full patch catalog.
 The other bundled provider and usage plugins come from the incorporated upstream
@@ -58,6 +58,23 @@ cards are enabled; native user and assistant rendering remains the default to
 retain Find and citation handling. Saved Chat presentation preferences win.
 Attachment rows and interactive Shell input remain native even when users enable
 enhanced messages. Preserve these boundaries when updating the vendored plugin.
+
+The additional community plugins are pinned and regenerated with
+`scripts/vendor-community-plugins.mjs`; each plugin's README records attribution,
+revision and license. They have no extra runtime dependencies. Beautiful Chat
+yields Mermaid messages and Bots tools so diagram renderers and actionable
+proposal/sign-in cards can run. Mermaid leaves messages containing provider
+citation markers to the native renderer. Its parser supports flowcharts and
+sequence diagrams; see upstream for its syntax limits.
+
+Bots and Annotations run in plugin workers with the owning daemon's `PASEO_HOME`,
+including isolated test and Live Design homes. Do not run these stateful built-ins
+inside the parent process or substitute the shell's home. Bots owns its own
+screen, data and routines; native worktree navigation remains scoped. Connected
+apps and bots are configured by the user. Annotations follows explicit saved send
+behavior and defaults to Queue. Its direct Send now queue lasts only for the
+current client lifetime; sending through the normal composer uses native queued
+message recovery. Live Design text attachments remain native and independent.
 
 The patch map above records the remaining customizations. Native navigation guards,
 composer draft/queue integration, editor recovery, process cleanup, and provider
