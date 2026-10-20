@@ -125,10 +125,10 @@ export default defineConfig({
       plugins: [
         {
           name: "enriched-markdown-wasm-commonjs",
-          setup(build) {
+          setup(pluginBuild) {
             // Metro accepts the package's CommonJS WASM factory inside its ESM
             // package. Expose the same factory to Vite's dependency optimizer.
-            build.onLoad(
+            pluginBuild.onLoad(
               {
                 filter:
                   /react-native-enriched-markdown[\\/]lib[\\/]module[\\/]web[\\/]wasm[\\/]md4c\.js$/,
