@@ -390,6 +390,25 @@ interface AppContainerProps {
 
 const WINDOW_SIDEBAR_TOGGLE_HORIZONTAL_PADDING = 12;
 
+// The embedded Bots tool owns its own navigation, so app chrome stays off there.
+function resolveChromeEnabled(override: boolean | undefined, hasDaemons: boolean): boolean {
+  return !isEmbeddedBotsTool && (override ?? hasDaemons);
+}
+
+// Embedded workspaces are bound to one worktree: no first-run setup, no adding projects or hosts.
+function ProjectSetupHosts() {
+  if (isEmbeddedFocusMode) return null;
+  return (
+    <>
+      <OnboardingHost />
+      <AddProjectFlowHost />
+      <HostChooserModal />
+      <HostConfirmationSheet />
+      <WorkspaceSetupDialog />
+    </>
+  );
+}
+
 function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppContainerProps) {
   const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const daemons = useHosts();
@@ -420,7 +439,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const pathname = usePathname();
   const isWorkspaceRoute = parseHostWorkspaceRouteFromPathname(pathname) !== null;
   const isWorkspaceFocusModeEnabled = isWorkspaceRoute && isFocusModeEnabled;
-  const chromeEnabled = !isEmbeddedBotsTool && (chromeEnabledOverride ?? daemons.length > 0);
+  const chromeEnabled = resolveChromeEnabled(chromeEnabledOverride, daemons.length > 0);
   const hasMountedDesktopSidebar = useLatchedBoolean(chromeEnabled);
   const toggleAgentList = isCompactLayout ? toggleMobileAgentList : toggleDesktopAgentList;
   const toggleDesktopSidebars = useCallback(() => {
@@ -561,14 +580,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <LegacyAgentSkillsMigration />
         <WorktreeSetupCalloutSource />
         <CommandCenterRootActions />
-        {isEmbeddedFocusMode ? null : (
-          <>
-            <AddProjectFlowHost />
-            <HostChooserModal />
-            <HostConfirmationSheet />
-            <WorkspaceSetupDialog />
-          </>
-        )}
+        <ProjectSetupHosts />
         <PluginCommandCenterActions />
         <CommandCenterWorkspaceActions />
         <WorkspacePinShortcutHandler />
