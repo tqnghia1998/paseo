@@ -107,7 +107,10 @@ it("hands a newly created bot chat to the native panel and releases visibility w
 });
 
 it("only supplies the native chat slot to Bots", () => {
-  expect(embeddedBotChatProps("paseo-bots")).toEqual({ nativeChat: NativeBotChat });
+  expect(embeddedBotChatProps("paseo-bots")).toMatchObject({
+    nativeChat: NativeBotChat,
+    botWorkspace: { id: "", directory: "" },
+  });
   expect(embeddedBotChatProps("mermaid")).toEqual({});
 });
 
