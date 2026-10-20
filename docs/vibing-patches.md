@@ -119,10 +119,10 @@ current client lifetime; sending through the normal composer uses native queued
 message recovery. Live Design text attachments remain native and independent.
 
 The patch map above records the remaining customizations. Native navigation guards,
-composer draft/queue integration, editor recovery, process cleanup, and provider
+composer draft/queue integration, process cleanup, and provider
 protocol fixes still require their existing core hooks. The plugin API can add
 screens, panels, buttons, attachments, lifecycle observers, providers, and themes;
-it does not provide native routing policy or composer/editor persistence hooks.
+it does not provide native routing policy or composer persistence hooks.
 Do not label these patches as installed plugins merely to make them discoverable.
 
 The built-in inventory display itself extends core plugin management with an
