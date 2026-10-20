@@ -1,6 +1,3 @@
-import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
-import { isEmbeddedScheduleAllowed } from "@/patches/vibing/sidebar";
-import { useWorkspace } from "@/stores/session-store-hooks";
 import equal from "fast-deep-equal";
 import {
   useCallback,
@@ -244,34 +241,14 @@ function OpenScheduleFormSheet({
 }: ScheduleFormSheetProps & { onDismiss: () => void }): ReactElement {
   const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
   const { projects } = useProjects();
-  const bound = getEmbeddedWorkspace();
-  const workspace = useWorkspace(bound?.serverId ?? null, bound?.workspaceId ?? null);
-  const allHostProfiles = useHosts();
-  const hostProfiles = useMemo(
-    () => allHostProfiles.filter((host) => !bound || host.serverId === bound.serverId),
-    [allHostProfiles, bound],
-  );
+  const hostProfiles = useHosts();
   const hosts = useStoreWithEqualityFn(
     useSessionStore,
     useMemo(() => selectScheduleHosts(hostProfiles), [hostProfiles]),
     equal,
   );
   const { preferences, updatePreferences } = useFormPreferences();
-  const projectTargets = useMemo(() => {
-    if (!bound) return buildScheduleProjectTargets(projects);
-    if (!workspace) return [];
-    return [
-      {
-        optionId: `project:${bound.serverId}:${bound.workspaceId}`,
-        serverId: bound.serverId,
-        serverName: bound.serverId,
-        projectViewKey: bound.workspaceId,
-        projectName: workspace.title || workspace.name,
-        cwd: workspace.workspaceDirectory,
-        isGit: false,
-      },
-    ];
-  }, [projects, bound, workspace]);
+  const projectTargets = useMemo(() => buildScheduleProjectTargets(projects), [projects]);
   const timezone = useMemo(getDeviceTimeZone, []);
   const snapshot = useMemo(
     () =>
@@ -288,11 +265,6 @@ function OpenScheduleFormSheet({
   );
   const model = useScheduleFormModel(snapshot);
   const state = useSyncExternalStore(model.subscribe, model.getState, model.getState);
-  useEffect(() => {
-    const target = projectTargets[0];
-    if (bound && mode === "create" && target && !model.getState().workingDir)
-      model.setProject(target.optionId, { label: target.projectName });
-  }, [bound, mode, model, projectTargets]);
   const providerSnapshot = useScheduleFormProviderSnapshot(model, state);
   const { agents } = useAggregatedAgents({ includeArchived: true });
   const mutationServerId = state.selectedServerId ?? serverId ?? "";
@@ -303,25 +275,7 @@ function OpenScheduleFormSheet({
   const isSubmitting = isCreating || isUpdating;
   const cadenceError =
     state.cadence.type === "cron" ? validateCron(state.cadence.expression) : null;
-  const withinWorktree = isEmbeddedScheduleAllowed(
-    {
-      serverId: mutationServerId,
-      target:
-        state.targetKind === "agent" && schedule
-          ? schedule.target
-          : {
-              type: "new-agent",
-              config: {
-                provider: state.selectedProvider ?? "codex",
-                cwd: state.workingDir,
-                isolation: "local",
-              },
-            },
-    },
-    workspace?.workspaceDirectory,
-    agents,
-  );
-  const canSubmit = withinWorktree && state.canSubmit && cadenceError === null && !isSubmitting;
+  const canSubmit = state.canSubmit && cadenceError === null && !isSubmitting;
   const agentTargetLabel = useMemo(() => {
     if (!schedule || schedule.target.type !== "agent") {
       return null;
@@ -371,7 +325,6 @@ function OpenScheduleFormSheet({
     return true;
   }, [schedule, state.submitCadence, updateSchedule]);
 
-  const submitIsolation = bound ? "local" : state.submitIsolation;
   const submitNewAgent = useCallback(async (): Promise<boolean> => {
     const provider = state.selectedProvider;
     const cwd = state.workingDir.trim();
@@ -396,7 +349,7 @@ function OpenScheduleFormSheet({
           ...(state.submitArchiveOnFinish !== undefined
             ? { archiveOnFinish: state.submitArchiveOnFinish }
             : {}),
-          ...(submitIsolation !== undefined ? { isolation: submitIsolation } : {}),
+          ...(state.submitIsolation !== undefined ? { isolation: state.submitIsolation } : {}),
         },
         maxRuns,
       });
@@ -418,14 +371,14 @@ function OpenScheduleFormSheet({
           ...(state.submitArchiveOnFinish !== undefined
             ? { archiveOnFinish: state.submitArchiveOnFinish }
             : {}),
-          ...(submitIsolation !== undefined ? { isolation: submitIsolation } : {}),
+          ...(state.submitIsolation !== undefined ? { isolation: state.submitIsolation } : {}),
           title: state.name.trim() || undefined,
         },
       },
       ...(maxRuns != null ? { maxRuns } : {}),
     });
     return true;
-  }, [submitIsolation, createSchedule, mode, persistPreferences, schedule, state, updateSchedule]);
+  }, [createSchedule, mode, persistPreferences, schedule, state, updateSchedule]);
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit) {

@@ -30,7 +30,6 @@ import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-ar
 import { type WorktreeArchiveWarningLabels } from "@/git/worktree-archive-warning";
 import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
-import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { readValidatedString } from "@/storage/validated-storage";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
@@ -643,7 +642,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   });
 
   const handleArchiveWorkspace = useCallback(() => {
-    if (!isEmbeddedFocusMode) archiveController.archive();
+    archiveController.archive();
   }, [archiveController]);
 
   const derived = deriveGitActionsState({
@@ -704,7 +703,6 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
       aheadOfOrigin,
       behindOfOrigin,
       shouldPromoteArchive,
-      workspaceArchiveEnabled: !isEmbeddedFocusMode,
       shipDefault,
       runtime: {
         commit: {

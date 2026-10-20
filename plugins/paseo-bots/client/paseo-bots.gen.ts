@@ -9,7 +9,7 @@ import { useRpc as useRpc20 } from "@getpaseo/plugin/client";
 import { copyText as copyText6, useToast as useToast17 } from "@getpaseo/plugin/client/react-native";
 import { SettingsAction as SettingsAction17, SettingsCard as SettingsCard21 } from "@getpaseo/plugin/client/ui";
 import { useQueryClient as useQueryClient11 } from "@tanstack/react-query";
-import { useEffect as useEffect24, useRef as useRef19, useState as useState44 } from "react";
+import { useCallback as useCallback6, useEffect as useEffect24, useRef as useRef19, useState as useState44 } from "react";
 import { ActivityIndicator as ActivityIndicator11, BackHandler, Platform as Platform21, Text as Text33, View as View45 } from "react-native";
 
 // shared/pixel.ts
@@ -1306,6 +1306,9 @@ function displayTitle(title) {
   return (title ?? "").replace(/^\[[^\]]*\]\s*/, "") || "New chat";
 }
 var normalize = (path) => (path ?? "").replace(/\/+$/, "");
+function isWorkspaceBotChat(agent, directory, botId) {
+  return normalize(agent.cwd) === normalize(directory) && (agent.labels?.[BOT_LABEL] === botId || botId === "vibing-general" && !agent.labels?.[BOT_LABEL]);
+}
 async function botsProjectId(api, root) {
   const { projects } = await api.projects.list();
   const existing = projects.find((project) => normalize(project.projectRootPath) === normalize(root));
@@ -1342,7 +1345,7 @@ async function syncBotWorkspaceTitle(api, bot, placement) {
 async function startBotChat(api, input) {
   const { bot } = input;
   const model = bot.model ?? await resolveDefaultModel(api, bot.provider);
-  const workspace = await ensureBotWorkspace(api, bot, input.placement);
+  const workspace = input.placement.workspaceId ? api.workspaces.ref(input.placement.workspaceId) : await ensureBotWorkspace(api, bot, input.placement);
   const agent = await workspace.agents.create({
     ...input.agentId ? { agentId: input.agentId } : {},
     config: buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
@@ -4240,7 +4243,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect as useEffect5, useMemo as useMemo3 } from "react";
 function resolveHost(hostId, local, localApi, hosts) {
   if (!hostId || hostId === local.id) {
-    return { api: localApi, key: local.id, label: local.label, isLocal: true, online: true };
+    return { api: localApi, key: local.id, label: local.label, isLocal: true, online: true, workspaceDirectory: local.workspaceDirectory };
   }
   const summary = hosts.find((host2) => host2.serverId === hostId);
   const label = summary?.label ?? "Unknown host";
@@ -4259,7 +4262,7 @@ function useBotHost(hostId, local) {
   return useMemo3(
     () => resolveHost(hostId, local, localApi, hosts),
     // Only the fields that change the result.
-    [hostId, local.id, local.label, localApi, summary?.label, status]
+    [hostId, local.id, local.label, local.workspaceDirectory, localApi, summary?.label, status]
   );
 }
 function useHostResolver(local) {
@@ -4301,16 +4304,27 @@ function useHostWorkspaces(host2) {
     }
   });
 }
-function useBotChats(host2, botId) {
+function useBotChats(host2, botId, workspaceOnly = true) {
+  const directory = workspaceOnly ? host2.workspaceDirectory : void 0;
   return useQuery({
-    queryKey: ["paseo-bots", "chats", host2.key, botId],
+    // All bots in an embedded workspace share one directory snapshot.
+    queryKey: ["paseo-bots", "chats", host2.key, directory ? "workspace" : botId, directory],
     enabled: !!host2.api,
-    // The local host pushes agent updates (useChatInvalidation); other hosts are polled.
     refetchInterval: host2.isLocal ? false : 15e3,
     queryFn: async () => {
-      const result = await host2.api.agents.list({ filter: { labels: { [BOT_LABEL]: botId } } });
-      return result.entries.map((entry) => entry.agent).filter((agent) => !agent.archivedAt).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-    }
+      const agents = [];
+      let cursor;
+      do {
+        const result = await host2.api.agents.list({
+          ...directory ? {} : { filter: { labels: { [BOT_LABEL]: botId } } },
+          page: { limit: 200, ...cursor ? { cursor } : {} }
+        });
+        agents.push(...result.entries.map((entry) => entry.agent));
+        cursor = result.pageInfo.hasMore ? result.pageInfo.nextCursor ?? void 0 : void 0;
+      } while (cursor);
+      return agents.filter((agent) => !agent.archivedAt).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+    },
+    select: (agents) => directory ? agents.filter((agent) => isWorkspaceBotChat(agent, directory, botId)) : agents
   });
 }
 function useChatInvalidation() {
@@ -10505,7 +10519,7 @@ function ArchivedCallout({ colors: colors2, compact: compact2 }) {
 
 // client/ChatPane.tsx
 import { Fragment as Fragment10, jsx as jsx26, jsxs as jsxs25 } from "react/jsx-runtime";
-function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, nativeChat: NativeChat, nativeCwd, onSelectChat }) {
+function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, nativeChat: NativeChat, nativeCwd, onSelectChat, botWorkspace, draftId }) {
   const running = chat.agent?.status === "running" || chat.agent?.status === "initializing";
   const empty = chat.entries.length === 0 && !chat.loading && !chat.error && (chat.agent?.pendingPermissions.length ?? 0) === 0;
   const title = chatId ? displayTitle(chat.agent?.title) : "New chat";
@@ -10530,12 +10544,19 @@ function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, 
         onFind: canFind ? () => setFindOpen((open) => !open) : void 0
       }
     ),
-    useNativeChat && NativeChat ? /* @__PURE__ */ jsx26(NativeChat, { serverId: host2.key, botId: bot.id, agentId: chatId, workspaceId: chat.agent?.workspaceId, cwd: chat.agent?.cwd || bot.cwd || nativeCwd || "", provider: bot.provider, model: bot.model, modeId: bot.modeId, thinkingOptionId: bot.thinkingOptionId, active: !layout.compact || !panelOpen, onSelectChat: (id) => onSelectChat?.(id), onStart }) : chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
+    botWorkspace && chat.agent?.cwd && chat.agent.cwd !== botWorkspace.directory ? /* @__PURE__ */ jsxs25(Text24, { style: { color: colors2.foregroundMuted, padding: 8 }, children: [
+      "This chat works in ",
+      chat.agent.cwd,
+      ". New chats use the current workspace."
+    ] }) : null,
+    useNativeChat && NativeChat ? /* @__PURE__ */ jsx26(NativeChat, { serverId: host2.key, botId: bot.id, agentId: chatId, draftId, workspaceId: chat.agent?.workspaceId ?? botWorkspace?.id, cwd: chat.agent?.cwd || botWorkspace?.directory || bot.cwd || nativeCwd || "", provider: bot.provider, model: bot.model, modeId: bot.modeId, thinkingOptionId: bot.thinkingOptionId, active: !layout.compact || !panelOpen, onSelectChat: (id) => onSelectChat?.(id), onStart }) : chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
       /* @__PURE__ */ jsx26(Avatar, { avatar: bot.avatar, size: 56 }),
       /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foreground, fontSize: ui(18), fontWeight: "500" }, children: bot.name }),
       bot.description ? /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foregroundMuted, fontSize: ui(14), textAlign: "center", maxWidth: 420 }, children: bot.description }) : null
     ] }) : /* @__PURE__ */ jsx26(ChatStream, { colors: colors2, chat, api: host2.api, agentId: chatId, compact: layout.compact, platform: layout.platform, typeVersion, onOpenChat, voice: bot.voice, findOpen, onCloseFind: () => setFindOpen(false), ...host2.isLocal ? { botId: bot.id } : {} }, chatId),
-    !useNativeChat ? /* @__PURE__ */ jsx26(Composer, { colors: colors2, bot, host: host2, agentId: chatId, agent: chat.agent, running, layout, keyboardOpen, onStart }) : null
+    !useNativeChat ? /* @__PURE__ */ jsx26(Composer, { colors: colors2, bot, host: host2, agentId: chatId, agent: chat.agent, running, layout, keyboardOpen, onStart: async (message2) => {
+      await onStart(message2);
+    } }) : null
   ] });
 }
 function Header({ colors: colors2, title, subtitle, hostBadge, compact: compact2, panelOpen, onBack, onMenu, onTogglePanel, onFind }) {
@@ -11592,7 +11613,7 @@ var STATUS2 = {
 };
 function BotCard({ colors: colors2, bot, lead, localHost, onPress }) {
   const host2 = useBotHost(bot.hostId, localHost);
-  const chats = useBotChats(host2, bot.id);
+  const chats = useBotChats(host2, bot.id, false);
   const status = STATUS2[aggregateBuckets((chats.data ?? []).map(chatBucket))];
   const { hovered, hoverProps } = useHover();
   const agent = [bot.provider, bot.model].filter(Boolean).join(" \xB7 ");
@@ -12105,7 +12126,7 @@ function FolderSection({ colors: colors2, bot, localHost, onPatch }) {
   ];
   const folderValue = bot.cwd === null ? host2.isLocal ? MANAGED : "Choose a folder" : options.some((option) => option.value === bot.cwd) ? bot.cwd : CUSTOM;
   const pathError = pathText.trim() && !ABSOLUTE_PATH.test(pathText.trim()) ? "Use an absolute path" : null;
-  return /* @__PURE__ */ jsx41(SettingsSection13, { title: "Working folder", info: "Where the bot's chats run. The shared folder keeps every bot chat in one Bots workspace.", children: /* @__PURE__ */ jsxs39(SettingsCard14, { children: [
+  return /* @__PURE__ */ jsx41(SettingsSection13, { title: "Working folder", info: host2.isLocal && localHost.workspaceDirectory ? "Chats opened here use the current Vibing workspace. This folder applies to routines and background chats; memory and skills stay in the bot\u2019s own folder." : "Where the bot's chats run. The shared folder keeps every bot chat in one Bots workspace.", children: /* @__PURE__ */ jsxs39(SettingsCard14, { children: [
     /* @__PURE__ */ jsx41(
       SettingsSelect4,
       {
@@ -13015,7 +13036,7 @@ function HistorySection({ colors: colors2, bot, history, onRestore }) {
 }
 function UsageSection({ bot, localHost }) {
   const host2 = useBotHost(bot.hostId, localHost);
-  const chats = useBotChats(host2, bot.id);
+  const chats = useBotChats(host2, bot.id, false);
   const list2 = chats.data ?? [];
   const sum = (pick2) => list2.reduce((total, chat) => total + (chat.lastUsage ? pick2(chat.lastUsage) ?? 0 : 0), 0);
   const input = sum((usage) => usage.inputTokens);
@@ -13243,7 +13264,7 @@ function RoutineForm({ colors: colors2, bot, host: host2, routine, onCancel, onS
   const [cronText, setCronText] = useState41(() => scheduleToCron(original) ?? "0 9 * * *");
   const [onceText, setOnceText] = useState41(() => formatLocalDateTime(original.kind === "once" ? new Date(original.at) : inAnHour()));
   const [cronKey, setCronKey] = useState41(0);
-  const chats = useBotChats(host2, bot.id);
+  const chats = useBotChats(host2, bot.id, false);
   const once = schedule.kind === "once";
   const hook = schedule.kind === "webhook";
   const trimmedCron = cronText.trim();
@@ -13721,19 +13742,20 @@ function BotsSurface(props) {
   useTooltipTheme(colors2);
   return /* @__PURE__ */ jsx49(MenuProvider, { colors: colors2, compact: props.layout.compact, children: /* @__PURE__ */ jsx49(AvatarTheme, { dark: nativeTokens(colors2).dark, children: /* @__PURE__ */ jsx49(BotsSurfaceContent, { ...props }) }) });
 }
-function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat }) {
+function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat, botWorkspace, workspaceBridge: WorkspaceBridge }) {
   const { colors: colors2 } = theme;
   const { settings, latest, commit } = useBotSettings();
   const toast = useToast17();
   const menu = useMenu();
   const queryClient = useQueryClient11();
-  const localHost = { id: host2.id, label: host2.label };
+  const localHost = { id: host2.id, label: host2.label, workspaceDirectory: botWorkspace?.directory };
   const localProviders = useProviders(useBotHost(null, localHost));
   const resolveHost2 = useHostResolver(localHost);
   const exportBot = useRpc20(exportBotRpc);
   const importBot = useRpc20(importBotRpc);
   const importTeam = useRpc20(importTeamRpc);
-  const [selection, setSelection] = useState44(null);
+  const [showAllFolders, setShowAllFolders] = useState44(false);
+  const [selection, setSelection] = useState44(botWorkspace ? { botId: "vibing-general", chatId: null } : null);
   const [panel, setPanel] = useState44({ open: false, section: null });
   const [panelVersion, setPanelVersion] = useState44(0);
   const [creating, setCreating] = useState44(false);
@@ -13852,6 +13874,28 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     const intent = takeIntent();
     if (intent?.kind === "new-bot") setCreating(true);
   }, []);
+  const initializingGeneral = useRef19(false);
+  useEffect24(() => {
+    if (!botWorkspace || settings.status !== "ready" || settings.values.bots.some((bot2) => bot2.id === "vibing-general") || !localProviders.data || initializingGeneral.current) return;
+    const ready = localProviders.data.filter((entry) => entry.status === "ready");
+    const provider = ready[0]?.provider ?? localProviders.data[0]?.provider ?? "codex";
+    initializingGeneral.current = true;
+    const bot = { ...applyDefaults(newBot(provider, BOT_TEMPLATES[0]), settings.values.defaults ?? DEFAULT_BOT_DEFAULTS, provider), id: "vibing-general", name: "General" };
+    void commit((values) => values.bots.some((entry) => entry.id === bot.id) ? values : { ...values, bots: [bot, ...values.bots] }).finally(() => {
+      initializingGeneral.current = false;
+    });
+  }, [botWorkspace, settings, localProviders.data, commit]);
+  const activateWorkspaceChat = useCallback6((target) => {
+    setSelection((current2) => {
+      const selectedId = target.botId ?? current2?.botId ?? "vibing-general";
+      const bot = latest.current.status === "ready" ? latest.current.values.bots.find((entry) => entry.id === selectedId) : null;
+      const local = !bot?.hostId || bot.hostId === host2.id;
+      return !local ? { botId: "vibing-general", chatId: null, draftId: target.draftId } : !target.agentId && !target.draftId ? current2 ?? { botId: "vibing-general", chatId: null } : { botId: target.botId ?? current2?.botId ?? "vibing-general", chatId: target.agentId ?? null, draftId: target.draftId };
+    });
+    setPanel({ open: false, section: null });
+    setLibraryView(null);
+    setTeamMap(false);
+  }, [host2.id, latest]);
   if (settings.status !== "ready") {
     return /* @__PURE__ */ jsxs47(View45, { style: { flex: 1, padding: 24, gap: 12, backgroundColor: colors2.surface0, justifyContent: settings.status === "loading" ? "center" : "flex-start", alignItems: settings.status === "loading" ? "center" : "stretch" }, children: [
       settings.status === "loading" ? /* @__PURE__ */ jsx49(ActivityIndicator11, { size: "large", color: colors2.foregroundMuted, accessibilityLabel: "Loading bots" }) : /* @__PURE__ */ jsxs47(Text33, { style: { fontSize: ui(14), color: colors2.statusDanger }, children: [
@@ -13959,7 +14003,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
   const copy = (text, done) => void copyText6(text).then(() => toast.show(done, { variant: "success" })).catch(() => toast.error("Unable to copy"));
   const openBotMenu = (bot, anchor, source) => {
     const botHost = resolveHost2(bot.hostId);
-    const chats = queryClient.getQueryData(["paseo-bots", "chats", botHost.key, bot.id]) ?? [];
+    const chats = queryClient.getQueryData(["paseo-bots", "chats", botHost.key]) ?? [];
     const workspaceId = chats.find((chat) => chat.workspaceId)?.workspaceId;
     const openWorkspace = navigation?.openWorkspace;
     menu.open({
@@ -14057,7 +14101,7 @@ Its chats stay on the host and remain in Paseo's history.`,
             await botHost.api.agents.ref(chat.id).archive();
             if (selection?.chatId === chat.id) setSelection({ botId: bot.id, chatId: null });
             if (context.pinned) updateUi(unpin);
-            await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key, bot.id] });
+            await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key] });
           } catch (error) {
             toast.error(`Failed to archive chat: ${errorText(error)}`);
           }
@@ -14072,6 +14116,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       width: 232,
       title: "Display",
       entries: [
+        ...botWorkspace ? [{ label: "Chats", trailing: showAllFolders ? "All folders" : "This workspace", onSelect: () => setShowAllFolders((current2) => !current2) }] : [],
         {
           label: "Archived bots",
           trailing: listUi.showArchived ? "Shown" : archivedCount ? `Hidden (${archivedCount})` : "Hidden",
@@ -14097,7 +14142,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       hiddenArchivedCount: listUi.showArchived ? 0 : archivedCount,
       selection,
       ui: listUi,
-      localHost,
+      localHost: showAllFolders ? { id: localHost.id, label: localHost.label } : localHost,
       touch: layout.compact || layout.platform !== "web",
       splash: layout.compact,
       bottomInset,
@@ -14141,6 +14186,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       bot: selectedBot,
       library,
       selection,
+      botWorkspace,
       localHost,
       panelOpen: panel.open,
       layout,
@@ -14153,7 +14199,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       onSelectChat: (chatId) => setSelection({ botId: selectedBot.id, chatId }),
       onStarted: (chatId) => setSelection({ botId: selectedBot.id, chatId })
     },
-    `${selectedBot.id}:${selection.chatId ?? "new"}`
+    `${selectedBot.id}:${selection.chatId ?? selection.draftId ?? "new"}`
   ) : /* @__PURE__ */ jsx49(Splash, { colors: colors2 });
   const settingsPanel = selectedBot && panel.open ? /* @__PURE__ */ jsx49(
     BotPanel,
@@ -14197,97 +14243,104 @@ Its chats stay on the host and remain in Paseo's history.`,
       onBack: () => setLibraryView(null)
     }
   ) : null;
+  const workspaceHeader = WorkspaceBridge ? /* @__PURE__ */ jsx49(WorkspaceBridge, { selectedAgentId: selection?.chatId, botId: selection?.botId ?? "vibing-general", onActivate: activateWorkspaceChat }) : null;
   if (libraryScreen && !layout.compact) {
-    return /* @__PURE__ */ jsx49(View45, { style: { flex: 1, backgroundColor: colors2.surface0, paddingBottom: keyboardHeight }, children: libraryScreen });
+    return /* @__PURE__ */ jsxs47(Fragment22, { children: [
+      workspaceHeader,
+      /* @__PURE__ */ jsx49(View45, { style: { flex: 1, backgroundColor: colors2.surface0, paddingBottom: keyboardHeight }, children: libraryScreen })
+    ] });
   }
-  return /* @__PURE__ */ jsx49(Fragment22, { children: /* @__PURE__ */ jsxs47(
-    View45,
-    {
-      style: { flex: 1, backgroundColor: colors2.surface0, paddingBottom: keyboardHeight },
-      onLayout: (event) => setSurfaceWidth(event.nativeEvent.layout.width),
-      children: [
-        layout.compact ? /* @__PURE__ */ jsxs47(View45, { ref: paneRef, collapsable: false, style: { flex: 1 }, children: [
-          tabProps ? /* @__PURE__ */ jsx49(TeamTabSwitcher, { ...tabProps }) : null,
-          sidebar,
-          selection || teamMap ? /* @__PURE__ */ jsx49(SlideOver, { onClose: () => teamMap ? setTeamMap(false) : setSelection(null), children: pane }) : null,
-          settingsPanel ? /* @__PURE__ */ jsx49(SlideOver, { onClose: () => setPanel({ open: false, section: null }), onBack: () => panel.section ? goBack() : false, children: settingsPanel }) : null,
-          libraryScreen ? /* @__PURE__ */ jsx49(SlideOver, { onClose: () => setLibraryView(null), children: libraryScreen }) : null
-        ] }) : /* @__PURE__ */ jsxs47(Fragment22, { children: [
-          tabProps ? /* @__PURE__ */ jsx49(TeamTabsRow, { ...tabProps }) : null,
-          /* @__PURE__ */ jsxs47(View45, { style: { flex: 1, flexDirection: "row" }, children: [
-            /* @__PURE__ */ jsxs47(View45, { style: { width: columns.list, borderRightWidth: 1, borderRightColor: colors2.border, backgroundColor: nativeTokens(colors2).surfaceSidebar }, children: [
-              sidebar,
-              /* @__PURE__ */ jsx49(ResizeHandle, { side: "right", width: columns.list, onResize: (width) => setDragWidths((current2) => ({ ...current2, list: width })), onCommit: (width) => commitWidth("listWidth", width) })
-            ] }),
-            /* @__PURE__ */ jsx49(View45, { ref: paneRef, collapsable: false, style: { flex: 1, minWidth: 0 }, children: pane }),
-            settingsPanel && columns.panel !== null ? /* @__PURE__ */ jsxs47(View45, { style: { width: columns.panel, borderLeftWidth: 1, borderLeftColor: colors2.border }, children: [
-              settingsPanel,
-              /* @__PURE__ */ jsx49(ResizeHandle, { side: "left", width: columns.panel, onResize: (width) => setDragWidths((current2) => ({ ...current2, panel: width })), onCommit: (width) => commitWidth("panelWidth", width) })
-            ] }) : null
-          ] })
-        ] }),
-        editingTeam ? /* @__PURE__ */ jsx49(
-          TeamSheet,
-          {
-            colors: colors2,
-            group: editingTeam === "new" ? null : editingTeam,
-            groups,
-            bots: allBots,
-            onClose: () => setEditingTeam(null),
-            onSave: (draft) => {
-              const id = editingTeam === "new" ? null : editingTeam.id;
-              const teamId = id ?? newGroupId();
-              setEditingTeam(null);
-              void commit((values) => ({ ...values, groups: saveTeam(values.groups ?? [], id, draft, teamId, (/* @__PURE__ */ new Date()).toISOString()) })).then((saved) => saved && !id && updateUi((current2) => ({ ...current2, tab: teamId })));
-            },
-            onDelete: editingTeam === "new" ? void 0 : () => void deleteTeam(editingTeam).then((deleted) => deleted && setEditingTeam(null))
-          }
-        ) : null,
-        creating ? /* @__PURE__ */ jsx49(
-          NewBotDialog,
-          {
-            colors: colors2,
-            onClose: () => setCreating(false),
-            presets: settings.status === "ready" ? settings.values.presets ?? [] : [],
-            onCreate: (start) => {
-              setCreating(false);
-              const bot = start?.preset ? botFromPreset(defaultProvider(), start.preset) : newBot(defaultProvider(), start?.template);
-              const defaults = (settings.status === "ready" ? settings.values.defaults : void 0) ?? DEFAULT_BOT_DEFAULTS;
-              void addBot(applyDefaults(bot, defaults, defaultProvider()), start ? "overview" : "identity");
-            },
-            onImport: async (json) => {
-              const { bots, teams } = await importTeam({ json });
-              setCreating(false);
-              const saved = await commit((values) => addImportedBots(values, bots, teams));
-              const first = bots[0]?.bot;
-              if (saved && first) {
-                select({ botId: first.id, chatId: null });
-                setPanel({ open: true, section: "overview" });
-                if (bots.length > 1) toast.show(`Added ${bots.length} bots`, { variant: "success" });
+  return /* @__PURE__ */ jsxs47(Fragment22, { children: [
+    workspaceHeader,
+    /* @__PURE__ */ jsxs47(
+      View45,
+      {
+        style: { flex: 1, backgroundColor: colors2.surface0, paddingBottom: keyboardHeight },
+        onLayout: (event) => setSurfaceWidth(event.nativeEvent.layout.width),
+        children: [
+          layout.compact ? /* @__PURE__ */ jsxs47(View45, { ref: paneRef, collapsable: false, style: { flex: 1 }, children: [
+            tabProps ? /* @__PURE__ */ jsx49(TeamTabSwitcher, { ...tabProps }) : null,
+            sidebar,
+            selection || teamMap ? /* @__PURE__ */ jsx49(SlideOver, { onClose: () => teamMap ? setTeamMap(false) : setSelection(null), children: pane }) : null,
+            settingsPanel ? /* @__PURE__ */ jsx49(SlideOver, { onClose: () => setPanel({ open: false, section: null }), onBack: () => panel.section ? goBack() : false, children: settingsPanel }) : null,
+            libraryScreen ? /* @__PURE__ */ jsx49(SlideOver, { onClose: () => setLibraryView(null), children: libraryScreen }) : null
+          ] }) : /* @__PURE__ */ jsxs47(Fragment22, { children: [
+            tabProps ? /* @__PURE__ */ jsx49(TeamTabsRow, { ...tabProps }) : null,
+            /* @__PURE__ */ jsxs47(View45, { style: { flex: 1, flexDirection: "row" }, children: [
+              /* @__PURE__ */ jsxs47(View45, { style: { width: columns.list, borderRightWidth: 1, borderRightColor: colors2.border, backgroundColor: nativeTokens(colors2).surfaceSidebar }, children: [
+                sidebar,
+                /* @__PURE__ */ jsx49(ResizeHandle, { side: "right", width: columns.list, onResize: (width) => setDragWidths((current2) => ({ ...current2, list: width })), onCommit: (width) => commitWidth("listWidth", width) })
+              ] }),
+              /* @__PURE__ */ jsx49(View45, { ref: paneRef, collapsable: false, style: { flex: 1, minWidth: 0 }, children: pane }),
+              settingsPanel && columns.panel !== null ? /* @__PURE__ */ jsxs47(View45, { style: { width: columns.panel, borderLeftWidth: 1, borderLeftColor: colors2.border }, children: [
+                settingsPanel,
+                /* @__PURE__ */ jsx49(ResizeHandle, { side: "left", width: columns.panel, onResize: (width) => setDragWidths((current2) => ({ ...current2, panel: width })), onCommit: (width) => commitWidth("panelWidth", width) })
+              ] }) : null
+            ] })
+          ] }),
+          editingTeam ? /* @__PURE__ */ jsx49(
+            TeamSheet,
+            {
+              colors: colors2,
+              group: editingTeam === "new" ? null : editingTeam,
+              groups,
+              bots: allBots,
+              onClose: () => setEditingTeam(null),
+              onSave: (draft) => {
+                const id = editingTeam === "new" ? null : editingTeam.id;
+                const teamId = id ?? newGroupId();
+                setEditingTeam(null);
+                void commit((values) => ({ ...values, groups: saveTeam(values.groups ?? [], id, draft, teamId, (/* @__PURE__ */ new Date()).toISOString()) })).then((saved) => saved && !id && updateUi((current2) => ({ ...current2, tab: teamId })));
+              },
+              onDelete: editingTeam === "new" ? void 0 : () => void deleteTeam(editingTeam).then((deleted) => deleted && setEditingTeam(null))
+            }
+          ) : null,
+          creating ? /* @__PURE__ */ jsx49(
+            NewBotDialog,
+            {
+              colors: colors2,
+              onClose: () => setCreating(false),
+              presets: settings.status === "ready" ? settings.values.presets ?? [] : [],
+              onCreate: (start) => {
+                setCreating(false);
+                const bot = start?.preset ? botFromPreset(defaultProvider(), start.preset) : newBot(defaultProvider(), start?.template);
+                const defaults = (settings.status === "ready" ? settings.values.defaults : void 0) ?? DEFAULT_BOT_DEFAULTS;
+                void addBot(applyDefaults(bot, defaults, defaultProvider()), start ? "overview" : "identity");
+              },
+              onImport: async (json) => {
+                const { bots, teams } = await importTeam({ json });
+                setCreating(false);
+                const saved = await commit((values) => addImportedBots(values, bots, teams));
+                const first = bots[0]?.bot;
+                if (saved && first) {
+                  select({ botId: first.id, chatId: null });
+                  setPanel({ open: true, section: "overview" });
+                  if (bots.length > 1) toast.show(`Added ${bots.length} bots`, { variant: "success" });
+                }
               }
             }
-          }
-        ) : null,
-        renaming ? /* @__PURE__ */ jsx49(
-          RenameDialog,
-          {
-            colors: colors2,
-            title: "Rename bot",
-            initialValue: renaming.name,
-            placeholder: renaming.name,
-            onClose: () => setRenaming(null),
-            onSubmit: async (name) => {
-              if (!await updateBot(renaming.id, { name }, true)) throw new Error("Unable to save");
-              if (panel.open && selection?.botId === renaming.id) setPanelVersion((version) => version + 1);
+          ) : null,
+          renaming ? /* @__PURE__ */ jsx49(
+            RenameDialog,
+            {
+              colors: colors2,
+              title: "Rename bot",
+              initialValue: renaming.name,
+              placeholder: renaming.name,
+              onClose: () => setRenaming(null),
+              onSubmit: async (name) => {
+                if (!await updateBot(renaming.id, { name }, true)) throw new Error("Unable to save");
+                if (panel.open && selection?.botId === renaming.id) setPanelVersion((version) => version + 1);
+              }
             }
-          }
-        ) : null,
-        exporting ? /* @__PURE__ */ jsx49(ExportDialog, { colors: colors2, bot: exporting, onClose: () => setExporting(null) }) : null
-      ]
-    }
-  ) });
+          ) : null,
+          exporting ? /* @__PURE__ */ jsx49(ExportDialog, { colors: colors2, bot: exporting, onClose: () => setExporting(null) }) : null
+        ]
+      }
+    )
+  ] });
 }
-function SelectedChat({ colors: colors2, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted, nativeChat, onSelectChat }) {
+function SelectedChat({ colors: colors2, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted, nativeChat, onSelectChat, botWorkspace }) {
   const host2 = useBotHost(bot.hostId, localHost);
   const chat = useChat(host2.api, selection.chatId);
   const ensureHome = useRpc20(ensureBotHomeRpc);
@@ -14309,7 +14362,7 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
   const start = async (message2) => {
     if (!host2.api) throw new Error(`${host2.label} is offline.`);
     const home = await ensureHome({ botId: bot.id });
-    const placement = bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root };
+    const placement = botWorkspace && host2.isLocal ? { path: botWorkspace.directory, projectRoot: null, workspaceId: botWorkspace.id } : bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root };
     const { systemPrompt } = await compose({ bot, local: host2.isLocal, message: message2.text });
     const agentId = newUuid();
     const plugin = host2.isLocal ? await mountServers({ botId: bot.id, agentId }) : {};
@@ -14325,11 +14378,12 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
       attachments: message2.attachments,
       clientMessageId: message2.messageId
     });
-    await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", host2.key, bot.id] });
+    await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", host2.key] });
     onStarted(id);
+    return id;
   };
   useEffect24(() => {
-    if (!host2.api || bot.cwd || !bot.name.trim()) return;
+    if (!host2.api || botWorkspace || bot.cwd || !bot.name.trim()) return;
     const api = host2.api;
     const timer2 = setTimeout(() => {
       void ensureHome({ botId: bot.id }).then((home) => syncBotWorkspaceTitle(api, bot, { path: home.path, projectRoot: home.root })).catch(() => {
@@ -14347,7 +14401,9 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
     ChatPane,
     {
       nativeChat,
-      nativeCwd,
+      nativeCwd: botWorkspace?.directory ?? nativeCwd,
+      botWorkspace,
+      draftId: selection.draftId,
       onSelectChat,
       colors: colors2,
       bot,

@@ -16,6 +16,11 @@ vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
 });
 vi.mock("@react-navigation/native", () => ({ useIsFocused: () => fake.focused }));
+vi.mock("./bot-workspace", () => ({ BotWorkspaceBridge: () => null }));
+vi.mock("./workspace-boundary", () => ({
+  getEmbeddedWorkspace: () => null,
+  getEmbeddedWorkspaceDirectory: () => undefined,
+}));
 vi.mock("@/panels/agent-panel", async () => {
   const { useQueryClient } =
     await vi.importActual<typeof import("@tanstack/react-query")>("@tanstack/react-query");

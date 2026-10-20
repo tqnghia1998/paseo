@@ -7,12 +7,18 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import { NativeBotChatDraft } from "./bot-chat-draft";
 
 const mocks = vi.hoisted(() => ({
+  composer: null as ComponentProps<typeof Composer> | null,
   submit: undefined as ((payload: MessagePayload) => Promise<void>) | undefined,
   encodeImages: vi.fn(),
   onStart: vi.fn(),
+  handoff: vi.fn(),
+}));
+vi.mock("@/composer/submission/writer", () => ({
+  handoffCreatedAgentMessageSubmission: mocks.handoff,
 }));
 vi.mock("@/composer", () => ({
   Composer: (props: ComponentProps<typeof Composer>) => {
+    mocks.composer = props;
     mocks.submit = props.onSubmitMessage;
     return <div data-testid="native-composer" />;
   },
@@ -49,7 +55,7 @@ describe("native bot draft", () => {
   it("uses the native composer and forwards text, files and encoded images through bot creation", async () => {
     const images = [{ data: "encoded", mimeType: "image/png" }];
     mocks.encodeImages.mockResolvedValue(images);
-    mocks.onStart.mockResolvedValue(undefined);
+    mocks.onStart.mockResolvedValue("created");
     render(
       <NativeBotChatDraft
         active
@@ -69,6 +75,11 @@ describe("native bot draft", () => {
         cwd: "/bot",
         attachments: [{ kind: "text", attachment: file }],
       }),
+    );
+    expect(mocks.handoff).toHaveBeenCalledWith(
+      "host",
+      "created",
+      expect.objectContaining({ text: "Review this", attachments: [file] }),
     );
     expect(mocks.onStart).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -114,4 +125,25 @@ describe("native bot draft", () => {
     ).rejects.toThrow("encode");
     expect(mocks.onStart).not.toHaveBeenCalled();
   });
+});
+
+it("scopes native drafts to their workspace and resolves the created agent for Live Design", async () => {
+  mocks.encodeImages.mockResolvedValue([]);
+  mocks.onStart.mockResolvedValue("created-bot-agent");
+  const props = {
+    active: true,
+    serverId: "host",
+    botId: "bot",
+    cwd: "/one",
+    workspaceId: "one",
+    provider: "codex" as const,
+    onStart: mocks.onStart,
+  };
+  const view = render(<NativeBotChatDraft {...props} />);
+  const first = mocks.composer!.agentId;
+  expect(mocks.composer!.workspaceId).toBe("one");
+  await act(async () => mocks.submit!({ text: "Review", cwd: "/one", attachments: [] }));
+  expect(mocks.composer!.resolveLiveDesignAgentId!()).toBe("created-bot-agent");
+  view.rerender(<NativeBotChatDraft {...props} cwd="/two" workspaceId="two" />);
+  expect(mocks.composer!.agentId).not.toBe(first);
 });

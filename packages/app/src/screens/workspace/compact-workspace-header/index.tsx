@@ -1,4 +1,3 @@
-import { StandaloneWorkspaceTools } from "@/patches/vibing/agent-workspace";
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { CompactHeader } from "@/components/headers/compact-header";
@@ -49,16 +48,14 @@ export function CompactWorkspaceHeader({
   const actions = (
     <>
       {children}
-      <StandaloneWorkspaceTools>
-        <WorkspaceExplorerToggle
-          onPress={onToggleExplorer}
-          label={explorerToggleLabel}
-          tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
-          tooltipKeys={EXPLORER_TOGGLE_KEYS}
-          accessibilityState={explorerToggleAccessibilityState}
-          mobile
-        />
-      </StandaloneWorkspaceTools>
+      <WorkspaceExplorerToggle
+        onPress={onToggleExplorer}
+        label={explorerToggleLabel}
+        tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
+        tooltipKeys={EXPLORER_TOGGLE_KEYS}
+        accessibilityState={explorerToggleAccessibilityState}
+        mobile
+      />
     </>
   );
 

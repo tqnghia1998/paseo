@@ -1,4 +1,3 @@
-import { StandaloneWorkspaceTools } from "@/patches/vibing/agent-workspace";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { Keyboard, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -363,18 +362,16 @@ export const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitch
         >
           {t("workspace.header.actions.newAgent")}
         </Button>
-        <StandaloneWorkspaceTools>
-          <Button
-            testID="workspace-tab-switcher-new-terminal"
-            style={styles.tabSwitcherFooterButton}
-            variant="secondary"
-            leftIcon={SquareTerminal}
-            disabled={createTerminalDisabled}
-            onPress={handleNewTerminal}
-          >
-            {t("workspace.header.actions.newTerminal")}
-          </Button>
-        </StandaloneWorkspaceTools>
+        <Button
+          testID="workspace-tab-switcher-new-terminal"
+          style={styles.tabSwitcherFooterButton}
+          variant="secondary"
+          leftIcon={SquareTerminal}
+          disabled={createTerminalDisabled}
+          onPress={handleNewTerminal}
+        >
+          {t("workspace.header.actions.newTerminal")}
+        </Button>
       </View>
     ),
     [createTerminalDisabled, handleNewAgent, handleNewTerminal, t],

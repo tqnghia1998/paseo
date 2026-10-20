@@ -8,7 +8,7 @@ import {
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useLocalSearchParams, usePathname } from "expo-router";
+import { router, type Href, useLocalSearchParams, usePathname } from "expo-router";
 import { useEffect, useSyncExternalStore } from "react";
 import {
   createLastWorkspaceSelectionStore,
@@ -76,8 +76,11 @@ export function getIsLastWorkspaceSelectionHydrated(): boolean {
 }
 
 export function navigateToWorkspace(input: NavigateToWorkspaceInput): string {
-  if (!isEmbeddedRouteAllowed(buildHostWorkspaceRoute(input.serverId, input.workspaceId)))
-    return embeddedWorkspaceRoute() ?? "";
+  if (!isEmbeddedRouteAllowed(buildHostWorkspaceRoute(input.serverId, input.workspaceId))) {
+    const route = embeddedWorkspaceRoute();
+    if (route) router.replace(route as Href);
+    return route ?? "";
+  }
   return navigateToWorkspacePure(input, navigateDeps());
 }
 

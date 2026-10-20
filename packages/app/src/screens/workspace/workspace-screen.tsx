@@ -1,10 +1,4 @@
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
-import {
-  projectEmbeddedAgentLayout,
-  useEmbeddedAgentFocus,
-  StandaloneWorkspaceTools,
-} from "@/patches/vibing/agent-workspace";
-import { workspaceNewTabTarget } from "@/patches/vibing/focus-mode";
 import { useHostFeature } from "@/runtime/host-features";
 import {
   AssistantFileLinkResolverProvider,
@@ -213,12 +207,6 @@ import {
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
-import {
-  isEmbeddedFocusMode,
-  isEmbeddedLiveDesignMessaging,
-  shouldUseDesktopWorkspaceTabs,
-} from "@/patches/vibing/focus-mode";
-import { useEmbeddedWorkspaceConversation } from "@/patches/vibing/workspace-conversation";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
 import type { TerminalProfile } from "@getpaseo/protocol/messages";
@@ -890,10 +878,7 @@ function shouldShowWorkspaceScreenHeader(input: {
   isFocusModeEnabled: boolean;
   isMobile: boolean;
 }): boolean {
-  return (
-    (!isEmbeddedFocusMode || isEmbeddedLiveDesignMessaging) &&
-    (!input.isFocusModeEnabled || input.isMobile)
-  );
+  return !input.isFocusModeEnabled || input.isMobile;
 }
 
 function buildWorkspaceTerminalScopeKey(serverId: string, workspaceId: string): string | null {
@@ -1036,7 +1021,6 @@ function useLastMainPane(input: {
   return lastMainPaneRef;
 }
 
-// eslint-disable-next-line complexity -- compact embeds retain their sheet host alongside desktop tabs.
 function WorkspaceScreenContent({
   serverId,
   workspaceId,
@@ -1048,10 +1032,6 @@ function WorkspaceScreenContent({
   const isMobile = useIsCompactFormFactor();
   const canRenderDesktopPaneSplits = supportsDesktopPaneSplits();
   const layoutMode = useWorkspaceLayoutStore((state) => state.layoutMode);
-  const usesDesktopWorkspaceTabs = shouldUseDesktopWorkspaceTabs(
-    isMobile,
-    isEmbeddedLiveDesignMessaging,
-  );
   const hasMacTrafficLights = useHasWindowChromeObstruction("top-left");
   const explorerToggleOwner = resolveWorkspaceExplorerToggleOwner({
     isMobile,
@@ -1296,8 +1276,6 @@ function WorkspaceScreenContent({
     isGit: isGitCheckout,
     layoutMode,
     explorerOpen: isExplorerSidebarShowing,
-    // Embedded workspaces stay Agent-only; a detected PR must not open its own tab.
-    autoAdd: !isEmbeddedFocusMode,
   });
 
   const explorerSidebarToggleAccessibilityState = useMemo(
@@ -1321,12 +1299,8 @@ function WorkspaceScreenContent({
     return () => handler.remove();
   }, [isExplorerSidebarShowing, isMobile, isRouteFocused, showMobileAgent]);
 
-  const savedWorkspaceLayout = useWorkspaceLayoutStore((state) =>
+  const workspaceLayout = useWorkspaceLayoutStore((state) =>
     persistenceKey ? (state.layoutByWorkspace[persistenceKey] ?? null) : null,
-  );
-  const workspaceLayout = useMemo(
-    () => projectEmbeddedAgentLayout(savedWorkspaceLayout),
-    [savedWorkspaceLayout],
   );
   const unfocusedPaneId = useWorkspaceLayoutStore((state) =>
     persistenceKey ? state.focusRestorationByWorkspace[persistenceKey]?.restorePaneId : undefined,
@@ -1373,14 +1347,6 @@ function WorkspaceScreenContent({
   );
   const openInSidePane = useSettings((settings) => settings.openInSidePane);
   const pullRequestOpenLocation = useSettings((settings) => settings.pullRequestOpenLocation);
-  const focusWorkspaceTab = useWorkspaceLayoutStore((state) => state.focusTab);
-  useEmbeddedAgentFocus({
-    enabled: isRouteFocused && hasHydratedWorkspaceLayoutStore,
-    workspaceKey: persistenceKey,
-    saved: savedWorkspaceLayout,
-    visible: workspaceLayout,
-    focusTab: focusWorkspaceTab,
-  });
   const selectWorkspaceTabInPane = useWorkspaceLayoutStore((state) => state.selectTabInPane);
   const closeWorkspaceTab = useWorkspaceLayoutStore((state) => state.closeTab);
   const sheets = useWorkspaceLayoutStore((state) =>
@@ -1423,15 +1389,6 @@ function WorkspaceScreenContent({
         return;
       }
 
-      if (
-        getPanelInstanceAttributes({
-          serverId: normalizedServerId,
-          workspaceId: normalizedWorkspaceId,
-          tabId: normalizedTabId,
-        }).discardChanges?.() === false
-      )
-        return;
-
       if (input.target?.kind === "agent") {
         unpinWorkspaceAgent(persistenceKey, input.target.agentId);
         hideWorkspaceAgent(persistenceKey, input.target.agentId);
@@ -1444,14 +1401,7 @@ function WorkspaceScreenContent({
       }
       closeWorkspaceTab(persistenceKey, normalizedTabId);
     },
-    [
-      closeWorkspaceTab,
-      hideWorkspaceAgent,
-      persistenceKey,
-      unpinWorkspaceAgent,
-      normalizedServerId,
-      normalizedWorkspaceId,
-    ],
+    [closeWorkspaceTab, hideWorkspaceAgent, persistenceKey, unpinWorkspaceAgent],
   );
 
   const focusedPaneTabState = useMemo(
@@ -1619,22 +1569,11 @@ function WorkspaceScreenContent({
 
   const activeTabId = focusedPaneTabState.activeTabId;
   const activeTab = focusedPaneTabState.activeTab;
+
   const tabs = useMemo<WorkspaceTabDescriptor[]>(
     () => focusedPaneTabState.tabs.map((tab) => tab.descriptor),
     [focusedPaneTabState.tabs],
   );
-  useEmbeddedWorkspaceConversation({
-    enabled: isRouteFocused && hasHydratedWorkspaceLayoutStore,
-    layoutInitialized: savedWorkspaceLayout !== null,
-    workspaceId: normalizedWorkspaceId,
-    persistenceKey,
-    activeTabId,
-    tabs,
-    allTabs: uiTabs,
-    openDraft: openWorkspaceDraftTab,
-    openTab,
-    focusTab: focusWorkspaceTab,
-  });
   const hasSetupTab = useMemo(
     () =>
       uiTabs.some(
@@ -1895,11 +1834,7 @@ function WorkspaceScreenContent({
       if (!persistenceKey) {
         return;
       }
-      createWorkspaceTab(
-        persistenceKey,
-        workspaceNewTabTarget(generateDraftId()),
-        paneLocalPlacement(input?.paneId),
-      );
+      createWorkspaceTab(persistenceKey, { kind: "new_tab" }, paneLocalPlacement(input?.paneId));
     },
     [createWorkspaceTab, persistenceKey],
   );
@@ -2130,7 +2065,7 @@ function WorkspaceScreenContent({
     async (tabId: string) => {
       if (persistenceKey && sheets.some((sheet) => sheet.tab.tabId === tabId)) {
         if (await confirmDiscardModifiedTab(tabId)) {
-          closeWorkspaceTabWithCleanup({ tabId });
+          closeWorkspaceTab(persistenceKey, tabId);
         }
         return;
       }
@@ -2153,7 +2088,7 @@ function WorkspaceScreenContent({
     },
     [
       allTabDescriptorsById,
-      closeWorkspaceTabWithCleanup,
+      closeWorkspaceTab,
       confirmDiscardModifiedTab,
       handleCloseAgentTab,
       handleClosePassiveTab,
@@ -3264,46 +3199,44 @@ function WorkspaceScreenContent({
 
   const headerRight = useMemo(
     () => (
-      <StandaloneWorkspaceTools>
-        <View style={styles.headerRight}>
-          <PluginHeaderButtons serverId={normalizedServerId} workspaceId={normalizedWorkspaceId} />
-          {workspaceDescriptor && workspaceDescriptor.scripts.length > 0 ? (
-            <WorkspaceScriptsButton
-              serverId={normalizedServerId}
-              workspaceId={normalizedWorkspaceId}
-              scripts={workspaceDescriptor.scripts}
-              liveTerminalIds={liveTerminalIds}
-              onScriptTerminalStarted={handleScriptTerminalStarted}
-              onViewTerminal={handleViewScriptTerminal}
-              onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
-              hideLabels
+      <View style={styles.headerRight}>
+        <PluginHeaderButtons serverId={normalizedServerId} workspaceId={normalizedWorkspaceId} />
+        {workspaceDescriptor && workspaceDescriptor.scripts.length > 0 ? (
+          <WorkspaceScriptsButton
+            serverId={normalizedServerId}
+            workspaceId={normalizedWorkspaceId}
+            scripts={workspaceDescriptor.scripts}
+            liveTerminalIds={liveTerminalIds}
+            onScriptTerminalStarted={handleScriptTerminalStarted}
+            onViewTerminal={handleViewScriptTerminal}
+            onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
+            hideLabels
+          />
+        ) : null}
+        {workspaceDirectory ? (
+          <WorkspaceOpenInEditorButton
+            serverId={normalizedServerId}
+            cwd={workspaceDirectory}
+            projectId={workspaceDescriptor?.projectId ?? null}
+            activeFile={activeFileLocation}
+            hideLabels
+          />
+        ) : null}
+        {workspaceDirectory ? (
+          <>
+            <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
+            <WorkspaceHeaderExplorerToggle
+              owner={explorerToggleOwner}
+              onPress={handleToggleExplorerSidebar}
+              label={explorerSidebarToggleLabel}
+              tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
+              tooltipKeys={EXPLORER_TOGGLE_KEYS}
+              style={styles.compactHeaderActionButton}
+              accessibilityState={explorerSidebarToggleAccessibilityState}
             />
-          ) : null}
-          {workspaceDirectory ? (
-            <WorkspaceOpenInEditorButton
-              serverId={normalizedServerId}
-              cwd={workspaceDirectory}
-              projectId={workspaceDescriptor?.projectId ?? null}
-              activeFile={activeFileLocation}
-              hideLabels
-            />
-          ) : null}
-          {workspaceDirectory ? (
-            <>
-              <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
-              <WorkspaceHeaderExplorerToggle
-                owner={explorerToggleOwner}
-                onPress={handleToggleExplorerSidebar}
-                label={explorerSidebarToggleLabel}
-                tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
-                tooltipKeys={EXPLORER_TOGGLE_KEYS}
-                style={styles.compactHeaderActionButton}
-                accessibilityState={explorerSidebarToggleAccessibilityState}
-              />
-            </>
-          ) : null}
-        </View>
-      </StandaloneWorkspaceTools>
+          </>
+        ) : null}
+      </View>
     ),
     [
       workspaceDescriptor,
@@ -3535,7 +3468,6 @@ function WorkspaceScreenContent({
       workspaceHeaderTitle,
     ],
   );
-
   const desktopSplitContent = useMemo(() => {
     if (!canRenderDesktopPaneSplits || !workspaceLayout || !persistenceKey) {
       return null;
@@ -3610,7 +3542,7 @@ function WorkspaceScreenContent({
     handleResizePaneSplit,
     handleReorderTabsInPane,
   ]);
-  const desktopContent = isMobile ? content : (desktopSplitContent ?? content);
+  const desktopContent = desktopSplitContent ?? content;
   const rendersDesktopSplitContent = !isMobile && desktopSplitContent !== null;
 
   const workspacePanelTabIds = useMemo(
@@ -3624,16 +3556,8 @@ function WorkspaceScreenContent({
     composerFullscreen: useComposerTabFullscreen(workspacePanelKey, activeTabId),
   });
 
-  // Compact Live Design keeps desktop tabs, but opened files and subagents still use sheets.
-  const workspaceSheetContent = isMobile ? (
-    <StreamTopOverlayProvider value={0}>
-      <SheetTabs onCloseTab={handleCloseTabById} />
-    </StreamTopOverlayProvider>
-  ) : null;
-
   // Compact sheets escape to the app overlay host, above both sidebars.
-
-  const workspaceCenterColumn = !usesDesktopWorkspaceTabs ? (
+  const workspaceCenterColumn = isMobile ? (
     <View style={styles.centerColumn}>
       <FloatingHeaderLayout
         header={compactHeaderLayout.header}
@@ -3645,14 +3569,13 @@ function WorkspaceScreenContent({
           </StreamTopOverlayProvider>
         )}
       </FloatingHeaderLayout>
-      {workspaceSheetContent}
+      <SheetTabs onCloseTab={handleCloseTabById} />
     </View>
   ) : (
     <View style={styles.centerColumn}>
       {rendersDesktopSplitContent ? null : renderWorkspaceScreenHeader()}
 
-      {shouldRenderDesktopPaneFallback ||
-      (usesDesktopWorkspaceTabs && !rendersDesktopSplitContent) ? (
+      {shouldRenderDesktopPaneFallback ? (
         <NewTabLauncherProvider value={newTabLauncher}>
           <WorkspaceDesktopTabsRow
             paneId={focusedPaneIdOrUndefined}
@@ -3683,7 +3606,6 @@ function WorkspaceScreenContent({
       <View style={styles.centerContent}>
         <View style={styles.content}>{desktopContent}</View>
       </View>
-      {workspaceSheetContent}
     </View>
   );
 
@@ -3850,7 +3772,6 @@ function WorkspaceScreenContent({
           serverId={normalizedServerId}
           cwd={workspaceDirectory}
           workspaceId={normalizedWorkspaceId}
-          allowShowAllDirectories={!isEmbeddedFocusMode}
           onClose={closeImportSheet}
           onImportedAgent={handleImportedAgent}
           onImported={navigateToImportedAgent}

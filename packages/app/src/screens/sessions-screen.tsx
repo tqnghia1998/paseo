@@ -1,6 +1,3 @@
-import { useWorktreeHistory, useWorktreeImportSession } from "@/patches/vibing/sidebar-hooks";
-import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
-import { navigateToLastWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useMemo, useState, useCallback, useEffect, type ReactElement } from "react";
 import { View, Text } from "react-native";
 import { useIsFocused } from "expo-router/react-navigation";
@@ -16,8 +13,9 @@ import { AgentList } from "@/components/agent-list";
 import { SearchField } from "@/components/ui/search-field";
 import { HostFilter } from "@/components/hosts/host-filter";
 import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker";
-import { type AgentHistoryHostError } from "@/hooks/use-agent-history";
+import { type AgentHistoryHostError, useAgentHistory } from "@/hooks/use-agent-history";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useImportSession } from "@/hooks/use-import-session";
 import { useHosts } from "@/runtime/host-runtime";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 
@@ -56,10 +54,8 @@ function resolveEmptyText(input: {
   t: TFunction;
   isSearching: boolean;
   isAllHosts: boolean;
-  isWorktree?: boolean;
 }): string {
   if (input.isSearching) return input.t("sessions.noMatches");
-  if (input.isWorktree) return "No sessions in this worktree";
   if (input.isAllHosts) return input.t("sessions.empty");
   return "No sessions for this host";
 }
@@ -77,13 +73,8 @@ export function SessionsScreen() {
 function SessionsScreenContent() {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const bound = getEmbeddedWorkspace();
-  const importSession = useWorktreeImportSession();
-  const allHosts = useHosts();
-  const hosts = useMemo(
-    () => allHosts.filter((host) => !bound || host.serverId === bound.serverId),
-    [allHosts, bound],
-  );
+  const importSession = useImportSession();
+  const hosts = useHosts();
   const [selectedHost, setSelectedHost] = useState(ALL_HOSTS_OPTION_ID);
   const [searchInput, setSearchInput] = useState("");
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS).trim();
@@ -99,7 +90,7 @@ function SessionsScreenContent() {
     hostErrors,
     loadMore,
     refreshAll,
-  } = useWorktreeHistory({
+  } = useAgentHistory({
     serverId: historyServerId,
     search,
   });
@@ -126,19 +117,14 @@ function SessionsScreenContent() {
     t,
     isSearching,
     isAllHosts: selectedHost === ALL_HOSTS_OPTION_ID,
-    isWorktree: Boolean(bound),
   });
   const showHostFilter = hosts.length > 1;
   const showFilterRow = showHostFilter || isSearchSupported;
   const showLoadError = isError && agents.length === 0;
 
   const handleBack = useCallback(() => {
-    if (bound) {
-      navigateToLastWorkspace();
-      return;
-    }
     router.navigate(buildOpenProjectRoute());
-  }, [bound]);
+  }, []);
 
   const handleClearSearch = useCallback(() => setSearchInput(""), []);
 
@@ -229,7 +215,7 @@ function SessionsScreenContent() {
           onRefresh={handleRefresh}
           listFooterComponent={listFooterComponent}
           showAttentionIndicator={false}
-          showHostColumn={!bound}
+          showHostColumn
           search={isSearching ? search : undefined}
         />
       ) : null}
