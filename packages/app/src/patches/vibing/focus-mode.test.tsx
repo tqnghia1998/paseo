@@ -24,6 +24,9 @@ describe("embedded focus mode", () => {
     vi.stubEnv("EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS", "false");
     try {
       expect((await import("./focus-mode")).isEmbeddedFocusMode).toBe(false);
+      const { usePanelStore } = await import("@/stores/panel-store");
+      await usePanelStore.persist.rehydrate();
+      expect(usePanelStore.getState().desktop.agentListOpen).toBe(true);
     } finally {
       vi.unstubAllEnvs();
       vi.resetModules();
@@ -76,6 +79,27 @@ describe("embedded focus mode", () => {
 });
 
 describe("full embedded workspace", () => {
+  it("starts with the sidebar hidden and restores the user's menu preference", async () => {
+    const { default: storage } = await import("@react-native-async-storage/async-storage");
+    await storage.removeItem("panel-state");
+    const { usePanelStore } = await import("@/stores/panel-store");
+    await usePanelStore.persist.rehydrate();
+    expect(usePanelStore.getState().desktop).toEqual({
+      agentListOpen: false,
+      focusModeEnabled: false,
+    });
+
+    usePanelStore.getState().toggleDesktopAgentList();
+    expect(usePanelStore.getState().desktop.agentListOpen).toBe(true);
+    const saved = await storage.getItem("panel-state");
+    expect(saved).not.toBeNull();
+    usePanelStore.getState().closeDesktopAgentList();
+    await storage.setItem("panel-state", saved!);
+    await usePanelStore.persist.rehydrate();
+    expect(usePanelStore.getState().desktop.agentListOpen).toBe(true);
+    await storage.removeItem("panel-state");
+  });
+
   it("clears legacy forced focus once while preserving other panel state", () => {
     const state = { desktop: { focusModeEnabled: true, agentListOpen: false }, sidebarWidth: 280 };
     expect(migrateEmbeddedPanelFocus(state, 16)).toEqual({
