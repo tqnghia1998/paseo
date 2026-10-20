@@ -24,6 +24,12 @@ const sections: CustomizationSection[] = [
     title: "Plugin changes",
     entries: [
       {
+        title: "Beautiful Chat",
+        description:
+          "Bundles ABorakati’s Beautiful Chat for tool, reasoning and task cards. Native messages, context attachments, search and interactive shells remain available. Customize it in Settings → Plugins → beautiful-chat → Chat presentation.",
+        source: "plugins/beautiful-chat/ · https://github.com/ABorakati/beautiful-chat",
+      },
+      {
         title: "Vibing theme",
         description:
           "Adds the Space App Vibing palette as a built-in plugin. A small embedding patch selects it once; later appearance choices are preserved. Choose the palette in Settings → Appearance.",
