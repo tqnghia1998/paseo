@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useId, useCallback } from "
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/data/query-client";
 import { View } from "react-native";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "expo-router";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AgentConversationPanel } from "@/panels/agent-panel";
 import {
