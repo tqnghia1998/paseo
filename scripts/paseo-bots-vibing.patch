@@ -1,5 +1,20 @@
+diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
+index 7533cb6..5a3bd3d 100644
+--- a/client/BotSidebar.tsx
++++ b/client/BotSidebar.tsx
+@@ -520,8 +520,8 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+       {showKebab ? (
+         <View style={{ position: "absolute", top: 8, right: 12, flexDirection: "row" }}>
+           {/* A short scrim in the row's colour hides the title's tail under the kebab, as native does. */}
+-          {touch ? null : <View pointerEvents="none" style={{ width: 16, backgroundColor: hovered ? colors.surface1 : "transparent" }} />}
+-          <View style={{ backgroundColor: selected ? tokens.surfaceSidebarSelected : colors.surface1 }}>
++          {touch ? null : <View pointerEvents="none" style={{ width: 16, backgroundColor: background }} />}
++          <View style={{ backgroundColor: background }}>
+             <KebabButton colors={colors} buttonRef={kebabRef} label="Chat actions" onPress={() => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab"))} />
+           </View>
+         </View>
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..e47a51c 100644
+index ebc4ed2..c712a7f 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
 @@ -1,3 +1,4 @@
@@ -16,7 +31,7 @@ index ebc4ed2..e47a51c 100644
  import { ActivityIndicator, BackHandler, type LayoutRectangle, Platform, Text, View } from "react-native";
  import { randomSeed } from "../shared/avatar";
  import { applyDefaults, DEFAULT_BOT_DEFAULTS, DEFAULT_BOT_LIST_UI, EMPTY_LIBRARY, newBotId, newGroupId, presetFromBot, pushHistory, type Bot, type BotGroup, type BotListUi, type Library } from "../shared/bot";
-@@ -15,7 +16,7 @@ import { displayTitle, startBotChat, syncBotWorkspaceTitle } from "../shared/cha
+@@ -15,12 +16,12 @@ import { displayTitle, startBotChat, syncBotWorkspaceTitle } from "../shared/cha
  import { moveKey } from "../shared/sidebar";
  import { chatTranscript } from "../shared/transcript";
  import { ensureBotHomeRpc, mountRpc, exportBotRpc, importBotRpc, importTeamRpc, systemPromptRpc } from "../shared/rpc";
@@ -25,7 +40,13 @@ index ebc4ed2..e47a51c 100644
  import { AvatarTheme } from "./Avatar";
  import { botMenuEntries, chatMenuEntries, ExportDialog, NewBotDialog, RenameDialog } from "./BotDialogs";
  import { BotSidebar, type ChatMenuContext, type MenuSource, type Selection } from "./BotSidebar";
-@@ -50,7 +51,7 @@ const SETUP_PROMPT =
+ import { ChatPane, type OutgoingMessage } from "./ChatPane";
+-import { useBotHost, useChatInvalidation, useHostResolver, useProviders, type LocalHost } from "./data";
++import { useBotChats, useBotHost, useChatInvalidation, useHostResolver, useProviders, type LocalHost } from "./data";
+ import { takeIntent } from "./intent";
+ import { LibraryView } from "./library/LibraryView";
+ import { onLibraryTarget, type LibraryTarget } from "./navigation";
+@@ -50,9 +51,10 @@ const SETUP_PROMPT =
  /** Autosave delay after the last edit in the settings panel. */
  const SAVE_DELAY_MS = 600;
  
@@ -33,8 +54,11 @@ index ebc4ed2..e47a51c 100644
 +export function BotsSurface(props: PluginSurfaceProps & NativeChatSlot) {
    const { colors } = props.theme;
    useTooltipTheme(colors);
++  if (props.botWorkspace && !props.botWorkspace.directory) return <View><Text>Opening workspace…</Text></View>;
    return (
-@@ -63,20 +64,21 @@ export function BotsSurface(props: PluginSurfaceProps) {
+     <MenuProvider colors={colors} compact={props.layout.compact}>
+       <AvatarTheme dark={nativeTokens(colors).dark}>
+@@ -63,20 +65,20 @@ export function BotsSurface(props: PluginSurfaceProps) {
  }
  
  
@@ -54,7 +78,6 @@ index ebc4ed2..e47a51c 100644
    const importTeam = useRpc(importTeamRpc);
  
 -  const [selection, setSelection] = useState<Selection | null>(null);
-+  const [showAllFolders, setShowAllFolders] = useState(false);
 +  const [selection, setSelection] = useState<(Selection & { draftId?: string }) | null>(botWorkspace ? { botId: "vibing-general", chatId: null } : null);
    const [panel, setPanel] = useState<{ open: boolean; section: SectionId | null }>({ open: false, section: null });
    const [panelVersion, setPanelVersion] = useState(0);
@@ -123,24 +146,7 @@ index ebc4ed2..e47a51c 100644
            } catch (error) {
              toast.error(`Failed to archive chat: ${errorText(error)}`);
            }
-@@ -486,6 +509,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
-       width: 232,
-       title: "Display",
-       entries: [
-+        ...(botWorkspace ? [{ label: "Chats", trailing: showAllFolders ? "All folders" : "This workspace", onSelect: () => setShowAllFolders(current => !current) }] : []),
-         {
-           label: "Archived bots",
-           trailing: listUi.showArchived ? "Shown" : archivedCount ? `Hidden (${archivedCount})` : "Hidden",
-@@ -514,7 +538,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
-       hiddenArchivedCount={listUi.showArchived ? 0 : archivedCount}
-       selection={selection}
-       ui={listUi}
--      localHost={localHost}
-+      localHost={showAllFolders ? { id: localHost.id, label: localHost.label } : localHost}
-       touch={layout.compact || layout.platform !== "web"}
-       splash={layout.compact}
-       bottomInset={bottomInset}
-@@ -558,11 +582,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -558,11 +581,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : selectedBot && selection ? (
        <SelectedChat
@@ -154,7 +160,7 @@ index ebc4ed2..e47a51c 100644
          localHost={localHost}
          panelOpen={panel.open}
          layout={layout}
-@@ -571,6 +596,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -571,6 +595,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          onBack={layout.compact ? () => setSelection(null) : undefined}
          onBotMenu={(anchor) => (anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot))}
          onTogglePanel={() => setPanel({ open: !panel.open, section: panel.section })}
@@ -163,7 +169,7 @@ index ebc4ed2..e47a51c 100644
          onStarted={(chatId) => setSelection({ botId: selectedBot.id, chatId })}
        />
      ) : (
-@@ -621,13 +648,16 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -621,13 +647,16 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : null;
  
@@ -181,7 +187,7 @@ index ebc4ed2..e47a51c 100644
      {/* The host gives plugin surfaces no keyboard handling; lift everything above the keyboard. */}
      <View
        style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}
-@@ -727,11 +757,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -727,11 +756,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    );
  }
  
@@ -196,14 +202,18 @@ index ebc4ed2..e47a51c 100644
    localHost: LocalHost;
    panelOpen: boolean;
    layout: PluginSurfaceProps["layout"];
-@@ -743,10 +774,17 @@ interface SelectedChatProps {
+@@ -743,10 +773,20 @@ interface SelectedChatProps {
    onStarted(chatId: string): void;
  }
  
 -function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted }: SelectedChatProps) {
 +function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted, nativeChat, onSelectChat, botWorkspace }: SelectedChatProps) {
    const host = useBotHost(bot.hostId, localHost);
-   const chat = useChat(host.api, selection.chatId);
+-  const chat = useChat(host.api, selection.chatId);
++  const chats = useBotChats(host, bot.id);
++  const scopedChat = chats.data?.find(chat => chat.id === selection.chatId);
++  const allowed = !botWorkspace || (host.isLocal && (!selection.chatId || Boolean(scopedChat)));
++  const chat = useChat(host.api, allowed ? selection.chatId : null);
    const ensureHome = useRpc(ensureBotHomeRpc);
 +  const [nativeCwd, setNativeCwd] = useState("");
 +  useEffect(() => {
@@ -215,8 +225,11 @@ index ebc4ed2..e47a51c 100644
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
    const queryClient = useQueryClient();
-@@ -756,7 +794,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -754,9 +794,10 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+ 
+   const start = async (message: OutgoingMessage) => {
      if (!host.api) throw new Error(`${host.label} is offline.`);
++    if (botWorkspace && !host.isLocal) throw new Error("Choose a local host for this worktree.");
      // The bot's folder holds its memory and skills even when it works elsewhere.
      const home = await ensureHome({ botId: bot.id });
 -    const placement = bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root };
@@ -224,7 +237,7 @@ index ebc4ed2..e47a51c 100644
      const { systemPrompt } = await compose({ bot, local: host.isLocal, message: message.text });
      // The plugin's tools and connected apps go through this host's relay, so only bots here get them.
      const agentId = newUuid();
-@@ -773,13 +811,14 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -773,13 +814,14 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        attachments: message.attachments,
        clientMessageId: message.messageId,
      });
@@ -241,8 +254,15 @@ index ebc4ed2..e47a51c 100644
      const api = host.api;
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
-@@ -801,6 +840,11 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -799,8 +841,18 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+     // Runs once for the selection that carries the prompt.
+   }, [host.api]);
  
++  if (!allowed) return <View style={{ flex: 1, padding: 16 }}>
++    <Text style={{ color: colors.foregroundMuted }}>{!host.isLocal ? "This bot runs on another host. Choose a local host in bot settings to chat in this worktree." : chats.isLoading || chats.isFetching ? "Loading conversation…" : "This conversation is not in the current worktree."}</Text>
++    <SettingsAction label="Bot settings" actionLabel="Open" onPress={onTogglePanel} />
++  </View>;
++
    return (
      <ChatPane
 +      nativeChat={nativeChat}
@@ -356,7 +376,7 @@ index 0000000..738381c
 +  workspaceBridge?: ComponentType<BotWorkspaceBridgeProps>;
 +}
 diff --git a/client/data.ts b/client/data.ts
-index ea7654d..b5e270e 100644
+index ea7654d..343e874 100644
 --- a/client/data.ts
 +++ b/client/data.ts
 @@ -2,16 +2,19 @@ import { getPaseoClient, usePaseo, useHosts } from "@getpaseo/plugin/client";
@@ -379,7 +399,7 @@ index ea7654d..b5e270e 100644
    /** Stable key for queries; the local host uses its own id. */
    key: string;
    label: string;
-@@ -23,7 +26,7 @@ type HostSummaries = ReturnType<typeof useHosts>;
+@@ -23,15 +26,15 @@ type HostSummaries = ReturnType<typeof useHosts>;
  
  function resolveHost(hostId: string | null, local: LocalHost, localApi: PaseoApi, hosts: HostSummaries): BotHost {
    if (!hostId || hostId === local.id) {
@@ -388,6 +408,17 @@ index ea7654d..b5e270e 100644
    }
    const summary = hosts.find((host) => host.serverId === hostId);
    const label = summary?.label ?? "Unknown host";
+-  if (summary?.status !== "online") return { api: null, key: hostId, label, isLocal: false, online: false };
++  if (summary?.status !== "online") return { api: null, key: hostId, label, isLocal: false, online: false, workspaceDirectory: local.workspaceDirectory };
+   try {
+-    return { api: getPaseoClient(hostId), key: hostId, label, isLocal: false, online: true };
++    return { api: getPaseoClient(hostId), key: hostId, label, isLocal: false, online: true, workspaceDirectory: local.workspaceDirectory };
+   } catch {
+-    return { api: null, key: hostId, label, isLocal: false, online: false };
++    return { api: null, key: hostId, label, isLocal: false, online: false, workspaceDirectory: local.workspaceDirectory };
+   }
+ }
+ 
 @@ -44,7 +47,7 @@ export function useBotHost(hostId: string | null, local: LocalHost): BotHost {
    return useMemo(
      () => resolveHost(hostId, local, localApi, hosts),
@@ -397,19 +428,19 @@ index ea7654d..b5e270e 100644
    );
  }
  
-@@ -92,19 +95,28 @@ export function useHostWorkspaces(host: BotHost) {
-   });
+@@ -93,18 +96,28 @@ export function useHostWorkspaces(host: BotHost) {
  }
  
--export function useBotChats(host: BotHost, botId: string) {
-+export function useBotChats(host: BotHost, botId: string, workspaceOnly = true) {
-+  const directory = workspaceOnly ? host.workspaceDirectory : undefined;
+ export function useBotChats(host: BotHost, botId: string) {
++  const directory = host.workspaceDirectory;
++  const available = !directory || host.isLocal;
    return useQuery({
 -    queryKey: ["paseo-bots", "chats", host.key, botId],
+-    enabled: !!host.api,
+-    // The local host pushes agent updates (useChatInvalidation); other hosts are polled.
 +    // All bots in an embedded workspace share one directory snapshot.
 +    queryKey: ["paseo-bots", "chats", host.key, directory ? "workspace" : botId, directory],
-     enabled: !!host.api,
--    // The local host pushes agent updates (useChatInvalidation); other hosts are polled.
++    enabled: !!host.api && available,
      refetchInterval: host.isLocal ? false : 15_000,
      queryFn: async (): Promise<PaseoAgent[]> => {
 -      const result = await host.api!.agents.list({ filter: { labels: { [BOT_LABEL]: botId } } });
@@ -429,7 +460,7 @@ index ea7654d..b5e270e 100644
 +      return agents.filter(agent => !agent.archivedAt)
          .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
      },
-+    select: (agents) => directory ? agents.filter(agent => isWorkspaceBotChat(agent, directory, botId)) : agents,
++    select: (agents) => !available ? [] : directory ? agents.filter(agent => isWorkspaceBotChat(agent, directory, botId)) : agents,
    });
  }
  
@@ -447,44 +478,47 @@ index ee24cd8..c0cf7b4 100644
          <SettingsSelect
            label="Folder"
 diff --git a/client/panel/OverviewSections.tsx b/client/panel/OverviewSections.tsx
-index 215e3f6..16d894f 100644
+index 215e3f6..afd9c38 100644
 --- a/client/panel/OverviewSections.tsx
 +++ b/client/panel/OverviewSections.tsx
-@@ -157,7 +157,7 @@ export function HistorySection({ colors, bot, history, onRestore }: PanelProps)
- 
- export function UsageSection({ bot, localHost }: PanelProps) {
-   const host = useBotHost(bot.hostId, localHost);
--  const chats = useBotChats(host, bot.id);
-+  const chats = useBotChats(host, bot.id, false);
-   const list = chats.data ?? [];
-   const sum = (pick: (usage: NonNullable<(typeof list)[number]["lastUsage"]>) => number | undefined) =>
-     list.reduce((total, chat) => total + (chat.lastUsage ? (pick(chat.lastUsage) ?? 0) : 0), 0);
+@@ -167,7 +167,7 @@ export function UsageSection({ bot, localHost }: PanelProps) {
+   const working = list.filter((chat) => chat.status === "running").length;
+   const loading = chats.isLoading;
+   return (
+-    <SettingsSection title="All chats" info="From each chat's latest turn as reported by the provider. Archived chats aren't counted.">
++    <SettingsSection title={localHost.workspaceDirectory ? "Workspace chats" : "All chats"} info="From each chat's latest turn as reported by the provider. Archived chats aren't counted.">
+       <SettingsCard>
+         <SettingsRow label="Chats" hint={loading ? "Loading..." : `${list.length} open${working ? `, ${working} working now` : ""}`} />
+         <SettingsRow label="Tokens" hint={loading ? "Loading..." : `${input.toLocaleString()} in · ${output.toLocaleString()} out`} />
 diff --git a/client/panel/RoutinesSection.tsx b/client/panel/RoutinesSection.tsx
-index 1320722..aecb106 100644
+index 1320722..2f2ee63 100644
 --- a/client/panel/RoutinesSection.tsx
 +++ b/client/panel/RoutinesSection.tsx
-@@ -290,7 +290,7 @@ function RoutineForm({ colors, bot, host, routine, onCancel, onSubmit }: Routine
-   const [onceText, setOnceText] = useState(() => formatLocalDateTime(original.kind === "once" ? new Date(original.at) : inAnHour()));
-   // Presets rewrite the cron field; remounting it is how Paseo's CadenceEditor resets it too.
-   const [cronKey, setCronKey] = useState(0);
--  const chats = useBotChats(host, bot.id);
-+  const chats = useBotChats(host, bot.id, false);
+@@ -71,6 +71,7 @@ function runTime(at: Date, now: Date): string {
  
-   const once = schedule.kind === "once";
-   const hook = schedule.kind === "webhook";
-diff --git a/client/teams/TeamMap.tsx b/client/teams/TeamMap.tsx
-index e3621c0..88cd5e8 100644
---- a/client/teams/TeamMap.tsx
-+++ b/client/teams/TeamMap.tsx
-@@ -133,7 +133,7 @@ const STATUS: Partial<Record<ReturnType<typeof chatBucket>, { label: string; col
- 
- function BotCard({ colors, bot, lead, localHost, onPress }: { colors: Colors; bot: Bot; lead: boolean; localHost: LocalHost; onPress(): void }) {
+ export function RoutinesSection({ colors, bot, localHost, onPatch, flush, onOpenChat }: PanelProps) {
    const host = useBotHost(bot.hostId, localHost);
--  const chats = useBotChats(host, bot.id);
-+  const chats = useBotChats(host, bot.id, false);
-   const status = STATUS[aggregateBuckets((chats.data ?? []).map(chatBucket))];
-   const { hovered, hoverProps } = useHover();
-   const agent = [bot.provider, bot.model].filter(Boolean).join(" · ");
++  const chats = useBotChats(host, bot.id);
+   const status = useRpc(routineStatusRpc);
+   const runNow = useRpc(routineRunNowRpc);
+   const webhook = useRpc(routineWebhookRpc);
+@@ -89,7 +90,7 @@ export function RoutinesSection({ colors, bot, localHost, onPatch, flush, onOpen
+     try {
+       await flush();
+       const { run: started } = await runNow({ botId: bot.id, routineId: routine.id });
+-      if (started.status === "running") toast.show(`Started "${routine.name}". It appears as a chat under ${bot.name}.`, { variant: "success" });
++      if (started.status === "running") toast.show(localHost.workspaceDirectory ? `Started "${routine.name}" in its configured folder.` : `Started "${routine.name}". It appears as a chat under ${bot.name}.`, { variant: "success" });
+       else if (started.status === "skipped-busy") toast.show(`"${routine.name}" is still working on its last run.`);
+       else toast.error(started.error ?? "Couldn't start the run.");
+       void queryClient.invalidateQueries({ queryKey: ["paseo-bots"] });
+@@ -131,6 +132,7 @@ export function RoutinesSection({ colors, bot, localHost, onPatch, flush, onOpen
+     .slice(0, UPCOMING);
+   const recent = bot.routines
+     .flatMap((routine) => (recordOf(routine)?.runs ?? []).map((entry) => ({ run: entry, routine })))
++    .filter(({run}) => !localHost.workspaceDirectory || chats.data?.some(chat => chat.id === run.agentId))
+     .sort((a, b) => Date.parse(b.run.startedAt) - Date.parse(a.run.startedAt))
+     .slice(0, RECENT);
+ 
 diff --git a/shared/chat.ts b/shared/chat.ts
 index cd27e0d..7f4a4e2 100644
 --- a/shared/chat.ts
@@ -547,4 +581,44 @@ index 9e592cd..e4a548d 100644
 +    expect(isWorkspaceBotChat({ cwd: "/one", labels: {} }, "/one", "vibing-general")).toBe(true);
 +    expect(isWorkspaceBotChat({ cwd: "/one", labels: {} }, "/one", "review")).toBe(false);
 +  });
++});
+diff --git a/tests/worktree-chats.test.tsx b/tests/worktree-chats.test.tsx
+new file mode 100644
+index 0000000..6c99a68
+--- /dev/null
++++ b/tests/worktree-chats.test.tsx
+@@ -0,0 +1,34 @@
++// @vitest-environment jsdom
++import React, { type ReactNode } from "react";
++import { renderHook, waitFor, cleanup } from "@testing-library/react";
++import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
++import { afterEach, expect, it, vi } from "vitest";
++vi.mock("@getpaseo/plugin/client", () => ({ getPaseoClient: vi.fn(), usePaseo: vi.fn(), useHosts: vi.fn() }));
++import { useBotChats, type BotHost } from "../client/data";
++import type { PaseoApi, PaseoAgent } from "../client/paseo";
++const agent = (id: string, cwd: string, botId = "review") => ({ id, cwd, labels: { "paseo-bots.bot": botId }, archivedAt: null, updatedAt: "2026-10-20T00:00:00Z" }) as unknown as PaseoAgent;
++afterEach(cleanup);
++function setup() {
++  const list = vi.fn(async () => ({ entries: [agent("one-chat", "/one"), agent("two-chat", "/two"), agent("other-bot", "/one", "other")].map(agent => ({agent})), pageInfo: {hasMore: false, nextCursor: null} }));
++  const host: BotHost = { api: { agents: { list } } as unknown as PaseoApi, key: "local", label: "Local", isLocal: true, online: true, workspaceDirectory: "/one" };
++  const cache = new QueryClient({defaultOptions: {queries: {retry: false}}});
++  const wrapper = ({children}: {children: ReactNode}) => <QueryClientProvider client={cache}>{children}</QueryClientProvider>;
++  return {host, list, wrapper};
++}
++it("shows only the selected bot's chats in the current worktree, including after switching back", async () => {
++  const {host,wrapper} = setup();
++  const view = renderHook(({directory}) => useBotChats({...host, workspaceDirectory: directory}, "review"), {initialProps: {directory: "/one"}, wrapper});
++  await waitFor(() => expect(view.result.current.data?.map(chat => chat.id)).toEqual(["one-chat"]));
++  view.rerender({directory: "/two"});
++  expect(view.result.current.data?.some(chat => chat.id === "one-chat")).not.toBe(true);
++  await waitFor(() => expect(view.result.current.data?.map(chat => chat.id)).toEqual(["two-chat"]));
++  view.rerender({directory: "/one"});
++  await waitFor(() => expect(view.result.current.data?.map(chat => chat.id)).toEqual(["one-chat"]));
++});
++it("does not expose another host's chats in a local worktree", async () => {
++  const {host,wrapper,list} = setup();
++  const view = renderHook(() => useBotChats({...host,isLocal:false}, "review"), {wrapper});
++  await new Promise(resolve => setTimeout(resolve, 0));
++  expect(list).not.toHaveBeenCalled();
++  expect(view.result.current.data ?? []).toEqual([]);
 +});
