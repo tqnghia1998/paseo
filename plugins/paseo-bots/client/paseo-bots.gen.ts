@@ -1431,6 +1431,11 @@ function moveKey(keys, key, delta) {
   next[target] = key;
   return next;
 }
+function chatAfterRemoval(keys, key) {
+  const rest = keys.filter((entry) => entry !== key);
+  const index = keys.indexOf(key);
+  return rest[Math.min(Math.max(index, 0), rest.length - 1)] ?? null;
+}
 
 // shared/activity.ts
 function toolLabel(name) {
@@ -4421,6 +4426,13 @@ function Splash({ colors: colors2, background }) {
 import { Fragment as Fragment3, jsx as jsx6, jsxs as jsxs5 } from "react/jsx-runtime";
 var noSelect = { userSelect: "none" };
 var CHEVRON_COLOR = "#9ca3af";
+function botChatOrder(chats, listUi, botId) {
+  const listed = new Set(chats.map((chat) => chat.id));
+  const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
+  const pinned = listUi.pinnedChats.filter((pin) => pin.botId === botId && listed.has(pin.chatId)).map((pin) => pin.chatId);
+  const rest = orderChats(chats.filter((chat) => !pinnedIds.has(chat.id)), listUi.chatSort, listUi.chatOrder[botId]);
+  return [...pinned, ...rest.map((chat) => chat.id)];
+}
 function BotSidebar(props) {
   const { colors: colors2, bots, openTab, ui: listUi, hiddenArchivedCount, bottomInset, onNewBot, onShowArchived, onTeamMap, onEditTeam } = props;
   const tokens = nativeTokens(colors2);
@@ -4599,11 +4611,12 @@ function PinnedSection(props) {
     ] })
   ] });
 }
-function PinnedChatRow({ colors: colors2, tokens, bot, chatId, selection, localHost, touch, onSelect, onChatMenu }) {
+function PinnedChatRow({ colors: colors2, tokens, bot, chatId, selection, ui: listUi, localHost, touch, onSelect, onChatMenu, onDeleteChat }) {
   const host2 = useBotHost(bot.hostId, localHost);
   const chats = useBotChats(host2, bot.id);
   const chat = chats.data?.find((entry) => entry.id === chatId);
   if (!chat) return null;
+  const context = { siblings: [], pinned: true, order: botChatOrder(chats.data ?? [], listUi, bot.id) };
   return /* @__PURE__ */ jsx6(
     ChatRow,
     {
@@ -4615,12 +4628,13 @@ function PinnedChatRow({ colors: colors2, tokens, bot, chatId, selection, localH
       touch,
       selected: selection?.botId === bot.id && selection.chatId === chat.id,
       onPress: () => onSelect({ botId: bot.id, chatId: chat.id }),
-      onMenu: (anchor, source) => onChatMenu(bot, chat, anchor, source, { siblings: [], pinned: true })
+      onMenu: (anchor, source) => onChatMenu(bot, chat, anchor, source, context),
+      onDelete: () => onDeleteChat(bot, chat, context)
     }
   );
 }
 function BotGroup(props) {
-  const { colors: colors2, tokens, bot, selection, ui: listUi, localHost, touch, pinnedIds, onSelect, onChatMenu } = props;
+  const { colors: colors2, tokens, bot, selection, ui: listUi, localHost, touch, pinnedIds, onSelect, onChatMenu, onDeleteChat } = props;
   const host2 = useBotHost(bot.hostId, localHost);
   const chats = useBotChats(host2, bot.id);
   const [expanded, setExpanded] = useState6(false);
@@ -4630,6 +4644,7 @@ function BotGroup(props) {
   const unpinned = (chats.data ?? []).filter((chat) => !pinnedIds.has(chat.id));
   const ordered = orderChats(unpinned, listUi.chatSort, listUi.chatOrder[bot.id]);
   const siblings = ordered.map((chat) => chat.id);
+  const context = { siblings, pinned: false, order: botChatOrder(chats.data ?? [], listUi, bot.id) };
   const visible = expanded ? ordered : ordered.slice(0, SIDEBAR_GROUP_LIMIT);
   const loading2 = !!host2.api && chats.isLoading;
   const aggregate = isOpen ? null : aggregateBuckets(unpinned.map(chatBucket));
@@ -4649,7 +4664,8 @@ function BotGroup(props) {
             touch,
             selected: botSelected && selection?.chatId === chat.id,
             onPress: () => onSelect({ botId: bot.id, chatId: chat.id }),
-            onMenu: (anchor, source) => onChatMenu(bot, chat, anchor, source, { siblings, pinned: false })
+            onMenu: (anchor, source) => onChatMenu(bot, chat, anchor, source, context),
+            onDelete: () => onDeleteChat(bot, chat, context)
           },
           chat.id
         )),
@@ -4751,7 +4767,7 @@ function BotRow({ colors: colors2, tokens, bot, lead, touch, isOpen, aggregate, 
     }
   );
 }
-var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu }) {
+var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu, onDelete }) {
   const [hovered, setHovered] = useState6(false);
   const kebabRef = useRef3(null);
   const bucket = chatBucket(chat);
@@ -4797,14 +4813,17 @@ var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selec
           /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, minWidth: 0 }, children: [
             /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "flex-start", gap: 8 }, children: [
               /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(14), fontWeight: "400", lineHeight: 20, color: colors2.foreground, opacity: hovered ? 1 : 0.76 }, children: title }),
-              touch ? /* @__PURE__ */ jsx6(View6, { style: { width: 18, height: 20 } }) : null
+              touch ? /* @__PURE__ */ jsx6(View6, { style: { width: 40, height: 20 } }) : null
             ] }),
             hoisted ? /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { fontSize: ui(12), lineHeight: 16, color: colors2.foregroundMuted }, children: bot.name }) : null
           ] })
         ] }),
         showKebab ? /* @__PURE__ */ jsxs5(View6, { style: { position: "absolute", top: 8, right: 12, flexDirection: "row" }, children: [
           touch ? null : /* @__PURE__ */ jsx6(View6, { pointerEvents: "none", style: { width: 16, backgroundColor: background } }),
-          /* @__PURE__ */ jsx6(View6, { style: { backgroundColor: background }, children: /* @__PURE__ */ jsx6(KebabButton2, { colors: colors2, buttonRef: kebabRef, label: "Chat actions", onPress: () => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab")) }) })
+          /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: background }, children: [
+            /* @__PURE__ */ jsx6(DeleteChatButton, { colors: colors2, onPress: onDelete }),
+            /* @__PURE__ */ jsx6(KebabButton2, { colors: colors2, buttonRef: kebabRef, label: "Chat actions", onPress: () => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab")) })
+          ] })
         ] }) : null
       ]
     }
@@ -4872,6 +4891,22 @@ function ShowMoreRow({ colors: colors2, expanded, onPress }) {
         /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }, children: /* @__PURE__ */ jsx6(Icon4, { name: expanded ? "ChevronUp" : "ChevronDown", size: 14, color: hovered || pressed ? colors2.foreground : colors2.foregroundMuted }) }),
         /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered || pressed ? colors2.foreground : colors2.foregroundMuted }, children: label })
       ] })
+    }
+  );
+}
+function DeleteChatButton({ colors: colors2, onPress }) {
+  const { hovered, hoverProps } = useHover();
+  return /* @__PURE__ */ jsx6(
+    Pressable4,
+    {
+      accessibilityRole: "button",
+      accessibilityLabel: "Delete chat",
+      ...tooltip("Delete chat", "bottom"),
+      hitSlop: 4,
+      onPress,
+      ...hoverProps,
+      style: { padding: 2, borderRadius: 4, backgroundColor: hovered ? colors2.surface2 : "transparent" },
+      children: /* @__PURE__ */ jsx6(Icon4, { name: "Trash2", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted })
     }
   );
 }
@@ -10520,7 +10555,7 @@ function ArchivedCallout({ colors: colors2, compact: compact2 }) {
 
 // client/ChatPane.tsx
 import { Fragment as Fragment10, jsx as jsx26, jsxs as jsxs25 } from "react/jsx-runtime";
-function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, nativeChat: NativeChat, nativeCwd, onSelectChat, botWorkspace, draftId }) {
+function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, onImported, nativeChat: NativeChat, nativeCwd, onSelectChat, botWorkspace, draftId }) {
   const running = chat.agent?.status === "running" || chat.agent?.status === "initializing";
   const empty = chat.entries.length === 0 && !chat.loading && !chat.error && (chat.agent?.pendingPermissions.length ?? 0) === 0;
   const title = chatId ? displayTitle(chat.agent?.title) : "New chat";
@@ -10550,7 +10585,7 @@ function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, 
       chat.agent.cwd,
       ". New chats use the current workspace."
     ] }) : null,
-    useNativeChat && NativeChat ? /* @__PURE__ */ jsx26(NativeChat, { serverId: host2.key, botId: bot.id, agentId: chatId, draftId, workspaceId: chat.agent?.workspaceId ?? botWorkspace?.id, cwd: chat.agent?.cwd || botWorkspace?.directory || bot.cwd || nativeCwd || "", provider: bot.provider, model: bot.model, modeId: bot.modeId, thinkingOptionId: bot.thinkingOptionId, active: !layout.compact || !panelOpen, onSelectChat: (id, draftId2) => onSelectChat?.(id, draftId2), onStart }) : chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
+    useNativeChat && NativeChat ? /* @__PURE__ */ jsx26(NativeChat, { serverId: host2.key, botId: bot.id, agentId: chatId, draftId, workspaceId: chat.agent?.workspaceId ?? botWorkspace?.id, cwd: chat.agent?.cwd || botWorkspace?.directory || bot.cwd || nativeCwd || "", provider: bot.provider, model: bot.model, modeId: bot.modeId, thinkingOptionId: bot.thinkingOptionId, active: !layout.compact || !panelOpen, onSelectChat: (id, draftId2) => onSelectChat?.(id, draftId2), importLabels: { [BOT_LABEL]: bot.id }, onImported, onStart }) : chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
       /* @__PURE__ */ jsx26(Avatar, { avatar: bot.avatar, size: 56 }),
       /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foreground, fontSize: ui(18), fontWeight: "500" }, children: bot.name }),
       bot.description ? /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foregroundMuted, fontSize: ui(14), textAlign: "center", maxWidth: 420 }, children: bot.description }) : null
@@ -14094,22 +14129,37 @@ Its chats stay on the host and remain in Paseo's history.`,
         ),
         move: context.pinned || listUi.chatSort !== "manual" ? null : { up: move(-1), down: move(1) },
         onOpenInPaseo: !nativeChat && openAgent && botHost.online ? () => openAgent({ agentId: chat.id, serverId: botHost.key }) : void 0,
-        onArchive: async () => {
-          if (!botHost.api) {
-            toast.error("Host is not connected");
-            return;
-          }
-          try {
-            await botHost.api.agents.ref(chat.id).archive();
-            if (selection?.chatId === chat.id) setSelection({ botId: bot.id, chatId: null });
-            if (context.pinned) updateUi(unpin);
-            await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key] });
-          } catch (error) {
-            toast.error(`Failed to archive chat: ${errorText(error)}`);
-          }
-        }
+        onArchive: () => removeChat(bot, chat, context, "archive")
       })
     });
+  };
+  const removeChat = async (bot, chat, context, kind) => {
+    const botHost = resolveHost2(bot.hostId);
+    if (!botHost.api) {
+      toast.error("Host is not connected");
+      return;
+    }
+    try {
+      const ref = botHost.api.agents.ref(chat.id);
+      if (kind === "archive") await ref.archive();
+      else if (ref.delete) await ref.delete();
+      else throw new Error("this Paseo host can't delete chats");
+      if (selection?.chatId === chat.id) setSelection({ botId: bot.id, chatId: chatAfterRemoval(context.order, chat.id) });
+      if (context.pinned) updateUi((current2) => ({ ...current2, pinnedChats: current2.pinnedChats.filter((pin) => pin.chatId !== chat.id) }));
+      await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key] });
+    } catch (error) {
+      toast.error(`Failed to ${kind} chat: ${errorText(error)}`);
+    }
+  };
+  const deleteChat = async (bot, chat, context) => {
+    const confirmed = await confirmDialog({
+      title: "Delete chat?",
+      message: `Delete "${displayTitle(chat.title)}"? This permanently removes the chat and can't be undone.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      destructive: true
+    });
+    if (confirmed) await removeChat(bot, chat, context, "delete");
   };
   const openDisplayMenu = (anchor) => {
     menu.open({
@@ -14157,6 +14207,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       onNewBot: () => setCreating(true),
       onBotMenu: openBotMenu,
       onChatMenu: openChatMenu,
+      onDeleteChat: (bot, chat, context) => void deleteChat(bot, chat, context),
       onDisplayMenu: openDisplayMenu,
       onEditTeam: setEditingTeam,
       onTeamMap: () => setTeamMap(true)
@@ -14200,7 +14251,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       onSelectChat: (chatId, draftId) => setSelection({ botId: selectedBot.id, chatId, draftId }),
       onStarted: (chatId) => setSelection({ botId: selectedBot.id, chatId })
     },
-    `${selectedBot.id}:${selection.chatId ?? selection.draftId ?? "new"}`
+    `${selectedBot.id}:${selection.chatId ?? selection.draftId ?? selection.promptId ?? "new"}`
   ) : /* @__PURE__ */ jsx49(Splash, { colors: colors2 });
   const settingsPanel = selectedBot && panel.open ? /* @__PURE__ */ jsx49(
     BotPanel,
@@ -14223,7 +14274,7 @@ Its chats stay on the host and remain in Paseo's history.`,
         setPanelVersion((version) => version + 1);
         toast.show("Restored. Undo it from History if needed.", { variant: "success" });
       },
-      onSetup: () => select({ botId: selectedBot.id, chatId: null, prompt: SETUP_PROMPT }),
+      onSetup: () => select({ botId: selectedBot.id, chatId: null, prompt: SETUP_PROMPT, promptId: newMessageId() }),
       onOpenChat: (chatId) => {
         select({ botId: selectedBot.id, chatId });
         if (layout.compact) setPanel({ open: false, section: panel.section });
@@ -14387,6 +14438,9 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
     onStarted(id);
     return id;
   };
+  const imported = (id) => {
+    void queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", host2.key] }).finally(() => onStarted(id));
+  };
   useEffect24(() => {
     if (!host2.api || botWorkspace || bot.cwd || !bot.name.trim()) return;
     const api = host2.api;
@@ -14427,7 +14481,8 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
       onBotMenu,
       onTogglePanel,
       onStart: start,
-      onOpenChat: onStarted
+      onOpenChat: onStarted,
+      onImported: imported
     }
   );
 }

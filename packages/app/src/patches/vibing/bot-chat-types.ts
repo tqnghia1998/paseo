@@ -15,6 +15,10 @@ export interface NativeBotChatProps {
   thinkingOptionId?: string | null;
   active: boolean;
   onSelectChat(agentId: string | null, draftId?: string): void;
+  /** Labels that file an imported session under this bot; absent hides Import session. */
+  importLabels?: Record<string, string>;
+  /** Opens a session imported into this bot once the bot can list it. */
+  onImported?(agentId: string): void;
   onStart(message: {
     text: string;
     messageId: string;
