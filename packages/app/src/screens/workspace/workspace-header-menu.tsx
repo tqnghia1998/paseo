@@ -1,3 +1,4 @@
+import { StandaloneWorkspaceTools } from "@/patches/vibing/agent-workspace";
 import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import React, { useCallback, useMemo } from "react";
 import { View } from "react-native";
@@ -139,7 +140,7 @@ function WorkspaceHeaderWorkspaceActionItems({
       >
         {t("workspace.header.actions.importSession")}
       </DropdownMenuItem>
-      {showWorkspaceSetup ? (
+      {showWorkspaceSetup && !isEmbeddedFocusMode ? (
         <>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -293,6 +294,7 @@ export function WorkspaceHeaderMenuMobile({
         pages={pages}
         sheetTitle={t("workspace.header.actions.workspaceActions")}
       >
+        <StandaloneWorkspaceTools>
         {scriptsMenu.trigger}
         {pluginMenu.rows}
         {pluginMenu.rows.length > 0 ? <DropdownMenuSeparator /> : null}
@@ -305,24 +307,27 @@ export function WorkspaceHeaderMenuMobile({
             {t("workspace.header.actions.newBrowser")}
           </DropdownMenuItem>
         ) : null}
+        </StandaloneWorkspaceTools>
         <WorkspaceHeaderWorkspaceActionItems {...workspaceActions} />
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>{t("workspace.tabs.actions.terminalProfilesMenu")}</DropdownMenuLabel>
-        {profiles.map((profile) => (
-          <HeaderMenuProfileItem
-            key={profile.id}
-            profile={profile}
-            disabled={createTerminalDisabled}
-            onCreateTerminalWithProfile={onCreateTerminalWithProfile}
-          />
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          testID="workspace-header-edit-terminal-profiles"
-          onSelect={handleEditProfiles}
-        >
-          {t("workspace.tabs.actions.editTerminalProfiles")}
-        </DropdownMenuItem>
+        <StandaloneWorkspaceTools>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>{t("workspace.tabs.actions.terminalProfilesMenu")}</DropdownMenuLabel>
+          {profiles.map((profile) => (
+            <HeaderMenuProfileItem
+              key={profile.id}
+              profile={profile}
+              disabled={createTerminalDisabled}
+              onCreateTerminalWithProfile={onCreateTerminalWithProfile}
+            />
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            testID="workspace-header-edit-terminal-profiles"
+            onSelect={handleEditProfiles}
+          >
+            {t("workspace.tabs.actions.editTerminalProfiles")}
+          </DropdownMenuItem>
+        </StandaloneWorkspaceTools>
       </DropdownMenuContent>
     </DropdownMenu>
   );
