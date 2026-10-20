@@ -41,6 +41,7 @@ import {
 } from "./history-start-settle-scheduler";
 import { useChatFindSelectedMessageId } from "@/agent-stream/chat-find";
 import { useScrollToMessage } from "./use-scroll-to-message.web";
+import { selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -1228,7 +1229,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   ]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
-    const gutter = isMobileBreakpoint ? 8 : 16;
+    const gutter = isMobileBreakpoint ? 8 : selectEmbeddedFocusMode(48, 16);
     const leftGutter = gutter + outlineInset;
     // Balance the outline gutter using only the space the capped column has left over.
     const rightGutter =
