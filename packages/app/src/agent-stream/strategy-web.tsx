@@ -42,6 +42,7 @@ import {
 import { useChatFindSelectedMessageId } from "@/agent-stream/chat-find";
 import { CHAT_COLUMN_BASE_GUTTER, resolveChatColumnGutters } from "@/chat-rail/gutters";
 import { useScrollToMessage } from "./use-scroll-to-message.web";
+import { selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -1232,7 +1233,8 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   ]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
-    const gutter = isMobileBreakpoint ? 8 : CHAT_COLUMN_BASE_GUTTER;
+    const desktopGutter = selectEmbeddedFocusMode(48, CHAT_COLUMN_BASE_GUTTER);
+    const gutter = isMobileBreakpoint ? 8 : desktopGutter;
     const { paddingLeft, paddingRight } = resolveChatColumnGutters({
       gutter,
       outlineInset,
