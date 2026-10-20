@@ -83,7 +83,7 @@ Design, including pending completion recovery and unique fresh-draft handshakes.
 Native draft keys include the workspace. Shared chat plugins, attachments, queues,
 rewind and provider fixes remain. The reproducible community source patch lives in
 `scripts/paseo-bots-vibing.patch`; regenerate its bundles instead of hand editing
-generated files. Chat settings remains available from Bots.
+generated files. The workspace bridge renders no header or Chat settings button.
 
 The additional community plugins are pinned and regenerated with
 `scripts/vendor-community-plugins.mjs`; each plugin's README records attribution,
