@@ -70,6 +70,9 @@ Embedded local bot chats use the native transcript and composer through the priv
 own a separate cache. Bots owns creation, preserving instructions, memory, skills,
 MCP/tools and labels, while the host supplies the bound workspace placement.
 Definitions remain runtime-global and local conversation lists stay worktree-scoped.
+Native fork actions open a fresh draft in the same bot, preserving the draft ID
+that owns the bounded Chat history attachment. The Bots composer reads that
+draft's attachment scope so the copied conversation reaches its first message.
 General is created automatically and includes legacy unlabeled chats from the same
 directory without mutating their records. Embedded conversation lists, pins, usage and routine chat links are strictly
 scoped to the bound worktree. There is no all-folder override. Selected chat IDs

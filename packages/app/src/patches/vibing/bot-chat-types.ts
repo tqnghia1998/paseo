@@ -14,7 +14,7 @@ export interface NativeBotChatProps {
   modeId?: string | null;
   thinkingOptionId?: string | null;
   active: boolean;
-  onSelectChat(agentId: string | null): void;
+  onSelectChat(agentId: string | null, draftId?: string): void;
   onStart(message: {
     text: string;
     messageId: string;

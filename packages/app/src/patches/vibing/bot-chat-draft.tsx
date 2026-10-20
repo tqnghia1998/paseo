@@ -16,10 +16,13 @@ import { handoffCreatedAgentMessageSubmission } from "@/composer/submission/writ
 import { useSessionStore } from "@/stores/session-store";
 import type { MessagePayload } from "@/composer/types";
 import type { NativeBotChatProps } from "./bot-chat-types";
+import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 
 export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "onSelectChat">) {
   const { serverId, botId, cwd, onStart } = props;
   const draftId = props.draftId ?? `paseo-bots:${botId}:${props.workspaceId ?? cwd}`;
+  const draftAttachmentScopeKey = useDraftWorkspaceAttachmentScopeKey(draftId);
+  const attachmentScopeKeys = useMemo(() => [draftAttachmentScopeKey], [draftAttachmentScopeKey]);
   const createdAgentId = useRef<string | undefined>(undefined);
   const resolveAgentId = useCallback(() => createdAgentId.current, []);
   const input = useAgentInputDraft({
@@ -106,6 +109,7 @@ export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "
             onChangeText={input.editText}
             textReplacement={input.textReplacement}
             attachments={input.attachments}
+            attachmentScopeKeys={attachmentScopeKeys}
             onChangeAttachments={input.setAttachments}
             cwd={cwd}
             clearDraft={input.clear}
