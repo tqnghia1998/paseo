@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { StreamItem } from "@/types/stream";
 import type { TimelineItemTransform } from "./model";
 import { projectPluginTimelineItems } from "./projection";
@@ -13,7 +14,97 @@ function thought(text: string, status: "loading" | "ready" = "loading"): StreamI
   };
 }
 
+const replaceUserMessage: TimelineItemTransform = ({ item, sourceId }) => {
+  if (item.type !== "user_message") return undefined;
+  return [
+    {
+      type: "plugin",
+      id: sourceId,
+      pluginId: "beautiful-chat",
+      kind: "user-message",
+      version: 1,
+      data: { text: item.text },
+    },
+  ];
+};
+
 describe("plugin timeline projection", () => {
+  it("transforms plain-text user-message rows", () => {
+    const source: StreamItem = {
+      kind: "user_message",
+      id: "user-1",
+      text: "Update the page",
+      timestamp: new Date("2026-01-01T00:00:00.000Z"),
+    };
+    const transform = vi.fn(replaceUserMessage);
+
+    expect(projectPluginTimelineItems([source], transform)).toMatchObject([
+      {
+        kind: "plugin",
+        id: "beautiful-chat/user-1",
+        data: { text: "Update the page" },
+      },
+    ]);
+    expect(transform).toHaveBeenCalledOnce();
+  });
+
+  it.each<AgentAttachment>([
+    {
+      type: "text",
+      mimeType: "text/plain",
+      title: "Live Design context",
+      text: "Change the selected heading color",
+    },
+    {
+      type: "uploaded_file",
+      id: "file-1",
+      fileName: "requirements.txt",
+      mimeType: "text/plain",
+      size: 25,
+      path: "/repo/requirements.txt",
+    },
+  ])("keeps user-message rows with $type attachments native", (attachment) => {
+    const source: StreamItem = {
+      kind: "user_message",
+      id: "user-1",
+      text: "Update the page",
+      timestamp: new Date("2026-01-01T00:00:00.000Z"),
+      attachments: [attachment],
+    };
+    const transform = vi.fn(replaceUserMessage);
+
+    const projected = projectPluginTimelineItems([source], transform);
+
+    expect(projected).toEqual([source]);
+    expect(projected[0]).toBe(source);
+    expect(transform).not.toHaveBeenCalled();
+  });
+
+  it("keeps user-message rows with images native", () => {
+    const source: StreamItem = {
+      kind: "user_message",
+      id: "user-1",
+      text: "Update the page",
+      timestamp: new Date("2026-01-01T00:00:00.000Z"),
+      images: [
+        {
+          id: "image-1",
+          mimeType: "image/png",
+          storageType: "desktop-file",
+          storageKey: "/repo/reference.png",
+          createdAt: 1767225600000,
+        },
+      ],
+    };
+    const transform = vi.fn(replaceUserMessage);
+
+    const projected = projectPluginTimelineItems([source], transform);
+
+    expect(projected).toEqual([source]);
+    expect(projected[0]).toBe(source);
+    expect(transform).not.toHaveBeenCalled();
+  });
+
   it("does not expose mutable tool detail from stream state", () => {
     const detail = { type: "read" as const, filePath: "/repo/original.ts" };
     const source: StreamItem = {

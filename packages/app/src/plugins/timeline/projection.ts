@@ -43,6 +43,8 @@ function sourceToolCallTimelineItem(data: AgentToolCallData): ToolCallTimelineIt
 function sourceTimelineItem(item: StreamItem): AgentTimelineItem | null {
   switch (item.kind) {
     case "user_message":
+      // The plugin timeline contract carries text only; native rows retain attachments.
+      if (item.attachments?.length || item.images?.length) return null;
       return {
         type: "user_message",
         text: item.text,
