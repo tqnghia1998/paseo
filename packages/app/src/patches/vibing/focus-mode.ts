@@ -34,13 +34,21 @@ export function selectEmbeddedFocusMode<T>(embedded: T, standard: T): T {
   return isEmbeddedFocusMode ? embedded : standard;
 }
 
+export function workspaceNewTabTarget(draftId: string) {
+  return isEmbeddedFocusMode
+    ? ({ kind: "draft", draftId } as const)
+    : ({ kind: "new_tab" } as const);
+}
+
 interface EmbeddedTab {
   tabId: string;
   target: { kind: string };
 }
 
 const isConversationTab = (tab: EmbeddedTab) =>
-  tab.target.kind === "agent" || tab.target.kind === "draft";
+  tab.target.kind === "agent" ||
+  tab.target.kind === "draft" ||
+  tab.target.kind === "provider_subagent";
 
 export function findNearestEmbeddedConversationTabId(
   tabs: EmbeddedTab[],
@@ -75,15 +83,11 @@ export function isEmbeddedShortcutAllowed(action: string): boolean {
     action.startsWith("workspace.pane.") ||
     [
       "command-center.toggle",
-      "command-center.files",
       "theme.cycle",
       "settings.toggle",
       "shortcuts.dialog.toggle",
       "workspace.pin",
-      "workspace.terminal.new",
       "sidebar.toggle.left",
-      "sidebar.toggle.both",
-      "sidebar.toggle.right",
       "view.toggle.focus",
       "message-input.action",
       "agent.interrupt",
