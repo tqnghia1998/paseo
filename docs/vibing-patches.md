@@ -42,15 +42,16 @@ Appearance and General → Default send controls without adding app routes or
 cross-screen plugin navigation. Live Design is configured in outer Vibing
 Settings → Experiments. Reliability and navigation patches do not get toggles.
 
-Embedded Settings → Plugins separates Vibing customizations, Paseo built-ins and
-additional plugins. `space-app-vibing-theme` and the vendored third-party
-`beautiful-chat`, `mermaid`, `paseo-bots` and `annotations` are added by this fork, and
-`codex-usage-source` contains the Enterprise allowance change; their runtime rows
-appear under Vibing customizations, alongside a link to the full patch catalog.
-The other bundled provider and usage plugins come from the incorporated upstream
-base and stay under Paseo built-ins. Additional plugins retain their installation
-and lifecycle controls. Keep this display grouping in `plugin-inventory.ts`; it
-must not change which plugins load or their runtime status.
+Embedded Settings → Plugins separates Vibing customizations, Community plugins,
+Paseo built-ins and additional plugins. Only `space-app-vibing-theme` and the
+extended `codex-usage-source` appear under Vibing customizations and in its patch
+catalog. The vendored `beautiful-chat`, `mermaid`, `paseo-bots` and `annotations`
+appear under Community plugins with links to their original authors' repositories.
+They are bundled and enabled by default. The other bundled provider and usage
+plugins come from the incorporated upstream base and stay under Paseo built-ins.
+Additional plugins retain their installation and lifecycle controls. Keep this
+display grouping in `plugin-inventory.ts`; it must not change which plugins load
+or their runtime status.
 
 [Beautiful Chat](../plugins/beautiful-chat/README.md) ships a pinned, prebundled
 upstream revision so embedded startup stays offline. Its tool, reasoning and task

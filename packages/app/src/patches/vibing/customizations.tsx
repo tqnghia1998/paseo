@@ -16,6 +16,28 @@ interface VibingPluginsSectionProps {
   children: ReactNode;
 }
 
+export function CommunityPluginsSection({
+  pageState,
+  hasPlugins,
+  children,
+}: {
+  pageState: PluginPageState;
+  hasPlugins: boolean;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
+  if (!hasPlugins || (pageState !== "ready" && pageState !== "empty")) return null;
+  return (
+    <SettingsSection
+      title={t("settings.plugins.communityTitle")}
+      info={t("settings.plugins.communityHint")}
+      testID="community-plugins"
+    >
+      {children}
+    </SettingsSection>
+  );
+}
+
 export function VibingPluginsSection({
   serverId,
   supported,
