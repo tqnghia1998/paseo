@@ -43,13 +43,21 @@ cross-screen plugin navigation. Live Design is configured in outer Vibing
 Settings → Experiments. Reliability and navigation patches do not get toggles.
 
 Embedded Settings → Plugins separates Vibing customizations, Paseo built-ins and
-additional plugins. `space-app-vibing-theme` is added by this fork, and
+additional plugins. `space-app-vibing-theme` and the vendored third-party
+`beautiful-chat` are added by this fork, and
 `codex-usage-source` contains the Enterprise allowance change; their runtime rows
 appear under Vibing customizations, alongside a link to the full patch catalog.
 The other bundled provider and usage plugins come from the incorporated upstream
 base and stay under Paseo built-ins. Additional plugins retain their installation
 and lifecycle controls. Keep this display grouping in `plugin-inventory.ts`; it
 must not change which plugins load or their runtime status.
+
+[Beautiful Chat](../plugins/beautiful-chat/README.md) ships a pinned, prebundled
+upstream revision so embedded startup stays offline. Its tool, reasoning and task
+cards are enabled; native user and assistant rendering remains the default to
+retain Find and citation handling. Saved Chat presentation preferences win.
+Attachment rows and interactive Shell input remain native even when users enable
+enhanced messages. Preserve these boundaries when updating the vendored plugin.
 
 The patch map above records the remaining customizations. Native navigation guards,
 composer draft/queue integration, editor recovery, process cleanup, and provider

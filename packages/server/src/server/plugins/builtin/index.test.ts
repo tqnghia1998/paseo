@@ -63,20 +63,50 @@ test("standalone bundles resolve built-ins beside the server entrypoint", async 
   expect(resolveBuiltinPluginsRoot(pathToFileURL(path.join(root, "server.mjs")))).toBe(plugins);
 });
 
-test("embedded theme is published with user plugins disabled", async () => {
+test("embedded theme and Beautiful Chat are published with user plugins disabled", async () => {
+  expect(builtinPlugins).toContain("beautiful-chat");
   const daemon = await createTestPaseoDaemon({
     pluginsEnabled: false,
     builtinPlugins: new BuiltinPluginLoader(resolveBuiltinPluginsRoot(), [
       "space-app-vibing-theme",
+      "beautiful-chat",
     ]),
   });
   const client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
   try {
     await client.connect();
     const catalog = await client.getPluginCatalog();
-    expect(catalog).toHaveLength(1);
-    expect(catalog[0]?.id).toBe("space-app-vibing-theme");
-    expect(catalog[0]?.clientBundle).toContain("Space App Vibing");
+    expect(catalog).toHaveLength(2);
+    expect(catalog.find(({ id }) => id === "space-app-vibing-theme")?.clientBundle).toContain(
+      "Space App Vibing",
+    );
+    expect(catalog.find(({ id }) => id === "beautiful-chat")?.clientBundle).toContain(
+      "Chat presentation",
+    );
+    expect(await client.listPlugins({ includeBuiltins: true })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "beautiful-chat",
+          builtin: true,
+          enabled: true,
+          status: "running",
+        }),
+      ]),
+    );
+    expect(
+      await client.invokePluginRpc("beautiful-chat", "highlight.tokens", {
+        code: "const bundled = true;",
+        language: "typescript",
+        dark: true,
+      }),
+    ).toMatchObject({
+      language: "typescript",
+      lines: [
+        expect.arrayContaining([
+          expect.objectContaining({ color: expect.stringMatching(/^#[a-f0-9]{6}$/i) }),
+        ]),
+      ],
+    });
   } finally {
     await client.close();
     await daemon.close();
