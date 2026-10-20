@@ -5,6 +5,10 @@ import type { MessagePayload } from "@/composer/types";
 import { act, render, screen, cleanup } from "@testing-library/react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { NativeBotChatDraft } from "./bot-chat-draft";
+import {
+  buildDraftWorkspaceAttachmentScopeKey,
+  useWorkspaceAttachmentsStore,
+} from "@/attachments/workspace-attachments-store";
 
 const mocks = vi.hoisted(() => ({
   composer: null as ComponentProps<typeof Composer> | null,
@@ -16,13 +20,19 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/composer/submission/writer", () => ({
   handoffCreatedAgentMessageSubmission: mocks.handoff,
 }));
-vi.mock("@/composer", () => ({
-  Composer: (props: ComponentProps<typeof Composer>) => {
-    mocks.composer = props;
-    mocks.submit = props.onSubmitMessage;
-    return <div data-testid="native-composer" />;
-  },
-}));
+vi.mock("@/composer", async () => {
+  const { useWorkspaceAttachmentsForScopes } =
+    await import("@/attachments/workspace-attachments-store");
+  return {
+    Composer: (props: ComponentProps<typeof Composer>) => {
+      mocks.composer = props;
+      const context = useWorkspaceAttachmentsForScopes(props.attachmentScopeKeys);
+      mocks.submit = (payload) =>
+        props.onSubmitMessage!({ ...payload, attachments: [...payload.attachments, ...context] });
+      return <div data-testid="native-composer" />;
+    },
+  };
+});
 vi.mock("@/composer/dock", () => ({
   ComposerDock: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -49,7 +59,10 @@ vi.mock("@/stores/session-store", () => ({
   useSessionStore: Object.assign(() => null, { getState: () => ({ sessions: {} }) }),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useWorkspaceAttachmentsStore.setState({ attachmentsByScope: {} });
+});
 
 describe("native bot draft", () => {
   it("uses the native composer and forwards text, files and encoded images through bot creation", async () => {
@@ -146,4 +159,48 @@ it("scopes native drafts to their workspace and resolves the created agent for L
   expect(mocks.composer!.resolveLiveDesignAgentId!()).toBe("created-bot-agent");
   view.rerender(<NativeBotChatDraft {...props} cwd="/two" workspaceId="two" />);
   expect(mocks.composer!.agentId).not.toBe(first);
+});
+
+it("submits only this fork draft's history to the new bot chat", async () => {
+  const history = {
+    type: "text",
+    title: "Chat history",
+    mimeType: "text/plain",
+    text: "Earlier conversation",
+  } as const;
+  const store = useWorkspaceAttachmentsStore.getState();
+  for (const draftId of ["fork", "other-fork"]) {
+    store.setWorkspaceAttachments({
+      scopeKey: buildDraftWorkspaceAttachmentScopeKey(draftId),
+      attachments: [
+        {
+          kind: "chat_history",
+          id: draftId,
+          attachment: {
+            ...history,
+            text: draftId === "fork" ? history.text : "Other conversation",
+          },
+          source: { serverId: "host", agentId: "source" },
+        },
+      ],
+    });
+  }
+  mocks.encodeImages.mockResolvedValue([]);
+  const start = vi.fn().mockResolvedValue("new-chat");
+  render(
+    <NativeBotChatDraft
+      serverId="host"
+      botId="bot"
+      draftId="fork"
+      cwd="/worktree"
+      workspaceId="workspace"
+      provider="codex"
+      active
+      onStart={start}
+    />,
+  );
+  await act(async () => mocks.submit!({ text: "Continue", cwd: "/worktree", attachments: [] }));
+  expect(start).toHaveBeenCalledWith(
+    expect.objectContaining({ text: "Continue", attachments: [history] }),
+  );
 });

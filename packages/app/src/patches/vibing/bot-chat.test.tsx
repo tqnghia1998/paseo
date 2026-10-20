@@ -1,21 +1,38 @@
 // @vitest-environment jsdom
 import React, { type ReactNode } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { NativeBotChatProps } from "./bot-chat-types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/data/query-client";
+import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
+import {
+  buildDraftWorkspaceAttachmentScopeKey,
+  useWorkspaceAttachmentsStore,
+} from "@/attachments/workspace-attachments-store";
 
 const fake = vi.hoisted(() => ({
   visible: vi.fn(),
   prepare: vi.fn().mockResolvedValue(undefined),
   focused: true,
   cache: null as unknown,
+  fork: undefined as (() => Promise<void>) | undefined,
+  buildForkContext: vi.fn().mockResolvedValue({
+    attachment: {
+      type: "text",
+      title: "Chat history",
+      mimeType: "text/plain",
+      text: "Earlier conversation",
+    },
+    itemCount: 3,
+  }),
 }));
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
 });
 vi.mock("@react-navigation/native", () => ({ useIsFocused: () => fake.focused }));
+vi.mock("expo-router", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./bot-workspace", () => ({ BotWorkspaceBridge: () => null }));
 vi.mock("./workspace-boundary", () => ({
   getEmbeddedWorkspace: () => null,
@@ -24,9 +41,19 @@ vi.mock("./workspace-boundary", () => ({
 vi.mock("@/panels/agent-panel", async () => {
   const { useQueryClient } =
     await vi.importActual<typeof import("@tanstack/react-query")>("@tanstack/react-query");
+  const { useForkAgent } = await import("@/hooks/use-fork-agent");
   return {
     AgentConversationPanel: () => {
       fake.cache = useQueryClient();
+      const fork = useForkAgent({ serverId: "host" });
+      fake.fork = () =>
+        fork({
+          agentId: "chat",
+          workspaceId: "workspace",
+          target: "tab",
+          agent: { provider: "codex", cwd: "/bot" } as Parameters<typeof fork>[0]["agent"],
+          boundary: { boundaryMessageId: "turn-end" },
+        });
       return <div data-testid="native-panel" />;
     },
   };
@@ -64,6 +91,8 @@ vi.mock("@/stores/session-store", () => ({
     select({
       sessions: {
         host: {
+          client: { buildAgentForkContext: fake.buildForkContext },
+          serverInfo: { features: { agentForkContext: true } },
           agents: new Map(),
           agentDetails: new Map(),
           viewedTimelineSync: { replaceVisibleAgentIds: fake.visible },
@@ -88,6 +117,9 @@ beforeEach(() => {
   fake.visible.mockClear();
   fake.prepare.mockClear();
   fake.focused = true;
+  vi.mocked(props.onSelectChat).mockClear();
+  vi.mocked(navigateToWorkspace).mockClear();
+  useWorkspaceAttachmentsStore.setState({ attachmentsByScope: {} });
 });
 afterEach(cleanup);
 
@@ -123,4 +155,23 @@ it("uses the app query cache for native controls inside a plugin's isolated cach
   );
   expect(fake.cache).toBe(queryClient);
   expect(fake.cache).not.toBe(pluginCache);
+});
+
+it("opens a fork in the same bot with the draft that owns its bounded history", async () => {
+  render(<NativeBotChat {...props} agentId="chat" />);
+  await act(async () => fake.fork!());
+  expect(props.onSelectChat).toHaveBeenCalledWith(null, expect.any(String));
+  const draftId = vi.mocked(props.onSelectChat).mock.calls[0][1]!;
+  expect(
+    useWorkspaceAttachmentsStore.getState().attachmentsByScope[
+      buildDraftWorkspaceAttachmentScopeKey(draftId)
+    ],
+  ).toEqual([
+    expect.objectContaining({
+      kind: "chat_history",
+      source: expect.objectContaining({ agentId: "chat", itemCount: 3 }),
+    }),
+  ]);
+  expect(fake.buildForkContext).toHaveBeenCalledWith("chat", { boundaryMessageId: "turn-end" });
+  expect(navigateToWorkspace).not.toHaveBeenCalled();
 });
