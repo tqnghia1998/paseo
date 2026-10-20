@@ -1,4 +1,4 @@
-import { migrateEmbeddedPanelFocus } from "@/patches/vibing/focus-mode";
+import { migrateEmbeddedPanelFocus, selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -93,7 +93,7 @@ export interface PanelState {
   toggleFileTreeVisible: () => void;
 }
 
-const DEFAULT_DESKTOP_OPEN = isWeb;
+const DEFAULT_DESKTOP_OPEN = selectEmbeddedFocusMode(false, isWeb);
 
 function setMobilePanelTargetPatch(
   state: PanelState,
