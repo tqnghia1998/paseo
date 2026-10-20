@@ -1,4 +1,5 @@
 import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
+import { embeddedBotChatProps } from "@/patches/vibing/bot-chat";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { router, useLocalSearchParams } from "expo-router";
 import type { PluginIcon, PluginScreenParams, PluginScreenProps } from "@getpaseo/plugin/client";
@@ -73,7 +74,14 @@ function SurfaceRenderer({
   const navigation = usePluginHostNavigation(host.id);
   return (
     <PluginInstallationProvider plugin={plugin}>
-      <Surface theme={theme} host={host} layout={layout} navigation={navigation} params={params} />
+      <Surface
+        theme={theme}
+        host={host}
+        layout={layout}
+        navigation={navigation}
+        params={params}
+        {...embeddedBotChatProps(plugin.id)}
+      />
     </PluginInstallationProvider>
   );
 }

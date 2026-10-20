@@ -1,0 +1,155 @@
+diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
+index ebc4ed2..d3f733a 100644
+--- a/client/BotsSurface.tsx
++++ b/client/BotsSurface.tsx
+@@ -1,3 +1,4 @@
++import type { NativeChatSlot } from "./NativeChat";
+ import type { PluginTheme } from "@getpaseo/plugin";
+ import type { PaseoAgent } from "./paseo";
+ import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
+@@ -50,7 +51,7 @@ const SETUP_PROMPT =
+ /** Autosave delay after the last edit in the settings panel. */
+ const SAVE_DELAY_MS = 600;
+ 
+-export function BotsSurface(props: PluginSurfaceProps) {
++export function BotsSurface(props: PluginSurfaceProps & NativeChatSlot) {
+   const { colors } = props.theme;
+   useTooltipTheme(colors);
+   return (
+@@ -63,7 +64,7 @@ export function BotsSurface(props: PluginSurfaceProps) {
+ }
+ 
+ 
+-function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfaceProps) {
++function BotsSurfaceContent({ theme, layout, host, navigation, nativeChat }: PluginSurfaceProps & NativeChatSlot) {
+   const { colors } = theme;
+   const { settings, latest, commit } = useBotSettings();
+   const toast = useToast();
+@@ -571,6 +572,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+         onBack={layout.compact ? () => setSelection(null) : undefined}
+         onBotMenu={(anchor) => (anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot))}
+         onTogglePanel={() => setPanel({ open: !panel.open, section: panel.section })}
++        nativeChat={nativeChat}
++        onSelectChat={(chatId) => setSelection({ botId: selectedBot.id, chatId })}
+         onStarted={(chatId) => setSelection({ botId: selectedBot.id, chatId })}
+       />
+     ) : (
+@@ -727,7 +730,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+   );
+ }
+ 
+-interface SelectedChatProps {
++interface SelectedChatProps extends NativeChatSlot {
++  onSelectChat(agentId: string | null): void;
+   colors: Colors;
+   bot: Bot;
+   library: Library;
+@@ -743,10 +747,17 @@ interface SelectedChatProps {
+   onStarted(chatId: string): void;
+ }
+ 
+-function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted }: SelectedChatProps) {
++function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted, nativeChat, onSelectChat }: SelectedChatProps) {
+   const host = useBotHost(bot.hostId, localHost);
+   const chat = useChat(host.api, selection.chatId);
+   const ensureHome = useRpc(ensureBotHomeRpc);
++  const [nativeCwd, setNativeCwd] = useState("");
++  useEffect(() => {
++    if (!nativeChat || !host.isLocal || selection.chatId || bot.cwd) return;
++    let current = true;
++    void ensureHome({ botId: bot.id }).then(home => { if (current) setNativeCwd(home.path); }).catch(error => toast.error(`Could not open bot folder: ${errorText(error)}`));
++    return () => { current = false; };
++  }, [nativeChat, host.isLocal, bot.id, bot.cwd, selection.chatId]);
+   const compose = useRpc(systemPromptRpc);
+   const mountServers = useRpc(mountRpc);
+   const queryClient = useQueryClient();
+@@ -801,6 +812,9 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+ 
+   return (
+     <ChatPane
++      nativeChat={nativeChat}
++      nativeCwd={nativeCwd}
++      onSelectChat={onSelectChat}
+       colors={colors}
+       bot={bot}
+       host={host}
+diff --git a/client/ChatPane.tsx b/client/ChatPane.tsx
+index 7d1bf84..4897a9e 100644
+--- a/client/ChatPane.tsx
++++ b/client/ChatPane.tsx
+@@ -16,9 +16,13 @@ import { listenForFind } from "./web";
+ import type { ChatState } from "./useChat";
+ import { tooltip } from "./ui/Tooltip";
+ 
++import type { NativeChatSlot } from "./NativeChat";
++
+ type Colors = PluginTheme["colors"];
+ 
+-export interface ChatPaneProps {
++export interface ChatPaneProps extends NativeChatSlot {
++  nativeCwd?: string;
++  onSelectChat?(agentId: string | null): void;
+   colors: Colors;
+   bot: Bot;
+   host: BotHost;
+@@ -46,11 +50,12 @@ export interface OutgoingMessage {
+   attachments: ReturnType<typeof toWire>["attachments"];
+ }
+ 
+-export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat }: ChatPaneProps) {
++export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, nativeChat: NativeChat, nativeCwd, onSelectChat }: ChatPaneProps) {
+   const running = chat.agent?.status === "running" || chat.agent?.status === "initializing";
+   const empty = chat.entries.length === 0 && !chat.loading && !chat.error && (chat.agent?.pendingPermissions.length ?? 0) === 0;
+   const title = chatId ? displayTitle(chat.agent?.title) : "New chat";
+-  const canFind = chatId !== null && !empty;
++  const useNativeChat = !!NativeChat && host.isLocal;
++  const canFind = !useNativeChat && chatId !== null && !empty;
+   const [findOpen, setFindOpen] = useState(false);
+   useEffect(() => setFindOpen(false), [chatId]);
+   // ⌘F / Ctrl+F finds in the open chat on the desktop.
+@@ -70,7 +75,9 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
+         onTogglePanel={onTogglePanel}
+         onFind={canFind ? () => setFindOpen((open) => !open) : undefined}
+       />
+-      {chatId === null || empty ? (
++      {useNativeChat && NativeChat ? (
++        <NativeChat serverId={host.key} botId={bot.id} agentId={chatId} workspaceId={chat.agent?.workspaceId} cwd={chat.agent?.cwd || bot.cwd || nativeCwd || ""} provider={bot.provider} model={bot.model} modeId={bot.modeId} thinkingOptionId={bot.thinkingOptionId} active={!layout.compact || !panelOpen} onSelectChat={(id) => onSelectChat?.(id)} onStart={onStart} />
++      ) : chatId === null || empty ? (
+         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }}>
+           <Avatar avatar={bot.avatar} size={56} />
+           <Text style={{ color: colors.foreground, fontSize: ui(18), fontWeight: "500" }}>{bot.name}</Text>
+@@ -81,7 +88,7 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
+       ) : (
+         <ChatStream key={chatId} colors={colors} chat={chat} api={host.api} agentId={chatId} compact={layout.compact} platform={layout.platform} typeVersion={typeVersion} onOpenChat={onOpenChat} voice={bot.voice} findOpen={findOpen} onCloseFind={() => setFindOpen(false)} {...(host.isLocal ? { botId: bot.id } : {})} />
+       )}
+-      <Composer colors={colors} bot={bot} host={host} agentId={chatId} agent={chat.agent} running={running} layout={layout} keyboardOpen={keyboardOpen} onStart={onStart} />
++      {!useNativeChat ? <Composer colors={colors} bot={bot} host={host} agentId={chatId} agent={chat.agent} running={running} layout={layout} keyboardOpen={keyboardOpen} onStart={onStart} /> : null}
+     </View>
+   );
+ }
+diff --git a/client/NativeChat.ts b/client/NativeChat.ts
+new file mode 100644
+index 0000000..1249067
+--- /dev/null
++++ b/client/NativeChat.ts
+@@ -0,0 +1,20 @@
++import type { ComponentType } from "react";
++import type { Bot } from "../shared/bot";
++import type { OutgoingMessage } from "./ChatPane";
++
++/** Optional host-owned chat UI; upstream/older hosts retain the plugin UI. */
++export interface NativeChatProps {
++  serverId: string;
++  botId: string;
++  agentId: string | null;
++  workspaceId?: string | null;
++  cwd: string;
++  provider: Bot["provider"];
++  model?: string | null;
++  modeId?: string | null;
++  thinkingOptionId?: string | null;
++  active: boolean;
++  onSelectChat(agentId: string | null): void;
++  onStart(message: OutgoingMessage): Promise<void>;
++}
++export interface NativeChatSlot { nativeChat?: ComponentType<NativeChatProps>; }
