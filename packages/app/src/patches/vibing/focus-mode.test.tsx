@@ -24,6 +24,9 @@ describe("embedded focus mode", () => {
     vi.stubEnv("EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS", "false");
     try {
       expect((await import("./focus-mode")).isEmbeddedFocusMode).toBe(false);
+      expect((await import("@/workspace-tabs/new-tab")).createNewWorkspaceTab().target).toEqual({
+        kind: "new_tab",
+      });
       const { usePanelStore } = await import("@/stores/panel-store");
       await usePanelStore.persist.rehydrate();
       expect(usePanelStore.getState().desktop.agentListOpen).toBe(true);
@@ -79,6 +82,14 @@ describe("embedded focus mode", () => {
 });
 
 describe("full embedded workspace", () => {
+  it("creates distinct Agent drafts for fresh tabs in embedded workspaces", async () => {
+    const { createNewWorkspaceTab } = await import("@/workspace-tabs/new-tab");
+    const first = createNewWorkspaceTab();
+    const second = createNewWorkspaceTab();
+    expect(first.target.kind).toBe("draft");
+    expect(second.target.kind).toBe("draft");
+    expect(second.target).not.toEqual(first.target);
+  });
   it("starts with the sidebar hidden and restores the user's menu preference", async () => {
     const { default: storage } = await import("@react-native-async-storage/async-storage");
     await storage.removeItem("panel-state");
@@ -112,7 +123,6 @@ describe("full embedded workspace", () => {
   it("allows workspace tools but excludes global navigation shortcuts", () => {
     for (const action of [
       "command-center.toggle",
-      "command-center.files",
       "theme.cycle",
       "settings.toggle",
       "shortcuts.dialog.toggle",
@@ -120,13 +130,19 @@ describe("full embedded workspace", () => {
       "workspace.tab.navigate.relative",
       "view.toggle.focus",
       "sidebar.toggle.left",
-      "sidebar.toggle.both",
-      "sidebar.toggle.right",
       "message-input.action",
     ]) {
       expect(isEmbeddedShortcutAllowed(action)).toBe(true);
     }
-    for (const action of ["workspace.navigate.index", "workspace.navigate.relative", "agent.new"]) {
+    for (const action of [
+      "workspace.navigate.index",
+      "workspace.navigate.relative",
+      "agent.new",
+      "workspace.terminal.new",
+      "command-center.files",
+      "sidebar.toggle.both",
+      "sidebar.toggle.right",
+    ]) {
       expect(isEmbeddedShortcutAllowed(action)).toBe(false);
     }
   });
