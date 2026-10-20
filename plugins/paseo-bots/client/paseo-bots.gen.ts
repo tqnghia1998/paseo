@@ -10550,7 +10550,7 @@ function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, 
       chat.agent.cwd,
       ". New chats use the current workspace."
     ] }) : null,
-    useNativeChat && NativeChat ? /* @__PURE__ */ jsx26(NativeChat, { serverId: host2.key, botId: bot.id, agentId: chatId, draftId, workspaceId: chat.agent?.workspaceId ?? botWorkspace?.id, cwd: chat.agent?.cwd || botWorkspace?.directory || bot.cwd || nativeCwd || "", provider: bot.provider, model: bot.model, modeId: bot.modeId, thinkingOptionId: bot.thinkingOptionId, active: !layout.compact || !panelOpen, onSelectChat: (id) => onSelectChat?.(id), onStart }) : chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
+    useNativeChat && NativeChat ? /* @__PURE__ */ jsx26(NativeChat, { serverId: host2.key, botId: bot.id, agentId: chatId, draftId, workspaceId: chat.agent?.workspaceId ?? botWorkspace?.id, cwd: chat.agent?.cwd || botWorkspace?.directory || bot.cwd || nativeCwd || "", provider: bot.provider, model: bot.model, modeId: bot.modeId, thinkingOptionId: bot.thinkingOptionId, active: !layout.compact || !panelOpen, onSelectChat: (id, draftId2) => onSelectChat?.(id, draftId2), onStart }) : chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
       /* @__PURE__ */ jsx26(Avatar, { avatar: bot.avatar, size: 56 }),
       /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foreground, fontSize: ui(18), fontWeight: "500" }, children: bot.name }),
       bot.description ? /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foregroundMuted, fontSize: ui(14), textAlign: "center", maxWidth: 420 }, children: bot.description }) : null
@@ -14197,7 +14197,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       onBotMenu: (anchor) => anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot),
       onTogglePanel: () => setPanel({ open: !panel.open, section: panel.section }),
       nativeChat,
-      onSelectChat: (chatId) => setSelection({ botId: selectedBot.id, chatId }),
+      onSelectChat: (chatId, draftId) => setSelection({ botId: selectedBot.id, chatId, draftId }),
       onStarted: (chatId) => setSelection({ botId: selectedBot.id, chatId })
     },
     `${selectedBot.id}:${selection.chatId ?? selection.draftId ?? "new"}`
