@@ -1,6 +1,3 @@
-import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
-import { isEmbeddedScheduleAllowed } from "@/patches/vibing/sidebar";
-import { useWorkspace } from "@/stores/session-store-hooks";
 import {
   useCallback,
   useEffect,
@@ -66,24 +63,9 @@ export function SchedulesScreen(): ReactElement {
 }
 
 function SchedulesScreenContent(): ReactElement {
-  const { loadState: allLoadState, hostErrors: allHostErrors, isError, refetch } = useSchedules();
-  const bound = getEmbeddedWorkspace();
-  const workspace = useWorkspace(bound?.serverId ?? null, bound?.workspaceId ?? null);
+  const { loadState, hostErrors, isError, refetch } = useSchedules();
+  const schedules = loadState.status === "loaded" ? loadState.data : EMPTY_SCHEDULES;
   const { agents } = useAggregatedAgents({ includeArchived: true });
-  const schedules = useMemo(
-    () =>
-      allLoadState.status === "loaded"
-        ? allLoadState.data.filter((schedule) =>
-            isEmbeddedScheduleAllowed(schedule, workspace?.workspaceDirectory, agents),
-          )
-        : EMPTY_SCHEDULES,
-    [allLoadState, workspace?.workspaceDirectory, agents],
-  );
-  const loadState = useMemo(
-    () => (allLoadState.status === "loaded" ? { ...allLoadState, data: schedules } : allLoadState),
-    [allLoadState, schedules],
-  );
-  const hostErrors = allHostErrors.filter((error) => !bound || error.serverId === bound.serverId);
   const { projects } = useProjects();
   const hosts = useHosts();
   const runtime = getHostRuntimeStore();
@@ -179,7 +161,7 @@ function SchedulesScreenContent(): ReactElement {
   }, [resolvedRows, selectedHost, statusFilter, hosts.length]);
 
   const showLoadError = isError && loadState.status !== "loaded";
-  const showHostFilter = !bound && hosts.length > 1;
+  const showHostFilter = hosts.length > 1;
 
   return (
     <View style={styles.container}>
@@ -200,7 +182,7 @@ function SchedulesScreenContent(): ReactElement {
         onEdit={openEdit}
       />
       <ScheduleFormSheet
-        serverId={form.mode === "edit" ? form.serverId : bound?.serverId}
+        serverId={form.mode === "edit" ? form.serverId : undefined}
         visible={form.mode === "create" || form.mode === "edit"}
         onClose={closeForm}
         mode={form.mode === "edit" ? "edit" : "create"}

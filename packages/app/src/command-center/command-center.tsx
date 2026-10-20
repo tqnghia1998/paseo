@@ -2,7 +2,7 @@ import { useOverlayRegistration, type KeyboardInputEvent } from "@/keyboard";
 import { Modal } from "@/components/ui/modal";
 import equal from "fast-deep-equal";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
-import { isEmbeddedWorkspaceAllowed } from "@/patches/vibing/workspace-boundary";
+
 
 import {
   FlatList,
@@ -239,9 +239,10 @@ function useWorkspaceRows(
       };
       for (const host of project.hosts) {
         for (const workspace of host.workspaces) {
-          if (workspace.archivingAt || !isEmbeddedWorkspaceAllowed(host.serverId, workspace.id)) continue;
+          if (workspace.archivingAt) continue;
           const key = `${host.serverId}:${workspace.id}`;
           rows.push(
+
 
             preserve({
               kind: "workspace",
@@ -266,6 +267,7 @@ function useWorkspaceRows(
             }),
           );
 
+
         }
       }
     }
@@ -280,7 +282,7 @@ function useWorkspaceRows(
     return archivedWorkspaces.flatMap<CommandCenterWorkspaceResult>((workspace) => {
       const id = `workspace:${workspace.key}`;
       // The host's history can trail its workspace list; the active row wins.
-      if (activeIds.has(id) || !isEmbeddedWorkspaceAllowed(workspace.serverId, workspace.workspaceId)) return [];
+      if (activeIds.has(id)) return [];
       const project = workspace.projectKey
         ? getProjectSummaryForHostProject(projects, workspace.serverId, workspace.projectKey)
         : undefined;
@@ -324,6 +326,7 @@ function useWorkspaceRows(
     // are no sign that the list is complete.
     loading: agentsLoading || projectsLoading || workspacesArriving,
   };
+
 
 }
 
