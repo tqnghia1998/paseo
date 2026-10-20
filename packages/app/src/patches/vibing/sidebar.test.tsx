@@ -1,30 +1,20 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { router } from "expo-router";
-import { EmbeddedBotsButton, SidebarWorkspaceArea } from "./sidebar-controls";
-import { usePanelStore } from "@/stores/panel-store";
+import { SidebarWorkspaceArea } from "./sidebar-controls";
 import type {
   SidebarWorkspacesListResult,
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
 const ui = vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
-  const plugin = {
-    id: "paseo-bots",
-    serverId: "local",
-    surfaces: [{ id: "bots-screen", title: "Bots" }],
-    legacySidebarItems: [{ id: "bots", surface: "bots-screen" }],
-  };
   return {
     embedded: true,
-    compact: false,
     bound: { serverId: "local", workspaceId: "one" } as {
       serverId: string;
       workspaceId: string;
     } | null,
-    plugin: plugin as typeof plugin | null,
   };
 });
 vi.mock("./focus-mode", async (importOriginal) => ({
@@ -39,16 +29,10 @@ vi.mock("./workspace-boundary", () => ({
   isEmbeddedWorkspaceAllowed: (serverId: string, workspaceId: string) =>
     serverId === "local" && workspaceId === "one",
 }));
-vi.mock("@/plugins/registry", () => ({
-  useInstalledPlugin: (serverId: string, pluginId: string) =>
-    ui.plugin?.serverId === serverId && ui.plugin.id === pluginId ? ui.plugin : null,
-}));
-vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => ui.compact }));
 
 beforeEach(() => {
   vi.stubGlobal("React", React);
   ui.embedded = true;
-  ui.compact = false;
   ui.bound = { serverId: "local", workspaceId: "one" };
 });
 afterEach(() => {
@@ -181,44 +165,4 @@ it("omits workspace rows and setup callouts without mounting them in embedded si
     </SidebarWorkspaceArea>,
   );
   expect(screen.getByText("Workspaces and setup")).toBeDefined();
-});
-
-it("opens Bots directly in the bound host without opening the desktop sidebar", () => {
-  usePanelStore.getState().closeDesktopAgentList();
-  render(<EmbeddedBotsButton />);
-  fireEvent.click(screen.getByRole("button", { name: "Open Bots" }));
-  expect(router.push).toHaveBeenLastCalledWith("/h/local/plugin/paseo-bots/sidebar/bots");
-  expect(usePanelStore.getState().desktop.agentListOpen).toBe(false);
-});
-
-it("closes the compact sidebar when navigating to Bots", () => {
-  ui.compact = true;
-  usePanelStore.getState().showMobileAgentList();
-  render(<EmbeddedBotsButton />);
-  fireEvent.click(screen.getByRole("button", { name: "Open Bots" }));
-  expect(usePanelStore.getState().mobilePanel.target).toBe("agent");
-});
-
-it("hides the shortcut outside embedding or when the bound host lacks the Bots screen", () => {
-  const view = render(<EmbeddedBotsButton />);
-  expect(screen.getByRole("button", { name: "Open Bots" })).toBeDefined();
-  ui.embedded = false;
-  view.rerender(<EmbeddedBotsButton />);
-  expect(screen.queryByRole("button", { name: "Open Bots" })).toBeNull();
-  ui.embedded = true;
-  ui.bound = { serverId: "other-host", workspaceId: "one" };
-  view.rerender(<EmbeddedBotsButton />);
-  expect(screen.queryByRole("button", { name: "Open Bots" })).toBeNull();
-  ui.bound = null;
-  view.rerender(<EmbeddedBotsButton />);
-  expect(screen.queryByRole("button", { name: "Open Bots" })).toBeNull();
-  ui.bound = { serverId: "local", workspaceId: "one" };
-  const installed = ui.plugin;
-  try {
-    ui.plugin = installed ? { ...installed, surfaces: [] } : null;
-    view.rerender(<EmbeddedBotsButton />);
-    expect(screen.queryByRole("button", { name: "Open Bots" })).toBeNull();
-  } finally {
-    ui.plugin = installed;
-  }
 });

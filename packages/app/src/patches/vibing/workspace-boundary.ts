@@ -2,11 +2,11 @@ import { useSessionStore } from "@/stores/session-store";
 import { useSyncExternalStore } from "react";
 import { parsePluginSurfaceRoute } from "@/plugins/routes";
 import {
-  buildHostWorkspaceRoute,
   parseHostWorkspaceRouteFromPathname,
   parseHostAgentRouteFromPathname,
 } from "@/utils/host-routes";
 import { isEmbeddedFocusMode } from "./focus-mode";
+import { isEmbeddedBotsTool, resolveEmbeddedToolEntryRoute } from "./embedded-tools";
 
 interface Workspace {
   serverId: string;
@@ -103,7 +103,9 @@ export function bindEmbeddedWorkspace(selection: Workspace): void {
 }
 
 export function embeddedWorkspaceRoute(): string | null {
-  return workspace ? buildHostWorkspaceRoute(workspace.serverId, workspace.workspaceId) : null;
+  return workspace
+    ? resolveEmbeddedToolEntryRoute(workspace.serverId, workspace.workspaceId, isEmbeddedBotsTool)
+    : null;
 }
 
 export function isEmbeddedHostSectionAllowed(section: string): boolean {
@@ -115,12 +117,13 @@ export function isEmbeddedRouteAllowed(path: string): boolean {
   const pathname = path.split(/[?#]/, 1)[0].replace(/\/$/, "") || "/";
   if (!workspace) return pathname === "/" || /^\/h\/[^/]+$/.test(pathname);
   const target = parseHostWorkspaceRouteFromPathname(pathname);
-  if (target) return isEmbeddedWorkspaceAllowed(target.serverId, target.workspaceId);
+  if (target)
+    return !isEmbeddedBotsTool && isEmbeddedWorkspaceAllowed(target.serverId, target.workspaceId);
   if (["/settings", "/sessions", "/schedules"].includes(pathname)) return true;
   const plugin = parsePluginSurfaceRoute(pathname);
   if (plugin) return plugin.serverId === workspace.serverId;
   const agent = parseHostAgentRouteFromPathname(pathname);
-  if (agent) return agent.serverId === workspace.serverId;
+  if (agent) return !isEmbeddedBotsTool && agent.serverId === workspace.serverId;
   return isEmbeddedSettingsRouteAllowed(pathname, workspace);
 }
 
