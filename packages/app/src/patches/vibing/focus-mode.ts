@@ -9,7 +9,7 @@ export function shouldUseDesktopWorkspaceTabs(
   isCompact: boolean,
   isLiveDesignMessaging: boolean,
 ): boolean {
-  return !isCompact || isLiveDesignMessaging;
+  return isEmbeddedFocusMode || !isCompact || isLiveDesignMessaging;
 }
 
 export const isEmbeddedFocusMode = process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS === "true";
