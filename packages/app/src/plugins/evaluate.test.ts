@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { useRevealedText } from "@/hooks/use-revealed-text";
 import { fileURLToPath } from "node:url";
 import { compilePlugin } from "../../../server/src/server/plugins/compiler";
 
 import { runPluginClientBundle, type PluginClientRuntime } from "./evaluate";
+import type { EvaluatedPlugin, PluginTimelineTransformerContribution } from "./types";
 
 const runtime = {
   paseo: {},
@@ -24,6 +25,19 @@ function evaluatePluginClientBundle(id: string, source: string) {
   return runPluginClientBundle(id, source, runtime);
 }
 
+function timelineTransformer<
+  ItemType extends PluginTimelineTransformerContribution["query"]["itemType"],
+>(plugin: EvaluatedPlugin, itemType: ItemType) {
+  const transformer = plugin.timelineTransformers.find(
+    (
+      entry,
+    ): entry is Extract<PluginTimelineTransformerContribution, { query: { itemType: ItemType } }> =>
+      entry.query.itemType === itemType,
+  );
+  expect(transformer).toBeDefined();
+  return transformer!;
+}
+
 function bundle(body: string): string {
   return `(function(require) {
     const module = { exports: {} };
@@ -33,6 +47,88 @@ function bundle(body: string): string {
 }
 
 describe("evaluatePluginClientBundle", () => {
+  it("loads bundled Beautiful Chat cards while preserving native messages and interactive shells", async () => {
+    const root = new URL("../../../../plugins/beautiful-chat/", import.meta.url);
+    const { clientBundle } = await compilePlugin({
+      client: fileURLToPath(new URL("index.client.ts", root)),
+      server: null,
+    });
+    const plugin = evaluatePluginClientBundle("beautiful-chat", clientBundle!);
+    try {
+      expect(plugin.settingsScreens.map(({ title }) => title)).toEqual(["Chat presentation"]);
+      expect(
+        timelineTransformer(plugin, "user_message").transform({
+          item: { type: "user_message", text: "Keep native context and search" },
+          phase: "complete",
+        }),
+      ).toBeUndefined();
+      expect(
+        timelineTransformer(plugin, "assistant_message").transform({
+          item: { type: "assistant_message", text: "Keep native citations and search" },
+          phase: "complete",
+        }),
+      ).toBeUndefined();
+      const shell = {
+        type: "tool_call" as const,
+        name: "exec_command",
+        callId: "shell-call",
+        status: "running" as const,
+        error: null,
+        detail: { type: "shell" as const, command: "read answer", output: "Answer: " },
+      };
+      const tools = timelineTransformer(plugin, "tool_call");
+      expect(tools.transform({ item: shell, phase: "streaming" })).toMatchObject({
+        items: [{ kind: "omp-tool-call", data: { name: "exec_command" } }],
+      });
+      expect(
+        tools.transform({
+          item: { ...shell, detail: { ...shell.detail, stdin: "yes\n" } },
+          phase: "streaming",
+        }),
+      ).toBeUndefined();
+    } finally {
+      await plugin.cleanup();
+    }
+    expect(plugin.timelineTransformers).toEqual([]);
+    expect(plugin.timelineRenderers).toEqual([]);
+  });
+
+  it("preserves saved Beautiful Chat message-rendering preferences", async () => {
+    const root = new URL("../../../../plugins/beautiful-chat/", import.meta.url);
+    const { clientBundle } = await compilePlugin({
+      client: fileURLToPath(new URL("index.client.ts", root)),
+      server: null,
+    });
+    vi.stubGlobal("localStorage", {
+      getItem(key: string) {
+        return key === "paseo/beautiful-chat/preferences/v1"
+          ? JSON.stringify({ enhancedUserBubble: true, assistantMarkdown: true })
+          : null;
+      },
+    });
+    try {
+      const plugin = evaluatePluginClientBundle("beautiful-chat", clientBundle!);
+      try {
+        expect(
+          timelineTransformer(plugin, "user_message").transform({
+            item: { type: "user_message", text: "Use the saved bubble preference" },
+            phase: "complete",
+          }),
+        ).toMatchObject({ items: [{ kind: "omp-user-message" }] });
+        expect(
+          timelineTransformer(plugin, "assistant_message").transform({
+            item: { type: "assistant_message", text: "Use the saved markdown preference" },
+            phase: "complete",
+          }),
+        ).toMatchObject({ items: [{ kind: "omp-assistant" }] });
+      } finally {
+        await plugin.cleanup();
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("registers the bundled Vibing catalog through native plugin settings and releases it with its theme", async () => {
     const root = new URL("../../../../plugins/space-app-vibing-theme/", import.meta.url);
     const { clientBundle } = await compilePlugin({
