@@ -1,5 +1,3 @@
-import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
-import { useWorkspaceTabLauncher } from "@/workspace-tabs/launcher";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
   Fragment,
@@ -242,22 +240,7 @@ function WorkspaceNewTabButton({
 }: WorkspaceNewTabButtonProps) {
   const { t } = useTranslation();
   const tooltipText = t("workspace.tabs.actions.newTab");
-  const launcher = useWorkspaceTabLauncher();
-  const createAgent = useCallback(
-    () => launcher.launch({ kind: "agent" }, { kind: "open", paneId }),
-    [launcher, paneId],
-  );
-  const menu = isEmbeddedFocusMode ? (
-    <ToolbarButton
-      onPress={createAgent}
-      label={tooltipText}
-      shortcut={shortcutKeys}
-      testID="workspace-new-tab-button"
-      style={placement === "inline" ? styles.inlineNewTabButton : undefined}
-    >
-      <ThemedPlus size={14} uniProps={extraMutedColorMapping} />
-    </ToolbarButton>
-  ) : (
+  const menu = (
     <DropdownMenu>
       <ToolbarButton
         kind="menu"

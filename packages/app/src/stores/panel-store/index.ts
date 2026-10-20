@@ -1,4 +1,3 @@
-import { migrateEmbeddedPanelFocus, selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -93,7 +92,7 @@ export interface PanelState {
   toggleFileTreeVisible: () => void;
 }
 
-const DEFAULT_DESKTOP_OPEN = selectEmbeddedFocusMode(false, isWeb);
+const DEFAULT_DESKTOP_OPEN = isWeb;
 
 function setMobilePanelTargetPatch(
   state: PanelState,
@@ -241,8 +240,7 @@ export const usePanelStore = create<PanelState>()(
       name: "panel-state",
       version: 17,
       storage: createValidatedPersistStorage(AsyncStorage, PanelPersistedStateSchema),
-      migrate: (persistedState, version) =>
-        migrateEmbeddedPanelFocus(migratePanelState(persistedState, version), version),
+      migrate: (persistedState, version) => migratePanelState(persistedState, version),
       partialize: (state) => ({
         desktop: state.desktop,
         expandedPathsByWorkspace: state.expandedPathsByWorkspace,

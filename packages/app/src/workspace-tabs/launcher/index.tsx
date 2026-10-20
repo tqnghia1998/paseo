@@ -1,4 +1,3 @@
-import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import {
   createContext,
   useCallback,
@@ -69,12 +68,6 @@ const EMPTY_PANE_PANEL_KINDS: readonly WorkspaceTabTarget["kind"][] = [];
 
 const NewTabLauncherContext = createContext<NewTabLauncher | null>(null);
 
-export function useWorkspaceTabLauncher(): NewTabLauncher {
-  const launcher = useContext(NewTabLauncherContext);
-  invariant(launcher, "NewTabLauncherProvider is required");
-  return launcher;
-}
-
 export function NewTabLauncherProvider({
   value,
   children,
@@ -111,7 +104,8 @@ export function useWorkspaceTabLaunchCatalog(input: {
   const { serverId, purpose, host, surface, panePanelKinds = EMPTY_PANE_PANEL_KINDS } = input;
   const { t } = useTranslation();
   const router = useRouter();
-  const launcher = useWorkspaceTabLauncher();
+  const launcher = useContext(NewTabLauncherContext);
+  invariant(launcher, "NewTabLauncherProvider is required");
   const { config } = useDaemonConfig(serverId);
   const plugins = useInstalledPlugins();
   const isCompact = useIsCompactFormFactor();
@@ -200,9 +194,6 @@ export function useWorkspaceTabLaunchCatalog(input: {
         launch: launchSelection(BUILT_IN_SELECTIONS.pullRequest),
       },
     };
-    if (isEmbeddedFocusMode) {
-      return [{ id: "tabs", label: null, items: host === "main" ? [builtIns.agent] : [] }];
-    }
     const tabItems = getBuiltInLaunchOrder(purpose).flatMap((id) => {
       const item = builtIns[id];
       return item.hidden || !panelSupportsHost(item.panelKind, host) ? [] : [item];

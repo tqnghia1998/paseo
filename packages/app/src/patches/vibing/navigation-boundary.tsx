@@ -29,7 +29,8 @@ export function EmbeddedNavigationBoundary({ children }: { children: ReactNode }
 export function useEmbeddedSettingsHandoff(): void {
   const pathname = usePathname();
   useEffect(() => {
-    if (parseHostWorkspaceRouteFromPathname(pathname)) return;
+    if (parseHostWorkspaceRouteFromPathname(pathname) || pathname.includes("/plugin/paseo-bots/"))
+      return;
     const workspace = getEmbeddedWorkspace();
     const origin = getEmbeddedHostOrigin();
     if (!workspace || !origin) return;

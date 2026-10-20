@@ -1,5 +1,5 @@
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..b0199b4 100644
+index ebc4ed2..e47a51c 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
 @@ -1,3 +1,4 @@
@@ -7,6 +7,24 @@ index ebc4ed2..b0199b4 100644
  import type { PluginTheme } from "@getpaseo/plugin";
  import type { PaseoAgent } from "./paseo";
  import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
+@@ -5,7 +6,7 @@ import { useRpc } from "@getpaseo/plugin/client";
+ import { copyText, useToast } from "@getpaseo/plugin/client/react-native";
+ import { SettingsAction, SettingsCard } from "@getpaseo/plugin/client/ui";
+ import { useQueryClient } from "@tanstack/react-query";
+-import { useEffect, useRef, useState } from "react";
++import { useCallback, useEffect, useRef, useState } from "react";
+ import { ActivityIndicator, BackHandler, type LayoutRectangle, Platform, Text, View } from "react-native";
+ import { randomSeed } from "../shared/avatar";
+ import { applyDefaults, DEFAULT_BOT_DEFAULTS, DEFAULT_BOT_LIST_UI, EMPTY_LIBRARY, newBotId, newGroupId, presetFromBot, pushHistory, type Bot, type BotGroup, type BotListUi, type Library } from "../shared/bot";
+@@ -15,7 +16,7 @@ import { displayTitle, startBotChat, syncBotWorkspaceTitle } from "../shared/cha
+ import { moveKey } from "../shared/sidebar";
+ import { chatTranscript } from "../shared/transcript";
+ import { ensureBotHomeRpc, mountRpc, exportBotRpc, importBotRpc, importTeamRpc, systemPromptRpc } from "../shared/rpc";
+-import { botFromPreset, newBot } from "../shared/templates";
++import { BOT_TEMPLATES, botFromPreset, newBot } from "../shared/templates";
+ import { AvatarTheme } from "./Avatar";
+ import { botMenuEntries, chatMenuEntries, ExportDialog, NewBotDialog, RenameDialog } from "./BotDialogs";
+ import { BotSidebar, type ChatMenuContext, type MenuSource, type Selection } from "./BotSidebar";
 @@ -50,7 +51,7 @@ const SETUP_PROMPT =
  /** Autosave delay after the last edit in the settings panel. */
  const SAVE_DELAY_MS = 600;
@@ -16,16 +34,69 @@ index ebc4ed2..b0199b4 100644
    const { colors } = props.theme;
    useTooltipTheme(colors);
    return (
-@@ -63,7 +64,7 @@ export function BotsSurface(props: PluginSurfaceProps) {
+@@ -63,20 +64,21 @@ export function BotsSurface(props: PluginSurfaceProps) {
  }
  
  
 -function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfaceProps) {
-+function BotsSurfaceContent({ theme, layout, host, navigation, nativeChat }: PluginSurfaceProps & NativeChatSlot) {
++function BotsSurfaceContent({ theme, layout, host, navigation, nativeChat, botWorkspace, workspaceBridge: WorkspaceBridge }: PluginSurfaceProps & NativeChatSlot) {
    const { colors } = theme;
    const { settings, latest, commit } = useBotSettings();
    const toast = useToast();
-@@ -376,7 +377,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+   const menu = useMenu();
+   const queryClient = useQueryClient();
+-  const localHost: LocalHost = { id: host.id, label: host.label };
++  const localHost: LocalHost = { id: host.id, label: host.label, workspaceDirectory: botWorkspace?.directory };
+   const localProviders = useProviders(useBotHost(null, localHost));
+   const resolveHost = useHostResolver(localHost);
+   const exportBot = useRpc(exportBotRpc);
+   const importBot = useRpc(importBotRpc);
+   const importTeam = useRpc(importTeamRpc);
+ 
+-  const [selection, setSelection] = useState<Selection | null>(null);
++  const [showAllFolders, setShowAllFolders] = useState(false);
++  const [selection, setSelection] = useState<(Selection & { draftId?: string }) | null>(botWorkspace ? { botId: "vibing-general", chatId: null } : null);
+   const [panel, setPanel] = useState<{ open: boolean; section: SectionId | null }>({ open: false, section: null });
+   const [panelVersion, setPanelVersion] = useState(0);
+   const [creating, setCreating] = useState(false);
+@@ -225,6 +227,27 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+     if (intent?.kind === "new-bot") setCreating(true);
+   }, []);
+ 
++  const initializingGeneral = useRef(false);
++  useEffect(() => {
++    if (!botWorkspace || settings.status !== "ready" || settings.values.bots.some(bot => bot.id === "vibing-general") || !localProviders.data || initializingGeneral.current) return;
++    const ready = localProviders.data.filter(entry => entry.status === "ready");
++    const provider = ready[0]?.provider ?? localProviders.data[0]?.provider ?? "codex";
++    initializingGeneral.current = true;
++    const bot = { ...applyDefaults(newBot(provider, BOT_TEMPLATES[0]), settings.values.defaults ?? DEFAULT_BOT_DEFAULTS, provider), id: "vibing-general", name: "General" };
++    void commit(values => values.bots.some(entry => entry.id === bot.id) ? values : { ...values, bots: [bot, ...values.bots] }).finally(() => { initializingGeneral.current = false; });
++  }, [botWorkspace, settings, localProviders.data, commit]);
++  const activateWorkspaceChat = useCallback((target: { botId?: string; agentId?: string; draftId?: string }) => {
++    setSelection(current => {
++      const selectedId = target.botId ?? current?.botId ?? "vibing-general";
++      const bot = latest.current.status === "ready" ? latest.current.values.bots.find(entry => entry.id === selectedId) : null;
++      const local = !bot?.hostId || bot.hostId === host.id;
++      return !local ? { botId: "vibing-general", chatId: null, draftId: target.draftId } : !target.agentId && !target.draftId ? current ?? { botId: "vibing-general", chatId: null } : ({ botId: target.botId ?? current?.botId ?? "vibing-general", chatId: target.agentId ?? null, draftId: target.draftId });
++    });
++    setPanel({ open: false, section: null });
++    setLibraryView(null);
++    setTeamMap(false);
++  }, [host.id, latest]);
++
+   if (settings.status !== "ready") {
+     return (
+       <View style={{ flex: 1, padding: 24, gap: 12, backgroundColor: colors.surface0, justifyContent: settings.status === "loading" ? "center" : "flex-start", alignItems: settings.status === "loading" ? "center" : "stretch" }}>
+@@ -366,7 +389,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+ 
+   const openBotMenu = (bot: Bot, anchor: LayoutRectangle, source: MenuSource) => {
+     const botHost = resolveHost(bot.hostId);
+-    const chats = queryClient.getQueryData<PaseoAgent[]>(["paseo-bots", "chats", botHost.key, bot.id]) ?? [];
++    const chats = queryClient.getQueryData<PaseoAgent[]>(["paseo-bots", "chats", botHost.key]) ?? [];
+     const workspaceId = chats.find((chat) => chat.workspaceId)?.workspaceId;
+     const openWorkspace = navigation?.openWorkspace;
+     menu.open({
+@@ -376,7 +399,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        title: "Bot actions",
        entries: botMenuEntries({
          bot,
@@ -34,7 +105,7 @@ index ebc4ed2..b0199b4 100644
          onOpenSettings: () => openPanel(bot, "identity"),
          onTogglePin: () => void updateBot(bot.id, { pinned: !bot.pinned }),
          onMoveUp: moveBot(bot, -1),
-@@ -460,7 +461,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -460,7 +483,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
              context.pinned ? unpin(current) : { ...current, pinnedChats: [...current.pinnedChats, { botId: bot.id, chatId: chat.id }] },
            ),
          move: context.pinned || listUi.chatSort !== "manual" ? null : { up: move(-1), down: move(1) },
@@ -43,7 +114,47 @@ index ebc4ed2..b0199b4 100644
          onArchive: async () => {
            if (!botHost.api) {
              toast.error("Host is not connected");
-@@ -571,6 +572,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -470,7 +493,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+             await botHost.api.agents.ref(chat.id).archive();
+             if (selection?.chatId === chat.id) setSelection({ botId: bot.id, chatId: null });
+             if (context.pinned) updateUi(unpin);
+-            await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key, bot.id] });
++            await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key] });
+           } catch (error) {
+             toast.error(`Failed to archive chat: ${errorText(error)}`);
+           }
+@@ -486,6 +509,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+       width: 232,
+       title: "Display",
+       entries: [
++        ...(botWorkspace ? [{ label: "Chats", trailing: showAllFolders ? "All folders" : "This workspace", onSelect: () => setShowAllFolders(current => !current) }] : []),
+         {
+           label: "Archived bots",
+           trailing: listUi.showArchived ? "Shown" : archivedCount ? `Hidden (${archivedCount})` : "Hidden",
+@@ -514,7 +538,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+       hiddenArchivedCount={listUi.showArchived ? 0 : archivedCount}
+       selection={selection}
+       ui={listUi}
+-      localHost={localHost}
++      localHost={showAllFolders ? { id: localHost.id, label: localHost.label } : localHost}
+       touch={layout.compact || layout.platform !== "web"}
+       splash={layout.compact}
+       bottomInset={bottomInset}
+@@ -558,11 +582,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+     />
+   ) : selectedBot && selection ? (
+       <SelectedChat
+-        key={`${selectedBot.id}:${selection.chatId ?? "new"}`}
++        key={`${selectedBot.id}:${selection.chatId ?? selection.draftId ?? "new"}`}
+         colors={colors}
+         bot={selectedBot}
+         library={library}
+         selection={selection}
++        botWorkspace={botWorkspace}
+         localHost={localHost}
+         panelOpen={panel.open}
+         layout={layout}
+@@ -571,6 +596,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          onBack={layout.compact ? () => setSelection(null) : undefined}
          onBotMenu={(anchor) => (anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot))}
          onTogglePanel={() => setPanel({ open: !panel.open, section: panel.section })}
@@ -52,7 +163,25 @@ index ebc4ed2..b0199b4 100644
          onStarted={(chatId) => setSelection({ botId: selectedBot.id, chatId })}
        />
      ) : (
-@@ -727,7 +730,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -621,13 +648,16 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+     />
+   ) : null;
+ 
++  const workspaceHeader = WorkspaceBridge ? <WorkspaceBridge selectedAgentId={selection?.chatId} botId={selection?.botId ?? "vibing-general"} onActivate={activateWorkspaceChat} /> : null;
++
+   // On desktop Skills & Tools takes over the screen, like Paseo's settings.
+   if (libraryScreen && !layout.compact) {
+-    return <View style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}>{libraryScreen}</View>;
++    return <>{workspaceHeader}<View style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}>{libraryScreen}</View></>;
+   }
+ 
+   return (
+     <>
++    {workspaceHeader}
+     {/* The host gives plugin surfaces no keyboard handling; lift everything above the keyboard. */}
+     <View
+       style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}
+@@ -727,11 +757,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    );
  }
  
@@ -62,12 +191,17 @@ index ebc4ed2..b0199b4 100644
    colors: Colors;
    bot: Bot;
    library: Library;
-@@ -743,10 +747,17 @@ interface SelectedChatProps {
+-  selection: Selection;
++  selection: Selection & { draftId?: string };
+   localHost: LocalHost;
+   panelOpen: boolean;
+   layout: PluginSurfaceProps["layout"];
+@@ -743,10 +774,17 @@ interface SelectedChatProps {
    onStarted(chatId: string): void;
  }
  
 -function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted }: SelectedChatProps) {
-+function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted, nativeChat, onSelectChat }: SelectedChatProps) {
++function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted, nativeChat, onSelectChat, botWorkspace }: SelectedChatProps) {
    const host = useBotHost(bot.hostId, localHost);
    const chat = useChat(host.api, selection.chatId);
    const ensureHome = useRpc(ensureBotHomeRpc);
@@ -81,21 +215,49 @@ index ebc4ed2..b0199b4 100644
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
    const queryClient = useQueryClient();
-@@ -801,6 +812,9 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -756,7 +794,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+     if (!host.api) throw new Error(`${host.label} is offline.`);
+     // The bot's folder holds its memory and skills even when it works elsewhere.
+     const home = await ensureHome({ botId: bot.id });
+-    const placement = bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root };
++    const placement = botWorkspace && host.isLocal ? { path: botWorkspace.directory, projectRoot: null, workspaceId: botWorkspace.id } : bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root };
+     const { systemPrompt } = await compose({ bot, local: host.isLocal, message: message.text });
+     // The plugin's tools and connected apps go through this host's relay, so only bots here get them.
+     const agentId = newUuid();
+@@ -773,13 +811,14 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+       attachments: message.attachments,
+       clientMessageId: message.messageId,
+     });
+-    await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", host.key, bot.id] });
++    await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", host.key] });
+     onStarted(id);
++    return id;
+   };
+ 
+   // Keep the bot's workspace named after the bot.
+   useEffect(() => {
+-    if (!host.api || bot.cwd || !bot.name.trim()) return;
++    if (!host.api || botWorkspace || bot.cwd || !bot.name.trim()) return;
+     const api = host.api;
+     const timer = setTimeout(() => {
+       void ensureHome({ botId: bot.id })
+@@ -801,6 +840,11 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
  
    return (
      <ChatPane
 +      nativeChat={nativeChat}
-+      nativeCwd={nativeCwd}
++      nativeCwd={botWorkspace?.directory ?? nativeCwd}
++      botWorkspace={botWorkspace}
++      draftId={selection.draftId}
 +      onSelectChat={onSelectChat}
        colors={colors}
        bot={bot}
        host={host}
 diff --git a/client/ChatPane.tsx b/client/ChatPane.tsx
-index 7d1bf84..4897a9e 100644
+index 7d1bf84..2183fa3 100644
 --- a/client/ChatPane.tsx
 +++ b/client/ChatPane.tsx
-@@ -16,9 +16,13 @@ import { listenForFind } from "./web";
+@@ -16,9 +16,14 @@ import { listenForFind } from "./web";
  import type { ChatState } from "./useChat";
  import { tooltip } from "./ui/Tooltip";
  
@@ -106,16 +268,26 @@ index 7d1bf84..4897a9e 100644
 -export interface ChatPaneProps {
 +export interface ChatPaneProps extends NativeChatSlot {
 +  nativeCwd?: string;
++  draftId?: string;
 +  onSelectChat?(agentId: string | null): void;
    colors: Colors;
    bot: Bot;
    host: BotHost;
-@@ -46,11 +50,12 @@ export interface OutgoingMessage {
+@@ -34,7 +39,7 @@ export interface ChatPaneProps {
+   onBotMenu(anchor: LayoutRectangle | null): void;
+   onTogglePanel(): void;
+   /** Creates the chat with its first message. */
+-  onStart(message: OutgoingMessage): Promise<void>;
++  onStart(message: OutgoingMessage): Promise<string>;
+   /** Shows another chat of this bot (a routine run's own chat). */
+   onOpenChat(chatId: string): void;
+ }
+@@ -46,11 +51,12 @@ export interface OutgoingMessage {
    attachments: ReturnType<typeof toWire>["attachments"];
  }
  
 -export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat }: ChatPaneProps) {
-+export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, nativeChat: NativeChat, nativeCwd, onSelectChat }: ChatPaneProps) {
++export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, nativeChat: NativeChat, nativeCwd, onSelectChat, botWorkspace, draftId }: ChatPaneProps) {
    const running = chat.agent?.status === "running" || chat.agent?.status === "initializing";
    const empty = chat.entries.length === 0 && !chat.loading && !chat.error && (chat.agent?.pendingPermissions.length ?? 0) === 0;
    const title = chatId ? displayTitle(chat.agent?.title) : "New chat";
@@ -125,32 +297,33 @@ index 7d1bf84..4897a9e 100644
    const [findOpen, setFindOpen] = useState(false);
    useEffect(() => setFindOpen(false), [chatId]);
    // ⌘F / Ctrl+F finds in the open chat on the desktop.
-@@ -70,7 +75,9 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
+@@ -70,7 +76,10 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
          onTogglePanel={onTogglePanel}
          onFind={canFind ? () => setFindOpen((open) => !open) : undefined}
        />
 -      {chatId === null || empty ? (
++      {botWorkspace && chat.agent?.cwd && chat.agent.cwd !== botWorkspace.directory ? <Text style={{ color: colors.foregroundMuted, padding: 8 }}>This chat works in {chat.agent.cwd}. New chats use the current workspace.</Text> : null}
 +      {useNativeChat && NativeChat ? (
-+        <NativeChat serverId={host.key} botId={bot.id} agentId={chatId} workspaceId={chat.agent?.workspaceId} cwd={chat.agent?.cwd || bot.cwd || nativeCwd || ""} provider={bot.provider} model={bot.model} modeId={bot.modeId} thinkingOptionId={bot.thinkingOptionId} active={!layout.compact || !panelOpen} onSelectChat={(id) => onSelectChat?.(id)} onStart={onStart} />
++        <NativeChat serverId={host.key} botId={bot.id} agentId={chatId} draftId={draftId} workspaceId={chat.agent?.workspaceId ?? botWorkspace?.id} cwd={chat.agent?.cwd || botWorkspace?.directory || bot.cwd || nativeCwd || ""} provider={bot.provider} model={bot.model} modeId={bot.modeId} thinkingOptionId={bot.thinkingOptionId} active={!layout.compact || !panelOpen} onSelectChat={(id) => onSelectChat?.(id)} onStart={onStart} />
 +      ) : chatId === null || empty ? (
          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }}>
            <Avatar avatar={bot.avatar} size={56} />
            <Text style={{ color: colors.foreground, fontSize: ui(18), fontWeight: "500" }}>{bot.name}</Text>
-@@ -81,7 +88,7 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
+@@ -81,7 +90,7 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
        ) : (
          <ChatStream key={chatId} colors={colors} chat={chat} api={host.api} agentId={chatId} compact={layout.compact} platform={layout.platform} typeVersion={typeVersion} onOpenChat={onOpenChat} voice={bot.voice} findOpen={findOpen} onCloseFind={() => setFindOpen(false)} {...(host.isLocal ? { botId: bot.id } : {})} />
        )}
 -      <Composer colors={colors} bot={bot} host={host} agentId={chatId} agent={chat.agent} running={running} layout={layout} keyboardOpen={keyboardOpen} onStart={onStart} />
-+      {!useNativeChat ? <Composer colors={colors} bot={bot} host={host} agentId={chatId} agent={chat.agent} running={running} layout={layout} keyboardOpen={keyboardOpen} onStart={onStart} /> : null}
++      {!useNativeChat ? <Composer colors={colors} bot={bot} host={host} agentId={chatId} agent={chat.agent} running={running} layout={layout} keyboardOpen={keyboardOpen} onStart={async message => { await onStart(message); }} /> : null}
      </View>
    );
  }
 diff --git a/client/NativeChat.ts b/client/NativeChat.ts
 new file mode 100644
-index 0000000..1249067
+index 0000000..738381c
 --- /dev/null
 +++ b/client/NativeChat.ts
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,31 @@
 +import type { ComponentType } from "react";
 +import type { Bot } from "../shared/bot";
 +import type { OutgoingMessage } from "./ChatPane";
@@ -159,6 +332,7 @@ index 0000000..1249067
 +export interface NativeChatProps {
 +  serverId: string;
 +  botId: string;
++  draftId?: string;
 +  agentId: string | null;
 +  workspaceId?: string | null;
 +  cwd: string;
@@ -168,6 +342,209 @@ index 0000000..1249067
 +  thinkingOptionId?: string | null;
 +  active: boolean;
 +  onSelectChat(agentId: string | null): void;
-+  onStart(message: OutgoingMessage): Promise<void>;
++  onStart(message: OutgoingMessage): Promise<string>;
 +}
-+export interface NativeChatSlot { nativeChat?: ComponentType<NativeChatProps>; }
++export interface BotWorkspace { id: string; directory: string; }
++export interface BotWorkspaceBridgeProps {
++  selectedAgentId?: string | null;
++  botId: string;
++  onActivate(target: { botId?: string; agentId?: string; draftId?: string }): void;
++}
++export interface NativeChatSlot {
++  nativeChat?: ComponentType<NativeChatProps>;
++  botWorkspace?: BotWorkspace;
++  workspaceBridge?: ComponentType<BotWorkspaceBridgeProps>;
++}
+diff --git a/client/data.ts b/client/data.ts
+index ea7654d..b5e270e 100644
+--- a/client/data.ts
++++ b/client/data.ts
+@@ -2,16 +2,19 @@ import { getPaseoClient, usePaseo, useHosts } from "@getpaseo/plugin/client";
+ import type { PaseoAgent, PaseoApi } from "./paseo";
+ import { useQuery, useQueryClient } from "@tanstack/react-query";
+ import { useEffect, useMemo } from "react";
++import { isWorkspaceBotChat } from "../shared/chat";
+ import { BOT_LABEL } from "../shared/bot";
+ import { paseoToolsState, type PaseoToolsConfig } from "../shared/paseo-tools";
+ 
+ export interface LocalHost {
+   id: string;
+   label: string;
++  workspaceDirectory?: string;
+ }
+ 
+ export interface BotHost {
+   api: PaseoApi | null;
++  workspaceDirectory?: string;
+   /** Stable key for queries; the local host uses its own id. */
+   key: string;
+   label: string;
+@@ -23,7 +26,7 @@ type HostSummaries = ReturnType<typeof useHosts>;
+ 
+ function resolveHost(hostId: string | null, local: LocalHost, localApi: PaseoApi, hosts: HostSummaries): BotHost {
+   if (!hostId || hostId === local.id) {
+-    return { api: localApi, key: local.id, label: local.label, isLocal: true, online: true };
++    return { api: localApi, key: local.id, label: local.label, isLocal: true, online: true, workspaceDirectory: local.workspaceDirectory };
+   }
+   const summary = hosts.find((host) => host.serverId === hostId);
+   const label = summary?.label ?? "Unknown host";
+@@ -44,7 +47,7 @@ export function useBotHost(hostId: string | null, local: LocalHost): BotHost {
+   return useMemo(
+     () => resolveHost(hostId, local, localApi, hosts),
+     // Only the fields that change the result.
+-    [hostId, local.id, local.label, localApi, summary?.label, status],
++    [hostId, local.id, local.label, local.workspaceDirectory, localApi, summary?.label, status],
+   );
+ }
+ 
+@@ -92,19 +95,28 @@ export function useHostWorkspaces(host: BotHost) {
+   });
+ }
+ 
+-export function useBotChats(host: BotHost, botId: string) {
++export function useBotChats(host: BotHost, botId: string, workspaceOnly = true) {
++  const directory = workspaceOnly ? host.workspaceDirectory : undefined;
+   return useQuery({
+-    queryKey: ["paseo-bots", "chats", host.key, botId],
++    // All bots in an embedded workspace share one directory snapshot.
++    queryKey: ["paseo-bots", "chats", host.key, directory ? "workspace" : botId, directory],
+     enabled: !!host.api,
+-    // The local host pushes agent updates (useChatInvalidation); other hosts are polled.
+     refetchInterval: host.isLocal ? false : 15_000,
+     queryFn: async (): Promise<PaseoAgent[]> => {
+-      const result = await host.api!.agents.list({ filter: { labels: { [BOT_LABEL]: botId } } });
+-      return result.entries
+-        .map((entry) => entry.agent)
+-        .filter((agent) => !agent.archivedAt)
++      const agents: PaseoAgent[] = [];
++      let cursor: string | undefined;
++      do {
++        const result = await host.api!.agents.list({
++          ...(directory ? {} : { filter: { labels: { [BOT_LABEL]: botId } } }),
++          page: { limit: 200, ...(cursor ? { cursor } : {}) },
++        });
++        agents.push(...result.entries.map(entry => entry.agent));
++        cursor = result.pageInfo.hasMore ? result.pageInfo.nextCursor ?? undefined : undefined;
++      } while (cursor);
++      return agents.filter(agent => !agent.archivedAt)
+         .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+     },
++    select: (agents) => directory ? agents.filter(agent => isWorkspaceBotChat(agent, directory, botId)) : agents,
+   });
+ }
+ 
+diff --git a/client/panel/AgentSections.tsx b/client/panel/AgentSections.tsx
+index ee24cd8..c0cf7b4 100644
+--- a/client/panel/AgentSections.tsx
++++ b/client/panel/AgentSections.tsx
+@@ -54,7 +54,7 @@ function FolderSection({ colors, bot, localHost, onPatch }: PanelProps) {
+   const folderValue = bot.cwd === null ? (host.isLocal ? MANAGED : "Choose a folder") : options.some((option) => option.value === bot.cwd) ? bot.cwd : CUSTOM;
+   const pathError = pathText.trim() && !ABSOLUTE_PATH.test(pathText.trim()) ? "Use an absolute path" : null;
+   return (
+-    <SettingsSection title="Working folder" info="Where the bot's chats run. The shared folder keeps every bot chat in one Bots workspace.">
++    <SettingsSection title="Working folder" info={host.isLocal && localHost.workspaceDirectory ? "Chats opened here use the current Vibing workspace. This folder applies to routines and background chats; memory and skills stay in the bot’s own folder." : "Where the bot's chats run. The shared folder keeps every bot chat in one Bots workspace."}>
+       <SettingsCard>
+         <SettingsSelect
+           label="Folder"
+diff --git a/client/panel/OverviewSections.tsx b/client/panel/OverviewSections.tsx
+index 215e3f6..16d894f 100644
+--- a/client/panel/OverviewSections.tsx
++++ b/client/panel/OverviewSections.tsx
+@@ -157,7 +157,7 @@ export function HistorySection({ colors, bot, history, onRestore }: PanelProps)
+ 
+ export function UsageSection({ bot, localHost }: PanelProps) {
+   const host = useBotHost(bot.hostId, localHost);
+-  const chats = useBotChats(host, bot.id);
++  const chats = useBotChats(host, bot.id, false);
+   const list = chats.data ?? [];
+   const sum = (pick: (usage: NonNullable<(typeof list)[number]["lastUsage"]>) => number | undefined) =>
+     list.reduce((total, chat) => total + (chat.lastUsage ? (pick(chat.lastUsage) ?? 0) : 0), 0);
+diff --git a/client/panel/RoutinesSection.tsx b/client/panel/RoutinesSection.tsx
+index 1320722..aecb106 100644
+--- a/client/panel/RoutinesSection.tsx
++++ b/client/panel/RoutinesSection.tsx
+@@ -290,7 +290,7 @@ function RoutineForm({ colors, bot, host, routine, onCancel, onSubmit }: Routine
+   const [onceText, setOnceText] = useState(() => formatLocalDateTime(original.kind === "once" ? new Date(original.at) : inAnHour()));
+   // Presets rewrite the cron field; remounting it is how Paseo's CadenceEditor resets it too.
+   const [cronKey, setCronKey] = useState(0);
+-  const chats = useBotChats(host, bot.id);
++  const chats = useBotChats(host, bot.id, false);
+ 
+   const once = schedule.kind === "once";
+   const hook = schedule.kind === "webhook";
+diff --git a/client/teams/TeamMap.tsx b/client/teams/TeamMap.tsx
+index e3621c0..88cd5e8 100644
+--- a/client/teams/TeamMap.tsx
++++ b/client/teams/TeamMap.tsx
+@@ -133,7 +133,7 @@ const STATUS: Partial<Record<ReturnType<typeof chatBucket>, { label: string; col
+ 
+ function BotCard({ colors, bot, lead, localHost, onPress }: { colors: Colors; bot: Bot; lead: boolean; localHost: LocalHost; onPress(): void }) {
+   const host = useBotHost(bot.hostId, localHost);
+-  const chats = useBotChats(host, bot.id);
++  const chats = useBotChats(host, bot.id, false);
+   const status = STATUS[aggregateBuckets((chats.data ?? []).map(chatBucket))];
+   const { hovered, hoverProps } = useHover();
+   const agent = [bot.provider, bot.model].filter(Boolean).join(" · ");
+diff --git a/shared/chat.ts b/shared/chat.ts
+index cd27e0d..7f4a4e2 100644
+--- a/shared/chat.ts
++++ b/shared/chat.ts
+@@ -13,6 +13,7 @@ export function displayTitle(title: string | null | undefined): string {
+ 
+ /** Where a bot's chats live. */
+ export interface BotPlacement {
++  workspaceId?: string;
+   /** The bot's own folder: its workspace's working folder. */
+   path: string;
+   /** Folder of the shared Bots project, or null when the bot has its own working folder. */
+@@ -21,6 +22,12 @@ export interface BotPlacement {
+ 
+ const normalize = (path: string | null | undefined) => (path ?? "").replace(/\/+$/, "");
+ 
++/** Embedded workspaces also expose pre-Bots conversations through General. */
++export function isWorkspaceBotChat(agent: { cwd?: string; labels?: Record<string, string> }, directory: string, botId: string): boolean {
++  return normalize(agent.cwd) === normalize(directory) &&
++    (agent.labels?.[BOT_LABEL] === botId || (botId === "vibing-general" && !agent.labels?.[BOT_LABEL]));
++}
++
+ // The part of Paseo's API these helpers use. Shared code may only import the plugin SDK's
+ // root, so the app and the server pass their Paseo API in, and it's checked against this.
+ 
+@@ -133,7 +140,7 @@ export interface StartChatInput {
+ export async function startBotChat(api: ChatApi, input: StartChatInput): Promise<string> {
+   const { bot } = input;
+   const model = bot.model ?? (await resolveDefaultModel(api, bot.provider));
+-  const workspace = await ensureBotWorkspace(api, bot, input.placement);
++  const workspace = input.placement.workspaceId ? api.workspaces.ref(input.placement.workspaceId) : await ensureBotWorkspace(api, bot, input.placement);
+   const agent = await workspace.agents.create({
+     ...(input.agentId ? { agentId: input.agentId } : {}),
+     config: buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
+diff --git a/tests/bots.test.ts b/tests/bots.test.ts
+index 9e592cd..e4a548d 100644
+--- a/tests/bots.test.ts
++++ b/tests/bots.test.ts
+@@ -102,3 +102,24 @@ describe("asking other bots", () => {
+     expect(granted("ask")).toContain("check_chat");
+   });
+ });
++
++
++describe("Vibing workspace conversations", () => {
++  it("uses the bound workspace without creating or renaming a bot workspace", async () => {
++    const { startBotChat } = await import("../shared/chat");
++    const create = vi.fn(async () => ({ id: "chat" }));
++    const ref = vi.fn(() => ({ agents: { create } }));
++    const bot = makeBot({ id: "review", model: "model", soul: "Review carefully." });
++    const api = { workspaces: { ref }, providers: {} } as unknown as Parameters<typeof startBotChat>[0];
++    await expect(startBotChat(api, { bot, library: EMPTY_LIBRARY, placement: { path: "/feature", projectRoot: null, workspaceId: "feature-workspace" }, systemPrompt: "Instructions and memory", prompt: "Review", attachments: [{ type: "text", title: "Live Design context", mimeType: "text/plain", text: "context" }] })).resolves.toBe("chat");
++    expect(ref).toHaveBeenCalledWith("feature-workspace");
++    expect(create).toHaveBeenCalledWith(expect.objectContaining({ labels: { "paseo-bots.bot": "review" }, config: expect.objectContaining({ systemPrompt: "Instructions and memory" }), attachments: [expect.objectContaining({ text: "context" })] }));
++  });
++  it("keeps bot chats in their worktree and exposes old native conversations through General", async () => {
++    const { isWorkspaceBotChat } = await import("../shared/chat");
++    expect(isWorkspaceBotChat({ cwd: "/one", labels: { "paseo-bots.bot": "review" } }, "/one/", "review")).toBe(true);
++    expect(isWorkspaceBotChat({ cwd: "/two", labels: { "paseo-bots.bot": "review" } }, "/one", "review")).toBe(false);
++    expect(isWorkspaceBotChat({ cwd: "/one", labels: {} }, "/one", "vibing-general")).toBe(true);
++    expect(isWorkspaceBotChat({ cwd: "/one", labels: {} }, "/one", "review")).toBe(false);
++  });
++});

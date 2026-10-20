@@ -16,20 +16,19 @@ Paths in the module column are relative to the corresponding `src/patches/vibing
 directory. The upstream hooks column names the integration points to check after a
 rebase, rather than requiring reviewers to reconstruct them from commit history.
 
-| Patch                                   | Owned modules                                                                                                                                                  | Upstream hooks                                                                                                  | Verification                                                                                                                 |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Worktree entry and embedded navigation  | App: `focus-mode.ts`, `folder-workspace.ts`, `workspace-conversation.ts`, `workspace-boundary.ts`, `navigation-boundary.tsx`, `sidebar.ts`, `sidebar-hooks.ts` | Root/workspace routes, panel/workspace-layout stores, root command actions, import controls, fork menu          | Colocated focus, folder, and conversation tests; `open-beside.test.ts`; workspace-layout regressions; embedded browser smoke |
-| Host prompt insertion                   | App: `host-prompts.ts`, `host-messages.ts`, `composer-bridge.ts`                                                                                               | Workspace activation and composer                                                                               | Colocated host-prompt and composer-bridge tests                                                                              |
-| Live Design requests                    | App: `live-design.ts`, `host-messages.ts`, `composer-bridge.ts`                                                                                                | Composer submission/queue callbacks, message context viewer and rewind                                          | Colocated Live Design and bridge tests; attachment/rewind tests; client/server wait regressions                              |
-| Agent activity                          | App: `agent-activity.tsx`; server: `worktree-activity.ts`, `worktree-runtime.ts`                                                                               | App layout and daemon bootstrap                                                                                 | Colocated activity tests; embedded activity case in `bootstrap.smoke.test.ts`                                                |
-| Embedded theme                          | App: `theme.ts`; `plugins/space-app-vibing-theme/`                                                                                                             | App shell and native built-in plugin registry                                                                   | Colocated theme tests; built-in publication test; browser palette check                                                      |
-| Queue persistence                       | App: `queued-messages.ts`                                                                                                                                      | Session initialization and queue writes                                                                         | Colocated queue tests; session-store and composer submission tests                                                           |
-| Worktree stop and deletion              | Server: `worktree-runtime.ts`                                                                                                                                  | Daemon startup, cleanup API and offline runner                                                                  | Missing-worktree case in `bootstrap.smoke.test.ts`; runner token-isolation tests                                             |
-| Editor remount recovery                 | App: `file-recovery.ts`                                                                                                                                        | File editor model/view and panel close attributes                                                               | Recovery/model tests; iframe remount smoke                                                                                   |
-| Duplicate workspace recovery            | Server: `workspace-open.ts`                                                                                                                                    | Session activity lookup and workspace provisioning                                                              | `workspace-provisioning-service.test.ts`                                                                                     |
-| Codex questions and native instructions | Server: `codex/questions.ts`                                                                                                                                   | Codex config load and developer-instruction composition; the session-local feature default stays in the adapter | Codex provider unit tests and local question round trips                                                                     |
-| Interactive Codex shells                | Server: `codex/terminal-interactions.ts`                                                                                                                       | Codex event mapping, optional protocol `stdin`, Shell card renderer                                             | Colocated terminal tests; Codex provider tests; tool-call schema/browser tests                                               |
-| Standalone distribution                 | `scripts/bundle-paseo-web.mjs`, `scripts/paseo-web.js`                                                                                                         | Root build command, embedded build flag, packaged version and built-in plugin discovery                         | Runner tests, full standalone build and Vibing bundle guard; see [porting guide](../README-PORT.md)                          |
+| Patch                                   | Owned modules                                                                                   | Upstream hooks                                                                                                  | Verification                                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Worktree entry and embedded navigation  | App: `focus-mode.ts`, `folder-workspace.ts`, `workspace-boundary.ts`, `navigation-boundary.tsx` | Folder entry, Bots surface, route boundary and settings return                                                  | Folder, boundary, bot draft and bridge tests; embedded browser smoke                                |
+| Host prompt insertion                   | App: `host-prompts.ts`, `host-messages.ts`, `composer-bridge.ts`                                | Workspace activation and composer                                                                               | Colocated host-prompt and composer-bridge tests                                                     |
+| Live Design requests                    | App: `live-design.ts`, `host-messages.ts`, `composer-bridge.ts`                                 | Composer submission/queue callbacks, message context viewer and rewind                                          | Colocated Live Design and bridge tests; attachment/rewind tests; client/server wait regressions     |
+| Agent activity                          | App: `agent-activity.tsx`; server: `worktree-activity.ts`, `worktree-runtime.ts`                | App layout and daemon bootstrap                                                                                 | Colocated activity tests; embedded activity case in `bootstrap.smoke.test.ts`                       |
+| Embedded theme                          | App: `theme.ts`; `plugins/space-app-vibing-theme/`                                              | App shell and native built-in plugin registry                                                                   | Colocated theme tests; built-in publication test; browser palette check                             |
+| Queue persistence                       | App: `queued-messages.ts`                                                                       | Session initialization and queue writes                                                                         | Colocated queue tests; session-store and composer submission tests                                  |
+| Worktree stop and deletion              | Server: `worktree-runtime.ts`                                                                   | Daemon startup, cleanup API and offline runner                                                                  | Missing-worktree case in `bootstrap.smoke.test.ts`; runner token-isolation tests                    |
+| Duplicate workspace recovery            | Server: `workspace-open.ts`                                                                     | Session activity lookup and workspace provisioning                                                              | `workspace-provisioning-service.test.ts`                                                            |
+| Codex questions and native instructions | Server: `codex/questions.ts`                                                                    | Codex config load and developer-instruction composition; the session-local feature default stays in the adapter | Codex provider unit tests and local question round trips                                            |
+| Interactive Codex shells                | Server: `codex/terminal-interactions.ts`                                                        | Codex event mapping, optional protocol `stdin`, Shell card renderer                                             | Colocated terminal tests; Codex provider tests; tool-call schema/browser tests                      |
+| Standalone distribution                 | `scripts/bundle-paseo-web.mjs`, `scripts/paseo-web.js`                                          | Root build command, embedded build flag, packaged version and built-in plugin discovery                         | Runner tests, full standalone build and Vibing bundle guard; see [porting guide](../README-PORT.md) |
 
 ## Plugin boundary
 
@@ -60,22 +59,29 @@ retain Find and citation handling. Saved Chat presentation preferences win.
 Attachment rows and interactive Shell input remain native even when users enable
 enhanced messages. Preserve these boundaries when updating the vendored plugin.
 
-Vibing exposes Bots as its own workspace tool beside Paseo. Its `view=bots` entry
-opens the plugin directly after binding the worktree; a distinct iframe name keeps
-its navigation independent of Paseo. The dedicated view omits outer Paseo chrome,
-and embedded Paseo omits its workspace header while retaining Agent tabs and New
-tab at all widths. The in-Paseo Bots shortcut/sidebar entry is removed.
+Vibing exposes Bots as its only agent tool. Embedded folder launches, including
+legacy entries and Live Design, bind the worktree and open the Bots plugin.
+Standalone Paseo retains its upstream workspace screens. The old embedded Agent
+launcher, tab/header projection, sidebar/history/schedule changes and editor
+journal are removed; they no longer serve an exposed tool.
 
-Embedded local Bots conversations use the host's native chat panel and composer
-inside the Bots screen, so timeline renderers (including Beautiful Chat and
-Mermaid), composer plugins, attachments, rewind and queued messages follow the
-normal Agent UI. Bots still creates each agent with its prompt, skills, tools,
-memory and working folder. New-chat model configuration comes from Bot settings;
-the native model/mode controls remain available after creation. Keep the private
-slot in `patches/vibing/bot-chat*` and the reproducible vendoring patch in
-`scripts/paseo-bots-vibing.patch`. Standalone and remote-host Bots retain their
-plugin UI. Native timeline visibility must be registered only while the Bots
-conversation is visible, independently of saved workspace tabs.
+Embedded local bot chats use the native transcript and composer through the private
+`bot-chat*` slot. Keep the app query client around native controls: plugin surfaces
+own a separate cache. Bots owns creation, preserving instructions, memory, skills,
+MCP/tools and labels, while the host supplies the bound workspace placement.
+Definitions remain runtime-global and local conversation lists stay worktree-scoped.
+General is created automatically and includes legacy unlabeled chats from the same
+directory without mutating their records. Display preferences can show All folders
+for older bot chats; those conversations show their directory, and host prompts
+switch back to a workspace draft before insertion. Remote chats and routines keep
+their configured placement and complete history.
+
+`bot-workspace.tsx` activates conversations for review/recovery prompts and Live
+Design, including pending completion recovery and unique fresh-draft handshakes.
+Native draft keys include the workspace. Shared chat plugins, attachments, queues,
+rewind and provider fixes remain. The reproducible community source patch lives in
+`scripts/paseo-bots-vibing.patch`; regenerate its bundles instead of hand editing
+generated files. Chat settings remains available from Bots.
 
 The additional community plugins are pinned and regenerated with
 `scripts/vendor-community-plugins.mjs`; each plugin's README records attribution,
@@ -108,47 +114,14 @@ plugin list unchanged.
 
 ## Contracts to preserve
 
-- Every standalone host uses the same embedded workspace policy. `?folder=` resolves
-  through idempotent `openProject` and preserves workspace/thread identity. Native
-  Agent conversation tabs stay available; embedded Paseo omits its top workspace header. Empty workspaces and panes
-  open Agent composers; New tab creates a fresh Agent draft directly. Embedded
-  launch menus offer Agent only, with Terminal, Explorer, Diff, Browser and other
-  tool controls omitted. The view projects saved tool tabs out without deleting
-  their layout or unsaved state, and restores focus to a visible conversation. Global host/project navigation and workspace archive stay host-owned. Shared
-  settings use the native screens and keyboard commands.
-  A worktree-qualified iframe name keys a sessionStorage navigation binding so
-  Settings reload/return cannot select a sibling iframe's last workspace. The route
-  boundary gates screen mounting, and navigation/search filter workspace targets.
-  The native sidebar starts closed when no panel preference is saved; the menu
-  shortcut reopens it and saved open/closed choices survive reload. History,
-  Search, Schedules and plugin screens stay available. The redundant Workspaces
-  section and setup callout are omitted; native standalone sidebars retain them.
-  Bots opens from its sibling Vibing workspace tool, using the bound host and a
-  separate navigation identity. Native
-  root command actions remain registered; only project creation, workspace creation
-  and Home are filtered. Import is unavailable until the bound directory resolves.
-  Scope rows, imports and schedule targets to the bound worktree. Different Paseo
-  workspace records may share that directory (local scheduled runs); only daemon
-  descriptors proving an exact directory match allow those records through. Other
-  hosts, sibling paths and unresolved identities remain blocked. Scheduled runs
-  created here explicitly use local isolation. Activity includes same-directory
-  records even while an auxiliary screen is open.
-  The bound project's settings expose scripts and lifecycle hooks; the project
-  index and other project settings remain unavailable.
-  Shared settings may affect other workspaces; this is not a plugin/terminal sandbox. The historical `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS` flag identifies
-  embedding; Focus Mode itself is optional. Panel-store version 17 clears legacy
-  forced focus once. Focus Mode keeps native file-placement preferences and
-  conversation-parent relationships within the same workspace. Standalone Paseo
-  retains the native multi-tool launcher and saved layouts.
-- Embedded editors journal unsaved text in sessionStorage before accepting it.
-  Recovery is scoped by server/workspace/tab/path and lasts across iframe remounts
-  in the same top-level window. It is not cross-window or restart persistence.
-  Storage failures reject new edits; external changes retain conflict protection.
-  Explicit discard clears recovery, including late save callbacks. Ordinary unmount
-  keeps it. Standard builds use the upstream editor without the journal.
-- Live Design adds messaging to that same UI. Compact Live Design keeps desktop
-  tabs and its compact file/subagent sheet host. Host requests select the nearest
-  conversation, recover a pending agent, or explicitly create a fresh draft.
+- Embedded folder entry uses idempotent `openProject`, binds its worktree and
+  opens Bots. Normal workspace/Agent routes cannot mount. Settings return to that
+  same frame's binding, independently of sibling workspaces. This is a navigation
+  policy, not a sandbox for agents or plugins. Standalone builds keep upstream
+  navigation, sidebar preferences and multi-tool workspace layouts.
+- Live Design uses Bots in its separate runtime. Readiness activates the selected
+  local bot or General; fresh requests create unique bot drafts. Pending completion
+  observation returns to the owning conversation in the bound directory.
 - Host prompts append to the active editable composer without submitting. Parent
   source/origin checks, composer/request IDs, acknowledgements and delivery
   deduplication belong to `host-prompts.ts`. Its parent origin/source boundary is
@@ -225,5 +198,5 @@ npm run lint
 
 Use the [porting guide](../README-PORT.md#2-bundling-commands-in-paseo-repo) to build
 the consumer bundle and run its guard. Verify workspace entry, prompt insertion,
-New Agent and compact Live Design in an isolated runtime before shipping. Module
+New Agent and compact Bots/Live Design in an isolated runtime before shipping. Module
 organization does not replace runtime or target-platform native checks.
