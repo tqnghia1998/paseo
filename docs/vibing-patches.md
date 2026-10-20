@@ -101,7 +101,11 @@ plugin list unchanged.
   boundary gates screen mounting, and navigation/search filter workspace targets.
   The native sidebar starts closed when no panel preference is saved; the menu
   button reopens it and saved open/closed choices survive reload. History,
-  Schedules and plugin screens stay available. Native
+  Search, Schedules and plugin screens stay available. The redundant Workspaces
+  section and setup callout are omitted; native standalone sidebars retain them.
+  A labeled Bots button beside the menu opens the bundled Bots screen on the
+  bound host without requiring the sidebar. It appears only while that screen
+  is registered, and compact navigation dismisses the sidebar overlay. Native
   root command actions remain registered; only project creation, workspace creation
   and Home are filtered. Import is unavailable until the bound directory resolves.
   Scope rows, imports and schedule targets to the bound worktree. Different Paseo

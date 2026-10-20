@@ -1,3 +1,4 @@
+import { EmbeddedBotsButton } from "@/patches/vibing/sidebar-controls";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -70,29 +71,32 @@ function SidebarMenuToggleButton({
   const accessibilityState = useMemo(() => ({ expanded: isOpen }), [isOpen]);
 
   return (
-    <HeaderToggleButton
-      onPress={handlePress}
-      tooltipLabel={t("shell.menu.toggleSidebar")}
-      tooltipKeys={toggleShortcutKeys}
-      tooltipSide={tooltipSide}
-      testID={testID}
-      nativeID={nativeID}
-      style={resolvedStyle}
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={isOpen ? t("shell.menu.close") : t("shell.menu.open")}
-      accessibilityState={accessibilityState}
-    >
-      {isMobile ? (
-        <MobileMenuIcon extraMuted={extraMutedIdleIcon} />
-      ) : (
-        <ThemedPanelLeft
-          size={iconButtonChromeGlyphSize("large")}
-          strokeWidth={1.5}
-          uniProps={extraMutedIdleIcon ? extraMutedIconColorMapping : mutedIconColorMapping}
-        />
-      )}
-    </HeaderToggleButton>
+    <>
+      <HeaderToggleButton
+        onPress={handlePress}
+        tooltipLabel={t("shell.menu.toggleSidebar")}
+        tooltipKeys={toggleShortcutKeys}
+        tooltipSide={tooltipSide}
+        testID={testID}
+        nativeID={nativeID}
+        style={resolvedStyle}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={isOpen ? t("shell.menu.close") : t("shell.menu.open")}
+        accessibilityState={accessibilityState}
+      >
+        {isMobile ? (
+          <MobileMenuIcon extraMuted={extraMutedIdleIcon} />
+        ) : (
+          <ThemedPanelLeft
+            size={iconButtonChromeGlyphSize("large")}
+            strokeWidth={1.5}
+            uniProps={extraMutedIdleIcon ? extraMutedIconColorMapping : mutedIconColorMapping}
+          />
+        )}
+      </HeaderToggleButton>
+      <EmbeddedBotsButton />
+    </>
   );
 }
 
