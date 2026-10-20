@@ -2,7 +2,8 @@
 import React, { type ReactNode, type ComponentProps } from "react";
 import type { Composer } from "@/composer";
 import type { MessagePayload } from "@/composer/types";
-import { act, render, screen, cleanup } from "@testing-library/react";
+import type { ImportSessionSheet } from "@/components/import-session-sheet";
+import { act, fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { NativeBotChatDraft } from "./bot-chat-draft";
 import {
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   encodeImages: vi.fn(),
   onStart: vi.fn(),
   handoff: vi.fn(),
+  importSheet: null as ComponentProps<typeof ImportSessionSheet> | null,
 }));
 vi.mock("@/composer/submission/writer", () => ({
   handoffCreatedAgentMessageSubmission: mocks.handoff,
@@ -53,6 +55,23 @@ vi.mock("@/composer/draft/input-draft", () => ({
     setAttachments: vi.fn(),
     clear: vi.fn(),
   }),
+}));
+vi.mock("@/composer/draft/import-pill", () => ({
+  ComposerImportPill: ({ onPress }: { onPress(): void }) => (
+    <button type="button" onClick={onPress}>
+      Import session
+    </button>
+  ),
+}));
+vi.mock("@/components/import-session-sheet", () => ({
+  ImportSessionSheet: (props: ComponentProps<typeof ImportSessionSheet>) => {
+    mocks.importSheet = props;
+    return null;
+  },
+}));
+vi.mock("@/runtime/host-runtime", () => ({
+  useHostRuntimeClient: () => ({}),
+  useHostRuntimeIsConnected: () => true,
 }));
 vi.mock("@/utils/encode-images", () => ({ encodeImages: mocks.encodeImages }));
 vi.mock("@/stores/session-store", () => ({
@@ -203,4 +222,40 @@ it("submits only this fork draft's history to the new bot chat", async () => {
   expect(start).toHaveBeenCalledWith(
     expect.objectContaining({ text: "Continue", attachments: [history] }),
   );
+});
+
+const BOT_LABELS = { "paseo-bots.bot": "bot" };
+
+it("imports sessions into the bot within its worktree", () => {
+  mocks.importSheet = null;
+  const onImported = vi.fn();
+  const props = {
+    active: true,
+    serverId: "host",
+    botId: "bot",
+    cwd: "/worktree",
+    provider: "codex" as const,
+    onStart: mocks.onStart,
+  };
+  const view = render(<NativeBotChatDraft {...props} workspaceId="workspace" />);
+  expect(screen.queryByText("Import session")).toBeNull();
+  view.rerender(
+    <NativeBotChatDraft
+      {...props}
+      workspaceId="workspace"
+      importLabels={BOT_LABELS}
+      onImported={onImported}
+    />,
+  );
+  expect(mocks.importSheet!.visible).toBe(false);
+  fireEvent.click(screen.getByText("Import session"));
+  expect(mocks.importSheet).toMatchObject({
+    visible: true,
+    cwd: "/worktree",
+    workspaceId: "workspace",
+    labels: { "paseo-bots.bot": "bot" },
+    scopeLocked: true,
+  });
+  mocks.importSheet!.onImportedAgent!("imported");
+  expect(onImported).toHaveBeenCalledWith("imported");
 });

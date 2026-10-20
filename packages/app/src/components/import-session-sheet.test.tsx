@@ -222,6 +222,8 @@ interface RenderOptions {
   onImported?: (agent: Awaited<ReturnType<DaemonClient["importAgent"]>>) => void;
   cwd?: string | null;
   workspaceId?: string;
+  labels?: Record<string, string>;
+  scopeLocked?: boolean;
   supportsSearch?: boolean;
   projects?: Array<{ iconWorkingDir: string; projectName: string }>;
   snapshot?: {
@@ -268,6 +270,8 @@ function renderSheet(
         onClose={options?.onClose ?? vi.fn()}
         onImportedAgent={options?.onImportedAgent ?? vi.fn()}
         onImported={options?.onImported}
+        labels={options?.labels}
+        scopeLocked={options?.scopeLocked}
       />
     </QueryClientProvider>,
   );
@@ -550,6 +554,46 @@ describe("ImportSessionSheet", () => {
         providers: ["claude"],
         limit: 15,
       });
+    });
+  });
+
+  it("applies caller labels and keeps a locked listing on its workspace", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          cwd: "/repo/paseo",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn(async () => createImportedAgentSnapshot("agent-imported"));
+    const onImportedAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        onImportedAgent,
+        workspaceId: "ws-current",
+        labels: { "paseo-bots.bot": "bot-1" },
+        scopeLocked: true,
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    fireEvent.click(await screen.findByTestId("import-session-session-claude-provider-thread-1"));
+    expect(screen.queryByTestId("import-session-show-all")).toBeNull();
+    await waitFor(() => expect(onImportedAgent).toHaveBeenCalledWith("agent-imported"));
+    expect(importAgent).toHaveBeenCalledWith({
+      providerId: "claude",
+      providerHandleId: "provider-thread-1",
+      cwd: "/repo/paseo",
+      workspaceId: "ws-current",
+      labels: { "paseo-bots.bot": "bot-1" },
     });
   });
 
