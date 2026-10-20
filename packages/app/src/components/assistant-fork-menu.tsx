@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { useBotChatFork } from "@/patches/vibing/bot-chat-fork";
 
 export type AssistantForkTarget = "tab" | "workspace";
 
@@ -27,10 +28,13 @@ const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.for
 
 export const AssistantForkMenu = memo(function AssistantForkMenu({
   onFork,
-  allowWorkspaceFork = true,
+  allowWorkspaceFork: allowWorkspaceForkProp = true,
   testID = "assistant-fork-menu",
 }: AssistantForkMenuProps) {
   const { t } = useTranslation();
+  // Bots chats fork only into the same bot; they have no workspace to fork into.
+  const isBotChat = useBotChatFork() !== null;
+  const allowWorkspaceFork = allowWorkspaceForkProp && !isBotChat;
   const [isOpen, setIsOpen] = useState(false);
   const [pendingTarget, setPendingTarget] = useState<AssistantForkTarget | null>(null);
   const isLocked = pendingTarget !== null;
