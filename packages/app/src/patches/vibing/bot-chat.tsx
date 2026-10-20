@@ -27,6 +27,7 @@ import { isEmbeddedFocusMode } from "./focus-mode";
 import type { Theme } from "@/styles/theme";
 import { getEmbeddedWorkspace, getEmbeddedWorkspaceDirectory } from "./workspace-boundary";
 import { BotWorkspaceBridge } from "./bot-workspace";
+import { BotChatForkProvider } from "./bot-chat-fork";
 import type { NativeBotChatProps } from "./bot-chat-types";
 
 const spinnerColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -94,7 +95,7 @@ function NativeBotChatContent(props: NativeBotChatProps) {
   const pane = useMemo<PaneContextValue>(() => {
     const openTab: PaneContextValue["openTab"] = (target) => {
       if (target.kind === "agent") onSelectChat(target.agentId);
-      else if (target.kind === "draft") onSelectChat(null);
+      else if (target.kind === "draft") onSelectChat(null, target.draftId);
       else navigateToWorkspace({ serverId, workspaceId, target });
     };
     return {
@@ -113,6 +114,12 @@ function NativeBotChatContent(props: NativeBotChatProps) {
       openImportSheet: () => {},
     };
   }, [agentId, onSelectChat, owner, serverId, workspaceId]);
+  const openForkDraft = useCallback(
+    (draftId: string) => {
+      pane.openTab({ kind: "draft", draftId });
+    },
+    [pane],
+  );
   const openFileLink = useCallback(
     (target: InlinePathTarget, disposition: OpenFileDisposition) => {
       pane.openFileInWorkspace({
@@ -146,7 +153,7 @@ function NativeBotChatContent(props: NativeBotChatProps) {
                   isPaneFocused: active,
                 })}
               >
-                {content}
+                <BotChatForkProvider openDraft={openForkDraft}>{content}</BotChatForkProvider>
               </PaneFocusProvider>
             </PaneProvider>
           </DiffDocumentWorkspaceCacheProvider>
