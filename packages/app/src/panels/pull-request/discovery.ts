@@ -18,7 +18,6 @@ export function useWorkspacePullRequestDiscovery(input: {
   isGit: boolean;
   layoutMode: "compact" | "single-pane" | "split-panes";
   explorerOpen: boolean;
-  autoAdd?: boolean;
 }): boolean {
   const settledExplorerActive = useIsMobilePanelActive("file-explorer");
   const enabled = shouldDiscoverPullRequest({
@@ -28,11 +27,7 @@ export function useWorkspacePullRequestDiscovery(input: {
     explorerActive: input.layoutMode === "compact" ? settledExplorerActive : input.explorerOpen,
   });
   const hasPullRequest = useHasPullRequest({ serverId: input.serverId, cwd: input.cwd, enabled });
-  usePullRequestAutoAdd({
-    workspaceKey: input.workspaceKey,
-    hasPullRequest,
-    enabled: enabled && input.autoAdd !== false,
-  });
+  usePullRequestAutoAdd({ workspaceKey: input.workspaceKey, hasPullRequest, enabled });
   return hasPullRequest;
 }
 

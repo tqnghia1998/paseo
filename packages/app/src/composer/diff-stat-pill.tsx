@@ -1,4 +1,3 @@
-import { StandaloneWorkspaceTools } from "@/patches/vibing/agent-workspace";
 import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 import { Pressable } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -23,19 +22,17 @@ export function ComposerDiffStatPill({ additions, deletions, onPress }: Composer
   );
 
   return (
-    <StandaloneWorkspaceTools>
-      <Pressable
-        testID="composer-diff-stat-pill"
-        accessibilityRole="button"
-        accessibilityLabel={t("workspace.git.diff.openChangesTab")}
-        onPress={onPress}
-        onHoverIn={handleHoverIn}
-        onHoverOut={handleHoverOut}
-        style={bodyStyle}
-      >
-        <DiffStat additions={additions} deletions={deletions} />
-      </Pressable>
-    </StandaloneWorkspaceTools>
+    <Pressable
+      testID="composer-diff-stat-pill"
+      accessibilityRole="button"
+      accessibilityLabel={t("workspace.git.diff.openChangesTab")}
+      onPress={onPress}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
+      style={bodyStyle}
+    >
+      <DiffStat additions={additions} deletions={deletions} />
+    </Pressable>
   );
 }
 

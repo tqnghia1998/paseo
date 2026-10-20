@@ -1,4 +1,3 @@
-import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { useMemo, type ComponentProps, type PropsWithChildren, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { GestureResponderEvent, PressableStateCallbackType } from "react-native";
@@ -283,7 +282,7 @@ function SidebarWorkspaceMenuItems({
           {t("sidebar.workspace.actions.select")}
         </WorkspaceMenuItem>
       ) : null}
-      {onArchive && !isEmbeddedFocusMode ? (
+      {onArchive ? (
         <WorkspaceMenuItem
           surface={surface}
           testID={`sidebar-workspace-menu-archive-${workspaceKey}`}
