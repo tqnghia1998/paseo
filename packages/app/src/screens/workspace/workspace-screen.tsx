@@ -877,7 +877,10 @@ function shouldShowWorkspaceScreenHeader(input: {
   isFocusModeEnabled: boolean;
   isMobile: boolean;
 }): boolean {
-  return !input.isFocusModeEnabled || input.isMobile;
+  return (
+    (!isEmbeddedFocusMode || isEmbeddedLiveDesignMessaging) &&
+    (!input.isFocusModeEnabled || input.isMobile)
+  );
 }
 
 function buildWorkspaceTerminalScopeKey(serverId: string, workspaceId: string): string | null {

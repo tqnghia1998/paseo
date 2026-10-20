@@ -31,7 +31,12 @@ export function useSidebarNavItems<Section extends SidebarSection>(
   const installed = useInstalledPlugins();
   const bound = getEmbeddedWorkspace();
   const plugins = useMemo(
-    () => installed.filter((plugin) => !isEmbeddedFocusMode || plugin.serverId === bound?.serverId),
+    () =>
+      installed.filter(
+        (plugin) =>
+          !isEmbeddedFocusMode ||
+          (plugin.serverId === bound?.serverId && plugin.id !== "paseo-bots"),
+      ),
     [installed, bound],
   );
   const { settings, updateSettings } = useAppSettings();

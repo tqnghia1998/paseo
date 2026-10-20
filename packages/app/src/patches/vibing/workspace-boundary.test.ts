@@ -26,6 +26,24 @@ beforeEach(() => {
   history.replaceState(null, "", "/");
 });
 
+it("keeps the dedicated Bots tool in Bots and restores it after a settings reload", async () => {
+  window.name = "paseo-workspace:bots:/repo";
+  const boundary = await import("./workspace-boundary");
+  boundary.bindEmbeddedWorkspace({ serverId: "local", workspaceId: "one" });
+  expect(boundary.embeddedWorkspaceRoute()).toBe(
+    "/h/local/plugin/paseo-bots/sidebar/bots?view=bots",
+  );
+  expect(boundary.isEmbeddedRouteAllowed("/h/local/plugin/paseo-bots/sidebar/bots")).toBe(true);
+  expect(boundary.isEmbeddedRouteAllowed("/h/local/workspace/one")).toBe(false);
+  expect(boundary.isEmbeddedRouteAllowed("/h/local/agent/chat")).toBe(false);
+  history.replaceState(null, "", "/settings/appearance");
+  vi.resetModules();
+  const reloaded = await import("./workspace-boundary");
+  expect(reloaded.embeddedWorkspaceRoute()).toBe(
+    "/h/local/plugin/paseo-bots/sidebar/bots?view=bots",
+  );
+});
+
 it("allows shared settings but blocks other workspaces, hosts and project management", async () => {
   const boundary = await import("./workspace-boundary");
   boundary.bindEmbeddedWorkspace({ serverId: "local", workspaceId: "one", projectId: "repo" });

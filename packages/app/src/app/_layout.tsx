@@ -132,6 +132,7 @@ import { ensureOsNotificationPermission } from "@/utils/os-notifications";
 import { EmbeddedAgentActivityBridge } from "@/patches/vibing/agent-activity";
 import { useEmbeddedTheme } from "@/patches/vibing/theme";
 import { isEmbeddedFocusMode, selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
+import { isEmbeddedBotsTool } from "@/patches/vibing/embedded-tools";
 
 polyfillCrypto();
 
@@ -367,7 +368,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   const pathname = usePathname();
   const isWorkspaceRoute = parseHostWorkspaceRouteFromPathname(pathname) !== null;
   const isWorkspaceFocusModeEnabled = isWorkspaceRoute && isFocusModeEnabled;
-  const chromeEnabled = chromeEnabledOverride ?? daemons.length > 0;
+  const chromeEnabled = !isEmbeddedBotsTool && (chromeEnabledOverride ?? daemons.length > 0);
   const hasMountedDesktopSidebar = useLatchedBoolean(chromeEnabled);
   const toggleAgentList = isCompactLayout ? toggleMobileAgentList : toggleDesktopAgentList;
   const toggleDesktopSidebars = useCallback(() => {
