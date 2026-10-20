@@ -1,4 +1,10 @@
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
+import {
+  projectEmbeddedAgentLayout,
+  useEmbeddedAgentFocus,
+  StandaloneWorkspaceTools,
+} from "@/patches/vibing/agent-workspace";
+import { workspaceNewTabTarget } from "@/patches/vibing/focus-mode";
 import { useHostFeature } from "@/runtime/host-features";
 import {
   AssistantFileLinkResolverProvider,
@@ -1287,6 +1293,8 @@ function WorkspaceScreenContent({
     isGit: isGitCheckout,
     layoutMode,
     explorerOpen: isExplorerSidebarShowing,
+    // Embedded workspaces stay Agent-only; a detected PR must not open its own tab.
+    autoAdd: !isEmbeddedFocusMode,
   });
 
   const explorerSidebarToggleAccessibilityState = useMemo(
@@ -1310,8 +1318,12 @@ function WorkspaceScreenContent({
     return () => handler.remove();
   }, [isExplorerSidebarShowing, isMobile, isRouteFocused, showMobileAgent]);
 
-  const workspaceLayout = useWorkspaceLayoutStore((state) =>
+  const savedWorkspaceLayout = useWorkspaceLayoutStore((state) =>
     persistenceKey ? (state.layoutByWorkspace[persistenceKey] ?? null) : null,
+  );
+  const workspaceLayout = useMemo(
+    () => projectEmbeddedAgentLayout(savedWorkspaceLayout),
+    [savedWorkspaceLayout],
   );
   const unfocusedPaneId = useWorkspaceLayoutStore((state) =>
     persistenceKey ? state.focusRestorationByWorkspace[persistenceKey]?.restorePaneId : undefined,
@@ -1358,6 +1370,14 @@ function WorkspaceScreenContent({
   );
   const openInSidePane = useSettings((settings) => settings.openInSidePane);
   const pullRequestOpenLocation = useSettings((settings) => settings.pullRequestOpenLocation);
+  const focusWorkspaceTab = useWorkspaceLayoutStore((state) => state.focusTab);
+  useEmbeddedAgentFocus({
+    enabled: isRouteFocused && hasHydratedWorkspaceLayoutStore,
+    workspaceKey: persistenceKey,
+    saved: savedWorkspaceLayout,
+    visible: workspaceLayout,
+    focusTab: focusWorkspaceTab,
+  });
   const selectWorkspaceTabInPane = useWorkspaceLayoutStore((state) => state.selectTabInPane);
   const closeWorkspaceTab = useWorkspaceLayoutStore((state) => state.closeTab);
   const sheets = useWorkspaceLayoutStore((state) =>
@@ -1602,6 +1622,7 @@ function WorkspaceScreenContent({
   );
   useEmbeddedWorkspaceConversation({
     enabled: isRouteFocused && hasHydratedWorkspaceLayoutStore,
+    layoutInitialized: savedWorkspaceLayout !== null,
     workspaceId: normalizedWorkspaceId,
     persistenceKey,
     activeTabId,
@@ -1871,7 +1892,11 @@ function WorkspaceScreenContent({
       if (!persistenceKey) {
         return;
       }
-      createWorkspaceTab(persistenceKey, { kind: "new_tab" }, paneLocalPlacement(input?.paneId));
+      createWorkspaceTab(
+        persistenceKey,
+        workspaceNewTabTarget(generateDraftId()),
+        paneLocalPlacement(input?.paneId),
+      );
     },
     [createWorkspaceTab, persistenceKey],
   );
@@ -3236,44 +3261,46 @@ function WorkspaceScreenContent({
 
   const headerRight = useMemo(
     () => (
-      <View style={styles.headerRight}>
-        <PluginHeaderButtons serverId={normalizedServerId} workspaceId={normalizedWorkspaceId} />
-        {workspaceDescriptor && workspaceDescriptor.scripts.length > 0 ? (
-          <WorkspaceScriptsButton
-            serverId={normalizedServerId}
-            workspaceId={normalizedWorkspaceId}
-            scripts={workspaceDescriptor.scripts}
-            liveTerminalIds={liveTerminalIds}
-            onScriptTerminalStarted={handleScriptTerminalStarted}
-            onViewTerminal={handleViewScriptTerminal}
-            onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
-            hideLabels
-          />
-        ) : null}
-        {workspaceDirectory ? (
-          <WorkspaceOpenInEditorButton
-            serverId={normalizedServerId}
-            cwd={workspaceDirectory}
-            projectId={workspaceDescriptor?.projectId ?? null}
-            activeFile={activeFileLocation}
-            hideLabels
-          />
-        ) : null}
-        {workspaceDirectory ? (
-          <>
-            <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
-            <WorkspaceHeaderExplorerToggle
-              owner={explorerToggleOwner}
-              onPress={handleToggleExplorerSidebar}
-              label={explorerSidebarToggleLabel}
-              tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
-              tooltipKeys={EXPLORER_TOGGLE_KEYS}
-              style={styles.compactHeaderActionButton}
-              accessibilityState={explorerSidebarToggleAccessibilityState}
+      <StandaloneWorkspaceTools>
+        <View style={styles.headerRight}>
+          <PluginHeaderButtons serverId={normalizedServerId} workspaceId={normalizedWorkspaceId} />
+          {workspaceDescriptor && workspaceDescriptor.scripts.length > 0 ? (
+            <WorkspaceScriptsButton
+              serverId={normalizedServerId}
+              workspaceId={normalizedWorkspaceId}
+              scripts={workspaceDescriptor.scripts}
+              liveTerminalIds={liveTerminalIds}
+              onScriptTerminalStarted={handleScriptTerminalStarted}
+              onViewTerminal={handleViewScriptTerminal}
+              onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
+              hideLabels
             />
-          </>
-        ) : null}
-      </View>
+          ) : null}
+          {workspaceDirectory ? (
+            <WorkspaceOpenInEditorButton
+              serverId={normalizedServerId}
+              cwd={workspaceDirectory}
+              projectId={workspaceDescriptor?.projectId ?? null}
+              activeFile={activeFileLocation}
+              hideLabels
+            />
+          ) : null}
+          {workspaceDirectory ? (
+            <>
+              <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
+              <WorkspaceHeaderExplorerToggle
+                owner={explorerToggleOwner}
+                onPress={handleToggleExplorerSidebar}
+                label={explorerSidebarToggleLabel}
+                tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
+                tooltipKeys={EXPLORER_TOGGLE_KEYS}
+                style={styles.compactHeaderActionButton}
+                accessibilityState={explorerSidebarToggleAccessibilityState}
+              />
+            </>
+          ) : null}
+        </View>
+      </StandaloneWorkspaceTools>
     ),
     [
       workspaceDescriptor,

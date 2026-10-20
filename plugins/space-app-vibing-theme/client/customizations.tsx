@@ -43,7 +43,7 @@ const sections: CustomizationSection[] = [
       {
         title: "Worktree navigation",
         description:
-          "Keeps History, search, imports and schedules within the current worktree. The sidebar omits the redundant workspace list and setup callout; a Bots shortcut stays beside the menu. Vibing owns switching worktrees and closing workspaces.",
+          "Keeps History, search, imports and schedules within the current worktree. The workspace shows Agent conversations, opens an Agent composer by default, and creates another directly from New tab. The sidebar omits the workspace list and setup callout; Bots stays beside the menu. Vibing owns switching worktrees and closing workspaces.",
         source:
           "packages/app/src/patches/vibing/workspace-boundary.ts · navigation-boundary.tsx · sidebar.ts",
       },
