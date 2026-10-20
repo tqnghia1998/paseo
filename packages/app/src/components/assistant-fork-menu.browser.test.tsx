@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantForkMenu } from "./assistant-fork-menu";
+import { BotChatForkProvider } from "@/patches/vibing/bot-chat-fork";
 
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -71,5 +72,20 @@ describe("assistant fork destinations", () => {
     );
     await expect.poll(() => onFork.mock.calls.length).toBe(1);
     expect(onFork).toHaveBeenCalledWith("workspace");
+  });
+
+  it("omits the new-workspace destination inside Bots chats", async () => {
+    flushSync(() =>
+      root.render(
+        <BotChatForkProvider openDraft={vi.fn()}>
+          <AssistantForkMenu onFork={vi.fn()} />
+        </BotChatForkProvider>,
+      ),
+    );
+    flushSync(() => trigger().click());
+    await expect
+      .poll(() => document.querySelector('[data-testid="assistant-fork-menu-new-tab"]'))
+      .not.toBeNull();
+    expect(document.querySelector('[data-testid="assistant-fork-menu-new-workspace"]')).toBeNull();
   });
 });
