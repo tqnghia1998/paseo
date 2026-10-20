@@ -60,6 +60,17 @@ retain Find and citation handling. Saved Chat presentation preferences win.
 Attachment rows and interactive Shell input remain native even when users enable
 enhanced messages. Preserve these boundaries when updating the vendored plugin.
 
+Embedded local Bots conversations use the host's native chat panel and composer
+inside the Bots screen, so timeline renderers (including Beautiful Chat and
+Mermaid), composer plugins, attachments, rewind and queued messages follow the
+normal Agent UI. Bots still creates each agent with its prompt, skills, tools,
+memory and working folder. New-chat model configuration comes from Bot settings;
+the native model/mode controls remain available after creation. Keep the private
+slot in `patches/vibing/bot-chat*` and the reproducible vendoring patch in
+`scripts/paseo-bots-vibing.patch`. Standalone and remote-host Bots retain their
+plugin UI. Native timeline visibility must be registered only while the Bots
+conversation is visible, independently of saved workspace tabs.
+
 The additional community plugins are pinned and regenerated with
 `scripts/vendor-community-plugins.mjs`; each plugin's README records attribution,
 revision and license. They have no extra runtime dependencies. Beautiful Chat
