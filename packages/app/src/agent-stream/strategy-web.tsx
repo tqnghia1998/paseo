@@ -45,6 +45,7 @@ import {
 } from "./history-start-settle-scheduler";
 import { useChatFindSelectedMessageId } from "@/agent-stream/chat-find";
 import { useScrollToMessage } from "./use-scroll-to-message.web";
+import { selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -1212,8 +1213,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       minHeight: "100%",
       paddingTop: CONTENT_PADDING_TOP_PX,
       paddingBottom: 16,
-      paddingLeft: isMobileBreakpoint ? 8 : 16,
-      paddingRight: isMobileBreakpoint ? 8 : 16,
+      // Embedded chats are wider than the outline rail's gutter assumes; clear it explicitly.
+      paddingLeft: isMobileBreakpoint ? 8 : selectEmbeddedFocusMode(48, 16),
+      paddingRight: isMobileBreakpoint ? 8 : selectEmbeddedFocusMode(48, 16),
       boxSizing: "border-box",
     };
   }, [isMobileBreakpoint]);
