@@ -12,7 +12,7 @@ Paseo Web is packaged as a standalone server that embeds:
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions, with `shell-integration/` beside the bundled modules.
 4. **Local Speech Worker (`worker-process.js`)**: Isolated worker for embedded dictation and voice mode.
-5. **Built-in plugins (`builtin-plugins/`)**: The daemon's provider/usage sources and the native Space App Vibing theme, with runtime compilers included in the dependency archive.
+5. **Built-in plugins (`builtin-plugins/`)**: The daemon's provider/usage sources, native Space App Vibing theme and [Beautiful Chat](plugins/beautiful-chat/README.md), with runtime compilers included in the dependency archive.
 6. **Embedded workspace**: Native workspace tools with host-owned global navigation. See the [patch contracts](docs/vibing-patches.md#contracts-to-preserve) for navigation, optional Focus Mode and editor recovery.
 
 ### Canonical embedded mode

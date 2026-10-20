@@ -1,0 +1,42 @@
+diff --git a/client/preferences.ts b/client/preferences.ts
+index 608c20e..a60e7f0 100644
+--- a/client/preferences.ts
++++ b/client/preferences.ts
+@@ -55,9 +55,9 @@ export const DEFAULT_PREFERENCES: Readonly<EnhancerPreferences> = {
+   codeFont: "code",
+   frostedGlass: true,
+   pointerGlow: true,
+-  enhancedUserBubble: true,
++  enhancedUserBubble: false,
+   selectionActions: true,
+-  assistantMarkdown: true,
++  assistantMarkdown: false,
+   markdownVariant: "document",
+ };
+ 
+diff --git a/client/settings-page.tsx b/client/settings-page.tsx
+index 2bd6689..76b72d3 100644
+--- a/client/settings-page.tsx
++++ b/client/settings-page.tsx
+@@ -331,7 +331,7 @@ export function BeautifulChatSettingsPage({ theme }: PluginSurfaceProps) {
+ 
+         <ToggleRow
+           title="Enhanced prompt bubble"
+-          description="Paseo removes pasted images before a plugin sees the message, so the enhanced bubble cannot show them. Turn this off for Paseo's own bubble with image previews. New prompts follow the change."
++          description="Use Beautiful Chat for text-only prompts. Messages with attachments or images keep Paseo's native bubble. Leave this off to keep native prompt rendering and search. New prompts follow the change."
+           value={preferences.enhancedUserBubble}
+           onChange={(enhancedUserBubble) => updateEnhancerPreferences({ enhancedUserBubble })}
+           tokens={tokens}
+diff --git a/index.client.tsx b/index.client.tsx
+index 10fc52e..98b2571 100644
+--- a/index.client.tsx
++++ b/index.client.tsx
+@@ -50,6 +50,8 @@ export default function contribute(client: PluginClientContext) {
+     query: { itemType: "tool_call" },
+     transform({ item, phase }) {
+       if (item.type !== "tool_call") return undefined;
++      // Native Shell cards retain Codex interactive input alongside live output.
++      if (item.detail.type === "shell" && item.detail.stdin !== undefined) return undefined;
+       return {
+         items: [
+           {

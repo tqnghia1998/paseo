@@ -10,13 +10,21 @@ describe("groupPluginInventory", () => {
   it("separates Vibing plugin changes from Paseo integrations and installed plugins", () => {
     const zai = plugin("zai-usage-source");
     const codex = plugin("codex-usage-source");
+    const beautifulChat = plugin("beautiful-chat");
     const theme = plugin("space-app-vibing-theme");
     const muse = plugin("muse-provider");
     const additional = { ...plugin("example"), builtin: false };
 
     expect(
-      groupPluginInventory({ plugins: [zai, codex, theme, muse, additional], embedded: true }),
-    ).toEqual({ vibing: [codex, theme], paseo: [zai, muse], additional: [additional] });
+      groupPluginInventory({
+        plugins: [zai, codex, beautifulChat, theme, muse, additional],
+        embedded: true,
+      }),
+    ).toEqual({
+      vibing: [codex, beautifulChat, theme],
+      paseo: [zai, muse],
+      additional: [additional],
+    });
   });
 
   it("keeps configured plugins in Additional even when their IDs match a Vibing plugin", () => {
