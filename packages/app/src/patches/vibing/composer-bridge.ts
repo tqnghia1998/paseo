@@ -1,3 +1,4 @@
+import { getEmbeddedWorkspace, isEmbeddedWorkspaceAllowed } from "./workspace-boundary";
 import type { ComposerAttachment } from "@/attachments/types";
 import type { ComposerInputMode } from "@/composer/input-mode";
 import type { AgentInputSubmitResult } from "@/composer/submit";
@@ -42,11 +43,13 @@ export function useEmbeddedComposerBridge(input: ComposerBridgeInput): void {
     focus,
     sendMessage,
   } = input;
+  const bound = getEmbeddedWorkspace();
+  const inWorkspace = !bound || isEmbeddedWorkspaceAllowed(bound.serverId, workspaceId);
   useEmbeddedPromptInsert({
     workspaceId,
     inputMode,
     readOnly,
-    enabled: enabled && !isComposerLocked,
+    enabled: enabled && inWorkspace && !isComposerLocked,
     getText: useStableEvent(getText),
     replaceText,
     focus: useStableEvent(focus),
@@ -54,7 +57,7 @@ export function useEmbeddedComposerBridge(input: ComposerBridgeInput): void {
 
   useEmbeddedLiveDesignSend({
     agentId,
-    enabled: enabled && isEmbeddedLiveDesignMessaging,
+    enabled: enabled && inWorkspace && isEmbeddedLiveDesignMessaging,
     isDraft: resolveLiveDesignAgentId !== undefined,
     workspaceId,
     submit: useStableEvent(
