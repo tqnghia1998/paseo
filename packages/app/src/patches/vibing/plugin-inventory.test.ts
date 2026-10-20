@@ -21,10 +21,33 @@ describe("groupPluginInventory", () => {
         embedded: true,
       }),
     ).toEqual({
-      vibing: [codex, beautifulChat, theme],
+      vibing: [codex, theme],
+      community: [beautifulChat],
       paseo: [zai, muse],
       additional: [additional],
     });
+  });
+
+  it("attributes all bundled community plugins without changing their runtime status", () => {
+    const community = ["beautiful-chat", "mermaid", "paseo-bots", "annotations"].map(plugin);
+    community[2]!.status = "failed";
+    community[2]!.error = "Worker unavailable";
+    expect(groupPluginInventory({ plugins: community, embedded: true })).toEqual({
+      vibing: [],
+      community,
+      paseo: [],
+      additional: [],
+    });
+    expect(groupPluginInventory({ plugins: community, embedded: false })).toEqual({
+      vibing: [],
+      community: [],
+      paseo: community,
+      additional: [],
+    });
+    const installed = community.map((entry) => Object.assign(plugin(entry.id), { builtin: false }));
+    expect(groupPluginInventory({ plugins: installed, embedded: true }).additional).toEqual(
+      installed,
+    );
   });
 
   it("keeps configured plugins in Additional even when their IDs match a Vibing plugin", () => {
@@ -32,6 +55,7 @@ describe("groupPluginInventory", () => {
     const legacy = { ...plugin("space-app-vibing-theme"), builtin: undefined };
     expect(groupPluginInventory({ plugins: [installed, legacy], embedded: true })).toEqual({
       vibing: [],
+      community: [],
       paseo: [],
       additional: [installed, legacy],
     });
@@ -42,6 +66,7 @@ describe("groupPluginInventory", () => {
     const theme = plugin("space-app-vibing-theme");
     expect(groupPluginInventory({ plugins: [codex, theme], embedded: false })).toEqual({
       vibing: [],
+      community: [],
       paseo: [codex, theme],
       additional: [],
     });
@@ -56,11 +81,13 @@ describe("groupPluginInventory", () => {
     const unknown = plugin("future-provider");
     expect(groupPluginInventory({ plugins: [failed, unknown], embedded: true })).toEqual({
       vibing: [failed],
+      community: [],
       paseo: [unknown],
       additional: [],
     });
     expect(groupPluginInventory({ plugins: [], embedded: true })).toEqual({
       vibing: [],
+      community: [],
       paseo: [],
       additional: [],
     });
