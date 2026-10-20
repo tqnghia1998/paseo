@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import {
   FOCUSED_PANE_PLACEMENT,
   type useWorkspaceLayoutStore,
@@ -19,6 +19,7 @@ type WorkspaceActions = Pick<
 type ConversationTab = Pick<WorkspaceTab, "tabId" | "target">;
 interface WorkspaceConversationInput extends WorkspaceActions {
   enabled: boolean;
+  layoutInitialized: boolean;
   workspaceId: string;
   persistenceKey: string | null;
   activeTabId: string | null;
@@ -30,6 +31,7 @@ interface WorkspaceConversationInput extends WorkspaceActions {
 export function useEmbeddedWorkspaceConversation(input: WorkspaceConversationInput): void {
   const {
     enabled,
+    layoutInitialized,
     workspaceId,
     persistenceKey,
     activeTabId,
@@ -82,6 +84,18 @@ export function useEmbeddedWorkspaceConversation(input: WorkspaceConversationInp
     activateConversation,
     enabled: isEmbeddedFocusMode && enabled,
   });
+  useLayoutEffect(() => {
+    if (allTabs.length > 0) openingEmbeddedLiveDesignDraftRef.current = false;
+    if (
+      isEmbeddedFocusMode &&
+      enabled &&
+      layoutInitialized &&
+      persistenceKey &&
+      allTabs.length === 0
+    ) {
+      activateConversation();
+    }
+  }, [enabled, layoutInitialized, persistenceKey, allTabs.length, activateConversation]);
   useEmbeddedLiveDesignActivation({
     activateConversation,
     enabled: isEmbeddedLiveDesignMessaging && enabled,

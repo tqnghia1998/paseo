@@ -93,8 +93,11 @@ plugin list unchanged.
 
 - Every standalone host uses the same embedded workspace policy. `?folder=` resolves
   through idempotent `openProject` and preserves workspace/thread identity. Native
-  headers, Explorer, New Tab launcher, splits, terminals, Git actions and configured
-  panels stay available. Global host/project navigation and workspace archive stay host-owned. Shared
+  headers and Agent conversation tabs stay available. Empty workspaces and panes
+  open Agent composers; New tab creates a fresh Agent draft directly. Embedded
+  launch menus offer Agent only, with Terminal, Explorer, Diff, Browser and other
+  tool controls omitted. The view projects saved tool tabs out without deleting
+  their layout or unsaved state, and restores focus to a visible conversation. Global host/project navigation and workspace archive stay host-owned. Shared
   settings use the native screens; the workspace header and shortcut provide entry.
   A worktree-qualified iframe name keys a sessionStorage navigation binding so
   Settings reload/return cannot select a sibling iframe's last workspace. The route
@@ -119,8 +122,8 @@ plugin list unchanged.
   Shared settings may affect other workspaces; this is not a plugin/terminal sandbox. The historical `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS` flag identifies
   embedding; Focus Mode itself is optional. Panel-store version 17 clears legacy
   forced focus once. Focus Mode keeps native file-placement preferences and
-  conversation-parent relationships within the same workspace. Empty panes keep
-  the native launcher.
+  conversation-parent relationships within the same workspace. Standalone Paseo
+  retains the native multi-tool launcher and saved layouts.
 - Embedded editors journal unsaved text in sessionStorage before accepting it.
   Recovery is scoped by server/workspace/tab/path and lasts across iframe remounts
   in the same top-level window. It is not cross-window or restart persistence.
