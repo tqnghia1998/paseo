@@ -1771,7 +1771,7 @@ async function ensureBotWorkspace(api, bot, placement) {
 async function startBotChat(api, input) {
   const { bot } = input;
   const model = bot.model ?? await resolveDefaultModel(api, bot.provider);
-  const workspace = await ensureBotWorkspace(api, bot, input.placement);
+  const workspace = input.placement.workspaceId ? api.workspaces.ref(input.placement.workspaceId) : await ensureBotWorkspace(api, bot, input.placement);
   const agent = await workspace.agents.create({
     ...input.agentId ? { agentId: input.agentId } : {},
     config: buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),

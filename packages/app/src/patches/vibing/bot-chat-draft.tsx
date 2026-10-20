@@ -11,16 +11,17 @@ import {
 } from "@/composer/attachments/submit";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { encodeImages } from "@/utils/encode-images";
-import { generateMessageId } from "@/types/stream";
+import { generateMessageId, createUserMessage } from "@/types/stream";
+import { handoffCreatedAgentMessageSubmission } from "@/composer/submission/writer";
 import { useSessionStore } from "@/stores/session-store";
 import type { MessagePayload } from "@/composer/types";
 import type { NativeBotChatProps } from "./bot-chat-types";
 
-export function NativeBotChatDraft(
-  props: Omit<NativeBotChatProps, "agentId" | "workspaceId" | "onSelectChat">,
-) {
+export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "onSelectChat">) {
   const { serverId, botId, cwd, onStart } = props;
-  const draftId = `paseo-bots:${botId}`;
+  const draftId = props.draftId ?? `paseo-bots:${botId}:${props.workspaceId ?? cwd}`;
+  const createdAgentId = useRef<string | undefined>(undefined);
+  const resolveAgentId = useCallback(() => createdAgentId.current, []);
   const input = useAgentInputDraft({
     draftKey: `draft:${serverId}:${draftId}`,
     composer: {
@@ -54,12 +55,27 @@ export function NativeBotChatDraft(
         const images = await encodeImages(wire.images);
         if (wire.images.length && images?.length !== wire.images.length)
           throw new Error("Could not encode every image attachment");
-        await onStart({
-          text: payload.text.trim() || "See the attached files.",
+        const timestamp = new Date();
+        const text = payload.text.trim() || "See the attached files.";
+        createdAgentId.current = await onStart({
+          text,
           messageId: messageId.current,
           images: images ?? [],
           attachments: wire.attachments,
         });
+        if (createdAgentId.current) {
+          handoffCreatedAgentMessageSubmission(
+            serverId,
+            createdAgentId.current,
+            createUserMessage({
+              clientMessageId: messageId.current,
+              text,
+              timestamp,
+              images: wire.images,
+              attachments: wire.attachments,
+            }),
+          );
+        }
         messageId.current = generateMessageId();
       } finally {
         submittingRef.current = false;
@@ -80,6 +96,8 @@ export function NativeBotChatDraft(
         <View style={styles.inputArea}>
           <Composer
             agentId={draftId}
+            workspaceId={props.workspaceId}
+            resolveLiveDesignAgentId={resolveAgentId}
             serverId={serverId}
             isPaneFocused={props.active}
             onSubmitMessage={submit}

@@ -1,4 +1,3 @@
-import { getEmbeddedWorkspace } from "@/patches/vibing/workspace-boundary";
 import {
   useCallback,
   useMemo,
@@ -165,12 +164,7 @@ const TRAILING_LABEL_KEYS: Record<SidebarTrailingChoice, string> = {
 export function SidebarDisplayPreferencesMenu(): ReactElement {
   const { t } = useTranslation();
   const preferences = useSidebarDisplayPreferences();
-  const allHosts = useHosts();
-  const bound = getEmbeddedWorkspace();
-  const hosts = useMemo(
-    () => allHosts.filter((host) => !bound || host.serverId === bound.serverId),
-    [allHosts, bound],
-  );
+  const hosts = useHosts();
   // `allProjects`, never `projects`: the model's `projects` is already filtered, so a picker fed
   // from it would lose the row that undoes the filter as soon as the filter narrowed to one.
   const { allProjects, resolvedProjectFilters, workspaceSortSupported } = useSidebarModel();

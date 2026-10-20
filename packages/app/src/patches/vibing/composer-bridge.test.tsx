@@ -2,6 +2,11 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
+const binding = vi.hoisted(() => ({ allowed: true }));
+vi.mock("./workspace-boundary", () => ({
+  getEmbeddedWorkspace: () => ({ serverId: "host" }),
+  isEmbeddedWorkspaceAllowed: () => binding.allowed,
+}));
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
   window.history.replaceState(null, "", "/?embedded-live-design=1");
@@ -111,4 +116,24 @@ it("observes the real agent after a fresh draft becomes a conversation", async (
     waitForActive: true,
     waitThroughPermission: true,
   });
+});
+
+it("does not prepare a composer from another folder for host prompts or Live Design", () => {
+  binding.allowed = false;
+  try {
+    const { postMessage, sendMessage } = setup("submitted");
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: window.parent,
+          origin,
+          data: { type: "space:paseo-live-design-ready-request" },
+        }),
+      ),
+    );
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+  } finally {
+    binding.allowed = true;
+  }
 });

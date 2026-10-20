@@ -80,17 +80,6 @@ export function getEmbeddedWorkspaceDirectory(): string | undefined {
   );
 }
 
-interface RootCommand {
-  id: string;
-  importAvailable: boolean;
-}
-
-export function isEmbeddedRootCommandAllowed({ id, importAvailable }: RootCommand): boolean {
-  if (!isEmbeddedFocusMode) return true;
-  if (["add-project", "new-workspace", "home"].includes(id)) return false;
-  return id !== "import-session" || importAvailable;
-}
-
 export function bindEmbeddedWorkspace(selection: Workspace): void {
   if (!isEmbeddedFocusMode || workspace) return;
   workspace = selection;
@@ -103,9 +92,7 @@ export function bindEmbeddedWorkspace(selection: Workspace): void {
 }
 
 export function embeddedWorkspaceRoute(): string | null {
-  return workspace
-    ? resolveEmbeddedToolEntryRoute(workspace.serverId, workspace.workspaceId, isEmbeddedBotsTool)
-    : null;
+  return workspace ? resolveEmbeddedToolEntryRoute(workspace.serverId) : null;
 }
 
 export function isEmbeddedHostSectionAllowed(section: string): boolean {
@@ -119,7 +106,7 @@ export function isEmbeddedRouteAllowed(path: string): boolean {
   const target = parseHostWorkspaceRouteFromPathname(pathname);
   if (target)
     return !isEmbeddedBotsTool && isEmbeddedWorkspaceAllowed(target.serverId, target.workspaceId);
-  if (["/settings", "/sessions", "/schedules"].includes(pathname)) return true;
+  if (pathname === "/settings") return true;
   const plugin = parsePluginSurfaceRoute(pathname);
   if (plugin) return plugin.serverId === workspace.serverId;
   const agent = parseHostAgentRouteFromPathname(pathname);
