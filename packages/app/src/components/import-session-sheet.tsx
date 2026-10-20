@@ -71,6 +71,10 @@ interface ImportSessionSheetProps {
   onImportedAgent?: (agentId: string) => void;
   /** The agent belongs to its own workspace; open that workspace and navigate. */
   onImported?: (agent: ImportedAgent) => void;
+  /** Labels applied to the imported agent, e.g. to file it under a bot. */
+  labels?: Record<string, string>;
+  /** Keeps the listing on `cwd`, hiding "Show all". */
+  scopeLocked?: boolean;
 }
 
 type RecentSessionsResponse = Awaited<
@@ -255,7 +259,7 @@ function ScopeSubtitle({
 }: {
   hostLabel: string;
   isScoped: boolean;
-  onShowAll: () => void;
+  onShowAll?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -265,7 +269,7 @@ function ScopeSubtitle({
           ? t("importSession.scope.workspace")
           : t("importSession.scope.host", { host: hostLabel })}
       </Text>
-      {isScoped ? (
+      {isScoped && onShowAll ? (
         <Button
           variant="ghost"
           size="sm"
@@ -495,6 +499,8 @@ export function ImportSessionSheet({
   onClose,
   onImportedAgent,
   onImported,
+  labels,
+  scopeLocked = false,
 }: ImportSessionSheetProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -701,6 +707,7 @@ export function ImportSessionSheet({
         providerHandleId: entry.providerHandleId,
         cwd: entry.cwd,
         ...(target.workspaceId ? { workspaceId: target.workspaceId } : {}),
+        ...(labels ? { labels } : {}),
       });
       // A pending import keeps the listing and navigation from the host it was sent to.
       void queryClient.invalidateQueries({
@@ -771,7 +778,7 @@ export function ImportSessionSheet({
         <ScopeSubtitle
           hostLabel={hostLabel}
           isScoped={scopeCwd !== null}
-          onShowAll={handleShowAll}
+          onShowAll={scopeLocked ? undefined : handleShowAll}
         />
       ),
       ...(supportsSearch
@@ -796,7 +803,17 @@ export function ImportSessionSheet({
         />
       ),
     }),
-    [handleRefresh, handleShowAll, hostLabel, isRefreshing, scopeCwd, supportsSearch, t, visible],
+    [
+      handleRefresh,
+      handleShowAll,
+      hostLabel,
+      isRefreshing,
+      scopeCwd,
+      scopeLocked,
+      supportsSearch,
+      t,
+      visible,
+    ],
   );
 
   const isSnapshotUnsupported = requiresHostUpgrade;

@@ -17,9 +17,13 @@ import { useSessionStore } from "@/stores/session-store";
 import type { MessagePayload } from "@/composer/types";
 import type { NativeBotChatProps } from "./bot-chat-types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
+import { ComposerImportPill } from "@/composer/draft/import-pill";
+import { COMPOSER_PILL_CLEARANCE } from "@/composer/pill-styles";
+import { ImportSessionSheet } from "@/components/import-session-sheet";
+import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 
 export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "onSelectChat">) {
-  const { serverId, botId, cwd, onStart } = props;
+  const { serverId, botId, cwd, onStart, importLabels, onImported } = props;
   const draftId = props.draftId ?? `paseo-bots:${botId}:${props.workspaceId ?? cwd}`;
   const draftAttachmentScopeKey = useDraftWorkspaceAttachmentScopeKey(draftId);
   const attachmentScopeKeys = useMemo(() => [draftAttachmentScopeKey], [draftAttachmentScopeKey]);
@@ -87,6 +91,13 @@ export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "
     },
     [serverId, onStart],
   );
+  const client = useHostRuntimeClient(serverId);
+  const connected = useHostRuntimeIsConnected(serverId);
+  const [importOpen, setImportOpen] = useState(false);
+  const openImport = useCallback(() => setImportOpen(true), []);
+  const closeImport = useCallback(() => setImportOpen(false), []);
+  // Bot chats are scoped to the bound worktree, so imports stay there too.
+  const canImport = Boolean(importLabels && onImported && props.workspaceId && cwd);
   const agentControls = useMemo(
     () =>
       input.composerState ? { ...input.composerState.agentControls, disabled: true } : undefined,
@@ -97,6 +108,11 @@ export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "
       <ComposerDock fullscreen={fullscreen}>
         <View style={styles.container} />
         <View style={styles.inputArea}>
+          {canImport && !submitting && !fullscreen ? (
+            <View style={styles.importPillRow}>
+              <ComposerImportPill onPress={openImport} disabled={!connected} />
+            </View>
+          ) : null}
           <Composer
             agentId={draftId}
             workspaceId={props.workspaceId}
@@ -119,6 +135,19 @@ export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "
           />
         </View>
       </ComposerDock>
+      {canImport ? (
+        <ImportSessionSheet
+          visible={importOpen}
+          client={client}
+          serverId={serverId}
+          cwd={cwd}
+          workspaceId={props.workspaceId}
+          labels={importLabels}
+          scopeLocked
+          onClose={closeImport}
+          onImportedAgent={onImported}
+        />
+      ) : null}
     </FileDropZone>
   );
 }
@@ -126,4 +155,9 @@ export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "
 const styles = StyleSheet.create((theme) => ({
   container: { flex: 1 },
   inputArea: { paddingHorizontal: theme.spacing[4], paddingBottom: theme.spacing[4] },
+  importPillRow: {
+    flexDirection: "row",
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: { xs: COMPOSER_PILL_CLEARANCE.compact, md: COMPOSER_PILL_CLEARANCE.wide },
+  },
 }));
