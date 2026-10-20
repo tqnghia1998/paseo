@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { renderHook } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { darkTheme } from "@/styles/theme";
 import type { PluginThemeOption } from "@/plugins/themes";
 
@@ -15,8 +15,17 @@ const themes = vi.hoisted(() => ({
 vi.mock("@/appearance/provider", () => ({ useContributedThemes: () => themes }));
 import { useEmbeddedTheme } from "./theme";
 
+// Node's own localStorage global shadows jsdom's, so give the hook a plain store.
+beforeEach(() => {
+  const items = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => void items.set(key, value),
+  });
+});
+
 afterEach(() => {
-  localStorage.clear();
+  vi.unstubAllGlobals();
   themes.options = [];
   themes.selected = null;
   themes.select.mockClear();
