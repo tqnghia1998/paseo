@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const builtinPlugins = [
+  "annotations",
   "antigravity-provider",
   "beautiful-chat",
   "claude-usage-source",
@@ -12,9 +13,11 @@ export const builtinPlugins = [
   "grok-usage-source",
   "hoplite-provider",
   "kimi-usage-source",
+  "mermaid",
   "minimax-usage-source",
   "muse-provider",
   "opencode-go-usage-source",
+  "paseo-bots",
   "worktree-include",
   "space-app-vibing-theme",
   "zai-usage-source",
@@ -39,7 +42,11 @@ export function resolveBuiltinPluginsRoot(moduleUrl: string | URL = import.meta.
 export interface BuiltinPlugin {
   id: string;
   directory: string;
+  isolated?: boolean;
 }
+
+// Stateful community plugins read PASEO_HOME and own timers or local servers.
+const isolatedBuiltins = new Set(["annotations", "paseo-bots"]);
 
 export class BuiltinPluginLoader {
   readonly ids: ReadonlySet<string>;
@@ -52,7 +59,11 @@ export class BuiltinPluginLoader {
   }
 
   entries(): BuiltinPlugin[] {
-    return this.list.map((id) => ({ id, directory: path.join(this.root, id) }));
+    return this.list.map((id) => ({
+      id,
+      directory: path.join(this.root, id),
+      ...(isolatedBuiltins.has(id) ? { isolated: true } : {}),
+    }));
   }
 
   async load(start: (plugin: BuiltinPlugin) => Promise<void>): Promise<void> {

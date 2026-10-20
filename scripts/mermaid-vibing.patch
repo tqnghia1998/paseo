@@ -1,0 +1,13 @@
+diff --git a/index.client.tsx b/index.client.tsx
+index 195ed34..8e7c142 100644
+--- a/index.client.tsx
++++ b/index.client.tsx
+@@ -31,7 +31,7 @@ export default function contribute(client: PluginClientContext) {
+   client.addTimelineTransformer({
+     id: "mermaid-assistant",
+     query: { itemType: "assistant_message" },
+-    transform: ({ item }) => split(item.text),
++    transform: ({ item }) => item.text.includes("\uE200") ? undefined : split(item.text),
+   });
+   client.addTimelineTransformer({
+     id: "mermaid-user",
