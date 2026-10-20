@@ -5,8 +5,16 @@ import { runPluginClientBundle, type PluginClientRuntime } from "./evaluate";
 import type { EvaluatedPlugin, PluginTimelineTransformerContribution } from "./types";
 
 const runtime = {
-  paseo: {},
-  async rpc() {},
+  paseo: {
+    agents: {
+      async list() {
+        return { subscription: { subscribe() {} } };
+      },
+    },
+  },
+  async rpc() {
+    return { annotations: [] };
+  },
   openSettings() {},
   openScreen() {},
   openSurface() {},
@@ -45,6 +53,45 @@ function bundle(body: string): string {
 }
 
 describe("evaluatePluginClientBundle", () => {
+  it.each(["mermaid", "paseo-bots", "annotations"])(
+    "loads the bundled %s client and releases its contributions",
+    async (id) => {
+      const root = new URL(`../../../../plugins/${id}/`, import.meta.url);
+      const { clientBundle } = await compilePlugin({
+        client: fileURLToPath(new URL("index.client.ts", root)),
+        server: null,
+      });
+      const plugin = evaluatePluginClientBundle(id, clientBundle!);
+      try {
+        if (id === "mermaid") {
+          expect(
+            timelineTransformer(plugin, "assistant_message").transform({
+              item: { type: "assistant_message", text: "```mermaid\nflowchart LR\n A --> B\n```" },
+              phase: "complete",
+            }),
+          ).toMatchObject({ items: [{ kind: "mermaid-diagram" }] });
+          expect(
+            timelineTransformer(plugin, "assistant_message").transform({
+              item: {
+                type: "assistant_message",
+                text: "Source \uE200cite\uE202turn1\uE201\n```mermaid\nflowchart LR\n A --> B\n```",
+              },
+              phase: "complete",
+            }),
+          ).toBeUndefined();
+        }
+        if (id === "paseo-bots") {
+          expect(plugin.settingsScreens.map(({ title }) => title)).toEqual(["Bots"]);
+          expect(plugin.surfaces.map(({ id: surfaceId }) => surfaceId)).toEqual(["bots"]);
+        }
+      } finally {
+        await plugin.cleanup();
+      }
+      expect(plugin.timelineTransformers).toEqual([]);
+      expect(plugin.settingsScreens).toEqual([]);
+    },
+  );
+
   it("loads bundled Beautiful Chat cards while preserving native messages and interactive shells", async () => {
     const root = new URL("../../../../plugins/beautiful-chat/", import.meta.url);
     const { clientBundle } = await compilePlugin({
@@ -119,6 +166,32 @@ describe("evaluatePluginClientBundle", () => {
             phase: "complete",
           }),
         ).toMatchObject({ items: [{ kind: "omp-assistant" }] });
+        const mermaid = "```mermaid\nflowchart LR\n A --> B\n```";
+        expect(
+          timelineTransformer(plugin, "assistant_message").transform({
+            item: { type: "assistant_message", text: mermaid },
+            phase: "complete",
+          }),
+        ).toBeUndefined();
+        expect(
+          timelineTransformer(plugin, "user_message").transform({
+            item: { type: "user_message", text: mermaid },
+            phase: "complete",
+          }),
+        ).toBeUndefined();
+        expect(
+          timelineTransformer(plugin, "tool_call").transform({
+            item: {
+              type: "tool_call",
+              name: "mcp__bots__propose_skill",
+              callId: "proposal",
+              status: "completed",
+              error: null,
+              detail: { type: "unknown", input: null, output: "Proposal p-abcdefghij" },
+            },
+            phase: "complete",
+          }),
+        ).toBeUndefined();
       } finally {
         await plugin.cleanup();
       }

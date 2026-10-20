@@ -61,6 +61,7 @@ interface PluginRuntimePort {
 }
 
 interface PluginServiceDependencies {
+  paseoHome?: string;
   usageAgents?: AgentUsageLookup;
   settingsDirectory?: string;
   runtime?: PluginRuntimePort;
@@ -111,6 +112,7 @@ export class PluginService {
     this.runtime =
       dependencies.runtime ??
       new PluginRuntime(logger, daemonVersion, {
+        paseoHome: dependencies.paseoHome,
         settingsDirectory: dependencies.settingsDirectory,
         onSettingsChanged: (pluginId, settingsId) => {
           for (const listener of this.settingsListeners) listener(pluginId, settingsId);

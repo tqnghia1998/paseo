@@ -1,0 +1,7 @@
+{
+  "id": "paseo-bots",
+  "description": "Personal bots with their own instructions, agent, memory, routines, skills, tools and connected apps.",
+  "requirements": {
+    "paseo": ">=0.9.2"
+  }
+}

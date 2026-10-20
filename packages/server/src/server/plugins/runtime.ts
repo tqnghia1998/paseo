@@ -6,6 +6,7 @@ import {
 } from "@getpaseo/plugin/server/provider";
 import type { PluginBeforeRequests, PluginLifecycleEvents } from "@getpaseo/plugin/server";
 import { validateBeforeRequest, validateBeforeResult } from "./lifecycle/index.js";
+import type { BuiltinPlugin } from "./builtin/index.js";
 import { fork } from "node:child_process";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -122,6 +123,7 @@ interface RemoteProviderConnection {
 }
 
 interface PluginRuntimeDependencies {
+  paseoHome?: string;
   settingsDirectory?: string;
   onSettingsChanged?: (pluginId: string, settingsId: string) => void;
   spawnChild?: () => PluginChild;
@@ -230,11 +232,12 @@ function resolveWorkerExecArgv(): string[] {
   ];
 }
 
-function spawnPluginChild(): PluginChild {
+function spawnPluginChild(paseoHome?: string): PluginChild {
   return fork(fileURLToPath(resolveWorkerUrl()), [], {
     execArgv: resolveWorkerExecArgv(),
     serialization: "advanced",
     stdio: ["ignore", "pipe", "pipe", "ipc"],
+    ...(paseoHome ? { env: { ...process.env, PASEO_HOME: paseoHome } } : {}),
   }) as PluginChild;
 }
 
@@ -309,7 +312,7 @@ export class PluginRuntime {
     private readonly dependencies: PluginRuntimeDependencies = {},
   ) {
     this.logger = logger.child({ module: "plugins" });
-    this.spawnChild = dependencies.spawnChild ?? spawnPluginChild;
+    this.spawnChild = dependencies.spawnChild ?? (() => spawnPluginChild(dependencies.paseoHome));
     this.sessionHost = dependencies.sessionHost ?? null;
   }
 
@@ -343,7 +346,7 @@ export class PluginRuntime {
     this.appendLog(pluginId, "stdout", "[paseo] Plugin ready");
   }
 
-  async startBuiltinPlugin(input: { id: string; directory: string }): Promise<void> {
+  async startBuiltinPlugin(input: BuiltinPlugin): Promise<void> {
     if (this.plugins.has(input.id)) throw new Error(`Plugin is already running: ${input.id}`);
     this.appendLog(input.id, "stdout", "[paseo] Loading plugin");
     const directory = path.resolve(input.directory);
@@ -358,8 +361,10 @@ export class PluginRuntime {
       pluginId: input.id,
       pluginDirectory: directory,
       requirements: manifest.requirements,
-      child: new InternalPluginChild(evaluateBundle(bundles.serverBundle)),
-      bundle: "",
+      child: input.isolated
+        ? this.spawnChild()
+        : new InternalPluginChild(evaluateBundle(bundles.serverBundle)),
+      bundle: bundles.serverBundle,
       clientBundle: bundles.clientBundle ?? "",
     });
     this.plugins.set(input.id, loaded);
