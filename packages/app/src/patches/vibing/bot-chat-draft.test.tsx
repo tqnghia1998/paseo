@@ -3,7 +3,7 @@ import React, { type ReactNode, type ComponentProps } from "react";
 import type { Composer } from "@/composer";
 import type { MessagePayload } from "@/composer/types";
 import type { ImportSessionSheet } from "@/components/import-session-sheet";
-import { act, fireEvent, render, screen, cleanup } from "@testing-library/react";
+import { act, fireEvent, render, screen, cleanup, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { NativeBotChatDraft } from "./bot-chat-draft";
 import {
@@ -258,4 +258,32 @@ it("imports sessions into the bot within its worktree", () => {
   });
   mocks.importSheet!.onImportedAgent!("imported");
   expect(onImported).toHaveBeenCalledWith("imported");
+});
+
+it("focuses the new chat composer while its pane is active and idle", async () => {
+  let finishStart: (id: string) => void = () => {};
+  const start = vi.fn(() => new Promise<string>((resolve) => (finishStart = resolve)));
+  mocks.encodeImages.mockResolvedValue([]);
+  const props = {
+    serverId: "host",
+    botId: "bot",
+    cwd: "/worktree",
+    workspaceId: "workspace",
+    provider: "codex" as const,
+    onStart: start,
+  };
+  const view = render(<NativeBotChatDraft {...props} active={false} />);
+  expect(mocks.composer!.autoFocus).toBe(false);
+  view.rerender(<NativeBotChatDraft {...props} active />);
+  expect(mocks.composer!.autoFocus).toBe(true);
+  let sent: Promise<unknown> = Promise.resolve();
+  act(() => {
+    sent = mocks.submit!({ text: "Hi", cwd: "/worktree", attachments: [] });
+  });
+  await waitFor(() => expect(mocks.composer!.autoFocus).toBe(false));
+  await act(async () => {
+    finishStart("created");
+    await sent;
+  });
+  expect(mocks.composer!.autoFocus).toBe(true);
 });
