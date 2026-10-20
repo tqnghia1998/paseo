@@ -21,6 +21,7 @@ import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submi
 import { toErrorMessage } from "@/utils/error-messages";
 import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
+import { useBotChatFork } from "@/patches/vibing/bot-chat-fork";
 
 /**
  * The subset of an agent record that a fork needs in order to seed the new
@@ -129,6 +130,7 @@ export function useForkAgent(
   const { serverId, toast, readOnly = false } = input;
   const { t } = useTranslation();
   const router = useRouter();
+  const openBotForkDraft = useBotChatFork();
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const supportsAgentForkContext = useHostFeature(serverId, "agentForkContext") && !readOnly;
 
@@ -164,6 +166,10 @@ export function useForkAgent(
           throw new Error(t("message.actions.forkMissingWorkspace"));
         }
         const draftId = await prepareForkDraft();
+        if (openBotForkDraft) {
+          openBotForkDraft(draftId);
+          return;
+        }
         navigateToWorkspace({
           serverId,
           workspaceId,
