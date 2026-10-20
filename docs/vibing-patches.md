@@ -73,6 +73,14 @@ Definitions remain runtime-global and local conversation lists stay worktree-sco
 Native fork actions open a fresh draft in the same bot, preserving the draft ID
 that owns the bounded Chat history attachment. The Bots composer reads that
 draft's attachment scope so the copied conversation reaches its first message.
+Bot chat rows show a Delete icon before their kebab; it confirms, then permanently
+deletes the agent through the client handle's `delete()` (hosts without it report an
+error). Deleting or archiving the open chat selects the bot's next chat in sidebar
+order (pins first), else the previous one; only a bot with no chats left opens a new
+chat. The new-chat draft shows the native Import session pill: the sheet is locked
+to the bound worktree (no "Show all") and labels the imported or restored agent with
+the bot, so it lists and opens under that bot.
+The fork menu omits its new-workspace destination inside Bots chats.
 General is created automatically and includes legacy unlabeled chats from the same
 directory without mutating their records. Embedded conversation lists, pins, usage and routine chat links are strictly
 scoped to the bound worktree. There is no all-folder override. Selected chat IDs
@@ -83,7 +91,10 @@ and configured background placement remain shared.
 
 `bot-workspace.tsx` activates conversations for review/recovery prompts and Live
 Design, including pending completion recovery and unique fresh-draft handshakes.
-Native draft keys include the workspace. Shared chat plugins, attachments, queues,
+It also saves the open chat (or new chat) per worktree in iframe `localStorage`
+and reopens it when the surface remounts, once agents hydrate and only if that
+agent still belongs to the worktree; prompts and Live Design win over a pending
+restore. Native draft keys include the workspace. Shared chat plugins, attachments, queues,
 rewind and provider fixes remain. The reproducible community source patch lives in
 `scripts/paseo-bots-vibing.patch`; regenerate its bundles instead of hand editing
 generated files. The workspace bridge renders no header or Chat settings button.
@@ -146,8 +157,9 @@ plugin list unchanged.
   fallback overrides them.
 - Paseo's native Appearance content-width setting controls both transcript and
   composer, defaulting to 1200px in embedded builds and 820px in standalone builds.
-  Explicit saved widths persist. Embedded chatboxes use 48px of internal padding
-  on the left and right. Gutters, tab geometry and metadata tooltips follow upstream.
+  Explicit saved widths persist. The embedded web transcript pads 48px on each side
+  (`agent-stream/strategy-web.tsx`) so messages clear the chat outline rail, whose
+  upstream gutter assumes the narrower standalone width. Gutters, tab geometry and metadata tooltips follow upstream.
   The bundled theme uses the native `addTheme` palette, whose derived colors
   intentionally replace the former full-token override. Only embedded builds
   select it automatically once; subsequent explicit appearance choices persist. Native built-ins need an explicit Paseo version range
