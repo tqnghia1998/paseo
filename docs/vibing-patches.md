@@ -80,6 +80,8 @@ order (pins first), else the previous one; only a bot with no chats left opens a
 chat. The new-chat draft shows the native Import session pill: the sheet is locked
 to the bound worktree (no "Show all") and labels the imported or restored agent with
 the bot, so it lists and opens under that bot.
+Opening a new chat focuses its composer while the pane is active, matching the native
+workspace draft; focus pauses while the first message is being created.
 The fork menu omits its new-workspace destination inside Bots chats.
 General is created automatically and includes legacy unlabeled chats from the same
 directory without mutating their records. Embedded conversation lists, pins, usage and routine chat links are strictly
