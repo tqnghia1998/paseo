@@ -98,7 +98,9 @@ plugin list unchanged.
   A worktree-qualified iframe name keys a sessionStorage navigation binding so
   Settings reload/return cannot select a sibling iframe's last workspace. The route
   boundary gates screen mounting, and navigation/search filter workspace targets.
-  The native sidebar, History, Schedules and plugin screens stay available. Native
+  The native sidebar starts closed when no panel preference is saved; the menu
+  button reopens it and saved open/closed choices survive reload. History,
+  Schedules and plugin screens stay available. Native
   root command actions remain registered; only project creation, workspace creation
   and Home are filtered. Import is unavailable until the bound directory resolves.
   Scope rows, imports and schedule targets to the bound worktree. Different Paseo
