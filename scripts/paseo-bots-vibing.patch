@@ -1,5 +1,5 @@
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..d3f733a 100644
+index ebc4ed2..b0199b4 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
 @@ -1,3 +1,4 @@
@@ -25,6 +25,24 @@ index ebc4ed2..d3f733a 100644
    const { colors } = theme;
    const { settings, latest, commit } = useBotSettings();
    const toast = useToast();
+@@ -376,7 +377,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+       title: "Bot actions",
+       entries: botMenuEntries({
+         bot,
+-        onOpenInPaseo: openWorkspace && workspaceId && botHost.online ? () => openWorkspace({ workspaceId, serverId: botHost.key }) : undefined,
++        onOpenInPaseo: !nativeChat && openWorkspace && workspaceId && botHost.online ? () => openWorkspace({ workspaceId, serverId: botHost.key }) : undefined,
+         onOpenSettings: () => openPanel(bot, "identity"),
+         onTogglePin: () => void updateBot(bot.id, { pinned: !bot.pinned }),
+         onMoveUp: moveBot(bot, -1),
+@@ -460,7 +461,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+             context.pinned ? unpin(current) : { ...current, pinnedChats: [...current.pinnedChats, { botId: bot.id, chatId: chat.id }] },
+           ),
+         move: context.pinned || listUi.chatSort !== "manual" ? null : { up: move(-1), down: move(1) },
+-        onOpenInPaseo: openAgent && botHost.online ? () => openAgent({ agentId: chat.id, serverId: botHost.key }) : undefined,
++        onOpenInPaseo: !nativeChat && openAgent && botHost.online ? () => openAgent({ agentId: chat.id, serverId: botHost.key }) : undefined,
+         onArchive: async () => {
+           if (!botHost.api) {
+             toast.error("Host is not connected");
 @@ -571,6 +572,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          onBack={layout.compact ? () => setSelection(null) : undefined}
          onBotMenu={(anchor) => (anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot))}

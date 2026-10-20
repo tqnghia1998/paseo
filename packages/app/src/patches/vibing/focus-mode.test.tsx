@@ -45,9 +45,9 @@ describe("embedded focus mode", () => {
     expect(shouldUseEmbeddedLiveDesignMessaging(false, "?embedded-live-design=1")).toBe(false);
   });
 
-  it("keeps Live Design workspace tabs in their desktop row", () => {
+  it("keeps embedded Agent tabs visible in their row at compact widths", () => {
     expect(shouldUseDesktopWorkspaceTabs(true, true)).toBe(true);
-    expect(shouldUseDesktopWorkspaceTabs(true, false)).toBe(false);
+    expect(shouldUseDesktopWorkspaceTabs(true, false)).toBe(true);
     expect(shouldUseDesktopWorkspaceTabs(false, false)).toBe(true);
   });
 

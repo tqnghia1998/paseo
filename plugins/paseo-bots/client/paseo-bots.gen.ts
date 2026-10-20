@@ -13969,7 +13969,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
       title: "Bot actions",
       entries: botMenuEntries({
         bot,
-        onOpenInPaseo: openWorkspace && workspaceId && botHost.online ? () => openWorkspace({ workspaceId, serverId: botHost.key }) : void 0,
+        onOpenInPaseo: !nativeChat && openWorkspace && workspaceId && botHost.online ? () => openWorkspace({ workspaceId, serverId: botHost.key }) : void 0,
         onOpenSettings: () => openPanel(bot, "identity"),
         onTogglePin: () => void updateBot(bot.id, { pinned: !bot.pinned }),
         onMoveUp: moveBot(bot, -1),
@@ -14047,7 +14047,7 @@ Its chats stay on the host and remain in Paseo's history.`,
           (current2) => context.pinned ? unpin(current2) : { ...current2, pinnedChats: [...current2.pinnedChats, { botId: bot.id, chatId: chat.id }] }
         ),
         move: context.pinned || listUi.chatSort !== "manual" ? null : { up: move(-1), down: move(1) },
-        onOpenInPaseo: openAgent && botHost.online ? () => openAgent({ agentId: chat.id, serverId: botHost.key }) : void 0,
+        onOpenInPaseo: !nativeChat && openAgent && botHost.online ? () => openAgent({ agentId: chat.id, serverId: botHost.key }) : void 0,
         onArchive: async () => {
           if (!botHost.api) {
             toast.error("Host is not connected");
