@@ -24,30 +24,6 @@ const sections: CustomizationSection[] = [
     title: "Plugin changes",
     entries: [
       {
-        title: "Mermaid diagrams",
-        description:
-          "Bundles dutchakdev’s inline Mermaid diagrams with zoom, fit, source and pop-out controls. Messages carrying provider citations keep native rendering.",
-        source: "plugins/mermaid/ · https://github.com/dutchakdev/paseo-plugin-mermaid",
-      },
-      {
-        title: "Personal bots",
-        description:
-          "Bundles oliexe’s Bots screen for personal instructions, memory, teams and routines. Open Bots from the sidebar; connected apps require your own setup.",
-        source: "plugins/paseo-bots/ · https://github.com/oliexe/paseo-bots",
-      },
-      {
-        title: "Chat annotations",
-        description:
-          "Bundles neunzig-zehn’s passage comments and annotation composer pills. Select text in a chat to add a comment or ask in a new chat.",
-        source: "plugins/annotations/ · https://github.com/neunzig-zehn/paseo-annotations",
-      },
-      {
-        title: "Beautiful Chat",
-        description:
-          "Bundles ABorakati’s Beautiful Chat for tool, reasoning and task cards. Native messages, context attachments, search and interactive shells remain available. Customize it in Settings → Plugins → beautiful-chat → Chat presentation.",
-        source: "plugins/beautiful-chat/ · https://github.com/ABorakati/beautiful-chat",
-      },
-      {
         title: "Vibing theme",
         description:
           "Adds the Space App Vibing palette as a built-in plugin. A small embedding patch selects it once; later appearance choices are preserved. Choose the palette in Settings → Appearance.",

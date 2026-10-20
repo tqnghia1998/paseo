@@ -1,4 +1,7 @@
 const shared = {
+  communityTitle: "Community plugins",
+  communityHint: "Plugins by community authors, bundled and enabled by default.",
+  communityEmpty: "No bundled community plugins reported by this host",
   builtinTitle: "Paseo built-ins",
   builtinHint:
     "Standard Paseo provider and usage integrations. Loaded automatically; accounts appear when configured. The additional-plugin switch does not affect these integrations.",

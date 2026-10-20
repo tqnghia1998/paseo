@@ -40,8 +40,8 @@ import { pluginRegistry, useInstalledPlugins } from "@/plugins/registry";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
-import { VibingPluginsSection } from "@/patches/vibing/customizations";
-import { groupPluginInventory } from "@/patches/vibing/plugin-inventory";
+import { CommunityPluginsSection, VibingPluginsSection } from "@/patches/vibing/customizations";
+import { getCommunityPluginSource, groupPluginInventory } from "@/patches/vibing/plugin-inventory";
 
 const pluginQueryKey = (serverId: string) => ["plugins", serverId] as const;
 const PLUGIN_SOURCE_DOCS_URL = "https://paseo.sh/docs/plugins/reference#plugin-sources";
@@ -164,9 +164,10 @@ function PluginRow({
     () => <StatusBadge label={statusLabel} variant={badgeVariant} />,
     [badgeVariant, statusLabel],
   );
+  const communitySource = getCommunityPluginSource(plugin, isEmbeddedFocusMode);
   const hint = useMemo(
     () =>
-      plugin.description || plugin.installation ? (
+      plugin.description || plugin.installation || communitySource ? (
         <View>
           {plugin.description ? (
             <Text style={styles.pluginDescription}>{plugin.description}</Text>
@@ -174,9 +175,12 @@ function PluginRow({
           {plugin.installation ? (
             <Text style={styles.pluginSource}>{formatPluginInstallation(plugin.installation)}</Text>
           ) : null}
+          {communitySource ? (
+            <ExternalLink href={`https://github.com/${communitySource}`} label={communitySource} />
+          ) : null}
         </View>
       ) : undefined,
-    [plugin.description, plugin.installation],
+    [plugin.description, plugin.installation, communitySource],
   );
   const toggleLabel = `${plugin.id}: ${t(
     plugin.enabled ? "settings.plugins.actions.disable" : "settings.plugins.actions.enable",
@@ -483,7 +487,7 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
     void refetchPlugins();
   }, [refetchPlugins]);
   const closeLogs = useCallback(() => setLogsPluginId(null), []);
-  const { vibing, paseo, additional } = groupPluginInventory({
+  const { vibing, community, paseo, additional } = groupPluginInventory({
     plugins: plugins.data ?? [],
     embedded: isEmbeddedFocusMode,
   });
@@ -560,6 +564,13 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
           emptyLabel={t("settings.plugins.vibingEmpty")}
         />
       </VibingPluginsSection>
+      <CommunityPluginsSection pageState={pageState} hasPlugins={community.length > 0}>
+        <PluginList
+          plugins={community}
+          renderRow={renderPluginRow}
+          emptyLabel={t("settings.plugins.communityEmpty")}
+        />
+      </CommunityPluginsSection>
       <BuiltinPluginsSection supported={builtinListingSupported} pageState={pageState}>
         <PluginList
           plugins={paseo}
