@@ -25,13 +25,23 @@ import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { NativeBotChatDraft } from "./bot-chat-draft";
 import { isEmbeddedFocusMode } from "./focus-mode";
 import type { Theme } from "@/styles/theme";
+import { getEmbeddedWorkspace, getEmbeddedWorkspaceDirectory } from "./workspace-boundary";
+import { BotWorkspaceBridge } from "./bot-workspace";
 import type { NativeBotChatProps } from "./bot-chat-types";
 
 const spinnerColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
 export function embeddedBotChatProps(pluginId: string) {
-  return isEmbeddedFocusMode && pluginId === "paseo-bots" ? { nativeChat: NativeBotChat } : {};
+  if (!isEmbeddedFocusMode || pluginId !== "paseo-bots") return {};
+  const bound = getEmbeddedWorkspace();
+  const directory = getEmbeddedWorkspaceDirectory();
+  return {
+    nativeChat: NativeBotChat,
+    ...(bound && directory
+      ? { botWorkspace: { id: bound.workspaceId, directory }, workspaceBridge: BotWorkspaceBridge }
+      : {}),
+  };
 }
 
 export function NativeBotChat(props: NativeBotChatProps) {

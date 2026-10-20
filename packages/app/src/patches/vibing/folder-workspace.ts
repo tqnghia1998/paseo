@@ -2,8 +2,9 @@ import { bindEmbeddedWorkspace } from "./workspace-boundary";
 import { useEffect } from "react";
 import { useRouter, type Href } from "expo-router";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { isEmbeddedBotsTool, resolveEmbeddedToolEntryRoute } from "./embedded-tools";
-import { preserveEmbeddedLiveDesignMessagingQuery } from "./focus-mode";
+import { resolveEmbeddedToolEntryRoute } from "./embedded-tools";
+import { buildHostWorkspaceRoute } from "@/utils/host-routes";
+import { isEmbeddedFocusMode, preserveEmbeddedLiveDesignMessagingQuery } from "./focus-mode";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import {
   normalizeWorkspaceDescriptor,
@@ -63,7 +64,9 @@ export function useEmbeddedFolderWorkspace(input: FolderWorkspaceLaunchInput): s
         useSessionStore.getState().mergeWorkspaces(serverId, [workspace]);
         router.replace(
           preserveEmbeddedLiveDesignMessagingQuery(
-            resolveEmbeddedToolEntryRoute(serverId, workspace.id, isEmbeddedBotsTool),
+            isEmbeddedFocusMode
+              ? resolveEmbeddedToolEntryRoute(serverId)
+              : buildHostWorkspaceRoute(serverId, workspace.id),
             embeddedLiveDesignMessaging,
           ) as Href,
         );

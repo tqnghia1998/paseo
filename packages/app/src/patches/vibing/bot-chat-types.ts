@@ -5,6 +5,7 @@ import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 export interface NativeBotChatProps {
   serverId: string;
   botId: string;
+  draftId?: string;
   agentId: string | null;
   workspaceId?: string | null;
   cwd: string;
@@ -19,5 +20,5 @@ export interface NativeBotChatProps {
     messageId: string;
     images: { data: string; mimeType: string }[];
     attachments: AgentAttachment[];
-  }): Promise<void>;
+  }): Promise<string>;
 }

@@ -43,15 +43,15 @@ const sections: CustomizationSection[] = [
       {
         title: "Worktree navigation",
         description:
-          "Keeps History, search, imports and schedules within the current worktree. The workspace shows Agent conversations, opens an Agent composer by default, and creates another directly from New tab. The sidebar omits the workspace list and setup callout; Bots stays beside the menu. Vibing owns switching worktrees and closing workspaces.",
+          "Opens Bots as the only embedded agent tool. Bot definitions stay reusable; local chats use the current worktree. General also shows existing worktree conversations. Vibing owns workspace switching.",
         source:
-          "packages/app/src/patches/vibing/workspace-boundary.ts · navigation-boundary.tsx · sidebar.ts",
+          "packages/app/src/patches/vibing/workspace-boundary.ts · navigation-boundary.tsx · bot-workspace.tsx",
       },
       {
         title: "Prompt insertion",
         description:
           "Inserts prompts from Vibing into the active editable composer without sending them, finding or creating a conversation when needed.",
-        source: "packages/app/src/patches/vibing/host-prompts.ts · workspace-conversation.ts",
+        source: "packages/app/src/patches/vibing/host-prompts.ts · bot-workspace.tsx",
       },
       {
         title: "Live Design requests",
@@ -72,12 +72,6 @@ const sections: CustomizationSection[] = [
           "Checkpoints queued messages across iframe remounts. Queue is the default action while an agent is running. Change Default send in General settings; queued-message recovery stays enabled.",
         source:
           "packages/app/src/patches/vibing/queued-messages.ts · packages/app/src/hooks/use-settings/migrations.ts",
-      },
-      {
-        title: "Unsaved editor recovery",
-        description:
-          "Preserves unsaved file edits across iframe remounts in the same window, with conflict and storage-failure guards.",
-        source: "packages/app/src/patches/vibing/file-recovery.ts",
       },
       {
         title: "Worktree resource cleanup",
