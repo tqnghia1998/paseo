@@ -150,8 +150,9 @@ plugin list unchanged.
   migration. Sending controls and alternate-send keyboard behavior follow upstream.
   Native saved provider/model preferences own selection; no provider-priority
   fallback overrides them.
-- Chat widths, gutters, tab geometry and metadata tooltips follow upstream. Use
-  Paseo's Appearance content-width setting for both transcript and composer.
+- Paseo's native Appearance content-width setting controls both transcript and
+  composer, defaulting to 1200px in embedded builds and 820px in standalone builds.
+  Explicit saved widths persist. Gutters, tab geometry and metadata tooltips follow upstream.
   The bundled theme uses the native `addTheme` palette, whose derived colors
   intentionally replace the former full-token override. Only embedded builds
   select it automatically once; subsequent explicit appearance choices persist. Native built-ins need an explicit Paseo version range
