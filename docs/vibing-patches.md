@@ -146,7 +146,8 @@ plugin list unchanged.
   fallback overrides them.
 - Paseo's native Appearance content-width setting controls both transcript and
   composer, defaulting to 1200px in embedded builds and 820px in standalone builds.
-  Explicit saved widths persist. Gutters, tab geometry and metadata tooltips follow upstream.
+  Explicit saved widths persist. Embedded chatboxes use 48px of internal padding
+  on the left and right. Gutters, tab geometry and metadata tooltips follow upstream.
   The bundled theme uses the native `addTheme` palette, whose derived colors
   intentionally replace the former full-token override. Only embedded builds
   select it automatically once; subsequent explicit appearance choices persist. Native built-ins need an explicit Paseo version range

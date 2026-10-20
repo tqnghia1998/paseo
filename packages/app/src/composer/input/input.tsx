@@ -62,7 +62,10 @@ import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isNative, isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
-import { isEmbeddedLiveDesignMessaging } from "@/patches/vibing/focus-mode";
+import {
+  isEmbeddedLiveDesignMessaging,
+  selectEmbeddedFocusMode,
+} from "@/patches/vibing/focus-mode";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useComposerHeight } from "./height";
 import { ComposerInputPresentation } from "./presentation";
@@ -2275,8 +2278,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
       md: theme.spacing[3],
     },
     paddingHorizontal: {
-      xs: theme.spacing[3],
-      md: theme.spacing[4],
+      xs: selectEmbeddedFocusMode(theme.spacing[12], theme.spacing[3]),
+      md: selectEmbeddedFocusMode(theme.spacing[12], theme.spacing[4]),
     },
     ...(isWeb
       ? {
