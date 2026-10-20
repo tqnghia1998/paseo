@@ -4247,11 +4247,11 @@ function resolveHost(hostId, local, localApi, hosts) {
   }
   const summary = hosts.find((host2) => host2.serverId === hostId);
   const label = summary?.label ?? "Unknown host";
-  if (summary?.status !== "online") return { api: null, key: hostId, label, isLocal: false, online: false };
+  if (summary?.status !== "online") return { api: null, key: hostId, label, isLocal: false, online: false, workspaceDirectory: local.workspaceDirectory };
   try {
-    return { api: getPaseoClient(hostId), key: hostId, label, isLocal: false, online: true };
+    return { api: getPaseoClient(hostId), key: hostId, label, isLocal: false, online: true, workspaceDirectory: local.workspaceDirectory };
   } catch {
-    return { api: null, key: hostId, label, isLocal: false, online: false };
+    return { api: null, key: hostId, label, isLocal: false, online: false, workspaceDirectory: local.workspaceDirectory };
   }
 }
 function useBotHost(hostId, local) {
@@ -4304,12 +4304,13 @@ function useHostWorkspaces(host2) {
     }
   });
 }
-function useBotChats(host2, botId, workspaceOnly = true) {
-  const directory = workspaceOnly ? host2.workspaceDirectory : void 0;
+function useBotChats(host2, botId) {
+  const directory = host2.workspaceDirectory;
+  const available = !directory || host2.isLocal;
   return useQuery({
     // All bots in an embedded workspace share one directory snapshot.
     queryKey: ["paseo-bots", "chats", host2.key, directory ? "workspace" : botId, directory],
-    enabled: !!host2.api,
+    enabled: !!host2.api && available,
     refetchInterval: host2.isLocal ? false : 15e3,
     queryFn: async () => {
       const agents = [];
@@ -4324,7 +4325,7 @@ function useBotChats(host2, botId, workspaceOnly = true) {
       } while (cursor);
       return agents.filter((agent) => !agent.archivedAt).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
     },
-    select: (agents) => directory ? agents.filter((agent) => isWorkspaceBotChat(agent, directory, botId)) : agents
+    select: (agents) => !available ? [] : directory ? agents.filter((agent) => isWorkspaceBotChat(agent, directory, botId)) : agents
   });
 }
 function useChatInvalidation() {
@@ -4802,8 +4803,8 @@ var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selec
           ] })
         ] }),
         showKebab ? /* @__PURE__ */ jsxs5(View6, { style: { position: "absolute", top: 8, right: 12, flexDirection: "row" }, children: [
-          touch ? null : /* @__PURE__ */ jsx6(View6, { pointerEvents: "none", style: { width: 16, backgroundColor: hovered ? colors2.surface1 : "transparent" } }),
-          /* @__PURE__ */ jsx6(View6, { style: { backgroundColor: selected ? tokens.surfaceSidebarSelected : colors2.surface1 }, children: /* @__PURE__ */ jsx6(KebabButton2, { colors: colors2, buttonRef: kebabRef, label: "Chat actions", onPress: () => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab")) }) })
+          touch ? null : /* @__PURE__ */ jsx6(View6, { pointerEvents: "none", style: { width: 16, backgroundColor: background } }),
+          /* @__PURE__ */ jsx6(View6, { style: { backgroundColor: background }, children: /* @__PURE__ */ jsx6(KebabButton2, { colors: colors2, buttonRef: kebabRef, label: "Chat actions", onPress: () => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab")) }) })
         ] }) : null
       ]
     }
@@ -11613,7 +11614,7 @@ var STATUS2 = {
 };
 function BotCard({ colors: colors2, bot, lead, localHost, onPress }) {
   const host2 = useBotHost(bot.hostId, localHost);
-  const chats = useBotChats(host2, bot.id, false);
+  const chats = useBotChats(host2, bot.id);
   const status = STATUS2[aggregateBuckets((chats.data ?? []).map(chatBucket))];
   const { hovered, hoverProps } = useHover();
   const agent = [bot.provider, bot.model].filter(Boolean).join(" \xB7 ");
@@ -13036,7 +13037,7 @@ function HistorySection({ colors: colors2, bot, history, onRestore }) {
 }
 function UsageSection({ bot, localHost }) {
   const host2 = useBotHost(bot.hostId, localHost);
-  const chats = useBotChats(host2, bot.id, false);
+  const chats = useBotChats(host2, bot.id);
   const list2 = chats.data ?? [];
   const sum = (pick2) => list2.reduce((total, chat) => total + (chat.lastUsage ? pick2(chat.lastUsage) ?? 0 : 0), 0);
   const input = sum((usage) => usage.inputTokens);
@@ -13044,7 +13045,7 @@ function UsageSection({ bot, localHost }) {
   const cost = sum((usage) => usage.totalCostUsd);
   const working = list2.filter((chat) => chat.status === "running").length;
   const loading2 = chats.isLoading;
-  return /* @__PURE__ */ jsx46(SettingsSection17, { title: "All chats", info: "From each chat's latest turn as reported by the provider. Archived chats aren't counted.", children: /* @__PURE__ */ jsxs44(SettingsCard19, { children: [
+  return /* @__PURE__ */ jsx46(SettingsSection17, { title: localHost.workspaceDirectory ? "Workspace chats" : "All chats", info: "From each chat's latest turn as reported by the provider. Archived chats aren't counted.", children: /* @__PURE__ */ jsxs44(SettingsCard19, { children: [
     /* @__PURE__ */ jsx46(SettingsRow9, { label: "Chats", hint: loading2 ? "Loading..." : `${list2.length} open${working ? `, ${working} working now` : ""}` }),
     /* @__PURE__ */ jsx46(SettingsRow9, { label: "Tokens", hint: loading2 ? "Loading..." : `${input.toLocaleString()} in \xB7 ${output.toLocaleString()} out` }),
     /* @__PURE__ */ jsx46(SettingsRow9, { label: "Cost", hint: loading2 ? "Loading..." : cost > 0 ? `$${cost.toFixed(2)}` : "Not reported by this provider" })
@@ -13100,6 +13101,7 @@ function runTime(at, now) {
 }
 function RoutinesSection({ colors: colors2, bot, localHost, onPatch, flush, onOpenChat }) {
   const host2 = useBotHost(bot.hostId, localHost);
+  const chats = useBotChats(host2, bot.id);
   const status = useRpc19(routineStatusRpc);
   const runNow = useRpc19(routineRunNowRpc);
   const webhook = useRpc19(routineWebhookRpc);
@@ -13116,7 +13118,7 @@ function RoutinesSection({ colors: colors2, bot, localHost, onPatch, flush, onOp
     try {
       await flush();
       const { run: started } = await runNow({ botId: bot.id, routineId: routine.id });
-      if (started.status === "running") toast.show(`Started "${routine.name}". It appears as a chat under ${bot.name}.`, { variant: "success" });
+      if (started.status === "running") toast.show(localHost.workspaceDirectory ? `Started "${routine.name}" in its configured folder.` : `Started "${routine.name}". It appears as a chat under ${bot.name}.`, { variant: "success" });
       else if (started.status === "skipped-busy") toast.show(`"${routine.name}" is still working on its last run.`);
       else toast.error(started.error ?? "Couldn't start the run.");
       void queryClient.invalidateQueries({ queryKey: ["paseo-bots"] });
@@ -13147,7 +13149,7 @@ function RoutinesSection({ colors: colors2, bot, localHost, onPatch, flush, onOp
   }
   const now = /* @__PURE__ */ new Date();
   const upcoming = bot.routines.filter((routine) => routine.enabled).flatMap((routine) => upcomingRuns(routine.schedule, new Date(recordOf(routine)?.lastRunAt ?? routine.createdAt), now, UPCOMING).map((at) => ({ at, routine }))).filter(({ at }) => at.getTime() - now.getTime() <= UPCOMING_DAYS * 864e5).sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, UPCOMING);
-  const recent = bot.routines.flatMap((routine) => (recordOf(routine)?.runs ?? []).map((entry) => ({ run: entry, routine }))).sort((a, b) => Date.parse(b.run.startedAt) - Date.parse(a.run.startedAt)).slice(0, RECENT);
+  const recent = bot.routines.flatMap((routine) => (recordOf(routine)?.runs ?? []).map((entry) => ({ run: entry, routine }))).filter(({ run: run2 }) => !localHost.workspaceDirectory || chats.data?.some((chat) => chat.id === run2.agentId)).sort((a, b) => Date.parse(b.run.startedAt) - Date.parse(a.run.startedAt)).slice(0, RECENT);
   return /* @__PURE__ */ jsxs45(Fragment21, { children: [
     records.data?.scheduler === false ? /* @__PURE__ */ jsx47(View43, { style: { marginBottom: 24 }, children: /* @__PURE__ */ jsx47(Alert2, { colors: colors2, variant: "warning", description: "The scheduler on this host is starting" }) }) : null,
     /* @__PURE__ */ jsx47(
@@ -13264,7 +13266,7 @@ function RoutineForm({ colors: colors2, bot, host: host2, routine, onCancel, onS
   const [cronText, setCronText] = useState41(() => scheduleToCron(original) ?? "0 9 * * *");
   const [onceText, setOnceText] = useState41(() => formatLocalDateTime(original.kind === "once" ? new Date(original.at) : inAnHour()));
   const [cronKey, setCronKey] = useState41(0);
-  const chats = useBotChats(host2, bot.id, false);
+  const chats = useBotChats(host2, bot.id);
   const once = schedule.kind === "once";
   const hook = schedule.kind === "webhook";
   const trimmedCron = cronText.trim();
@@ -13740,6 +13742,7 @@ var SAVE_DELAY_MS = 600;
 function BotsSurface(props) {
   const { colors: colors2 } = props.theme;
   useTooltipTheme(colors2);
+  if (props.botWorkspace && !props.botWorkspace.directory) return /* @__PURE__ */ jsx49(View45, { children: /* @__PURE__ */ jsx49(Text33, { children: "Opening workspace\u2026" }) });
   return /* @__PURE__ */ jsx49(MenuProvider, { colors: colors2, compact: props.layout.compact, children: /* @__PURE__ */ jsx49(AvatarTheme, { dark: nativeTokens(colors2).dark, children: /* @__PURE__ */ jsx49(BotsSurfaceContent, { ...props }) }) });
 }
 function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat, botWorkspace, workspaceBridge: WorkspaceBridge }) {
@@ -13754,7 +13757,6 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
   const exportBot = useRpc20(exportBotRpc);
   const importBot = useRpc20(importBotRpc);
   const importTeam = useRpc20(importTeamRpc);
-  const [showAllFolders, setShowAllFolders] = useState44(false);
   const [selection, setSelection] = useState44(botWorkspace ? { botId: "vibing-general", chatId: null } : null);
   const [panel, setPanel] = useState44({ open: false, section: null });
   const [panelVersion, setPanelVersion] = useState44(0);
@@ -14116,7 +14118,6 @@ Its chats stay on the host and remain in Paseo's history.`,
       width: 232,
       title: "Display",
       entries: [
-        ...botWorkspace ? [{ label: "Chats", trailing: showAllFolders ? "All folders" : "This workspace", onSelect: () => setShowAllFolders((current2) => !current2) }] : [],
         {
           label: "Archived bots",
           trailing: listUi.showArchived ? "Shown" : archivedCount ? `Hidden (${archivedCount})` : "Hidden",
@@ -14142,7 +14143,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       hiddenArchivedCount: listUi.showArchived ? 0 : archivedCount,
       selection,
       ui: listUi,
-      localHost: showAllFolders ? { id: localHost.id, label: localHost.label } : localHost,
+      localHost,
       touch: layout.compact || layout.platform !== "web",
       splash: layout.compact,
       bottomInset,
@@ -14342,7 +14343,10 @@ Its chats stay on the host and remain in Paseo's history.`,
 }
 function SelectedChat({ colors: colors2, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted, nativeChat, onSelectChat, botWorkspace }) {
   const host2 = useBotHost(bot.hostId, localHost);
-  const chat = useChat(host2.api, selection.chatId);
+  const chats = useBotChats(host2, bot.id);
+  const scopedChat = chats.data?.find((chat2) => chat2.id === selection.chatId);
+  const allowed = !botWorkspace || host2.isLocal && (!selection.chatId || Boolean(scopedChat));
+  const chat = useChat(host2.api, allowed ? selection.chatId : null);
   const ensureHome = useRpc20(ensureBotHomeRpc);
   const [nativeCwd, setNativeCwd] = useState44("");
   useEffect24(() => {
@@ -14361,6 +14365,7 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
   const toast = useToast17();
   const start = async (message2) => {
     if (!host2.api) throw new Error(`${host2.label} is offline.`);
+    if (botWorkspace && !host2.isLocal) throw new Error("Choose a local host for this worktree.");
     const home = await ensureHome({ botId: bot.id });
     const placement = botWorkspace && host2.isLocal ? { path: botWorkspace.directory, projectRoot: null, workspaceId: botWorkspace.id } : bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root };
     const { systemPrompt } = await compose({ bot, local: host2.isLocal, message: message2.text });
@@ -14397,6 +14402,10 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
     autoStarted.current = true;
     start({ text: selection.prompt, messageId: newMessageId(), images: [], attachments: [] }).catch((error) => toast.error(`Couldn't start: ${errorText(error)}`));
   }, [host2.api]);
+  if (!allowed) return /* @__PURE__ */ jsxs47(View45, { style: { flex: 1, padding: 16 }, children: [
+    /* @__PURE__ */ jsx49(Text33, { style: { color: colors2.foregroundMuted }, children: !host2.isLocal ? "This bot runs on another host. Choose a local host in bot settings to chat in this worktree." : chats.isLoading || chats.isFetching ? "Loading conversation\u2026" : "This conversation is not in the current worktree." }),
+    /* @__PURE__ */ jsx49(SettingsAction17, { label: "Bot settings", actionLabel: "Open", onPress: onTogglePanel })
+  ] });
   return /* @__PURE__ */ jsx49(
     ChatPane,
     {

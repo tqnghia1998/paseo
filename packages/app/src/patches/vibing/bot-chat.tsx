@@ -38,9 +38,8 @@ export function embeddedBotChatProps(pluginId: string) {
   const directory = getEmbeddedWorkspaceDirectory();
   return {
     nativeChat: NativeBotChat,
-    ...(bound && directory
-      ? { botWorkspace: { id: bound.workspaceId, directory }, workspaceBridge: BotWorkspaceBridge }
-      : {}),
+    botWorkspace: { id: bound?.workspaceId ?? "", directory: directory ?? "" },
+    workspaceBridge: BotWorkspaceBridge,
   };
 }
 
