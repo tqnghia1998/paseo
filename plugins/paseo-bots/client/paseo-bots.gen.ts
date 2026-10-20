@@ -10505,11 +10505,12 @@ function ArchivedCallout({ colors: colors2, compact: compact2 }) {
 
 // client/ChatPane.tsx
 import { Fragment as Fragment10, jsx as jsx26, jsxs as jsxs25 } from "react/jsx-runtime";
-function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat }) {
+function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, nativeChat: NativeChat, nativeCwd, onSelectChat }) {
   const running = chat.agent?.status === "running" || chat.agent?.status === "initializing";
   const empty = chat.entries.length === 0 && !chat.loading && !chat.error && (chat.agent?.pendingPermissions.length ?? 0) === 0;
   const title = chatId ? displayTitle(chat.agent?.title) : "New chat";
-  const canFind = chatId !== null && !empty;
+  const useNativeChat = !!NativeChat && host2.isLocal;
+  const canFind = !useNativeChat && chatId !== null && !empty;
   const [findOpen, setFindOpen] = useState24(false);
   useEffect18(() => setFindOpen(false), [chatId]);
   useEffect18(() => canFind ? listenForFind(() => setFindOpen(true)) : void 0, [canFind]);
@@ -10529,12 +10530,12 @@ function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, 
         onFind: canFind ? () => setFindOpen((open) => !open) : void 0
       }
     ),
-    chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
+    useNativeChat && NativeChat ? /* @__PURE__ */ jsx26(NativeChat, { serverId: host2.key, botId: bot.id, agentId: chatId, workspaceId: chat.agent?.workspaceId, cwd: chat.agent?.cwd || bot.cwd || nativeCwd || "", provider: bot.provider, model: bot.model, modeId: bot.modeId, thinkingOptionId: bot.thinkingOptionId, active: !layout.compact || !panelOpen, onSelectChat: (id) => onSelectChat?.(id), onStart }) : chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
       /* @__PURE__ */ jsx26(Avatar, { avatar: bot.avatar, size: 56 }),
       /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foreground, fontSize: ui(18), fontWeight: "500" }, children: bot.name }),
       bot.description ? /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foregroundMuted, fontSize: ui(14), textAlign: "center", maxWidth: 420 }, children: bot.description }) : null
     ] }) : /* @__PURE__ */ jsx26(ChatStream, { colors: colors2, chat, api: host2.api, agentId: chatId, compact: layout.compact, platform: layout.platform, typeVersion, onOpenChat, voice: bot.voice, findOpen, onCloseFind: () => setFindOpen(false), ...host2.isLocal ? { botId: bot.id } : {} }, chatId),
-    /* @__PURE__ */ jsx26(Composer, { colors: colors2, bot, host: host2, agentId: chatId, agent: chat.agent, running, layout, keyboardOpen, onStart })
+    !useNativeChat ? /* @__PURE__ */ jsx26(Composer, { colors: colors2, bot, host: host2, agentId: chatId, agent: chat.agent, running, layout, keyboardOpen, onStart }) : null
   ] });
 }
 function Header({ colors: colors2, title, subtitle, hostBadge, compact: compact2, panelOpen, onBack, onMenu, onTogglePanel, onFind }) {
@@ -13720,7 +13721,7 @@ function BotsSurface(props) {
   useTooltipTheme(colors2);
   return /* @__PURE__ */ jsx49(MenuProvider, { colors: colors2, compact: props.layout.compact, children: /* @__PURE__ */ jsx49(AvatarTheme, { dark: nativeTokens(colors2).dark, children: /* @__PURE__ */ jsx49(BotsSurfaceContent, { ...props }) }) });
 }
-function BotsSurfaceContent({ theme, layout, host: host2, navigation }) {
+function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat }) {
   const { colors: colors2 } = theme;
   const { settings, latest, commit } = useBotSettings();
   const toast = useToast17();
@@ -14148,6 +14149,8 @@ Its chats stay on the host and remain in Paseo's history.`,
       onBack: layout.compact ? () => setSelection(null) : void 0,
       onBotMenu: (anchor) => anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot),
       onTogglePanel: () => setPanel({ open: !panel.open, section: panel.section }),
+      nativeChat,
+      onSelectChat: (chatId) => setSelection({ botId: selectedBot.id, chatId }),
       onStarted: (chatId) => setSelection({ botId: selectedBot.id, chatId })
     },
     `${selectedBot.id}:${selection.chatId ?? "new"}`
@@ -14284,10 +14287,21 @@ Its chats stay on the host and remain in Paseo's history.`,
     }
   ) });
 }
-function SelectedChat({ colors: colors2, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted }) {
+function SelectedChat({ colors: colors2, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted, nativeChat, onSelectChat }) {
   const host2 = useBotHost(bot.hostId, localHost);
   const chat = useChat(host2.api, selection.chatId);
   const ensureHome = useRpc20(ensureBotHomeRpc);
+  const [nativeCwd, setNativeCwd] = useState44("");
+  useEffect24(() => {
+    if (!nativeChat || !host2.isLocal || selection.chatId || bot.cwd) return;
+    let current2 = true;
+    void ensureHome({ botId: bot.id }).then((home) => {
+      if (current2) setNativeCwd(home.path);
+    }).catch((error) => toast.error(`Could not open bot folder: ${errorText(error)}`));
+    return () => {
+      current2 = false;
+    };
+  }, [nativeChat, host2.isLocal, bot.id, bot.cwd, selection.chatId]);
   const compose = useRpc20(systemPromptRpc);
   const mountServers = useRpc20(mountRpc);
   const queryClient = useQueryClient11();
@@ -14332,6 +14346,9 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
   return /* @__PURE__ */ jsx49(
     ChatPane,
     {
+      nativeChat,
+      nativeCwd,
+      onSelectChat,
       colors: colors2,
       bot,
       host: host2,

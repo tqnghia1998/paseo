@@ -17,6 +17,7 @@ const plugins = [
     id: "paseo-bots",
     repository: "oliexe/paseo-bots",
     revision: "39a700006c204aef25de4e0db11419b6f75ac814",
+    patch: "paseo-bots-vibing.patch",
   },
   {
     id: "annotations",
