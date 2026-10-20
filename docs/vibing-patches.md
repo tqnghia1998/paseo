@@ -67,7 +67,8 @@ journal are removed; they no longer serve an exposed tool.
 
 Embedded local bot chats use the native transcript and composer through the private
 `bot-chat*` slot. Keep the app query client around native controls: plugin surfaces
-own a separate cache. Bots owns creation, preserving instructions, memory, skills,
+own a separate cache. Use Expo Router's focus hooks; SDK 57 owns navigation contexts
+that are separate from `@react-navigation/native`. Bots owns creation, preserving instructions, memory, skills,
 MCP/tools and labels, while the host supplies the bound workspace placement.
 Definitions remain runtime-global and local conversation lists stay worktree-scoped.
 Native fork actions open a fresh draft in the same bot, preserving the draft ID
