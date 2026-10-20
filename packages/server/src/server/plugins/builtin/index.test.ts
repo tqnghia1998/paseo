@@ -63,20 +63,55 @@ test("standalone bundles resolve built-ins beside the server entrypoint", async 
   expect(resolveBuiltinPluginsRoot(pathToFileURL(path.join(root, "server.mjs")))).toBe(plugins);
 });
 
-test("embedded theme and Beautiful Chat are published with user plugins disabled", async () => {
-  expect(builtinPlugins).toContain("beautiful-chat");
+test("embedded defaults are published with user plugins disabled and keep plugin data in their daemon home", async () => {
+  const embeddedDefaults = [
+    "space-app-vibing-theme",
+    "beautiful-chat",
+    "mermaid",
+    "paseo-bots",
+    "annotations",
+  ];
+  for (const id of embeddedDefaults) expect(builtinPlugins).toContain(id);
   const daemon = await createTestPaseoDaemon({
     pluginsEnabled: false,
-    builtinPlugins: new BuiltinPluginLoader(resolveBuiltinPluginsRoot(), [
-      "space-app-vibing-theme",
-      "beautiful-chat",
-    ]),
+    builtinPlugins: new BuiltinPluginLoader(resolveBuiltinPluginsRoot(), embeddedDefaults),
   });
   const client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
   try {
     await client.connect();
     const catalog = await client.getPluginCatalog();
-    expect(catalog).toHaveLength(2);
+    expect(catalog).toHaveLength(5);
+    expect(
+      (await client.listPlugins({ includeBuiltins: true })).filter(
+        ({ status }) => status === "running",
+      ),
+    ).toHaveLength(5);
+    expect(
+      await client.invokePluginRpc("paseo-bots", "bots.ensure-home", { botId: "bundle-test" }),
+    ).toMatchObject({
+      root: path.join(daemon.paseoHome, "plugin-data/paseo-bots/shared/Bots"),
+    });
+    const annotation = {
+      id: "bundle-test",
+      agentId: "agent-test",
+      quote: "Selected passage",
+      anchorText: "Selected passage",
+      code: null,
+      anchor: null,
+      comment: "Explain this",
+      status: "pending",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    await client.invokePluginRpc("annotations", "annotations.save", { annotations: [annotation] });
+    expect(await client.invokePluginRpc("annotations", "annotations.list", {})).toEqual({
+      annotations: [annotation],
+    });
+    expect(
+      (
+        await stat(path.join(daemon.paseoHome, "plugin-data/annotations/annotations.json"))
+      ).isFile(),
+    ).toBe(true);
     expect(catalog.find(({ id }) => id === "space-app-vibing-theme")?.clientBundle).toContain(
       "Space App Vibing",
     );

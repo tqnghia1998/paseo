@@ -6,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import pino from "pino";
 import {
-  builtinPlugins,
+  BuiltinPluginLoader,
   resolveBuiltinPluginsRoot,
 } from "../packages/server/dist/server/server/plugins/builtin/index.js";
 import { compilePlugin } from "../packages/server/dist/server/server/plugins/compiler.js";
@@ -30,7 +30,10 @@ test("built output compiles and starts every listed built-in", async () => {
     await readFile(path.join(repoRoot, "packages/server/package.json"), "utf8"),
   );
   const settingsDirectory = await mkdtemp(path.join(os.tmpdir(), "builtin-dist-settings-"));
-  const runtime = new PluginRuntime(pino({ level: "silent" }), version, { settingsDirectory });
+  const runtime = new PluginRuntime(pino({ level: "silent" }), version, {
+    settingsDirectory,
+    paseoHome: settingsDirectory,
+  });
   runtime.bindPaseoSessionHost({
     async attachPluginSocket(_pluginId, socket) {
       const closed = new Promise((resolve) => socket.once("close", resolve));
@@ -58,16 +61,16 @@ test("built output compiles and starts every listed built-in", async () => {
     },
   });
   try {
-    for (const id of builtinPlugins) {
-      const directory = path.join(packagedRoot, id);
+    for (const plugin of new BuiltinPluginLoader(packagedRoot).entries()) {
+      const { id, directory } = plugin;
       assert.equal((await readPluginManifest(directory)).id, id);
       const bundles = await compilePlugin({
         server: await findEntry(directory, ["index.server.ts", "index.server.tsx"]),
         client: await findEntry(directory, ["index.client.ts", "index.client.tsx"]),
       });
       assert.ok(bundles.serverBundle, `${id} must compile a server bundle`);
-      await runtime.startBuiltinPlugin({ id, directory });
-      assert.ok(runtime.catalog().some((plugin) => plugin.id === id));
+      await runtime.startBuiltinPlugin(plugin);
+      assert.ok(runtime.catalog().some((entry) => entry.id === id));
       if (id.endsWith("-usage-source")) {
         const sourceId = id.slice(0, -"-usage-source".length);
         assert.ok(

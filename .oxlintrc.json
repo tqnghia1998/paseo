@@ -3,7 +3,10 @@
   "options": {
     "typeAware": false
   },
-  "ignorePatterns": [".dev/**", "plugins/beautiful-chat/**/*.gen.ts"],
+  "ignorePatterns": [
+    ".dev/**",
+    "plugins/{annotations,beautiful-chat,mermaid,paseo-bots}/**/*.gen.ts"
+  ],
   "plugins": ["react", "react-perf", "unicorn", "typescript", "oxc", "import", "promise"],
   "jsPlugins": ["./scripts/oxlint/paseo-plugin.mjs"],
   "categories": {
