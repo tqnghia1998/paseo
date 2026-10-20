@@ -22,8 +22,6 @@ vi.mock("./live-design", () => ({
     fake.activate = input.activateConversation;
   },
 }));
-vi.mock("@/components/ui/button", () => ({ Button: () => null }));
-vi.mock("expo-router", () => ({ router: { push: vi.fn() } }));
 import { BotWorkspaceBridge } from "./bot-workspace";
 it("resumes the owning bot only in the bound worktree and routes legacy chats to General", () => {
   const activate = vi.fn();

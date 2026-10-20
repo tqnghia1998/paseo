@@ -1,8 +1,4 @@
-import React, { useCallback } from "react";
-import { View } from "react-native";
-import { Button } from "@/components/ui/button";
-import { router } from "expo-router";
-import { StyleSheet } from "react-native-unistyles";
+import { useCallback } from "react";
 import { useSessionStore } from "@/stores/session-store";
 import { useEmbeddedWorkspace, getEmbeddedWorkspaceDirectory } from "./workspace-boundary";
 import { useEmbeddedPromptActivation } from "./host-prompts";
@@ -49,28 +45,5 @@ export function BotWorkspaceBridge({
     workspaceId: bound?.workspaceId ?? "",
     activateConversation,
   });
-  const openSettings = useCallback(() => router.push("/settings"), []);
-  return (
-    <View style={styles.actions}>
-      <Button
-        variant="ghost"
-        size="xs"
-        accessibilityRole="button"
-        accessibilityLabel="Chat settings"
-        onPress={openSettings}
-      >
-        Chat settings
-      </Button>
-    </View>
-  );
+  return null;
 }
-
-const styles = StyleSheet.create((theme) => ({
-  actions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[1],
-    backgroundColor: theme.colors.surface0,
-  },
-}));
