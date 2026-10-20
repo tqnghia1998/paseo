@@ -71,10 +71,12 @@ own a separate cache. Bots owns creation, preserving instructions, memory, skill
 MCP/tools and labels, while the host supplies the bound workspace placement.
 Definitions remain runtime-global and local conversation lists stay worktree-scoped.
 General is created automatically and includes legacy unlabeled chats from the same
-directory without mutating their records. Display preferences can show All folders
-for older bot chats; those conversations show their directory, and host prompts
-switch back to a workspace draft before insertion. Remote chats and routines keep
-their configured placement and complete history.
+directory without mutating their records. Embedded conversation lists, pins, usage and routine chat links are strictly
+scoped to the bound worktree. There is no all-folder override. Selected chat IDs
+are checked against that scope before loading a transcript, and unresolved binding
+waits instead of falling back to the global list. Remote-host bots cannot open
+chats in a local worktree; their settings remain editable. Routine definitions
+and configured background placement remain shared.
 
 `bot-workspace.tsx` activates conversations for review/recovery prompts and Live
 Design, including pending completion recovery and unique fresh-draft handshakes.
