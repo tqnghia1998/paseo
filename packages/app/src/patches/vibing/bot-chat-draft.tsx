@@ -21,6 +21,7 @@ import { ComposerImportPill } from "@/composer/draft/import-pill";
 import { COMPOSER_PILL_CLEARANCE } from "@/composer/pill-styles";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 
 export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "onSelectChat">) {
   const { serverId, botId, cwd, onStart, importLabels, onImported } = props;
@@ -119,6 +120,10 @@ export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "
             resolveLiveDesignAgentId={resolveAgentId}
             serverId={serverId}
             isPaneFocused={props.active}
+            autoFocus={shouldAutoFocusWorkspaceDraftComposer({
+              isPaneFocused: props.active,
+              isSubmitting: submitting,
+            })}
             onSubmitMessage={submit}
             isSubmitLoading={submitting || !cwd}
             textSource={input.textSource}
