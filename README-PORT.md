@@ -51,6 +51,7 @@ not in the environment inherited by providers, external commands, or terminals.
 ### Bundle Output Structure (`scripts/paseo-web/`)
 
 - `paseo-web.js` — Executable CLI runner
+- `plugin-process.js` — Bundled worker for isolated built-ins and installed plugins
 - `package.json` — Packaged daemon name/version and ESM metadata
 - `server.mjs` — Standalone bundled daemon
 - `terminal-worker-process.js` — PTY process worker

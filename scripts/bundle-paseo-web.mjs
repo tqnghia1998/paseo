@@ -80,15 +80,19 @@ const __dirname = __dirnameFn(__filename);
 });
 
 // Also bundle the isolated workers that resolve relative to server.mjs.
-await esbuild.build({
-  entryPoints: ["packages/server/dist/server/terminal/terminal-worker-process.js"],
-  bundle: true,
-  platform: "node",
-  target: "node20",
-  format: "esm",
-  outfile: path.join(DEST_DIR, "terminal-worker-process.js"),
-  banner: {
-    js: `
+for (const [entry, output] of [
+  ["packages/server/dist/server/terminal/terminal-worker-process.js", "terminal-worker-process.js"],
+  ["packages/server/dist/server/server/plugins/plugin-process.js", "plugin-process.js"],
+]) {
+  await esbuild.build({
+    entryPoints: [entry],
+    bundle: true,
+    platform: "node",
+    target: "node20",
+    format: "esm",
+    outfile: path.join(DEST_DIR, output),
+    banner: {
+      js: `
 import { createRequire as __createRequire } from 'node:module';
 import { fileURLToPath as __fileURLToPath } from 'node:url';
 import { dirname as __dirnameFn } from 'node:path';
@@ -96,16 +100,17 @@ const require = __createRequire(import.meta.url);
 const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __dirnameFn(__filename);
 `,
-  },
-  external: [
-    "node-pty",
-    "fsevents",
-    "classic-level",
-    "bufferutil",
-    "utf-8-validate",
-    "sherpa-onnx-node",
-  ],
-});
+    },
+    external: [
+      "node-pty",
+      "fsevents",
+      "classic-level",
+      "bufferutil",
+      "utf-8-validate",
+      "sherpa-onnx-node",
+    ],
+  });
+}
 
 await esbuild.build({
   entryPoints: ["packages/server/dist/server/server/speech/providers/local/worker-process.js"],
