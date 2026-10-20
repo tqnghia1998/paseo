@@ -12,7 +12,14 @@ interface PluginInventoryInput {
 }
 
 // The other bundled integrations come from upstream; see docs/vibing-patches.md.
-const vibingPluginIds = new Set(["space-app-vibing-theme", "codex-usage-source", "beautiful-chat"]);
+const vibingPluginIds = new Set([
+  "space-app-vibing-theme",
+  "codex-usage-source",
+  "beautiful-chat",
+  "annotations",
+  "mermaid",
+  "paseo-bots",
+]);
 
 export function groupPluginInventory({ plugins, embedded }: PluginInventoryInput): PluginGroups {
   const groups: PluginGroups = { vibing: [], paseo: [], additional: [] };

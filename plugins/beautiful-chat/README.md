@@ -23,3 +23,6 @@ the default to preserve context attachments, citation handling and native Find.
 Saved Chat presentation preferences still win. Interactive Shell cards carrying
 stdin stay native. The host timeline projection separately preserves messages
 with attachments or images even if enhanced user bubbles are enabled.
+
+Beautiful Chat yields Mermaid fences and Bots/Composio tools to their specialized
+renderers, including when enhanced user or assistant messages are enabled.

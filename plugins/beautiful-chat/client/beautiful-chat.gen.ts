@@ -9384,6 +9384,9 @@ function LiveUserMessageRenderer({
 function toJsonValue(value) {
   return value;
 }
+function hasMermaidFence(text) {
+  return /^\s*(?:`{3,}|~{3,})mermaid\b/m.test(text);
+}
 function contribute(client) {
   const removeFonts = embedFonts();
   const removeFrost = installFrostedGlass();
@@ -9403,6 +9406,7 @@ function contribute(client) {
     transform({ item, phase }) {
       if (item.type !== "tool_call") return void 0;
       if (item.detail.type === "shell" && item.detail.stdin !== void 0) return void 0;
+      if (/^(?:mcp__)?(?:bots|composio)(?:__|\.|_)/.test(item.name.trim())) return void 0;
       return {
         items: [
           {
@@ -9498,6 +9502,7 @@ function contribute(client) {
     query: { itemType: "user_message" },
     transform({ item }) {
       if (item.type !== "user_message") return void 0;
+      if (hasMermaidFence(item.text)) return void 0;
       if (!getEnhancerPreferences().enhancedUserBubble) return void 0;
       const images = extractPromptImages(item);
       if (images.hasUnrenderable) return void 0;
@@ -9532,6 +9537,7 @@ function contribute(client) {
     query: { itemType: "assistant_message" },
     transform({ item }) {
       if (item.type !== "assistant_message") return void 0;
+      if (hasMermaidFence(item.text)) return void 0;
       if (!getEnhancerPreferences().assistantMarkdown) return void 0;
       if (!item.text.trim()) return void 0;
       return {
