@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import React, { type ReactNode } from "react";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import React, { type ReactNode, type ContextType } from "react";
+import { act, cleanup, render as renderComponent, screen } from "@testing-library/react";
+import { NavigationContext } from "expo-router/build/react-navigation/core/NavigationContext";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { NativeBotChatProps } from "./bot-chat-types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -30,8 +31,13 @@ const fake = vi.hoisted(() => ({
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
 });
-vi.mock("@react-navigation/native", () => ({ useIsFocused: () => fake.focused }));
-vi.mock("expo-router", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@react-navigation/native", async () => ({
+  ...(await vi.importActual("@react-navigation/core")),
+}));
+vi.mock("expo-router", async () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  ...(await vi.importActual("expo-router/build/react-navigation/core/useIsFocused")),
+}));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./bot-workspace", () => ({ BotWorkspaceBridge: () => null }));
 vi.mock("./workspace-boundary", () => ({
@@ -101,6 +107,19 @@ vi.mock("@/stores/session-store", () => ({
     }),
 }));
 import { NativeBotChat, embeddedBotChatProps } from "./bot-chat";
+
+// Expo Router owns a different navigation context from @react-navigation/native.
+const navigation = {
+  isFocused: () => fake.focused,
+  addListener: () => () => {},
+} as unknown as ContextType<typeof NavigationContext>;
+function render(ui: React.ReactNode) {
+  return renderComponent(ui, {
+    wrapper: ({ children }) => (
+      <NavigationContext.Provider value={navigation}>{children}</NavigationContext.Provider>
+    ),
+  });
+}
 
 const props: NativeBotChatProps = {
   serverId: "host",
