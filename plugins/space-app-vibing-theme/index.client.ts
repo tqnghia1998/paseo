@@ -1,5 +1,4 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
-import { VibingCustomizations } from "./client/customizations.js";
 
 export default function contribute(client: PluginClientContext) {
   const removeTheme = client.addTheme({
@@ -18,14 +17,5 @@ export default function contribute(client: PluginClientContext) {
       ring: "#6e6e6e",
     },
   });
-  const removeSettings = client.addSettingsScreen({
-    id: "customizations",
-    title: "Vibing customizations",
-    icon: "Blocks",
-    Component: VibingCustomizations,
-  });
-  return () => {
-    removeSettings();
-    removeTheme();
-  };
+  return removeTheme;
 }

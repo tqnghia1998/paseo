@@ -7,26 +7,7 @@ index e539772..00304aa 100644
  /** Settings → Sending → Default send where the app stores it; its default elsewhere. */
  export function defaultSendBehavior(): SendBehavior {
 -  return Platform.OS === "web" && isWebDom() ? readSendBehavior() : "steer";
-+  return Platform.OS === "web" && isWebDom() ? readSendBehavior() : "queue";
- }
-
- /** Focuses the agent's composer once its tab is showing, or gives up quietly. */
-diff --git a/client/web/dom.ts b/client/web/dom.ts
-index a4468fb..d748f96 100644
---- a/client/web/dom.ts
-+++ b/client/web/dom.ts
-@@ -355,12 +355,12 @@ export function readSendBehavior(): "interrupt" | "steer" | "queue" {
-         settings && typeof settings === "object" && "sendBehavior" in settings
-           ? settings.sendBehavior
-           : undefined;
--      return value === "interrupt" || value === "queue" ? value : "steer";
-+      return value === "interrupt" || value === "queue" || value === "steer" ? value : "queue";
-     } catch {
-       // Unreadable settings fall through to the app's own default.
-     }
-   }
--  return "steer";
 +  return "queue";
  }
 
- export interface PassageSource {
+ /** Focuses the agent's composer once its tab is showing, or gives up quietly. */
