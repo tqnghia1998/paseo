@@ -84,6 +84,7 @@ import { extractCodexTerminalSessionId, nonEmptyString } from "./tool-call-mappe
 import { CodexTerminalInteractions } from "../../../patches/vibing/codex/terminal-interactions.js";
 
 
+import { CodexBackgroundTerminals } from "../../../patches/vibing/codex/background-terminals.js";
 import {
   buildCodexControls,
   CodexServiceTierSchema,
@@ -3679,6 +3680,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   >();
   private interruptedTurnCleanup: Promise<void> | null = null;
   private terminalInteractions = new CodexTerminalInteractions();
+  private backgroundTerminals = new CodexBackgroundTerminals();
   private terminalOutputDirtyIds = new Set<string>();
   private terminalOutputFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private emittedExecCommandStartedCallIds = new Set<string>();
@@ -3928,6 +3930,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handleUnexpectedTermination(error: Error): void {
     this.connectionState = "disconnected";
     this.background.stop();
+    for (const event of this.backgroundTerminals.failAll()) this.emitEvent(event);
     const hasActiveRootTurn = this.activeForegroundTurnId !== null || this.currentTurnId !== null;
     this.clearPendingPermissions({ preservePlanApprovals: !hasActiveRootTurn });
     if (hasActiveRootTurn) {
@@ -5875,6 +5878,13 @@ export class CodexAppServerAgentSession implements AgentSession {
       );
       const turnId = this.terminalInteractions.turnId(item.callId);
       event = { ...event, item, ...(turnId ? { turnId } : {}) };
+      this.notifySubscribers(event);
+      if (!this.loadingPersistedHistory) {
+        for (const shellEvent of this.backgroundTerminals.observe(item)) {
+          this.notifySubscribers(shellEvent);
+        }
+      }
+      return;
     }
     this.notifySubscribers(event);
   }
@@ -6718,6 +6728,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (parsed.status !== "interrupted" && this.currentTurnId) {
       this.terminalProcessIdsByTurnId.delete(this.currentTurnId);
     }
+    for (const event of this.backgroundTerminals.turnEnded(parsed.status)) this.emitEvent(event);
     if (parsed.status === "failed") {
       const error = parsed.errorMessage ?? "Codex turn failed";
       this.settleStreamRetry({ status: "failed", error });
