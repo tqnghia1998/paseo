@@ -1,18 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// `bundleDependencies` acknowledges reviewed npm dependencies; they are fetched from the
+// public registry at vendoring time and inlined, so installs never run npm.
 const plugins = [
-  {
-    id: "mermaid",
-    repository: "dutchakdev/paseo-plugin-mermaid",
-    revision: "fcc906e1044225f227639803b132873e3ab5b300",
-    patch: "mermaid-vibing.patch",
-  },
   {
     id: "paseo-bots",
     repository: "oliexe/paseo-bots",
@@ -26,18 +22,58 @@ const plugins = [
     patch: "annotations-vibing.patch",
     assets: ["NOTICE.md", "assets/icon.png", "assets/hero.png", "assets/screenshot-selection.png"],
   },
+  {
+    id: "paseo-doc-viewer",
+    repository: "nkwib/paseo-doc-viewer",
+    revision: "d7434f85b556e949d491bf5574a55bd935b4f55f",
+    bundleDependencies: true,
+    assets: ["NOTICE"],
+  },
+  {
+    id: "shell-yeah",
+    repository: "stevecastaneda/paseo-plugins",
+    directory: "shell-yeah",
+    revision: "d58b575f18a29d1eb3fe408db985c7cf0c612bff",
+  },
+  {
+    id: "paseo-recap",
+    repository: "kingsleydon/paseo-plugins",
+    directory: "plugins/recap",
+    revision: "7c139a6532691e8598601c9bb401f536993fff6a",
+    patch: "paseo-recap-vibing.patch",
+  },
+  {
+    id: "paseo-quick-prompts",
+    repository: "kingsleydon/paseo-plugins",
+    directory: "plugins/quick-prompts",
+    revision: "7c139a6532691e8598601c9bb401f536993fff6a",
+    patch: "paseo-quick-prompts-vibing.patch",
+  },
+  {
+    id: "genui",
+    repository: "anh-chu/paseo-plugin-genui",
+    revision: "e945ca9ab53a3f0d7c9ef41d803f133849050702",
+  },
 ];
 
+// `node scripts/vendor-community-plugins.mjs [id...]` regenerates only the named plugins.
+const selected = process.argv.slice(2);
+for (const id of selected)
+  if (!plugins.some((plugin) => plugin.id === id)) throw new Error(`Unknown plugin: ${id}`);
+
 for (const plugin of plugins) {
-  const source = await mkdtemp(path.join(os.tmpdir(), `paseo-${plugin.id}-`));
+  if (selected.length && !selected.includes(plugin.id)) continue;
+  const checkout = await mkdtemp(path.join(os.tmpdir(), `paseo-${plugin.id}-`));
+  const source = path.join(checkout, plugin.directory ?? "");
   const destination = path.join(root, "plugins", plugin.id);
+  const origin = `${plugin.repository}${plugin.directory ? `/${plugin.directory}` : ""}`;
   try {
-    execFileSync("git", ["init", "-q", source]);
+    execFileSync("git", ["init", "-q", checkout]);
     execFileSync(
       "git",
       [
         "-C",
-        source,
+        checkout,
         "fetch",
         "--depth=1",
         `https://github.com/${plugin.repository}.git`,
@@ -45,26 +81,34 @@ for (const plugin of plugins) {
       ],
       { stdio: "inherit" },
     );
-    execFileSync("git", ["-C", source, "checkout", "--detach", "-q", "FETCH_HEAD"]);
+    execFileSync("git", ["-C", checkout, "checkout", "--detach", "-q", "FETCH_HEAD"]);
     if (plugin.patch)
-      execFileSync("git", ["-C", source, "apply", path.join(root, "scripts", plugin.patch)]);
+      execFileSync("git", ["-C", checkout, "apply", path.join(root, "scripts", plugin.patch)]);
     const metadata = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));
-    if (Object.keys(metadata.dependencies ?? {}).length)
+    const hasDependencies = Object.keys(metadata.dependencies ?? {}).length > 0;
+    if (hasDependencies && !plugin.bundleDependencies)
       throw new Error(`${plugin.id} has new dependencies that must be reviewed and bundled`);
+    if (hasDependencies)
+      execFileSync(
+        process.platform === "win32" ? "npm.cmd" : "npm",
+        [
+          "ci",
+          "--omit=dev",
+          "--ignore-scripts",
+          "--no-fund",
+          "--no-audit",
+          "--registry=https://registry.npmjs.org/",
+        ],
+        { cwd: source, stdio: "inherit" },
+      );
+    await rm(destination, { recursive: true, force: true });
     await mkdir(destination, { recursive: true });
+    const bundledPackages = new Set();
     for (const target of ["client", "server"]) {
-      if (target === "server" && plugin.id === "mermaid") {
-        // The built-in loader publishes client plugins through a server entry.
-        await writeFile(
-          path.join(destination, "index.server.ts"),
-          "export default function contribute() { return () => {}; }\n",
-        );
-        continue;
-      }
       const extension = target === "client" ? "tsx" : "ts";
       const directory = path.join(destination, target);
       await mkdir(directory, { recursive: true });
-      await build({
+      const result = await build({
         absWorkingDir: source,
         entryPoints: [`index.${target}.${extension}`],
         outfile: path.join(directory, `${plugin.id}.gen.ts`),
@@ -83,29 +127,78 @@ for (const plugin of plugins) {
           "zod",
         ],
         banner: {
-          js: `// @ts-nocheck\n// Generated by scripts/vendor-community-plugins.mjs from ${plugin.repository}@${plugin.revision}.`,
+          js: `// @ts-nocheck\n// Generated by scripts/vendor-community-plugins.mjs from ${origin}@${plugin.revision}.`,
         },
         legalComments: "eof",
+        metafile: true,
       });
+      for (const name of packageNames(result.metafile)) bundledPackages.add(name);
       await writeFile(
         path.join(destination, `index.${target}.ts`),
         `export { default } from "./${target}/${plugin.id}.gen.js";\n`,
       );
     }
-    for (const relative of ["LICENSE", "paseo-plugin.json", ...(plugin.assets ?? [])]) {
+    if (bundledPackages.size && !plugin.bundleDependencies)
+      throw new Error(`${plugin.id} bundled packages that were not reviewed`);
+    const manifest = JSON.parse(await readFile(path.join(source, "paseo-plugin.json"), "utf8"));
+    if (manifest.id !== plugin.id) throw new Error(`Unexpected manifest for ${plugin.id}`);
+    // The prebundled output replaces upstream's install-time dependency build.
+    if (manifest.build && !plugin.bundleDependencies)
+      throw new Error(`Unexpected build step for ${plugin.id}`);
+    delete manifest.build;
+    await writeFile(
+      path.join(destination, "paseo-plugin.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+    const assets = new Set([
+      "LICENSE",
+      ...(plugin.assets ?? []),
+      ...(manifest.icon ? [manifest.icon] : []),
+      ...(manifest.media ?? []).filter((entry) => !entry.startsWith("https:")),
+    ]);
+    for (const relative of assets) {
       await mkdir(path.dirname(path.join(destination, relative)), { recursive: true });
       await copyFile(path.join(source, relative), path.join(destination, relative));
     }
-    const manifest = JSON.parse(
-      await readFile(path.join(destination, "paseo-plugin.json"), "utf8"),
-    );
-    if (manifest.id !== plugin.id || manifest.build)
-      throw new Error(`Unexpected manifest for ${plugin.id}`);
+    if (bundledPackages.size)
+      await writeFile(
+        path.join(destination, "THIRD_PARTY_LICENSES.txt"),
+        await licenseNotices(source, bundledPackages),
+      );
+    const dependencyNote = bundledPackages.size
+      ? `Its locked npm dependencies are inlined at vendoring time from the public registry;\nsee \`THIRD_PARTY_LICENSES.txt\`. Installs run no npm commands or network requests.`
+      : `There are no additional runtime dependencies, network requests or installation\ncommands needed to load the plugin.`;
+    const upstream = `https://github.com/${plugin.repository}${plugin.directory ? `/tree/${plugin.revision}/${plugin.directory}` : ""}`;
     await writeFile(
       path.join(destination, "README.md"),
-      `# ${plugin.id}\n\nBundled from [${plugin.repository}](https://github.com/${plugin.repository}) at\n\`${plugin.revision}\` (version ${metadata.version}, ${metadata.license}).\n\nRegenerate with \`node scripts/vendor-community-plugins.mjs\` in the Paseo fork.\nGenerated code uses the host SDK, React, React Native, React Query and Zod; there\nare no additional runtime dependencies, network requests or installation commands\nneeded to load the plugin. Keep upstream licenses and notices with the bundle.\n\nSee [the integration contract](../../docs/vibing-patches.md#plugin-boundary) for\nrendering, send defaults and per-daemon storage requirements.\n`,
+      `# ${plugin.id}\n\nBundled from [${origin}](${upstream}) at\n\`${plugin.revision}\` (version ${metadata.version}, ${metadata.license}).\n\nRegenerate with \`node scripts/vendor-community-plugins.mjs ${plugin.id}\` in the Paseo fork.\nGenerated code uses the host SDK, React, React Native, React Query and Zod.\n${dependencyNote}\nKeep upstream licenses and notices with the bundle.\n\nSee [the integration contract](../../docs/vibing-patches.md#plugin-boundary) for\nrendering, send defaults and per-daemon storage requirements.\n`,
     );
   } finally {
-    await rm(source, { recursive: true, force: true });
+    await rm(checkout, { recursive: true, force: true });
   }
+}
+
+function packageNames(metafile) {
+  return Object.keys(metafile.inputs).flatMap((input) => {
+    const match = /(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(input);
+    return match ? [match[1]] : [];
+  });
+}
+
+async function licenseNotices(source, names) {
+  const notices = [];
+  for (const name of [...names].sort()) {
+    const directory = path.join(source, "node_modules", name);
+    const info = JSON.parse(await readFile(path.join(directory, "package.json"), "utf8"));
+    const licenseName = (await readdir(directory)).find((file) =>
+      /^licen[cs]e(?:[.-]|$)/i.test(file),
+    );
+    // A few packages declare their SPDX license without shipping its text.
+    if (!licenseName && !info.license) throw new Error(`Missing license for ${name}`);
+    const license = licenseName
+      ? await readFile(path.join(directory, licenseName), "utf8")
+      : `No license file is distributed; package.json declares ${info.license}.`;
+    notices.push(`${info.name}@${info.version} (${info.license})\n${license}`);
+  }
+  return notices.join("\n\n");
 }
