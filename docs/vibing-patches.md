@@ -223,7 +223,10 @@ Do not label these patches as installed plugins merely to make them discoverable
   `preparedText: true`; an older mounted iframe requires a reload before sending.
   Keep attachments through drafts/queues, read-only viewing/search, rewind, and
   request-correlated completion across remounts. Observation errors keep waiting;
-  only confirmed terminal snapshots settle a request. Legacy image grants and
+  only confirmed terminal snapshots settle a request. Its `wait_for_finish` sets the
+  fork-only `waitUntilActive`, so the wait outlasts an idle agent until the
+  note's turn starts; upstream's `waitForActive` keeps returning at once for an
+  idle agent with no turn, which child-completion reports rely on. Legacy image grants and
   image handoff remain rejected.
 - Queue is the fixed active-turn Send policy. The default-send setting and
   one-time queue migration are removed; obsolete saved preferences cannot change
