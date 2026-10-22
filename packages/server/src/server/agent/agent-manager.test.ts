@@ -7258,7 +7258,10 @@ test("waitForAgentEvent waitForActive resolves for autonomous live-event run", a
   );
 
   const autonomousTurnId = "autonomous-wait-1";
-  const waitPromise = manager.waitForAgentEvent(snapshot.id, { waitForActive: true });
+  const waitPromise = manager.waitForAgentEvent(snapshot.id, {
+    waitForActive: true,
+    waitUntilActive: true,
+  });
   const earlyResolution = await Promise.race([
     waitPromise.then(() => "resolved"),
     new Promise((resolve) => setTimeout(() => resolve("pending"), 0)),

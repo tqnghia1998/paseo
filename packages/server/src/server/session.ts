@@ -8420,7 +8420,9 @@ export class Session {
 
       let result = await this.agentManager.waitForAgentEvent(agentId, {
         signal: AbortSignal.any([abortController.signal, sourceSignal]),
-        waitForActive,
+        waitForActive: true,
+        // Live Design asks to wait for its note's turn even before it starts.
+        waitUntilActive: waitForActive,
         waitThroughPermission,
       });
       let final = await this.getAgentPayloadById(agentId);
