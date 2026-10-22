@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test, vi } from "vitest";
+import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 
 import { createTestLogger } from "../../../test-utils/test-logger.js";
 import { createTestAgentClients } from "../../test-utils/fake-agent-client.js";
@@ -469,3 +470,73 @@ test("session create with an internal config skips provider session persistence"
   expect(createAgent.mock.calls[1]?.[0]).not.toHaveProperty("internal");
   expect(createAgent.mock.calls[1]?.[2]).not.toHaveProperty("persistSession");
 });
+
+test.each([undefined, "live-design"])(
+  "mcp delegation preserves surface %s through stored children and grandchildren",
+  async (context) => {
+    const workdir = mkdtempSync(join(tmpdir(), "create-agent-context-test-"));
+    const storage = new AgentStorage(join(workdir, "agents"), logger);
+    const agentManager = createRealAgentManager(storage);
+    const dependencies = {
+      agentManager,
+      agentStorage: storage,
+      logger,
+      providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+    };
+    const contextLabels = context ? { "paseo-bots.context": context } : {};
+    try {
+      const parent = await agentManager.createAgent(
+        { provider: "codex", cwd: workdir },
+        undefined,
+        {
+          workspaceId: "ws-context",
+          labels: {
+            "paseo-bots.bot": "reviewer",
+            "paseo-bots.routine": "private-parent-routine",
+            ...contextLabels,
+          },
+        },
+      );
+      const { snapshot: child } = await createAgentCommand(dependencies, {
+        kind: "mcp",
+        provider: "codex/gpt-5.4",
+        title: "child",
+        notifyOnFinish: false,
+        callerAgentId: parent.id,
+        callerContext: { childAgentDefaultLabels: { purpose: "default", callerDefault: "kept" } },
+        labels: { purpose: "requested" },
+      });
+      expect((await storage.get(child.id))?.labels).toEqual({
+        ...contextLabels,
+        [PARENT_AGENT_ID_LABEL]: parent.id,
+        purpose: "requested",
+        callerDefault: "kept",
+      });
+      const { snapshot: grandchild } = await createAgentCommand(dependencies, {
+        kind: "mcp",
+        provider: "codex/gpt-5.4",
+        title: "grandchild",
+        notifyOnFinish: false,
+        callerAgentId: child.id,
+      });
+      expect((await storage.get(grandchild.id))?.labels).toEqual({
+        ...contextLabels,
+        [PARENT_AGENT_ID_LABEL]: child.id,
+      });
+      const { snapshot: explicit } = await createAgentCommand(dependencies, {
+        kind: "mcp",
+        provider: "codex/gpt-5.4",
+        title: "explicit context",
+        notifyOnFinish: false,
+        callerAgentId: parent.id,
+        labels: { "paseo-bots.context": "workspace" },
+      });
+      expect((await storage.get(explicit.id))?.labels).toEqual({
+        "paseo-bots.context": "workspace",
+        [PARENT_AGENT_ID_LABEL]: parent.id,
+      });
+    } finally {
+      await removeRealAgentManagerWorkdir({ agentManager, storage, workdir });
+    }
+  },
+);

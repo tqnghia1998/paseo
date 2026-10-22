@@ -34,6 +34,8 @@ export function isEmbeddedShortcutAllowed(action: string): boolean {
     [
       "theme.cycle",
       "settings.toggle",
+      "command-center.toggle",
+      "command-center.files",
       "shortcuts.dialog.toggle",
       "message-input.action",
       "agent.interrupt",

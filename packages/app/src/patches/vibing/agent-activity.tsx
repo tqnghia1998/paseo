@@ -1,13 +1,7 @@
-import { getEmbeddedWorkspace, isEmbeddedWorkspaceAllowed } from "./workspace-boundary";
-import { useEffect, useMemo } from "react";
-import { usePathname } from "expo-router";
+import { useEmbeddedWorkspace, isEmbeddedWorkspaceAllowed } from "./workspace-boundary";
+import { useEffect } from "react";
 import { isWeb } from "@/constants/platform";
 import { selectAgentTurnPresentation, useSessionStore, type Agent } from "@/stores/session-store";
-import {
-  parseHostAgentRouteFromPathname,
-  parseHostWorkspaceRouteFromPathname,
-} from "@/utils/host-routes";
-
 export const EMBEDDED_AGENT_ACTIVITY_EVENT_TYPE = "paseo:agent-activity";
 export const EMBEDDED_AGENT_ACTIVITY_REQUEST_TYPE = "space:paseo-agent-activity-request";
 
@@ -49,20 +43,10 @@ export function isEmbeddedAgentActivityRequest(data: unknown): boolean {
   );
 }
 
-export function resolveEmbeddedActivityWorkspace(pathname: string) {
-  return getEmbeddedWorkspace() ?? parseHostWorkspaceRouteFromPathname(pathname);
-}
-
 export function EmbeddedAgentActivityBridge() {
-  const pathname = usePathname();
-  const workspaceRoute = useMemo(() => resolveEmbeddedActivityWorkspace(pathname), [pathname]);
-  const agentRoute = useMemo(() => parseHostAgentRouteFromPathname(pathname), [pathname]);
-  const serverId = workspaceRoute?.serverId ?? agentRoute?.serverId ?? null;
-  const workspaceId = useSessionStore((state) => {
-    if (workspaceRoute) return workspaceRoute.workspaceId;
-    if (!agentRoute) return null;
-    return state.sessions[agentRoute.serverId]?.agents.get(agentRoute.agentId)?.workspaceId ?? null;
-  });
+  const workspace = useEmbeddedWorkspace();
+  const serverId = workspace?.serverId;
+  const workspaceId = workspace?.workspaceId;
   const running = useSessionStore((state) => {
     if (!serverId || !workspaceId) return false;
     const session = state.sessions[serverId];
@@ -71,7 +55,7 @@ export function EmbeddedAgentActivityBridge() {
       session.agents.values(),
       workspaceId,
       (agentId) => selectAgentTurnPresentation(session, agentId).isActive,
-      getEmbeddedWorkspace() ? (id) => isEmbeddedWorkspaceAllowed(serverId, id) : undefined,
+      (id) => isEmbeddedWorkspaceAllowed(serverId, id),
     );
   });
 
