@@ -63,14 +63,8 @@ test("standalone bundles resolve built-ins beside the server entrypoint", async 
   expect(resolveBuiltinPluginsRoot(pathToFileURL(path.join(root, "server.mjs")))).toBe(plugins);
 });
 
-test("embedded defaults are published with user plugins disabled and keep plugin data in their daemon home", async () => {
-  const embeddedDefaults = [
-    "space-app-vibing-theme",
-    "beautiful-chat",
-    "mermaid",
-    "paseo-bots",
-    "annotations",
-  ];
+test("Bots stays built-in while ordinary community plugins use native lifecycle controls and their daemon home", async () => {
+  const embeddedDefaults = ["space-app-vibing-theme", "paseo-bots"];
   for (const id of embeddedDefaults) expect(builtinPlugins).toContain(id);
   const daemon = await createTestPaseoDaemon({
     pluginsEnabled: false,
@@ -80,17 +74,30 @@ test("embedded defaults are published with user plugins disabled and keep plugin
   try {
     await client.connect();
     const catalog = await client.getPluginCatalog();
-    expect(catalog).toHaveLength(5);
-    expect(
-      (await client.listPlugins({ includeBuiltins: true })).filter(
-        ({ status }) => status === "running",
-      ),
-    ).toHaveLength(5);
+    expect(catalog).toHaveLength(2);
     expect(
       await client.invokePluginRpc("paseo-bots", "bots.ensure-home", { botId: "bundle-test" }),
     ).toMatchObject({
       root: path.join(daemon.paseoHome, "plugin-data/paseo-bots/shared/Bots"),
     });
+    expect(await client.listPlugins()).toEqual([]);
+    await client.patchDaemonConfig({ pluginsEnabled: true });
+    for (const id of ["beautiful-chat", "annotations"]) {
+      expect(builtinPlugins).not.toContain(id);
+      await client.installDirectoryPlugin(path.join(resolveBuiltinPluginsRoot(), id));
+    }
+    expect((await client.listPlugins()).map(({ id }) => id).sort()).toEqual([
+      "annotations",
+      "beautiful-chat",
+    ]);
+    await client.disablePlugin("beautiful-chat");
+    expect(await client.listPlugins()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "beautiful-chat", status: "disabled" }),
+      ]),
+    );
+    await client.enablePlugin("beautiful-chat");
+    const installedCatalog = await client.getPluginCatalog();
     const annotation = {
       id: "bundle-test",
       agentId: "agent-test",
@@ -115,18 +122,8 @@ test("embedded defaults are published with user plugins disabled and keep plugin
     expect(catalog.find(({ id }) => id === "space-app-vibing-theme")?.clientBundle).toContain(
       "Space App Vibing",
     );
-    expect(catalog.find(({ id }) => id === "beautiful-chat")?.clientBundle).toContain(
+    expect(installedCatalog.find(({ id }) => id === "beautiful-chat")?.clientBundle).toContain(
       "Chat presentation",
-    );
-    expect(await client.listPlugins({ includeBuiltins: true })).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "beautiful-chat",
-          builtin: true,
-          enabled: true,
-          status: "running",
-        }),
-      ]),
     );
     expect(
       await client.invokePluginRpc("beautiful-chat", "highlight.tokens", {
@@ -142,6 +139,12 @@ test("embedded defaults are published with user plugins disabled and keep plugin
         ]),
       ],
     });
+    await client.removePlugin("annotations");
+    expect(
+      (
+        await stat(path.join(daemon.paseoHome, "plugin-data/annotations/annotations.json"))
+      ).isFile(),
+    ).toBe(true);
   } finally {
     await client.close();
     await daemon.close();
@@ -162,9 +165,6 @@ test("listed client bundle is published while plugins are disabled; unlisted dir
   try {
     await client.connect();
     expect(await client.listPlugins()).toEqual([]);
-    expect(await client.listPlugins({ includeBuiltins: true })).toMatchObject([
-      { id: "listed", builtin: true, enabled: true, status: "running" },
-    ]);
     const catalog = await client.getPluginCatalog();
     expect(catalog.map(({ id }) => id)).toEqual(["listed"]);
     expect(catalog[0]?.clientBundle).toContain("builtin-client-marker");

@@ -50,7 +50,14 @@ export interface ListUsageReportsOptions {
   onReport?: (report: UsageReportEntry) => void;
 }
 
-/** Groups discovered logins by account and caches their usage for five minutes. */
+interface AgentReports {
+  provider: string;
+  model?: string;
+  sessionKey: string;
+  reports: Map<string, KnownReport>;
+}
+
+/** Groups discovered logins by account and caches their usage. */
 export class UsageSourceRegistry {
   private readonly sources = new Map<string, UsageSource>();
   private readonly known = new Map<string, KnownReport>();
@@ -62,7 +69,7 @@ export class UsageSourceRegistry {
 
   constructor(
     private readonly now: () => number = Date.now,
-    private readonly ttlMs = 300_000,
+    private readonly ttlMs = 60_000,
     private readonly logger: Pick<Logger, "warn"> = { warn: console.warn },
     private readonly agents: AgentUsageLookup = { hasAgent: () => false, usageSession: () => null },
     private readonly deadlineMs = 20_000,
