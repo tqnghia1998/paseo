@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { openWorkspaceFileFromExplorer } from "@/screens/workspace/workspace-file-open-command";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { revealWorkspaceTab } from "@/workspace-tabs/navigation";
+import { useEmbeddedWorkspaceSelection } from "@/patches/vibing/embedded-command-center";
+import { usePanelStore } from "@/stores/panel-store";
+
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
@@ -53,7 +56,7 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
   error: string | null;
   openFile(path: string): void;
 } {
-  const selection = useActiveWorkspaceSelection();
+  const selection = useEmbeddedWorkspaceSelection(useActiveWorkspaceSelection());
   const serverId = selection?.serverId ?? null;
   const workspaceId = selection?.workspaceId ?? null;
   const cwd = useWorkspaceDirectory(serverId, workspaceId);

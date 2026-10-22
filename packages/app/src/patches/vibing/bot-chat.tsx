@@ -1,9 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useId, useCallback } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/data/query-client";
-import { View } from "react-native";
 import { useIsFocused } from "expo-router";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { withUnistyles } from "react-native-unistyles";
 import { AgentConversationPanel } from "@/panels/agent-panel";
 import {
   PaneProvider,
@@ -20,14 +19,24 @@ import { WorkspaceFocusProvider } from "@/workspace/focus";
 import { DiffDocumentWorkspaceCacheProvider } from "@/git/diff-document/workspace-cache";
 import { AssistantFileLinkResolverProvider, type InlinePathTarget } from "@/assistant-file-links";
 import type { OpenFileDisposition } from "@/workspace/file-open";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { prefetchProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { NativeBotChatDraft } from "./bot-chat-draft";
-import { isEmbeddedFocusMode } from "./focus-mode";
+import { isEmbeddedFocusMode, isEmbeddedLiveDesignMessaging } from "./focus-mode";
 import type { Theme } from "@/styles/theme";
 import { getEmbeddedWorkspace, getEmbeddedWorkspaceDirectory } from "./workspace-boundary";
 import { BotWorkspaceBridge } from "./bot-workspace";
 import { BotChatForkProvider } from "./bot-chat-fork";
+import {
+  BotChatPanelLayer,
+  useBotChatPanelStack,
+  type BotChatPanelEntry,
+  type BotChatPanelPane,
+} from "./bot-chat-panels";
+import { registerEmbeddedTargetOpener } from "./embedded-targets";
+import { openFileInHost } from "./host-file-open";
+import { BotUsageCard } from "./bot-usage-card";
 import type { NativeBotChatProps } from "./bot-chat-types";
 
 const spinnerColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -39,8 +48,13 @@ export function embeddedBotChatProps(pluginId: string) {
   const directory = getEmbeddedWorkspaceDirectory();
   return {
     nativeChat: NativeBotChat,
-    botWorkspace: { id: bound?.workspaceId ?? "", directory: directory ?? "" },
+    botWorkspace: {
+      id: bound?.workspaceId ?? "",
+      directory: directory ?? "",
+      ...(isEmbeddedLiveDesignMessaging ? { chatContext: "live-design" as const } : {}),
+    },
     workspaceBridge: BotWorkspaceBridge,
+    sidebarFooter: BotUsageCard,
   };
 }
 
@@ -81,39 +95,107 @@ function NativeBotChatContent(props: NativeBotChatProps) {
       prefetchProvidersSnapshot(serverId, client, { cwd });
     }
   }, [active, connected, client, cwd, serverId]);
+  const panels = useBotChatPanelStack(agentId);
+  const panel = panels.top;
+  const panelAgentId = panel?.target.kind === "agent" ? panel.target.agentId : null;
+  const panelAgentWorkspaceId = useSessionStore((state) => {
+    if (!panelAgentId) return null;
+    const session = state.sessions[serverId];
+    const agent = session?.agents.get(panelAgentId) ?? session?.agentDetails.get(panelAgentId);
+    return agent?.workspaceId ?? null;
+  });
+  // An open child agent owns the live timeline; the parent chat waits hidden.
+  const visibleAgentId = panelAgentId ?? agentId;
   useEffect(() => {
-    if (!agentId || !active) return;
+    if (!visibleAgentId || !active) return;
     void getHostRuntimeStore()
-      .prepareAgentTimeline(serverId, agentId)
+      .prepareAgentTimeline(serverId, visibleAgentId)
       .catch(() => undefined);
-  }, [active, agentId, serverId]);
+  }, [active, visibleAgentId, serverId]);
   useLayoutEffect(() => {
     if (!sync) return;
-    sync.replaceVisibleAgentIds(owner, active && agentId ? [agentId] : []);
+    sync.replaceVisibleAgentIds(owner, active && visibleAgentId ? [visibleAgentId] : []);
     return () => sync.replaceVisibleAgentIds(owner, []);
-  }, [active, agentId, owner, sync]);
-  const pane = useMemo<PaneContextValue>(() => {
+  }, [active, visibleAgentId, owner, sync]);
+  const { open: openPanel, back: closePanel, close: closePanels, setEntryState } = panels;
+  // Bots has no workspace tabs: files open in Vibing's VS Code tab, everything else in the chat.
+  const openTarget = useCallback(
+    (target: WorkspaceTabTarget): boolean => {
+      if (target.kind === "draft") {
+        onSelectChat(null, target.draftId);
+        return true;
+      }
+      if (target.kind === "agent" && target.agentId === agentId) {
+        closePanels();
+        return true;
+      }
+      if (target.kind === "file" && openFileInHost(target, cwd)) return true;
+      return openPanel(target);
+    },
+    [agentId, closePanels, cwd, onSelectChat, openPanel],
+  );
+  useEffect(() => {
+    if (!active) return;
+    return registerEmbeddedTargetOpener({ serverId, agentId, open: openTarget });
+  }, [active, agentId, openTarget, serverId]);
+  const { pane, panelPanes } = useMemo(() => {
     const openTab: PaneContextValue["openTab"] = (target) => {
-      if (target.kind === "agent") onSelectChat(target.agentId);
-      else if (target.kind === "draft") onSelectChat(null, target.draftId);
-      else navigateToWorkspace({ serverId, workspaceId, target });
+      if (!openTarget(target)) navigateToWorkspace({ serverId, workspaceId, target });
     };
-    return {
+    const shared = {
       serverId,
-      workspaceId,
-      host: "main",
-      tabId: agentId ?? owner,
-      target: agentId ? { kind: "agent", agentId } : { kind: "draft", draftId: owner },
+      host: "main" as const,
       openTab,
       openPreferredTarget: openTab,
       openTargetToSide: openTab,
-      closeCurrentTab: () => onSelectChat(null),
-      retargetCurrentTab: openTab,
-      setCurrentTabState: () => {},
-      openFileInWorkspace: ({ location }) => openTab({ kind: "file", ...location }),
+      openFileInWorkspace: ({ location }: Parameters<PaneContextValue["openFileInWorkspace"]>[0]) =>
+        openTab({ kind: "file", ...location }),
       openImportSheet: () => {},
     };
-  }, [agentId, onSelectChat, owner, serverId, workspaceId]);
+    const panePanel = (entry: BotChatPanelEntry): BotChatPanelPane => ({
+      ...shared,
+      workspaceId:
+        (entry.target.kind === "agent" && entry.target.agentId === panelAgentId
+          ? panelAgentWorkspaceId
+          : null) || workspaceId,
+      tabId: `${owner}:${entry.id}`,
+      target: entry.target,
+      state: entry.state,
+      retargetCurrentTab: openTab,
+      setCurrentTabState: (state) => setEntryState(entry.id, state),
+      closeCurrentTab: closePanel,
+    });
+    return {
+      pane: {
+        ...shared,
+        workspaceId,
+        tabId: agentId ?? owner,
+        target: agentId ? { kind: "agent", agentId } : { kind: "draft", draftId: owner },
+        // A started draft becomes this bot's chat.
+        retargetCurrentTab: (target) =>
+          target.kind === "agent" ? onSelectChat(target.agentId) : openTab(target),
+        setCurrentTabState: () => {},
+        closeCurrentTab: () => onSelectChat(null),
+      } satisfies PaneContextValue,
+      panelPanes: [
+        ...(panel ? [{ pane: panePanel(panel), visible: true }] : []),
+        ...(panels.retained ? [{ pane: panePanel(panels.retained), visible: false }] : []),
+      ],
+    };
+  }, [
+    agentId,
+    closePanel,
+    onSelectChat,
+    openTarget,
+    owner,
+    panel,
+    panelAgentId,
+    panelAgentWorkspaceId,
+    panels.retained,
+    serverId,
+    setEntryState,
+    workspaceId,
+  ]);
   const openForkDraft = useCallback(
     (draftId: string) => {
       pane.openTab({ kind: "draft", draftId });
@@ -130,11 +212,16 @@ function NativeBotChatContent(props: NativeBotChatProps) {
     [pane],
   );
   const content = (
-    <View style={styles.container} testID="bots-native-chat">
-      {!agentId && <NativeBotChatDraft {...props} active={active} />}
+    <BotChatPanelLayer
+      panes={panelPanes}
+      active={active}
+      onBack={closePanel}
+      testID="bots-native-chat"
+    >
+      {!agentId && <NativeBotChatDraft {...props} active={active && !panel} />}
       {agentId && workspaceId && <AgentConversationPanel />}
       {agentId && !workspaceId && <ThemedLoadingSpinner uniProps={spinnerColor} />}
-    </View>
+    </BotChatPanelLayer>
   );
   return (
     <AssistantFileLinkResolverProvider
@@ -150,7 +237,7 @@ function NativeBotChatContent(props: NativeBotChatProps) {
               <PaneFocusProvider
                 value={createPaneFocusContextValue({
                   isWorkspaceFocused: active,
-                  isPaneFocused: active,
+                  isPaneFocused: active && !panel,
                 })}
               >
                 <BotChatForkProvider openDraft={openForkDraft}>{content}</BotChatForkProvider>
@@ -162,5 +249,3 @@ function NativeBotChatContent(props: NativeBotChatProps) {
     </AssistantFileLinkResolverProvider>
   );
 }
-
-const styles = StyleSheet.create({ container: { flex: 1, minWidth: 0 } });

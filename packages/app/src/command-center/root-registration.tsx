@@ -41,6 +41,7 @@ import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { CommandCenterContribution, CommandCenterIconProps } from "./contributions";
 import { getCommandCenterIcon } from "./icon";
 import { useCommandCenterActions } from "./provider";
+import { keepEmbeddedRootActions } from "@/patches/vibing/embedded-command-center";
 import { buildGroupingContribution } from "./root-contributions";
 
 const ThemedPlus = withUnistyles(Plus, (theme) => ({ color: theme.colors.foregroundMuted }));
@@ -364,7 +365,7 @@ export function CommandCenterRootActions() {
       }),
     );
 
-    return availableActions;
+    return keepEmbeddedRootActions(availableActions);
   }, [
     browserHostLabel,
     groupMode,
