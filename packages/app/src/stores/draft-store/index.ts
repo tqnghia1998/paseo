@@ -39,6 +39,8 @@ import { createValidatedPersistStorage } from "@/storage/validated-persist-stora
 import type { JsonValue } from "@getpaseo/protocol/agent-types";
 import { applyMetadataPatch } from "@/composer/draft/metadata";
 import { hasDraftContent } from "@/composer/draft/input-draft-core";
+import { isWeb } from "@/constants/platform";
+import { createWebDraftStorage } from "./web-storage";
 
 export type { DraftInput, DraftLifecycleState } from "./state";
 
@@ -89,7 +91,9 @@ type DraftStore = DraftStoreState & DraftStoreRuntimeState & DraftStoreActions;
 
 let gcScheduled = false;
 const draftPersistStorage = createDraftPersistStorage(
-  createValidatedPersistStorage(AsyncStorage, PersistedDraftStoreSchema),
+  isWeb && typeof window !== "undefined"
+    ? createWebDraftStorage(window.localStorage)
+    : createValidatedPersistStorage(AsyncStorage, PersistedDraftStoreSchema),
 );
 
 export function flushDraftPersistStorage(): Promise<void> {
