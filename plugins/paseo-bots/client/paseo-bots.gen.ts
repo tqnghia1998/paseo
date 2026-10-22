@@ -9,7 +9,7 @@ import { useRpc as useRpc20 } from "@getpaseo/plugin/client";
 import { copyText as copyText6, useToast as useToast17 } from "@getpaseo/plugin/client/react-native";
 import { SettingsAction as SettingsAction17, SettingsCard as SettingsCard21 } from "@getpaseo/plugin/client/ui";
 import { useQueryClient as useQueryClient11 } from "@tanstack/react-query";
-import { useCallback as useCallback6, useEffect as useEffect24, useRef as useRef19, useState as useState44 } from "react";
+import { useCallback as useCallback6, useEffect as useEffect24, useRef as useRef20, useState as useState44 } from "react";
 import { ActivityIndicator as ActivityIndicator11, BackHandler, Platform as Platform21, Text as Text33, View as View45 } from "react-native";
 
 // shared/pixel.ts
@@ -821,7 +821,7 @@ var BotListUiSchema = z.object({
   chatOrder: z.record(z.string(), z.array(z.string())).default({}),
   chatSort: z.enum(["manual", "activity"]).default("manual"),
   showArchived: z.boolean().default(false),
-  /** The open team tab: a team id, or OTHER_BOTS_TAB. Null opens the first. */
+  /** The open team tab: a team id, or ALL_BOTS_TAB. Null (or a retired id) opens the first. */
   tab: z.string().nullable().default(null),
   /** Desktop column widths, like Paseo's resizable sidebar (default 320) and explorer (default 320). */
   listWidth: z.number().default(320),
@@ -854,7 +854,7 @@ var TeamFileTeamSchema = z.object({
   name: z.string().max(60),
   logo: TeamLogoSchema.nullable().default(null),
   lead: z.number().int().min(0).nullable().default(null),
-  members: z.array(z.number().int().min(0)).max(50).default([]),
+  members: z.array(z.number().int().min(0)).default([]),
   instructions: z.string().max(2e4).default("")
 });
 var BotDefaultsSchema = z.object({
@@ -1153,6 +1153,77 @@ function joinArgs(args) {
   return args.map((arg) => arg === "" || /[\s"']/.test(arg) ? `"${arg.replace(/"/g, "'")}"` : arg).join(" ");
 }
 
+// shared/sidebar.ts
+function chatBucket(agent) {
+  if ((agent.pendingPermissions?.length ?? 0) > 0 || agent.attentionReason === "permission") return "needs_input";
+  if (agent.status === "error" || agent.attentionReason === "error") return "failed";
+  if (agent.status === "running") return "running";
+  if (agent.requiresAttention) return "attention";
+  return "done";
+}
+var AGGREGATE_PRIORITY = ["needs_input", "failed", "running", "attention", "done"];
+function aggregateBuckets(buckets) {
+  let best = AGGREGATE_PRIORITY.length - 1;
+  for (const bucket of buckets) {
+    const rank = AGGREGATE_PRIORITY.indexOf(bucket);
+    if (rank !== -1 && rank < best) best = rank;
+  }
+  return AGGREGATE_PRIORITY[best] ?? "done";
+}
+var BUCKET_LABELS = {
+  needs_input: "Needs input",
+  failed: "Failed",
+  attention: "Ready to review",
+  running: "Working",
+  done: "Done"
+};
+var SIDEBAR_GROUP_LIMIT = 20;
+function applyStoredOrdering(items, storedOrder, getKey) {
+  if (items.length <= 1 || storedOrder.length === 0) return [...items];
+  const byKey = /* @__PURE__ */ new Map();
+  for (const item of items) byKey.set(getKey(item), item);
+  const pruned = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const key of storedOrder) {
+    if (!byKey.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    pruned.push(key);
+  }
+  if (pruned.length === 0) return [...items];
+  const ordered = [];
+  let index = 0;
+  for (const item of items) {
+    const key = getKey(item);
+    if (!seen.has(key)) {
+      ordered.push(item);
+      continue;
+    }
+    const target = pruned[index] ?? key;
+    index += 1;
+    ordered.push(byKey.get(target) ?? item);
+  }
+  return ordered;
+}
+function orderChats(chats, sort, storedOrder = []) {
+  if (sort === "activity") return [...chats].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const base = [...chats].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  return applyStoredOrdering(base, storedOrder, (chat) => chat.id);
+}
+function moveKey(keys, key, delta) {
+  const index = keys.indexOf(key);
+  const target = index + delta;
+  if (index === -1 || target < 0 || target >= keys.length) return null;
+  const next = [...keys];
+  next[index] = keys[target];
+  next[target] = key;
+  return next;
+}
+function chatAfterRemoval(keys, key) {
+  const rest = keys.filter((entry) => entry !== key);
+  const index = keys.indexOf(key);
+  return rest[Math.min(Math.max(index, 0), rest.length - 1)] ?? null;
+}
+
 // shared/groups.ts
 function teamLogoOf(group) {
   return group.logo ?? { seed: group.id, palette: null, imageUrl: null };
@@ -1184,21 +1255,34 @@ function withoutBot(groups, botId, now) {
     (group) => group.memberIds.includes(botId) || group.leadId === botId ? { ...group, memberIds: group.memberIds.filter((id) => id !== botId), leadId: group.leadId === botId ? null : group.leadId, updatedAt: now } : group
   );
 }
-var OTHER_BOTS_TAB = "other";
+var ALL_BOTS_TAB = "all";
 function teamTabs(groups, bots) {
   if (groups.length === 0) return [];
   const byId = new Map(bots.map((bot) => [bot.id, bot]));
-  const teamed = /* @__PURE__ */ new Set();
   const tabs = groups.map((group) => {
     const ids = [...group.leadId ? [group.leadId] : [], ...group.memberIds.filter((id) => id !== group.leadId)];
-    for (const id of ids) teamed.add(id);
     return { id: group.id, group, bots: ids.flatMap((id) => byId.get(id) ?? []) };
   });
-  const others = bots.filter((bot) => !teamed.has(bot.id));
-  return others.length > 0 ? [...tabs, { id: OTHER_BOTS_TAB, group: null, bots: others }] : tabs;
+  return [{ id: ALL_BOTS_TAB, group: null, bots: [...bots] }, ...tabs];
 }
-function tabOf(botId, groups) {
-  return teamOf(botId, groups)?.id ?? OTHER_BOTS_TAB;
+function chatForTab(tab, saved, chats) {
+  const onTab = (botId) => tab.bots.some((bot) => bot.id === botId);
+  if (saved && onTab(saved.botId) && (saved.chatId === null || chats.some((chat) => chat.id === saved.chatId))) return saved;
+  const latest = chats.filter((chat) => onTab(chat.botId)).reduce((best, chat) => !best || Date.parse(chat.updatedAt) > Date.parse(best.updatedAt) ? chat : best, null);
+  if (latest) return { botId: latest.botId, chatId: latest.id };
+  return tab.bots[0] ? { botId: tab.bots[0].id, chatId: null } : null;
+}
+function tabBuckets(tabs, chatsOf) {
+  return Object.fromEntries(
+    tabs.map((tab) => {
+      const bucket = aggregateBuckets(tab.bots.flatMap((bot) => chatsOf(bot.id)).map(chatBucket));
+      return [tab.id, bucket === "done" ? null : bucket];
+    })
+  );
+}
+function tabsOf(botId, groups) {
+  const team = teamOf(botId, groups);
+  return team ? [ALL_BOTS_TAB, team.id] : [ALL_BOTS_TAB];
 }
 
 // shared/library.ts
@@ -1301,13 +1385,14 @@ function addImportedBots(values, imported, teams = [], now = (/* @__PURE__ */ ne
 
 // shared/chat.ts
 var ROUTINE_LABEL = "paseo-bots.routine";
+var CHAT_CONTEXT_LABEL = "paseo-bots.context";
 var MAX_TITLE_CHARS = 200;
 function displayTitle(title) {
   return (title ?? "").replace(/^\[[^\]]*\]\s*/, "") || "New chat";
 }
 var normalize = (path) => (path ?? "").replace(/\/+$/, "");
-function isWorkspaceBotChat(agent, directory, botId) {
-  return normalize(agent.cwd) === normalize(directory) && (agent.labels?.[BOT_LABEL] === botId || botId === "vibing-general" && !agent.labels?.[BOT_LABEL]);
+function isWorkspaceBotChat(agent, directory, botId, context = "workspace") {
+  return normalize(agent.cwd) === normalize(directory) && (agent.labels?.[CHAT_CONTEXT_LABEL] ?? "workspace") === context && (agent.labels?.[BOT_LABEL] === botId || botId === "vibing-general" && !agent.labels?.[BOT_LABEL]);
 }
 async function botsProjectId(api, root) {
   const { projects } = await api.projects.list();
@@ -1364,77 +1449,6 @@ async function resolveDefaultModel(api, provider) {
   const model = defaultModelId(entry?.models ?? []);
   if (!model) throw new Error(`${provider} has no models available. Pick a model in the bot's settings.`);
   return model;
-}
-
-// shared/sidebar.ts
-function chatBucket(agent) {
-  if ((agent.pendingPermissions?.length ?? 0) > 0 || agent.attentionReason === "permission") return "needs_input";
-  if (agent.status === "error" || agent.attentionReason === "error") return "failed";
-  if (agent.status === "running") return "running";
-  if (agent.requiresAttention) return "attention";
-  return "done";
-}
-var AGGREGATE_PRIORITY = ["needs_input", "failed", "running", "attention", "done"];
-function aggregateBuckets(buckets) {
-  let best = AGGREGATE_PRIORITY.length - 1;
-  for (const bucket of buckets) {
-    const rank = AGGREGATE_PRIORITY.indexOf(bucket);
-    if (rank !== -1 && rank < best) best = rank;
-  }
-  return AGGREGATE_PRIORITY[best] ?? "done";
-}
-var BUCKET_LABELS = {
-  needs_input: "Needs input",
-  failed: "Failed",
-  attention: "Ready to review",
-  running: "Working",
-  done: "Done"
-};
-var SIDEBAR_GROUP_LIMIT = 20;
-function applyStoredOrdering(items, storedOrder, getKey) {
-  if (items.length <= 1 || storedOrder.length === 0) return [...items];
-  const byKey = /* @__PURE__ */ new Map();
-  for (const item of items) byKey.set(getKey(item), item);
-  const pruned = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const key of storedOrder) {
-    if (!byKey.has(key) || seen.has(key)) continue;
-    seen.add(key);
-    pruned.push(key);
-  }
-  if (pruned.length === 0) return [...items];
-  const ordered = [];
-  let index = 0;
-  for (const item of items) {
-    const key = getKey(item);
-    if (!seen.has(key)) {
-      ordered.push(item);
-      continue;
-    }
-    const target = pruned[index] ?? key;
-    index += 1;
-    ordered.push(byKey.get(target) ?? item);
-  }
-  return ordered;
-}
-function orderChats(chats, sort, storedOrder = []) {
-  if (sort === "activity") return [...chats].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  const base = [...chats].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  return applyStoredOrdering(base, storedOrder, (chat) => chat.id);
-}
-function moveKey(keys, key, delta) {
-  const index = keys.indexOf(key);
-  const target = index + delta;
-  if (index === -1 || target < 0 || target >= keys.length) return null;
-  const next = [...keys];
-  next[index] = keys[target];
-  next[target] = key;
-  return next;
-}
-function chatAfterRemoval(keys, key) {
-  const rest = keys.filter((entry) => entry !== key);
-  const index = keys.indexOf(key);
-  return rest[Math.min(Math.max(index, 0), rest.length - 1)] ?? null;
 }
 
 // shared/activity.ts
@@ -2672,7 +2686,7 @@ var importBotRpc = defineRpc({
 var ImportedBotSchema = z5.object({ bot: BotSchema, skills: z5.array(ImportedSkillSchema), mcpServers: z5.array(BotMcpServerSchema) });
 var exportTeamRpc = defineRpc({
   name: "bots.export-team",
-  input: z5.object({ bots: z5.array(BotSchema).min(1).max(50), groups: z5.array(BotGroupSchema).max(50).default([]), includeMemory: z5.boolean() }),
+  input: z5.object({ bots: z5.array(BotSchema).min(1), groups: z5.array(BotGroupSchema).default([]), includeMemory: z5.boolean() }),
   output: z5.object({ json: z5.string() })
 });
 var importTeamRpc = defineRpc({
@@ -3993,1342 +4007,25 @@ function SectionMeta({ colors: colors2, text, tone }) {
   return /* @__PURE__ */ jsx3(Text2, { style: { fontSize: ui(12), color }, children: text });
 }
 
-// client/BotDialogs.tsx
-import { jsx as jsx4, jsxs as jsxs3 } from "react/jsx-runtime";
-function NewBotDialog({
-  colors: colors2,
-  presets,
-  onClose,
-  onCreate,
-  onImport
-}) {
-  const [json, setJson] = useState5("");
-  const [importing, setImporting] = useState5(false);
-  const toast = useToast();
-  return /* @__PURE__ */ jsx4(Modal2, { title: "New bot", open: true, onOpenChange: (open) => !open && onClose(), children: /* @__PURE__ */ jsxs3(Modal2.Content, { children: [
-    /* @__PURE__ */ jsx4(SettingsSection, { title: "Start from", children: /* @__PURE__ */ jsxs3(SettingsCard, { children: [
-      /* @__PURE__ */ jsx4(StartRow, { colors: colors2, label: "Blank bot", hint: "Set everything up yourself in the settings panel.", onPress: () => onCreate() }),
-      BOT_TEMPLATES.map((template) => /* @__PURE__ */ jsx4(StartRow, { colors: colors2, label: template.title, hint: template.description, avatar: { seed: template.avatarSeed }, onPress: () => onCreate({ template }) }, template.id))
-    ] }) }),
-    presets.length ? /* @__PURE__ */ jsx4(SettingsSection, { title: "Your presets", info: "Bots you saved as presets from their menu. Manage them in Settings, Plugins, paseo-bots.", children: /* @__PURE__ */ jsx4(SettingsCard, { children: presets.map((preset) => /* @__PURE__ */ jsx4(StartRow, { colors: colors2, label: preset.name, hint: preset.title || preset.description, avatar: preset.avatar, onPress: () => onCreate({ preset }) }, preset.id)) }) }) : null,
-    /* @__PURE__ */ jsxs3(SettingsSection, { title: "Import", info: "Paste a bot or team file from paseo-bots. Routines arrive paused, skills need a review and secrets must be filled in again.", children: [
-      /* @__PURE__ */ jsx4(
-        FormTextArea,
-        {
-          colors: colors2,
-          monospace: true,
-          accessibilityLabel: "Bot or team file",
-          value: json,
-          onChangeText: setJson,
-          autoCapitalize: "none",
-          autoCorrect: false,
-          minHeight: 120,
-          placeholder: '{"format": "paseo-bots", \u2026}'
-        }
-      ),
-      /* @__PURE__ */ jsx4(SheetActions, { children: /* @__PURE__ */ jsx4(
-        Button,
-        {
-          colors: colors2,
-          variant: "default",
-          label: importing ? "Importing..." : "Import",
-          loading: importing,
-          disabled: !json.trim(),
-          onPress: () => {
-            setImporting(true);
-            void onImport(json).catch((error) => toast.error(errorText(error))).finally(() => setImporting(false));
-          }
-        }
-      ) })
-    ] })
-  ] }) });
-}
-function StartRow({ colors: colors2, label, hint, avatar, onPress }) {
-  const { hovered, hoverProps } = useHover();
-  return /* @__PURE__ */ jsxs3(
-    Pressable3,
-    {
-      accessibilityRole: "button",
-      accessibilityLabel: `Create ${label}`,
-      accessibilityHint: hint,
-      onPress,
-      ...hoverProps,
-      style: ({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        backgroundColor: pressed || hovered ? colors2.surface2 : "transparent"
-      }),
-      children: [
-        avatar ? /* @__PURE__ */ jsx4(Avatar, { avatar, size: 28, dark: nativeTokens(colors2).dark }) : /* @__PURE__ */ jsx4(View4, { style: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors2.surface2 }, children: /* @__PURE__ */ jsx4(Icon3, { name: "Plus", size: 14, color: colors2.foregroundMuted }) }),
-        /* @__PURE__ */ jsxs3(View4, { style: { flex: 1, minWidth: 0 }, children: [
-          /* @__PURE__ */ jsx4(Text3, { numberOfLines: 1, style: { fontSize: ui(14), color: colors2.foreground }, children: label }),
-          hint ? /* @__PURE__ */ jsx4(Text3, { numberOfLines: 2, style: { marginTop: 4, fontSize: ui(12), color: colors2.foregroundMuted }, children: hint }) : null
-        ] }),
-        /* @__PURE__ */ jsx4(Icon3, { name: "ChevronRight", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted })
-      ]
-    }
-  );
-}
-function RenameDialog({ colors: colors2, title, initialValue, placeholder, submitLabel = "Rename", onClose, onSubmit }) {
-  const [draft, setDraft2] = useState5(initialValue);
-  const [error, setError] = useState5(null);
-  const [pending2, setPending] = useState5(false);
-  const invalid = !draft.trim();
-  const submitDisabled = pending2 || draft === initialValue || invalid;
-  const submit = async () => {
-    if (pending2 || draft === initialValue) return;
-    if (invalid) {
-      setError("Name is required");
-      return;
-    }
-    try {
-      setPending(true);
-      await onSubmit(draft.trim());
-      setPending(false);
-      onClose();
-    } catch (err) {
-      setPending(false);
-      setError(err instanceof Error && err.message ? err.message : "Unable to save");
-    }
-  };
-  const cancel = () => {
-    if (!pending2) onClose();
-  };
-  return /* @__PURE__ */ jsx4(Modal2, { title, open: true, onOpenChange: (open) => !open && cancel(), children: /* @__PURE__ */ jsx4(Modal2.Content, { children: /* @__PURE__ */ jsxs3(View4, { style: { gap: 12, paddingBottom: 8 }, children: [
-    /* @__PURE__ */ jsx4(
-      TextInput2,
-      {
-        accessibilityLabel: title,
-        defaultValue: initialValue,
-        onChangeText: (value) => {
-          setDraft2(value);
-          setError(null);
-        },
-        placeholder,
-        placeholderTextColor: colors2.foregroundMuted,
-        autoFocus: true,
-        selectTextOnFocus: true,
-        autoCapitalize: "none",
-        autoCorrect: false,
-        editable: !pending2,
-        returnKeyType: "done",
-        onSubmitEditing: () => void submit(),
-        style: {
-          backgroundColor: colors2.surface0,
-          color: colors2.foreground,
-          paddingVertical: 12,
-          paddingHorizontal: 12,
-          borderRadius: 6,
-          borderWidth: 1,
-          borderColor: colors2.border,
-          fontSize: ui(14)
-        }
-      }
-    ),
-    error ? /* @__PURE__ */ jsx4(Text3, { accessibilityRole: "alert", style: { color: colors2.statusDanger, fontSize: ui(14) }, children: error }) : null,
-    /* @__PURE__ */ jsxs3(View4, { style: { flexDirection: "row", alignItems: "center", gap: 8 }, children: [
-      /* @__PURE__ */ jsx4(DialogButton, { colors: colors2, label: "Cancel", disabled: pending2, onPress: cancel }),
-      /* @__PURE__ */ jsx4(DialogButton, { colors: colors2, label: pending2 ? "Saving..." : submitLabel, primary: true, disabled: submitDisabled, onPress: () => void submit() })
-    ] })
-  ] }) }) });
-}
-function DialogButton({ colors: colors2, label, primary, disabled, onPress }) {
-  const fill = primary ? colors2.accent : nativeTokens(colors2).surface3;
-  return /* @__PURE__ */ jsx4(
-    Pressable3,
-    {
-      accessibilityRole: "button",
-      accessibilityLabel: label,
-      accessibilityState: { disabled: !!disabled },
-      disabled,
-      onPress,
-      style: ({ pressed }) => ({
-        flex: 1,
-        minHeight: 32,
-        paddingHorizontal: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: fill,
-        backgroundColor: fill,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        opacity: disabled ? 0.5 : pressed ? 0.85 : 1
-      }),
-      children: /* @__PURE__ */ jsx4(Text3, { style: { fontSize: ui(14), color: primary ? colors2.accentForeground : colors2.foreground }, children: label })
-    }
-  );
-}
-function botMenuEntries(actions) {
-  const { bot } = actions;
-  const entries = [{ label: "Open bot settings", icon: "Settings", onSelect: actions.onOpenSettings }];
-  if (actions.onOpenInPaseo) entries.push({ label: "Open in Paseo", icon: "ExternalLink", onSelect: actions.onOpenInPaseo });
-  entries.push({ label: bot.pinned ? "Unpin" : "Pin to top", icon: bot.pinned ? "PinOff" : "Pin", onSelect: actions.onTogglePin });
-  if (actions.onMoveUp || actions.onMoveDown) {
-    entries.push({ label: "Move up", icon: "ArrowUp", disabled: !actions.onMoveUp, onSelect: () => actions.onMoveUp?.() });
-    entries.push({ label: "Move down", icon: "ArrowDown", disabled: !actions.onMoveDown, onSelect: () => actions.onMoveDown?.() });
-  }
-  entries.push(
-    { label: "Rename bot", icon: "Pencil", onSelect: actions.onRename },
-    { label: "Duplicate", icon: "CopyPlus", pendingLabel: "Duplicating...", onSelect: actions.onDuplicate },
-    { label: "Save as preset", icon: "BookmarkPlus", onSelect: actions.onSaveAsPreset },
-    { label: "Export", icon: "Share", onSelect: actions.onExport },
-    { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId },
-    { kind: "separator" },
-    { label: bot.archived ? "Unarchive bot" : "Archive bot", icon: bot.archived ? "ArchiveRestore" : "Archive", onSelect: actions.onToggleArchive },
-    { label: "Delete bot", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDelete }
-  );
-  return entries;
-}
-function chatMenuEntries(actions) {
-  const entries = [
-    { label: "Copy path", icon: "Copy", onSelect: actions.onCopyPath },
-    { label: "Copy chat ID", icon: "Copy", onSelect: actions.onCopyId },
-    { label: "Copy transcript", icon: "FileText", pendingLabel: "Copying...", onSelect: actions.onCopyTranscript },
-    { label: actions.pinned ? "Unpin" : "Pin to top", icon: actions.pinned ? "PinOff" : "Pin", onSelect: actions.onTogglePin }
-  ];
-  if (actions.move) {
-    entries.push({ label: "Move up", icon: "ArrowUp", disabled: !actions.move.up, onSelect: () => actions.move?.up?.() });
-    entries.push({ label: "Move down", icon: "ArrowDown", disabled: !actions.move.down, onSelect: () => actions.move?.down?.() });
-  }
-  if (actions.onOpenInPaseo) entries.push({ label: "Open in Paseo", icon: "ExternalLink", onSelect: actions.onOpenInPaseo });
-  entries.push({ label: "Archive", icon: "Archive", pendingLabel: "Archiving...", onSelect: actions.onArchive });
-  return entries;
-}
-function ExportDialog({ colors: colors2, bot, onClose }) {
-  const exportBot = useRpc(exportBotRpc);
-  const toast = useToast();
-  const [includeMemory, setIncludeMemory] = useState5(false);
-  const [json, setJson] = useState5(null);
-  useEffect4(() => {
-    let cancelled = false;
-    setJson(null);
-    exportBot({ bot, includeMemory }).then((result) => !cancelled && setJson(result.json)).catch((error) => toast.error(errorText(error)));
-    return () => {
-      cancelled = true;
-    };
-  }, [includeMemory]);
-  return /* @__PURE__ */ jsx4(Modal2, { title: `Export ${bot.name}`, open: true, onOpenChange: (open) => !open && onClose(), children: /* @__PURE__ */ jsxs3(Modal2.Content, { children: [
-    /* @__PURE__ */ jsxs3(SettingsCard, { children: [
-      /* @__PURE__ */ jsx4(
-        SettingsSwitch,
-        {
-          label: "Include memory",
-          hint: "MEMORY.md and topic files. Leave off when sharing with someone else.",
-          value: includeMemory,
-          onValueChange: setIncludeMemory
-        }
-      ),
-      /* @__PURE__ */ jsx4(
-        SettingsAction,
-        {
-          label: "Copy the bot file",
-          hint: json ? `${(json.length / 1e3).toFixed(1)} KB \xB7 host, folder, tool grants, secrets and chats aren't included.` : "Building...",
-          actionLabel: "Copy",
-          disabled: !json,
-          onPress: () => void copyText(json).then(() => toast.show("Bot file copied", { variant: "success" }))
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsx4(Text3, { ...MONO_PROPS, selectable: true, numberOfLines: 16, style: { fontFamily: MONO_FONT, fontSize: code(), lineHeight: codeLine(), color: colors2.foregroundMuted }, children: json ?? "" })
-  ] }) });
-}
-
-// client/BotSidebar.tsx
-import { Icon as Icon4, ScrollView } from "@getpaseo/plugin/client/react-native";
-import { memo, useEffect as useEffect6, useRef as useRef3, useState as useState6 } from "react";
-import { Animated, Easing, Platform as Platform6, Pressable as Pressable4, Text as Text5, View as View6 } from "react-native";
-
-// client/data.ts
-import { getPaseoClient, usePaseo, useHosts } from "@getpaseo/plugin/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect as useEffect5, useMemo as useMemo3 } from "react";
-function resolveHost(hostId, local, localApi, hosts) {
-  if (!hostId || hostId === local.id) {
-    return { api: localApi, key: local.id, label: local.label, isLocal: true, online: true, workspaceDirectory: local.workspaceDirectory };
-  }
-  const summary = hosts.find((host2) => host2.serverId === hostId);
-  const label = summary?.label ?? "Unknown host";
-  if (summary?.status !== "online") return { api: null, key: hostId, label, isLocal: false, online: false, workspaceDirectory: local.workspaceDirectory };
-  try {
-    return { api: getPaseoClient(hostId), key: hostId, label, isLocal: false, online: true, workspaceDirectory: local.workspaceDirectory };
-  } catch {
-    return { api: null, key: hostId, label, isLocal: false, online: false, workspaceDirectory: local.workspaceDirectory };
-  }
-}
-function useBotHost(hostId, local) {
-  const localApi = usePaseo();
-  const hosts = useHosts();
-  const summary = hostId ? hosts.find((host2) => host2.serverId === hostId) : void 0;
-  const status = summary?.status;
-  return useMemo3(
-    () => resolveHost(hostId, local, localApi, hosts),
-    // Only the fields that change the result.
-    [hostId, local.id, local.label, local.workspaceDirectory, localApi, summary?.label, status]
-  );
-}
-function useHostResolver(local) {
-  const localApi = usePaseo();
-  const hosts = useHosts();
-  return (hostId) => resolveHost(hostId, local, localApi, hosts);
-}
-function useProviders(host2) {
-  return useQuery({
-    queryKey: ["paseo-bots", "providers", host2.key],
-    enabled: !!host2.api,
-    staleTime: 6e4,
-    queryFn: async () => {
-      const snapshot = await host2.api.providers.snapshot();
-      return snapshot.entries.filter((entry) => entry.enabled);
-    }
-  });
-}
-function useAgentProfiles(host2) {
-  return useQuery({
-    queryKey: ["paseo-bots", "profiles", host2.key],
-    enabled: !!host2.api,
-    staleTime: 6e4,
-    queryFn: async () => (await host2.api.config.get()).config.agentProfiles ?? []
-  });
-}
-function useHostWorkspaces(host2) {
-  return useQuery({
-    queryKey: ["paseo-bots", "workspaces", host2.key],
-    enabled: !!host2.api,
-    staleTime: 3e4,
-    queryFn: async () => {
-      const result = await host2.api.workspaces.list();
-      return result.entries.map((workspace) => ({
-        id: workspace.id,
-        label: workspace.title || `${workspace.projectDisplayName} \xB7 ${workspace.name}`,
-        directory: workspace.workspaceDirectory ?? workspace.projectRootPath
-      }));
-    }
-  });
-}
-function useBotChats(host2, botId) {
-  const directory = host2.workspaceDirectory;
-  const available = !directory || host2.isLocal;
-  return useQuery({
-    // All bots in an embedded workspace share one directory snapshot.
-    queryKey: ["paseo-bots", "chats", host2.key, directory ? "workspace" : botId, directory],
-    enabled: !!host2.api && available,
-    refetchInterval: host2.isLocal ? false : 15e3,
-    queryFn: async () => {
-      const agents = [];
-      let cursor;
-      do {
-        const result = await host2.api.agents.list({
-          ...directory ? {} : { filter: { labels: { [BOT_LABEL]: botId } } },
-          page: { limit: 200, ...cursor ? { cursor } : {} }
-        });
-        agents.push(...result.entries.map((entry) => entry.agent));
-        cursor = result.pageInfo.hasMore ? result.pageInfo.nextCursor ?? void 0 : void 0;
-      } while (cursor);
-      return agents.filter((agent) => !agent.archivedAt).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-    },
-    select: (agents) => !available ? [] : directory ? agents.filter((agent) => isWorkspaceBotChat(agent, directory, botId)) : agents
-  });
-}
-function useChatInvalidation() {
-  const paseo = usePaseo();
-  const queryClient = useQueryClient();
-  useEffect5(() => {
-    let timer2 = null;
-    let closed = false;
-    let subscription = null;
-    const unsubscribe = paseo.agents.subscribe(() => {
-      if (timer2) return;
-      timer2 = setTimeout(() => {
-        timer2 = null;
-        void queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats"] });
-      }, 500);
-    });
-    void paseo.agents.list({ page: { limit: 1 }, subscribe: {} }).then((result) => {
-      if (closed) void result.subscription.release();
-      else subscription = result.subscription;
-    }).catch(() => {
-    });
-    return () => {
-      closed = true;
-      if (timer2) clearTimeout(timer2);
-      unsubscribe();
-      void subscription?.release();
-    };
-  }, [paseo, queryClient]);
-}
-function usePaseoTools(host2, provider) {
-  const queryClient = useQueryClient();
-  const key = ["paseo-bots", "paseo-tools", host2.key];
-  const config = useQuery({
-    queryKey: key,
-    enabled: !!host2.api,
-    staleTime: 3e4,
-    queryFn: async () => (await host2.api.config.get()).config
-  });
-  const state = config.data ? paseoToolsState(config.data, provider) : null;
-  const turnOn = async () => {
-    if (!host2.api || !state || state.on) return;
-    await host2.api.config.patch(state.reason === "provider" ? { providers: { [provider]: { paseoTools: { enabled: true } } } } : { mcp: { injectIntoAgents: true } });
-    await queryClient.invalidateQueries({ queryKey: key });
-  };
-  return { state, loading: config.isLoading, turnOn };
-}
-
-// client/navigation.ts
-var listeners = /* @__PURE__ */ new Set();
-function openLibrary(target = null) {
-  for (const listener of listeners) listener(target);
-}
-function onLibraryTarget(listener) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-// client/Splash.tsx
-import { useMemo as useMemo4 } from "react";
-import { ExternalLink } from "@getpaseo/plugin/client/ui";
-import { Text as Text4, View as View5 } from "react-native";
-
-// shared/version.ts
-var PLUGIN_VERSION = "0.2.0";
-var PLUGIN_ID = "paseo-bots";
-
-// client/Splash.tsx
-import { jsx as jsx5, jsxs as jsxs4 } from "react/jsx-runtime";
-var AVATAR_SIZE = 48;
-var REPOSITORY_URL = "https://github.com/oliexe/paseo-bots";
-function Splash({ colors: colors2, background }) {
-  const dark = nativeTokens(colors2).dark;
-  const lineup = useMemo4(
-    () => SPLASH_LINEUP.map((entry) => {
-      return { key: entry.sprite, gray: grayscaleAvatar(spriteAvatar(entry.sprite, entry.palette, entry.accent, { dark })) };
-    }),
-    [dark]
-  );
-  return /* @__PURE__ */ jsxs4(View5, { style: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 16, backgroundColor: background ?? colors2.surface0 }, children: [
-    /* @__PURE__ */ jsx5(View5, { accessibilityElementsHidden: true, importantForAccessibility: "no-hide-descendants", style: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 12, maxWidth: 6 * AVATAR_SIZE + 5 * 12 }, children: lineup.map((entry) => /* @__PURE__ */ jsx5(PixelSprite, { sprite: entry.gray, size: AVATAR_SIZE }, entry.key)) }),
-    /* @__PURE__ */ jsxs4(View5, { style: { alignItems: "center", gap: 2 }, children: [
-      /* @__PURE__ */ jsx5(Text4, { style: { fontSize: ui(12), color: colors2.foregroundMuted }, children: "paseo-bots" }),
-      /* @__PURE__ */ jsxs4(Text4, { style: { fontSize: ui(11), color: colors2.foregroundMuted, opacity: 0.7 }, children: [
-        "v",
-        PLUGIN_VERSION
-      ] })
-    ] }),
-    /* @__PURE__ */ jsx5(View5, { style: { position: "absolute", left: 0, right: 0, bottom: 16, alignItems: "center" }, children: /* @__PURE__ */ jsx5(ExternalLink, { href: REPOSITORY_URL, accessibilityLabel: "paseo-bots on GitHub", children: "GitHub" }) })
-  ] });
-}
-
-// client/BotSidebar.tsx
-import { Fragment as Fragment3, jsx as jsx6, jsxs as jsxs5 } from "react/jsx-runtime";
-var noSelect = { userSelect: "none" };
-var CHEVRON_COLOR = "#9ca3af";
-function botChatOrder(chats, listUi, botId) {
-  const listed = new Set(chats.map((chat) => chat.id));
-  const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
-  const pinned = listUi.pinnedChats.filter((pin) => pin.botId === botId && listed.has(pin.chatId)).map((pin) => pin.chatId);
-  const rest = orderChats(chats.filter((chat) => !pinnedIds.has(chat.id)), listUi.chatSort, listUi.chatOrder[botId]);
-  return [...pinned, ...rest.map((chat) => chat.id)];
-}
-function BotSidebar(props) {
-  const { colors: colors2, bots, openTab, ui: listUi, hiddenArchivedCount, bottomInset, onNewBot, onShowArchived, onTeamMap, onEditTeam } = props;
-  const tokens = nativeTokens(colors2);
-  const shown = openTab?.bots ?? bots;
-  const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
-  const listedBots = new Map(shown.map((bot) => [bot.id, bot]));
-  const pins = listUi.pinnedChats.filter((pin) => listedBots.has(pin.botId));
-  const leadId = openTab?.group?.leadId ?? null;
-  if (props.splash && bots.length === 0 && hiddenArchivedCount === 0 && pins.length === 0 && !openTab) {
-    return /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, paddingBottom: bottomInset, backgroundColor: tokens.surfaceSidebar }, children: [
-      /* @__PURE__ */ jsx6(Splash, { colors: colors2, background: tokens.surfaceSidebar }),
-      /* @__PURE__ */ jsx6(Footer, { colors: colors2, onNewBot, onTeamMap })
-    ] });
-  }
-  return /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, paddingBottom: bottomInset, backgroundColor: tokens.surfaceSidebar }, children: [
-    /* @__PURE__ */ jsxs5(
-      ScrollView,
-      {
-        style: { flex: 1 },
-        keyboardShouldPersistTaps: "handled",
-        showsVerticalScrollIndicator: false,
-        contentContainerStyle: { paddingHorizontal: 8, paddingTop: 2, paddingBottom: 16 },
-        children: [
-          pins.length > 0 ? /* @__PURE__ */ jsx6(PinnedSection, { ...props, pins, botById: listedBots, tokens }) : null,
-          shown.length > 0 || hiddenArchivedCount > 0 ? /* @__PURE__ */ jsx6(SectionHeader, { colors: colors2, onDisplayMenu: props.onDisplayMenu }) : null,
-          shown.map((bot) => /* @__PURE__ */ jsx6(BotGroup, { ...props, tokens, bot, lead: bot.id === leadId, pinnedIds }, bot.id)),
-          openTab?.group && shown.length === 0 ? /* @__PURE__ */ jsx6(EmptyState, { colors: colors2, title: "No bots on this team", description: "Add bots to it in the team's settings.", action: { icon: "Pencil", label: "Edit team", onPress: () => onEditTeam(openTab.group) } }) : bots.length === 0 ? hiddenArchivedCount > 0 ? /* @__PURE__ */ jsx6(
-            EmptyState,
-            {
-              colors: colors2,
-              title: "All bots are archived",
-              description: "Show archived bots to see them here.",
-              action: { icon: "Archive", label: "Show archived", onPress: onShowArchived }
-            }
-          ) : /* @__PURE__ */ jsx6(EmptyState, { colors: colors2, title: "No bots yet", description: "Create a bot to get started", action: { icon: "Plus", label: "New bot", onPress: onNewBot } }) : null
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsx6(Footer, { colors: colors2, onNewBot, onTeamMap })
-  ] });
-}
-function SectionHeader({ colors: colors2, onDisplayMenu }) {
-  const ref = useRef3(null);
-  const { hovered, hoverProps } = useHover();
-  return /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingLeft: 8, paddingRight: 4, paddingTop: 4, paddingBottom: 4 }, children: [
-    /* @__PURE__ */ jsx6(Text5, { style: [{ fontSize: ui(12), color: colors2.foregroundMuted }, noSelect], children: "Bots" }),
-    /* @__PURE__ */ jsx6(
-      Pressable4,
-      {
-        ref,
-        accessibilityRole: "button",
-        accessibilityLabel: "Display preferences",
-        ...tooltip("Display preferences", "bottom"),
-        onPress: () => void measureAnchor(ref).then((anchor) => anchor && onDisplayMenu(anchor)),
-        ...hoverProps,
-        style: { width: 28, height: 28, alignItems: "center", justifyContent: "center", borderRadius: 6, backgroundColor: hovered ? colors2.surface1 : "transparent" },
-        children: /* @__PURE__ */ jsx6(Icon4, { name: "Settings2", size: 14, color: colors2.foregroundMuted })
-      }
-    )
-  ] });
-}
-function Footer({ colors: colors2, onNewBot, onTeamMap }) {
-  const { hovered, hoverProps } = useHover();
-  return /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors2.border }, children: [
-    /* @__PURE__ */ jsxs5(
-      Pressable4,
-      {
-        accessibilityRole: "button",
-        accessibilityLabel: "New bot",
-        onPress: onNewBot,
-        ...hoverProps,
-        style: ({ pressed }) => [
-          {
-            minWidth: 0,
-            minHeight: 32,
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            paddingVertical: 6,
-            paddingHorizontal: 8,
-            borderRadius: 8,
-            backgroundColor: pressed ? colors2.surface2 : hovered ? colors2.surface1 : "transparent"
-          },
-          noSelect
-        ],
-        children: [
-          /* @__PURE__ */ jsx6(Icon4, { name: "Plus", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted }),
-          /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered ? colors2.foreground : colors2.foregroundMuted }, children: "New bot" })
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Network", label: "Team map", onPress: onTeamMap }),
-    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Blocks", label: "Skills & Tools", onPress: () => openLibrary() })
-  ] });
-}
-function FooterIconButton({ colors: colors2, icon, label, onPress }) {
-  const { hovered, hoverProps } = useHover();
-  return /* @__PURE__ */ jsx6(
-    Pressable4,
-    {
-      accessibilityRole: "button",
-      accessibilityLabel: label,
-      ...tooltip(label),
-      onPress,
-      ...hoverProps,
-      style: ({ pressed }) => [
-        { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: pressed ? colors2.surface2 : hovered ? colors2.surface1 : "transparent" },
-        noSelect
-      ],
-      children: /* @__PURE__ */ jsx6(Icon4, { name: icon, size: 16, color: hovered ? colors2.foreground : colors2.foregroundMuted })
-    }
-  );
-}
-function EmptyState({ colors: colors2, title, description, action }) {
-  return /* @__PURE__ */ jsxs5(View6, { style: { marginHorizontal: 8, marginTop: 16, paddingTop: 24, paddingBottom: 16, paddingHorizontal: 16, borderRadius: 8, backgroundColor: colors2.surface0, alignItems: "center", gap: 12 }, children: [
-    /* @__PURE__ */ jsx6(Text5, { style: { color: colors2.foreground, fontSize: ui(12), fontWeight: "500", textAlign: "center" }, children: title }),
-    /* @__PURE__ */ jsx6(Text5, { style: { color: colors2.foregroundMuted, fontSize: ui(12), textAlign: "center" }, children: description }),
-    /* @__PURE__ */ jsx6(GhostButton, { colors: colors2, icon: action.icon, label: action.label, onPress: action.onPress })
-  ] });
-}
-function GhostButton({ colors: colors2, icon, label, onPress }) {
-  const { hovered, hoverProps } = useHover();
-  const tint = hovered ? colors2.foreground : colors2.foregroundMuted;
-  return /* @__PURE__ */ jsxs5(
-    Pressable4,
-    {
-      accessibilityRole: "button",
-      accessibilityLabel: label,
-      onPress,
-      ...hoverProps,
-      style: ({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        minHeight: 32,
-        paddingHorizontal: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "transparent",
-        opacity: pressed ? 0.85 : 1
-      }),
-      children: [
-        /* @__PURE__ */ jsx6(Icon4, { name: icon, size: 14, color: tint }),
-        /* @__PURE__ */ jsx6(Text5, { style: { fontSize: ui(14), color: tint }, children: label })
-      ]
-    }
-  );
-}
-function PinnedSection(props) {
-  const { colors: colors2, pins, ui: listUi, touch, onTogglePinnedSection } = props;
-  const collapsed = listUi.pinnedCollapsed;
-  const [expanded, setExpanded] = useState6(false);
-  const visible = expanded ? pins : pins.slice(0, SIDEBAR_GROUP_LIMIT);
-  const { hovered, hoverProps } = useHover();
-  return /* @__PURE__ */ jsxs5(View6, { style: { marginBottom: 4 }, children: [
-    /* @__PURE__ */ jsxs5(
-      Pressable4,
-      {
-        accessibilityRole: "button",
-        accessibilityLabel: "Pinned",
-        accessibilityState: { expanded: !collapsed },
-        onPress: onTogglePinnedSection,
-        ...hoverProps,
-        style: [{ minHeight: 36, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 4, paddingHorizontal: 8, paddingVertical: 4 }, noSelect],
-        children: [
-          /* @__PURE__ */ jsx6(Text5, { style: { fontSize: ui(12), color: colors2.foregroundMuted }, children: "Pinned" }),
-          hovered || touch ? /* @__PURE__ */ jsx6(Icon4, { name: collapsed ? "ChevronRight" : "ChevronDown", size: 12, color: colors2.foregroundMuted }) : null
-        ]
-      }
-    ),
-    collapsed ? null : /* @__PURE__ */ jsxs5(Fragment3, { children: [
-      visible.map((pin) => /* @__PURE__ */ jsx6(PinnedChatRow, { ...props, bot: props.botById.get(pin.botId), chatId: pin.chatId }, pin.chatId)),
-      pins.length > SIDEBAR_GROUP_LIMIT ? /* @__PURE__ */ jsx6(ShowMoreRow, { colors: colors2, expanded, onPress: () => setExpanded(!expanded) }) : null
-    ] })
-  ] });
-}
-function PinnedChatRow({ colors: colors2, tokens, bot, chatId, selection, ui: listUi, localHost, touch, onSelect, onChatMenu, onDeleteChat }) {
-  const host2 = useBotHost(bot.hostId, localHost);
-  const chats = useBotChats(host2, bot.id);
-  const chat = chats.data?.find((entry) => entry.id === chatId);
-  if (!chat) return null;
-  const context = { siblings: [], pinned: true, order: botChatOrder(chats.data ?? [], listUi, bot.id) };
-  return /* @__PURE__ */ jsx6(
-    ChatRow,
-    {
-      colors: colors2,
-      tokens,
-      chat,
-      bot,
-      hoisted: true,
-      touch,
-      selected: selection?.botId === bot.id && selection.chatId === chat.id,
-      onPress: () => onSelect({ botId: bot.id, chatId: chat.id }),
-      onMenu: (anchor, source) => onChatMenu(bot, chat, anchor, source, context),
-      onDelete: () => onDeleteChat(bot, chat, context)
-    }
-  );
-}
-function BotGroup(props) {
-  const { colors: colors2, tokens, bot, selection, ui: listUi, localHost, touch, pinnedIds, onSelect, onChatMenu, onDeleteChat } = props;
-  const host2 = useBotHost(bot.hostId, localHost);
-  const chats = useBotChats(host2, bot.id);
-  const [expanded, setExpanded] = useState6(false);
-  const isOpen = !listUi.collapsed.includes(bot.id);
-  const botSelected = selection?.botId === bot.id;
-  const draftSelected = botSelected && selection?.chatId === null;
-  const unpinned = (chats.data ?? []).filter((chat) => !pinnedIds.has(chat.id));
-  const ordered = orderChats(unpinned, listUi.chatSort, listUi.chatOrder[bot.id]);
-  const siblings = ordered.map((chat) => chat.id);
-  const context = { siblings, pinned: false, order: botChatOrder(chats.data ?? [], listUi, bot.id) };
-  const visible = expanded ? ordered : ordered.slice(0, SIDEBAR_GROUP_LIMIT);
-  const loading2 = !!host2.api && chats.isLoading;
-  const aggregate = isOpen ? null : aggregateBuckets(unpinned.map(chatBucket));
-  let children = null;
-  if (isOpen) {
-    if (loading2) children = /* @__PURE__ */ jsx6(SkeletonRows, { colors: colors2 });
-    else if (ordered.length > 0 || draftSelected) {
-      children = /* @__PURE__ */ jsxs5(Fragment3, { children: [
-        draftSelected && ordered.length > 0 ? /* @__PURE__ */ jsx6(NewChatGhostRow, { colors: colors2, tokens, selected: true, onPress: () => onSelect({ botId: bot.id, chatId: null }) }) : null,
-        visible.map((chat) => /* @__PURE__ */ jsx6(
-          ChatRow,
-          {
-            colors: colors2,
-            tokens,
-            chat,
-            bot,
-            touch,
-            selected: botSelected && selection?.chatId === chat.id,
-            onPress: () => onSelect({ botId: bot.id, chatId: chat.id }),
-            onMenu: (anchor, source) => onChatMenu(bot, chat, anchor, source, context),
-            onDelete: () => onDeleteChat(bot, chat, context)
-          },
-          chat.id
-        )),
-        ordered.length > SIDEBAR_GROUP_LIMIT ? /* @__PURE__ */ jsx6(ShowMoreRow, { colors: colors2, expanded, onPress: () => setExpanded(!expanded) }) : null,
-        ordered.length === 0 ? /* @__PURE__ */ jsx6(NewChatGhostRow, { colors: colors2, tokens, selected: true, onPress: () => onSelect({ botId: bot.id, chatId: null }) }) : null
-      ] });
-    } else if (host2.api) {
-      children = /* @__PURE__ */ jsx6(NewChatGhostRow, { colors: colors2, tokens, selected: false, onPress: () => onSelect({ botId: bot.id, chatId: null }) });
-    }
-  }
-  return /* @__PURE__ */ jsxs5(View6, { role: "group", accessibilityLabel: bot.name, style: { paddingBottom: children ? 12 : 0 }, children: [
-    /* @__PURE__ */ jsx6(BotRow, { ...props, isOpen, aggregate, hostLabel: host2.online ? null : host2.label }),
-    children
-  ] });
-}
-function BotRow({ colors: colors2, tokens, bot, lead, touch, isOpen, aggregate, hostLabel, onToggle, onSelect, onBotMenu }) {
-  const [hovered, setHovered] = useState6(false);
-  const kebabRef = useRef3(null);
-  const plus = useHover();
-  const actionsVisible = hovered || touch;
-  const backdrop = hovered ? colors2.surface1 : tokens.surfaceSidebar;
-  return /* @__PURE__ */ jsxs5(
-    View6,
-    {
-      onPointerEnter: () => setHovered(true),
-      onPointerLeave: () => setHovered(false),
-      style: [
-        {
-          position: "relative",
-          minHeight: 36,
-          paddingVertical: 8,
-          paddingHorizontal: 8,
-          borderRadius: 8,
-          marginBottom: 4,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-          backgroundColor: hovered ? colors2.surface1 : "transparent"
-        },
-        noSelect
-      ],
-      children: [
-        /* @__PURE__ */ jsx6(
-          Pressable4,
-          {
-            accessibilityRole: "button",
-            accessibilityLabel: bot.name,
-            accessibilityState: { expanded: isOpen },
-            onPress: () => onToggle(bot.id),
-            ...contextMenuProps((anchor) => onBotMenu(bot, anchor, "context")),
-            style: ({ pressed }) => ({ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 8, backgroundColor: pressed ? colors2.surface2 : "transparent" })
-          }
-        ),
-        /* @__PURE__ */ jsxs5(View6, { pointerEvents: "none", style: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }, children: [
-          /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: hovered ? /* @__PURE__ */ jsx6(Icon4, { name: isOpen ? "ChevronDown" : "ChevronRight", size: 14, color: CHEVRON_COLOR }) : /* @__PURE__ */ jsxs5(View6, { style: { position: "relative", width: 16, height: 16 }, children: [
-            /* @__PURE__ */ jsx6(Avatar, { avatar: bot.avatar, size: 16 }),
-            aggregate ? /* @__PURE__ */ jsx6(StatusBadge2, { colors: colors2, tokens, bucket: aggregate, backdrop }) : null
-          ] }) }),
-          /* @__PURE__ */ jsxs5(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: colors2.foregroundMuted, opacity: bot.archived ? 0.6 : 1 }, children: [
-            bot.name,
-            hostLabel ? ` \xB7 ${hostLabel} offline` : ""
-          ] }),
-          lead ? /* @__PURE__ */ jsx6(Icon4, { name: "Crown", size: 12, color: colors2.foregroundMuted }) : null
-        ] }),
-        /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 2, flexShrink: 0, marginRight: -6 }, children: [
-          /* @__PURE__ */ jsx6(View6, { style: { width: 24, height: 24, alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: actionsVisible ? 1 : 0 }, pointerEvents: actionsVisible ? "auto" : "none", children: /* @__PURE__ */ jsx6(
-            Pressable4,
-            {
-              accessibilityRole: "button",
-              accessibilityLabel: `New chat with ${bot.name}`,
-              ...tooltip("New chat", "bottom"),
-              hitSlop: 8,
-              onPress: () => onSelect({ botId: bot.id, chatId: null }),
-              ...plus.hoverProps,
-              style: ({ pressed: down }) => ({
-                width: 24,
-                height: 24,
-                borderRadius: 6,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: plus.hovered || down ? colors2.surface1 : "transparent"
-              }),
-              children: ({ pressed: down }) => /* @__PURE__ */ jsx6(Icon4, { name: "Plus", size: 15, color: plus.hovered || down ? colors2.foreground : colors2.foregroundMuted })
-            }
-          ) }),
-          /* @__PURE__ */ jsx6(View6, { style: { opacity: actionsVisible ? 1 : 0 }, pointerEvents: actionsVisible ? "auto" : "none", children: /* @__PURE__ */ jsx6(
-            KebabButton2,
-            {
-              colors: colors2,
-              buttonRef: kebabRef,
-              label: "Bot actions",
-              box: true,
-              onPress: () => void measureAnchor(kebabRef).then((anchor) => anchor && onBotMenu(bot, anchor, "kebab"))
-            }
-          ) })
-        ] })
-      ]
-    }
-  );
-}
-var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu, onDelete }) {
-  const [hovered, setHovered] = useState6(false);
-  const kebabRef = useRef3(null);
-  const bucket = chatBucket(chat);
-  const title = displayTitle(chat.title);
-  const showKebab = hovered || touch;
-  const background = selected ? tokens.surfaceSidebarSelected : hovered ? colors2.surface1 : "transparent";
-  return /* @__PURE__ */ jsxs5(
-    View6,
-    {
-      onPointerEnter: () => setHovered(true),
-      onPointerLeave: () => setHovered(false),
-      style: [
-        {
-          position: "relative",
-          minHeight: 36,
-          marginBottom: 2,
-          paddingVertical: 8,
-          paddingLeft: 8,
-          paddingRight: 12,
-          borderRadius: 8,
-          justifyContent: "center",
-          backgroundColor: background
-        },
-        noSelect
-      ],
-      children: [
-        /* @__PURE__ */ jsx6(
-          Pressable4,
-          {
-            accessibilityRole: "button",
-            accessibilityLabel: `${title}, ${BUCKET_LABELS[bucket]}`,
-            accessibilityState: { selected },
-            onPress,
-            ...contextMenuProps((anchor) => onMenu(anchor, "context")),
-            style: ({ pressed }) => ({ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 8, backgroundColor: pressed ? colors2.surface2 : "transparent" })
-          }
-        ),
-        /* @__PURE__ */ jsxs5(View6, { pointerEvents: "none", style: { flexDirection: "row", alignItems: "flex-start", gap: 8, width: "100%" }, children: [
-          hoisted ? /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxs5(View6, { style: { position: "relative", width: 16, height: 16 }, children: [
-            /* @__PURE__ */ jsx6(Avatar, { avatar: bot.avatar, size: 16 }),
-            bucket !== "done" ? /* @__PURE__ */ jsx6(StatusBadge2, { colors: colors2, tokens, bucket, backdrop: selected ? tokens.surfaceSidebarSelected : hovered ? colors2.surface1 : tokens.surfaceSidebar }) : null
-          ] }) }) : /* @__PURE__ */ jsx6(ChatStatusSlot, { colors: colors2, tokens, bucket }),
-          /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, minWidth: 0 }, children: [
-            /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "flex-start", gap: 8 }, children: [
-              /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(14), fontWeight: "400", lineHeight: 20, color: colors2.foreground, opacity: hovered ? 1 : 0.76 }, children: title }),
-              touch ? /* @__PURE__ */ jsx6(View6, { style: { width: 40, height: 20 } }) : null
-            ] }),
-            hoisted ? /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { fontSize: ui(12), lineHeight: 16, color: colors2.foregroundMuted }, children: bot.name }) : null
-          ] })
-        ] }),
-        showKebab ? /* @__PURE__ */ jsxs5(View6, { style: { position: "absolute", top: 8, right: 12, flexDirection: "row" }, children: [
-          touch ? null : /* @__PURE__ */ jsx6(View6, { pointerEvents: "none", style: { width: 16, backgroundColor: background } }),
-          /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: background }, children: [
-            /* @__PURE__ */ jsx6(DeleteChatButton, { colors: colors2, onPress: onDelete }),
-            /* @__PURE__ */ jsx6(KebabButton2, { colors: colors2, buttonRef: kebabRef, label: "Chat actions", onPress: () => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab")) })
-          ] })
-        ] }) : null
-      ]
-    }
-  );
-});
-function NewChatGhostRow({ colors: colors2, tokens, selected, onPress }) {
-  const { hovered, hoverProps } = useHover();
-  return /* @__PURE__ */ jsx6(
-    Pressable4,
-    {
-      accessibilityRole: "button",
-      accessibilityLabel: "New chat",
-      accessibilityState: { selected },
-      onPress,
-      ...hoverProps,
-      style: ({ pressed }) => [
-        {
-          minHeight: 36,
-          marginBottom: 2,
-          paddingVertical: 8,
-          paddingLeft: 16,
-          paddingRight: 12,
-          borderRadius: 8,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          backgroundColor: pressed ? colors2.surface2 : selected ? tokens.surfaceSidebarSelected : hovered ? colors2.surface1 : "transparent"
-        },
-        noSelect
-      ],
-      children: ({ pressed }) => /* @__PURE__ */ jsxs5(Fragment3, { children: [
-        /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }, children: /* @__PURE__ */ jsx6(Icon4, { name: "Plus", size: 14, color: hovered || pressed || selected ? colors2.foreground : colors2.foregroundMuted }) }),
-        /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered || pressed || selected ? colors2.foreground : colors2.foregroundMuted }, children: "New chat" })
-      ] })
-    }
-  );
-}
-function ShowMoreRow({ colors: colors2, expanded, onPress }) {
-  const { hovered, hoverProps } = useHover();
-  const label = expanded ? "Show less" : "Show more";
-  return /* @__PURE__ */ jsx6(
-    Pressable4,
-    {
-      accessibilityRole: "button",
-      accessibilityLabel: label,
-      accessibilityState: { expanded },
-      onPress,
-      ...hoverProps,
-      style: ({ pressed }) => [
-        {
-          minHeight: 36,
-          marginBottom: 2,
-          paddingVertical: 8,
-          paddingLeft: 8,
-          paddingRight: 12,
-          borderRadius: 8,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          backgroundColor: pressed ? colors2.surface2 : hovered ? colors2.surface1 : "transparent"
-        },
-        noSelect
-      ],
-      children: ({ pressed }) => /* @__PURE__ */ jsxs5(Fragment3, { children: [
-        /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }, children: /* @__PURE__ */ jsx6(Icon4, { name: expanded ? "ChevronUp" : "ChevronDown", size: 14, color: hovered || pressed ? colors2.foreground : colors2.foregroundMuted }) }),
-        /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered || pressed ? colors2.foreground : colors2.foregroundMuted }, children: label })
-      ] })
-    }
-  );
-}
-function DeleteChatButton({ colors: colors2, onPress }) {
-  const { hovered, hoverProps } = useHover();
-  return /* @__PURE__ */ jsx6(
-    Pressable4,
-    {
-      accessibilityRole: "button",
-      accessibilityLabel: "Delete chat",
-      ...tooltip("Delete chat", "bottom"),
-      hitSlop: 4,
-      onPress,
-      ...hoverProps,
-      style: { padding: 2, borderRadius: 4, backgroundColor: hovered ? colors2.surface2 : "transparent" },
-      children: /* @__PURE__ */ jsx6(Icon4, { name: "Trash2", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted })
-    }
-  );
-}
-function KebabButton2({ colors: colors2, buttonRef, label, box, onPress }) {
-  const { hovered, hoverProps } = useHover();
-  return /* @__PURE__ */ jsx6(
-    Pressable4,
-    {
-      ref: buttonRef,
-      accessibilityRole: "button",
-      accessibilityLabel: label,
-      ...tooltip(label, "bottom"),
-      hitSlop: 8,
-      onPress,
-      ...hoverProps,
-      style: box ? { width: 24, height: 24, borderRadius: 6, alignItems: "center", justifyContent: "center", flexShrink: 0, backgroundColor: hovered ? colors2.surface2 : "transparent" } : { padding: 2, borderRadius: 4, marginLeft: 2, marginRight: -7, backgroundColor: hovered ? colors2.surface2 : "transparent" },
-      children: /* @__PURE__ */ jsx6(Icon4, { name: "MoreVertical", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted })
-    }
-  );
-}
-function ChatStatusSlot({ colors: colors2, tokens, bucket }) {
-  let glyph;
-  if (bucket === "running") glyph = /* @__PURE__ */ jsx6(StatusRing, { color: tokens.statusDotRunning });
-  else if (bucket === "needs_input") glyph = /* @__PURE__ */ jsx6(NeedsInputGlyph, { colors: colors2, tokens });
-  else if (bucket === "attention") glyph = /* @__PURE__ */ jsx6(Dot, { color: tokens.statusDotSuccess });
-  else if (bucket === "done") glyph = /* @__PURE__ */ jsx6(Dot, { color: tokens.foregroundExtraMuted, opacity: 0.3 });
-  else {
-    glyph = /* @__PURE__ */ jsxs5(Fragment3, { children: [
-      /* @__PURE__ */ jsx6(Icon4, { name: "MessageSquare", size: 14, color: colors2.foregroundMuted }),
-      /* @__PURE__ */ jsx6(View6, { style: { position: "absolute", right: 0, bottom: 0, width: 8, height: 8, borderRadius: 4, borderWidth: 1, borderColor: colors2.surface0, backgroundColor: tokens.statusDotDanger } })
-    ] });
-  }
-  return /* @__PURE__ */ jsx6(View6, { accessibilityLabel: BUCKET_LABELS[bucket], style: { position: "relative", width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: glyph });
-}
-function Dot({ color, opacity = 1 }) {
-  return /* @__PURE__ */ jsx6(View6, { style: { width: 6, height: 6, borderRadius: 3, backgroundColor: color, opacity } });
-}
-function NeedsInputGlyph({ colors: colors2, tokens }) {
-  return /* @__PURE__ */ jsx6(View6, { style: { width: 12, height: 12, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx6(View6, { style: { width: 11, height: 11, borderRadius: 5.5, backgroundColor: colors2.surface0, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxs5(View6, { style: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: tokens.statusDotWarning, alignItems: "center", justifyContent: "center" }, children: [
-    /* @__PURE__ */ jsx6(View6, { style: { width: 1, height: 3, borderRadius: 0.5, backgroundColor: colors2.surface0 } }),
-    /* @__PURE__ */ jsx6(View6, { style: { width: 1, height: 1, marginTop: 1, borderRadius: 0.5, backgroundColor: colors2.surface0 } })
-  ] }) }) });
-}
-var BADGE_SIZE = 12;
-var BADGE_OFFSET = -4;
-var RING_FRAME = 14;
-function StatusBadge2({ colors: colors2, tokens, bucket, backdrop }) {
-  if (bucket === "done") return null;
-  if (bucket === "running") {
-    const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
-    return /* @__PURE__ */ jsx6(View6, { accessibilityLabel: BUCKET_LABELS[bucket], style: { position: "absolute", right: offset, bottom: offset }, children: /* @__PURE__ */ jsx6(StatusRing, { color: tokens.statusDotRunning, backdrop }) });
-  }
-  return /* @__PURE__ */ jsx6(
-    View6,
-    {
-      accessibilityLabel: BUCKET_LABELS[bucket],
-      style: {
-        position: "absolute",
-        right: BADGE_OFFSET,
-        bottom: BADGE_OFFSET,
-        width: BADGE_SIZE,
-        height: BADGE_SIZE,
-        borderRadius: BADGE_SIZE / 2,
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        backgroundColor: backdrop
-      },
-      children: bucket === "needs_input" ? /* @__PURE__ */ jsx6(NeedsInputGlyph, { colors: colors2, tokens }) : /* @__PURE__ */ jsx6(Dot, { color: bucket === "failed" ? tokens.statusDotDanger : tokens.statusDotSuccess })
-    }
-  );
-}
-var RING_PERIOD_MS = 900;
-var ringProgress = new Animated.Value(0);
-var ringRotation = ringProgress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-var ringUsers = 0;
-var ringLoop = null;
-function useRingClock() {
-  useEffect6(() => {
-    ringUsers += 1;
-    if (!ringLoop) {
-      ringProgress.setValue(0);
-      ringLoop = Animated.loop(
-        Animated.timing(ringProgress, { toValue: 1, duration: RING_PERIOD_MS, easing: Easing.linear, useNativeDriver: Platform6.OS !== "web" })
-      );
-      ringLoop.start();
-    }
-    return () => {
-      ringUsers -= 1;
-      if (ringUsers === 0 && ringLoop) {
-        ringLoop.stop();
-        ringLoop = null;
-      }
-    };
-  }, []);
-  return ringRotation;
-}
-function StatusRing({ color, backdrop }) {
-  const rotate = useRingClock();
-  const circle = { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5 };
-  return /* @__PURE__ */ jsxs5(View6, { style: { width: RING_FRAME, height: RING_FRAME, borderRadius: RING_FRAME / 2, alignItems: "center", justifyContent: "center", backgroundColor: backdrop }, children: [
-    /* @__PURE__ */ jsx6(View6, { style: { ...circle, position: "absolute", borderColor: color, opacity: 0.3 } }),
-    /* @__PURE__ */ jsx6(Animated.View, { style: { position: "absolute", width: 12, height: 12, transform: [{ rotate }] }, children: /* @__PURE__ */ jsx6(View6, { style: { ...circle, borderColor: "transparent", borderTopColor: color, opacity: 0.9 } }) }),
-    /* @__PURE__ */ jsx6(View6, { style: { width: 6, height: 6, borderRadius: 3, backgroundColor: color } })
-  ] });
-}
-function SkeletonRows({ colors: colors2 }) {
-  const pulse = useRef3(new Animated.Value(0)).current;
-  useEffect6(() => {
-    const native4 = Platform6.OS !== "web";
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1e3, useNativeDriver: native4 }),
-        Animated.timing(pulse, { toValue: 0, duration: 1e3, useNativeDriver: native4 })
-      ])
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [pulse]);
-  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.8] });
-  return /* @__PURE__ */ jsx6(View6, { accessibilityLabel: "Loading chats", style: { gap: 4 }, children: [1, 0.7].map((rowOpacity) => /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, paddingHorizontal: 12, marginLeft: 4, opacity: rowOpacity }, children: [
-    /* @__PURE__ */ jsx6(Animated.View, { style: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors2.surface2, opacity } }),
-    /* @__PURE__ */ jsx6(Animated.View, { style: { flex: 1, height: 12, borderRadius: 2, backgroundColor: colors2.surface2, opacity } })
-  ] }, rowOpacity)) });
-}
-
-// client/ChatPane.tsx
-import { Icon as Icon16 } from "@getpaseo/plugin/client/react-native";
-import { useEffect as useEffect18, useRef as useRef13, useState as useState24 } from "react";
-import { Pressable as Pressable17, Text as Text24, View as View26 } from "react-native";
-
-// client/chat/Composer.tsx
-import { useRpc as useRpc2 } from "@getpaseo/plugin/client";
-import { Icon as Icon6, Modal as Modal4, TextInput as TextInput3, useToast as useToast2 } from "@getpaseo/plugin/client/react-native";
-import { SettingsAction as SettingsAction2, SettingsCard as SettingsCard2, SettingsRow } from "@getpaseo/plugin/client/ui";
-import { useEffect as useEffect10, useMemo as useMemo5, useRef as useRef6, useState as useState11 } from "react";
-import { ActivityIndicator as ActivityIndicator4, Platform as Platform13, Pressable as Pressable8, Text as Text8, View as View10, useWindowDimensions as useWindowDimensions3 } from "react-native";
-
-// shared/attachments.ts
-var IMAGE_MAX_BYTES = 10 * 1024 * 1024;
-var TEXT_MAX_BYTES = 1024 * 1024;
-var FILE_MAX_BYTES = 25 * 1024 * 1024;
-var IMAGE_TYPES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
-var TEXT_EXTENSIONS = /\.(txt|md|markdown|csv|tsv|json|jsonl|yaml|yml|toml|xml|html?|css|scss|js|jsx|ts|tsx|mjs|cjs|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|cs|php|sh|zsh|bash|sql|log|ini|cfg|conf|env|graphql|vue|svelte)$/i;
-function classifyFile(name, mimeType) {
-  if (IMAGE_TYPES.has(mimeType.toLowerCase())) return "image";
-  if (mimeType.startsWith("text/") || /^application\/(json|xml|x-yaml|yaml|javascript|typescript|sql)/.test(mimeType) || TEXT_EXTENSIONS.test(name)) return "text";
-  return "file";
-}
-function preflightFile(name, mimeType, size2, canUpload) {
-  let kind = classifyFile(name, mimeType);
-  if (kind === "text" && size2 > TEXT_MAX_BYTES) kind = "file";
-  return { kind, reason: rejectReason(kind, size2, canUpload) };
-}
-function normalizeMimeType(mimeType) {
-  const base = (mimeType.split(";", 1)[0] ?? "").trim().toLowerCase();
-  return base === "image/jpg" ? "image/jpeg" : base;
-}
-function getFileTypeLabel(name) {
-  const base = name.split(/[\\/]/).pop() ?? name;
-  const dot = base.lastIndexOf(".");
-  if (dot <= 0 || dot === base.length - 1) return null;
-  const extension = base.slice(dot + 1);
-  return /^[a-z0-9]+$/i.test(extension) ? extension.toUpperCase() : null;
-}
-function rejectReason(kind, size2, canUpload) {
-  if (kind === "image" && size2 > IMAGE_MAX_BYTES) return "Images can be up to 10 MB.";
-  if (kind === "text" && size2 > TEXT_MAX_BYTES) return canUpload ? null : "Text files can be up to 1 MB.";
-  if (kind === "file" && !canUpload) return "Other files can only be attached for bots running on this host.";
-  if (size2 > FILE_MAX_BYTES) return "Files can be up to 25 MB.";
-  return null;
-}
-function toWire(attachments) {
-  const images = [];
-  const rest = [];
-  for (const attachment of attachments) {
-    if (attachment.kind === "image") images.push({ data: attachment.data, mimeType: attachment.mimeType });
-    else if (attachment.kind === "text") rest.push({ type: "text", mimeType: "text/plain", title: attachment.name, text: attachment.text });
-    else rest.push({ type: "uploaded_file", id: attachment.id, fileName: attachment.name, mimeType: attachment.mimeType, size: attachment.size, path: attachment.path });
-  }
-  return { images, attachments: rest };
-}
-function newAttachmentId() {
-  return "att-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
-// shared/skills.ts
-var trimSlashes = (path) => path.replace(/^\/+|\/+$/g, "");
-function parseSkillSource(input) {
-  const source = input.trim();
-  if (/^https?:\/\//i.test(source)) {
-    const url = new URL(source);
-    if (url.hostname === "github.com") {
-      const [owner2, repo2, mode, ref, ...rest2] = trimSlashes(url.pathname).split("/");
-      if (!owner2 || !repo2) throw new Error("That GitHub URL doesn't name a repository.");
-      if (mode === "blob" || mode === "tree") {
-        let path = rest2.join("/");
-        if (mode === "blob") path = path.replace(/\/?SKILL\.md$/i, "");
-        return { kind: "github", owner: owner2, repo: repo2.replace(/\.git$/, ""), ref: ref ?? null, path };
-      }
-      return { kind: "github", owner: owner2, repo: repo2.replace(/\.git$/, ""), ref: null, path: "" };
-    }
-    if (/SKILL\.md$/i.test(url.pathname)) return { kind: "raw", url: source };
-    throw new Error("Use a GitHub repository, a GitHub folder, or a link to a SKILL.md file.");
-  }
-  const parts = trimSlashes(source).split("/");
-  if (parts.length < 2 || parts.some((part) => !/^[A-Za-z0-9._-]+$/.test(part))) {
-    throw new Error('Use "owner/repo", "owner/repo/path/to/skill" or a GitHub URL.');
-  }
-  const [owner, repo, ...rest] = parts;
-  return { kind: "github", owner, repo, ref: null, path: rest.join("/").replace(/\/?SKILL\.md$/i, "") };
-}
-function parseSkillFrontmatter(text) {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
-  const read = (key) => {
-    const line = match?.[1]?.split(/\r?\n/).find((entry) => entry.trim().startsWith(`${key}:`));
-    const value = line?.slice(line.indexOf(":") + 1).trim().replace(/^["']|["']$/g, "");
-    return value ? value : null;
-  };
-  return { name: read("name"), description: read("description") };
-}
-function sanitizeSkillName(name) {
-  const clean = name.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "");
-  return clean || "skill";
-}
-function skillMarkdown(id, description, body) {
-  const line = description.replace(/\s+/g, " ").trim();
-  return `---
-name: ${id}
-description: ${line}
----
-
-${body.trim()}
-`;
-}
-function skillBody(text) {
-  return text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
-}
-var LEARN_COMMAND = { name: "learn", description: "Save what the bot just did as a skill", argumentHint: "[what to focus on]" };
-function learnPrompt(focus = "") {
-  const topic = focus.trim().replace(/[.!?]*$/, ".");
-  const about = focus.trim() ? ` Focus on: ${topic}` : "";
-  return `Turn what you just did into a reusable skill: the steps that worked, what to check, and what a good result looks like.${about} Then propose it with the propose_skill tool so I can review it. Don't write the skill file yourself.`;
-}
-function expandLearn(text) {
-  const match = /^\/learn(?:\s+([\s\S]*))?$/.exec(text.trim());
-  return match ? learnPrompt(match[1] ?? "") : null;
-}
-function scanSkillText(text) {
-  const warnings = [];
-  if (/[A-Za-z0-9+/]{400,}={0,2}/.test(text)) warnings.push("It contains a long encoded blob that could hide instructions or a program.");
-  if (/\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba|z)?sh\b/.test(text)) warnings.push("It pipes a download straight into a shell.");
-  if (/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/.test(text)) warnings.push("It contains invisible characters, which can hide text from you.");
-  if (/\b(ignore|disregard)\b[^\n]{0,30}\b(previous|prior|above|all)\b[^\n]{0,20}\binstructions\b/i.test(text)) warnings.push("It tells the bot to ignore its other instructions.");
-  if (/\b(rm\s+-rf\s+[~/]|mkfs\b|dd\s+if=)/.test(text)) warnings.push("It includes commands that can erase data.");
-  return warnings;
-}
-
-// client/AttachmentPill.tsx
-import { Icon as Icon5, Modal as Modal3, ScrollView as ScrollView2 } from "@getpaseo/plugin/client/react-native";
-import { useState as useState7 } from "react";
-import { ActivityIndicator as ActivityIndicator3, Image as Image2, Platform as Platform7, Pressable as Pressable5, Text as Text6, View as View7, useWindowDimensions as useWindowDimensions2 } from "react-native";
-import { jsx as jsx7, jsxs as jsxs6 } from "react/jsx-runtime";
-var CONTENT_HEIGHT = 48;
-function AttachmentPill({ colors: colors2, attachment, onRemove, disabled, alwaysShowRemove }) {
-  const [open, setOpen] = useState7(false);
-  const [bodyHovered, setBodyHovered] = useState7(false);
-  const [closeHovered, setCloseHovered] = useState7(false);
-  const showRemove = (alwaysShowRemove ?? Platform7.OS !== "web") || bodyHovered || closeHovered;
-  const canOpen = attachment.kind !== "file";
-  const openLabel = attachment.kind === "image" ? "Open image attachment" : `Open ${attachment.name}`;
-  const removeLabel = attachment.kind === "image" ? "Remove image attachment" : "Remove file attachment";
-  return /* @__PURE__ */ jsxs6(View7, { style: { position: "relative" }, children: [
-    /* @__PURE__ */ jsx7(
-      Pressable5,
-      {
-        accessibilityRole: canOpen ? "button" : void 0,
-        accessibilityLabel: canOpen ? openLabel : attachment.name,
-        disabled: !canOpen,
-        onPress: () => setOpen(true),
-        onHoverIn: () => setBodyHovered(true),
-        onHoverOut: () => setBodyHovered(false),
-        style: frameStyle(colors2),
-        children: attachment.kind === "image" ? /* @__PURE__ */ jsx7(Image2, { source: { uri: imageUri(attachment) }, style: { width: CONTENT_HEIGHT, height: CONTENT_HEIGHT } }) : /* @__PURE__ */ jsx7(AttachmentLabel, { colors: colors2, icon: /* @__PURE__ */ jsx7(Icon5, { name: "FileText", size: 14, color: colors2.foregroundMuted }), title: attachment.name, subtitle: subtitleFor(attachment) })
-      }
-    ),
-    onRemove ? /* @__PURE__ */ jsx7(
-      Pressable5,
-      {
-        accessibilityRole: "button",
-        accessibilityLabel: removeLabel,
-        ...tooltip("Remove"),
-        onPress: onRemove,
-        disabled: disabled || !showRemove,
-        onHoverIn: () => setCloseHovered(true),
-        onHoverOut: () => setCloseHovered(false),
-        hitSlop: 8,
-        style: {
-          position: "absolute",
-          top: -8,
-          left: -8,
-          width: 24,
-          height: 24,
-          borderRadius: 12,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: colors2.surface2,
-          borderWidth: 1,
-          borderColor: colors2.border,
-          zIndex: 1,
-          opacity: showRemove ? 1 : 0
-        },
-        children: /* @__PURE__ */ jsx7(Icon5, { name: "X", size: 12, color: colors2.foregroundMuted })
-      }
-    ) : null,
-    open ? /* @__PURE__ */ jsx7(AttachmentPreview, { colors: colors2, attachment, onClose: () => setOpen(false) }) : null
-  ] });
-}
-function PendingAttachmentPill({ colors: colors2, name }) {
-  return /* @__PURE__ */ jsx7(View7, { accessibilityLabel: `Attaching ${name}`, style: frameStyle(colors2), children: /* @__PURE__ */ jsx7(AttachmentLabel, { colors: colors2, icon: /* @__PURE__ */ jsx7(ActivityIndicator3, { size: "small", color: colors2.foregroundMuted }), title: name, subtitle: getFileTypeLabel(name) ?? "" }) });
-}
-function frameStyle(colors2) {
-  return { borderRadius: 6, borderWidth: 1, borderColor: nativeTokens(colors2).borderAccent, overflow: "hidden" };
-}
-function imageUri(attachment) {
-  return `data:${attachment.mimeType};base64,${attachment.data}`;
-}
-function subtitleFor(attachment) {
-  return getFileTypeLabel(attachment.name) ?? (attachment.kind === "text" ? "TXT" : "");
-}
-function AttachmentLabel({ colors: colors2, icon, title, subtitle }) {
-  return /* @__PURE__ */ jsxs6(View7, { style: { height: CONTENT_HEIGHT, maxWidth: 260, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, backgroundColor: colors2.surface1 }, children: [
-    /* @__PURE__ */ jsx7(View7, { style: { width: 18, alignItems: "center", justifyContent: "center" }, children: icon }),
-    /* @__PURE__ */ jsxs6(View7, { style: { minWidth: 0, flexShrink: 1 }, children: [
-      /* @__PURE__ */ jsx7(Text6, { numberOfLines: 1, style: { fontSize: ui(14), color: colors2.foreground }, children: title }),
-      /* @__PURE__ */ jsx7(Text6, { numberOfLines: 1, style: { fontSize: ui(12), color: colors2.foregroundMuted }, children: subtitle })
-    ] })
-  ] });
-}
-function AttachmentPreview({ colors: colors2, attachment, onClose }) {
-  const { height } = useWindowDimensions2();
-  return /* @__PURE__ */ jsx7(Modal3, { title: attachment.name, open: true, onOpenChange: (value) => !value && onClose(), children: /* @__PURE__ */ jsx7(Modal3.Content, { scrollable: attachment.kind !== "text", children: attachment.kind === "image" ? /* @__PURE__ */ jsx7(Image2, { accessibilityLabel: attachment.name, source: { uri: imageUri(attachment) }, resizeMode: "contain", style: { width: "100%", height: Math.round(height * 0.6) } }) : attachment.kind === "text" ? /* @__PURE__ */ jsx7(ScrollView2, { style: { maxHeight: Math.round(height * 0.6) }, children: /* @__PURE__ */ jsx7(Text6, { selectable: true, ...MONO_PROPS, style: { fontFamily: MONO_FONT, fontSize: code(), lineHeight: codeLine(), color: colors2.foreground }, children: attachment.text }) }) : null }) });
-}
-
-// client/keyboard.ts
-import { useEffect as useEffect7, useState as useState8 } from "react";
-import { Dimensions, Keyboard, LayoutAnimation, Platform as Platform8, TurboModuleRegistry as TurboModuleRegistry2, NativeModules as NativeModules2 } from "react-native";
-var IOS_KEYBOARD_MIN_HEIGHT = 120;
-function iosKeyboardHeight(event, screenHeight) {
-  const { height, screenY } = event.endCoordinates;
-  if (!(height > 0) || Number.isFinite(screenY) && screenY >= screenHeight) return 0;
-  return height < IOS_KEYBOARD_MIN_HEIGHT ? 0 : height;
-}
-function useKeyboardHeight() {
-  const [height, setHeight] = useState8(0);
-  useEffect7(() => {
-    if (Platform8.OS === "web") return;
-    const ios = Platform8.OS === "ios";
-    let current2 = 0;
-    const apply = (next, duration) => {
-      if (next === current2) return;
-      current2 = next;
-      if (ios) {
-        LayoutAnimation.configureNext(LayoutAnimation.create(duration || 250, LayoutAnimation.Types.keyboard, LayoutAnimation.Properties.opacity));
-      } else {
-        LayoutAnimation.configureNext(LayoutAnimation.create(duration || 200, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
-      }
-      setHeight(next);
-    };
-    const subscriptions = ios ? [
-      Keyboard.addListener("keyboardWillChangeFrame", (event) => apply(iosKeyboardHeight(event, Dimensions.get("screen").height), event.duration)),
-      Keyboard.addListener("keyboardWillHide", (event) => apply(0, event.duration))
-    ] : [
-      Keyboard.addListener("keyboardDidShow", (event) => apply(Math.max(0, event.endCoordinates.height), void 0)),
-      Keyboard.addListener("keyboardDidHide", () => apply(0, void 0))
-    ];
-    return () => subscriptions.forEach((subscription) => subscription.remove());
-  }, []);
-  return height;
-}
-var initialBottomInset;
-function readInitialBottomInset() {
-  if (initialBottomInset !== void 0) return initialBottomInset;
-  initialBottomInset = null;
-  try {
-    const module = TurboModuleRegistry2.get("RNCSafeAreaContext") ?? NativeModules2.RNCSafeAreaContext;
-    const bottom = module?.getConstants?.().initialWindowMetrics?.insets?.bottom;
-    if (typeof bottom === "number" && Number.isFinite(bottom) && bottom >= 0) initialBottomInset = bottom;
-  } catch {
-  }
-  return initialBottomInset;
-}
-function homeIndicatorInset() {
-  if (Platform8.OS === "web") return 0;
-  const { width, height } = Dimensions.get("screen");
-  const landscape = width > height;
-  const measured = readInitialBottomInset();
-  if (Platform8.OS === "ios") {
-    const pad3 = Platform8.isPad === true;
-    const portrait = measured ?? (!pad3 && Math.max(width, height) >= 812 ? 34 : 0);
-    return landscape && portrait > 0 ? Math.min(portrait, 21) : portrait;
-  }
-  return measured ?? 0;
-}
-
-// client/sent-attachments.ts
-var sent = [];
-function rememberSent(messageId, text, attachments) {
-  if (attachments.length > 0) sent.push({ messageId, text, attachments });
-}
-function sentAttachments(item) {
-  const ids = [item.messageId, item.clientMessageId].filter(Boolean);
-  return (sent.find((entry) => ids.includes(entry.messageId)) ?? sent.find((entry) => entry.text === item.text.trim()))?.attachments ?? [];
-}
-function newMessageId() {
-  return "msg-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
 // client/web.ts
-import { Platform as Platform9 } from "react-native";
-var web2 = Platform9.OS === "web";
+import { Platform as Platform6 } from "react-native";
+var web2 = Platform6.OS === "web";
 var canPickFiles = web2;
+function downloadBotFile(name, json) {
+  if (!web2) return;
+  const stem = name.trim().replace(/[^\p{L}\p{N}_-]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "bot";
+  const url = URL.createObjectURL(new Blob([json], { type: "application/json;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${stem}.bot.json`;
+  document.body.appendChild(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1e3);
+  }
+}
 function readBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -5594,6 +4291,1393 @@ function focusWithRetries(element, timeoutMs = 1500) {
   return () => {
     cancelled = true;
   };
+}
+
+// client/BotDialogs.tsx
+import { Fragment as Fragment3, jsx as jsx4, jsxs as jsxs3 } from "react/jsx-runtime";
+function NewBotDialog({
+  colors: colors2,
+  presets,
+  onClose,
+  onCreate,
+  onImport,
+  importOnly = false
+}) {
+  const [json, setJson] = useState5("");
+  const [importing, setImporting] = useState5(false);
+  const [reading, setReading] = useState5(false);
+  const [error, setError] = useState5(null);
+  const busy = importing || reading;
+  const chooseFile = async () => {
+    setReading(true);
+    setError(null);
+    try {
+      const [file] = await pickFileHandles({ accept: ".json,application/json", multiple: false });
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) throw new Error("Choose a bot file smaller than 10 MiB.");
+      setJson(decodeUtf8(await file.readBase64()).replace(/^\uFEFF/, ""));
+    } catch (error2) {
+      setError(errorText(error2));
+    } finally {
+      setReading(false);
+    }
+  };
+  return /* @__PURE__ */ jsx4(Modal2, { title: importOnly ? "Import bots" : "New bot", open: true, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs3(Modal2.Content, { children: [
+    !importOnly ? /* @__PURE__ */ jsxs3(Fragment3, { children: [
+      /* @__PURE__ */ jsx4(SettingsSection, { title: "Start from", children: /* @__PURE__ */ jsxs3(SettingsCard, { children: [
+        /* @__PURE__ */ jsx4(StartRow, { colors: colors2, label: "Blank bot", hint: "Set everything up yourself in the settings panel.", onPress: () => onCreate() }),
+        BOT_TEMPLATES.map((template) => /* @__PURE__ */ jsx4(StartRow, { colors: colors2, label: template.title, hint: template.description, avatar: { seed: template.avatarSeed }, onPress: () => onCreate({ template }) }, template.id))
+      ] }) }),
+      presets.length ? /* @__PURE__ */ jsx4(SettingsSection, { title: "Your presets", info: "Bots you saved as presets from their menu. Manage them in Settings, Plugins, paseo-bots.", children: /* @__PURE__ */ jsx4(SettingsCard, { children: presets.map((preset) => /* @__PURE__ */ jsx4(StartRow, { colors: colors2, label: preset.name, hint: preset.title || preset.description, avatar: preset.avatar, onPress: () => onCreate({ preset }) }, preset.id)) }) }) : null
+    ] }) : null,
+    /* @__PURE__ */ jsxs3(SettingsSection, { title: "Import", info: "Choose a single-bot or all-bots file, or paste its JSON. All bots and teams in the file are imported as new copies. Routines arrive paused, skills need a review and tool credentials must be filled in again.", children: [
+      canPickFiles ? /* @__PURE__ */ jsx4(Button, { colors: colors2, label: reading ? "Reading file..." : "Choose bot file", icon: "Upload", disabled: busy, onPress: () => void chooseFile() }) : null,
+      /* @__PURE__ */ jsx4(
+        FormTextArea,
+        {
+          colors: colors2,
+          monospace: true,
+          accessibilityLabel: "Bot or team file",
+          value: json,
+          onChangeText: (text) => {
+            setJson(text);
+            setError(null);
+          },
+          editable: !busy,
+          autoCapitalize: "none",
+          autoCorrect: false,
+          minHeight: 120,
+          placeholder: '{"format": "paseo-bots", \u2026}'
+        }
+      ),
+      error ? /* @__PURE__ */ jsx4(Text3, { accessibilityRole: "alert", style: { color: colors2.statusDanger, fontSize: ui(14) }, children: error }) : null,
+      /* @__PURE__ */ jsx4(SheetActions, { children: /* @__PURE__ */ jsx4(
+        Button,
+        {
+          colors: colors2,
+          variant: "default",
+          label: importing ? "Importing..." : "Import",
+          loading: importing,
+          disabled: busy || !json.trim(),
+          onPress: () => {
+            setImporting(true);
+            setError(null);
+            void onImport(json).catch((error2) => setError(errorText(error2))).finally(() => setImporting(false));
+          }
+        }
+      ) })
+    ] })
+  ] }) });
+}
+function StartRow({ colors: colors2, label, hint, avatar, onPress }) {
+  const { hovered, hoverProps } = useHover();
+  return /* @__PURE__ */ jsxs3(
+    Pressable3,
+    {
+      accessibilityRole: "button",
+      accessibilityLabel: `Create ${label}`,
+      accessibilityHint: hint,
+      onPress,
+      ...hoverProps,
+      style: ({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 16,
+        paddingHorizontal: 16,
+        backgroundColor: pressed || hovered ? colors2.surface2 : "transparent"
+      }),
+      children: [
+        avatar ? /* @__PURE__ */ jsx4(Avatar, { avatar, size: 28, dark: nativeTokens(colors2).dark }) : /* @__PURE__ */ jsx4(View4, { style: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors2.surface2 }, children: /* @__PURE__ */ jsx4(Icon3, { name: "Plus", size: 14, color: colors2.foregroundMuted }) }),
+        /* @__PURE__ */ jsxs3(View4, { style: { flex: 1, minWidth: 0 }, children: [
+          /* @__PURE__ */ jsx4(Text3, { numberOfLines: 1, style: { fontSize: ui(14), color: colors2.foreground }, children: label }),
+          hint ? /* @__PURE__ */ jsx4(Text3, { numberOfLines: 2, style: { marginTop: 4, fontSize: ui(12), color: colors2.foregroundMuted }, children: hint }) : null
+        ] }),
+        /* @__PURE__ */ jsx4(Icon3, { name: "ChevronRight", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted })
+      ]
+    }
+  );
+}
+function RenameDialog({ colors: colors2, title, initialValue, placeholder, submitLabel = "Rename", onClose, onSubmit }) {
+  const [draft, setDraft2] = useState5(initialValue);
+  const [error, setError] = useState5(null);
+  const [pending2, setPending] = useState5(false);
+  const invalid = !draft.trim();
+  const submitDisabled = pending2 || draft === initialValue || invalid;
+  const submit = async () => {
+    if (pending2 || draft === initialValue) return;
+    if (invalid) {
+      setError("Name is required");
+      return;
+    }
+    try {
+      setPending(true);
+      await onSubmit(draft.trim());
+      setPending(false);
+      onClose();
+    } catch (err) {
+      setPending(false);
+      setError(err instanceof Error && err.message ? err.message : "Unable to save");
+    }
+  };
+  const cancel = () => {
+    if (!pending2) onClose();
+  };
+  return /* @__PURE__ */ jsx4(Modal2, { title, open: true, onOpenChange: (open) => !open && cancel(), children: /* @__PURE__ */ jsx4(Modal2.Content, { children: /* @__PURE__ */ jsxs3(View4, { style: { gap: 12, paddingBottom: 8 }, children: [
+    /* @__PURE__ */ jsx4(
+      TextInput2,
+      {
+        accessibilityLabel: title,
+        defaultValue: initialValue,
+        onChangeText: (value) => {
+          setDraft2(value);
+          setError(null);
+        },
+        placeholder,
+        placeholderTextColor: colors2.foregroundMuted,
+        autoFocus: true,
+        selectTextOnFocus: true,
+        autoCapitalize: "none",
+        autoCorrect: false,
+        editable: !pending2,
+        returnKeyType: "done",
+        onSubmitEditing: () => void submit(),
+        style: {
+          backgroundColor: colors2.surface0,
+          color: colors2.foreground,
+          paddingVertical: 12,
+          paddingHorizontal: 12,
+          borderRadius: 6,
+          borderWidth: 1,
+          borderColor: colors2.border,
+          fontSize: ui(14)
+        }
+      }
+    ),
+    error ? /* @__PURE__ */ jsx4(Text3, { accessibilityRole: "alert", style: { color: colors2.statusDanger, fontSize: ui(14) }, children: error }) : null,
+    /* @__PURE__ */ jsxs3(View4, { style: { flexDirection: "row", alignItems: "center", gap: 8 }, children: [
+      /* @__PURE__ */ jsx4(DialogButton, { colors: colors2, label: "Cancel", disabled: pending2, onPress: cancel }),
+      /* @__PURE__ */ jsx4(DialogButton, { colors: colors2, label: pending2 ? "Saving..." : submitLabel, primary: true, disabled: submitDisabled, onPress: () => void submit() })
+    ] })
+  ] }) }) });
+}
+function DialogButton({ colors: colors2, label, primary, disabled, onPress }) {
+  const fill = primary ? colors2.accent : nativeTokens(colors2).surface3;
+  return /* @__PURE__ */ jsx4(
+    Pressable3,
+    {
+      accessibilityRole: "button",
+      accessibilityLabel: label,
+      accessibilityState: { disabled: !!disabled },
+      disabled,
+      onPress,
+      style: ({ pressed }) => ({
+        flex: 1,
+        minHeight: 32,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: fill,
+        backgroundColor: fill,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: disabled ? 0.5 : pressed ? 0.85 : 1
+      }),
+      children: /* @__PURE__ */ jsx4(Text3, { style: { fontSize: ui(14), color: primary ? colors2.accentForeground : colors2.foreground }, children: label })
+    }
+  );
+}
+function botMenuEntries(actions) {
+  const { bot } = actions;
+  const entries = [{ label: "Open bot settings", icon: "Settings", onSelect: actions.onOpenSettings }];
+  if (actions.onOpenInPaseo) entries.push({ label: "Open in Paseo", icon: "ExternalLink", onSelect: actions.onOpenInPaseo });
+  entries.push({ label: bot.pinned ? "Unpin" : "Pin to top", icon: bot.pinned ? "PinOff" : "Pin", onSelect: actions.onTogglePin });
+  if (actions.onMoveUp || actions.onMoveDown) {
+    entries.push({ label: "Move up", icon: "ArrowUp", disabled: !actions.onMoveUp, onSelect: () => actions.onMoveUp?.() });
+    entries.push({ label: "Move down", icon: "ArrowDown", disabled: !actions.onMoveDown, onSelect: () => actions.onMoveDown?.() });
+  }
+  entries.push(
+    { label: "Rename bot", icon: "Pencil", onSelect: actions.onRename },
+    { label: "Duplicate", icon: "CopyPlus", pendingLabel: "Duplicating...", onSelect: actions.onDuplicate },
+    { label: "Save as preset", icon: "BookmarkPlus", onSelect: actions.onSaveAsPreset },
+    { label: "Export", icon: "Share", onSelect: actions.onExport },
+    { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId },
+    { kind: "separator" },
+    { label: bot.archived ? "Unarchive bot" : "Archive bot", icon: bot.archived ? "ArchiveRestore" : "Archive", onSelect: actions.onToggleArchive },
+    { label: "Delete bot", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDelete }
+  );
+  return entries;
+}
+function chatMenuEntries(actions) {
+  const entries = [
+    { label: "Copy path", icon: "Copy", onSelect: actions.onCopyPath },
+    { label: "Copy chat ID", icon: "Copy", onSelect: actions.onCopyId },
+    { label: "Copy transcript", icon: "FileText", pendingLabel: "Copying...", onSelect: actions.onCopyTranscript },
+    { label: actions.pinned ? "Unpin" : "Pin to top", icon: actions.pinned ? "PinOff" : "Pin", onSelect: actions.onTogglePin }
+  ];
+  if (actions.move) {
+    entries.push({ label: "Move up", icon: "ArrowUp", disabled: !actions.move.up, onSelect: () => actions.move?.up?.() });
+    entries.push({ label: "Move down", icon: "ArrowDown", disabled: !actions.move.down, onSelect: () => actions.move?.down?.() });
+  }
+  if (actions.onOpenInPaseo) entries.push({ label: "Open in Paseo", icon: "ExternalLink", onSelect: actions.onOpenInPaseo });
+  entries.push({ label: "Archive", icon: "Archive", pendingLabel: "Archiving...", onSelect: actions.onArchive });
+  return entries;
+}
+function ExportDialog({ colors: colors2, target, onClose }) {
+  const exportBot = useRpc(exportBotRpc);
+  const exportTeam = useRpc(exportTeamRpc);
+  const name = target.kind === "bot" ? target.bot.name : "All bots";
+  const toast = useToast();
+  const [includeMemory, setIncludeMemory] = useState5(false);
+  const [json, setJson] = useState5(null);
+  useEffect4(() => {
+    let cancelled = false;
+    setJson(null);
+    const result = target.kind === "bot" ? exportBot({ bot: target.bot, includeMemory }) : exportTeam({ bots: target.bots, groups: target.groups, includeMemory });
+    result.then((result2) => !cancelled && setJson(result2.json)).catch((error) => toast.error(errorText(error)));
+    return () => {
+      cancelled = true;
+    };
+  }, [includeMemory]);
+  return /* @__PURE__ */ jsx4(Modal2, { title: target.kind === "bot" ? `Export ${name}` : "Export all bots", open: true, onOpenChange: (open) => !open && onClose(), children: /* @__PURE__ */ jsxs3(Modal2.Content, { children: [
+    target.kind === "all" ? /* @__PURE__ */ jsx4(Text3, { style: { color: colors2.foregroundMuted, fontSize: ui(14) }, children: `${target.bots.length} bots, including archived bots, with their teams in one file.` }) : null,
+    /* @__PURE__ */ jsxs3(SettingsCard, { children: [
+      /* @__PURE__ */ jsx4(
+        SettingsSwitch,
+        {
+          label: "Include memory",
+          hint: "MEMORY.md and topic files. Leave off when sharing with someone else.",
+          value: includeMemory,
+          onValueChange: setIncludeMemory
+        }
+      ),
+      canPickFiles ? /* @__PURE__ */ jsx4(
+        SettingsAction,
+        {
+          label: "Download bot file",
+          hint: "Instructions, model settings, skills and tool setup in a shareable .bot.json file.",
+          actionLabel: "Download",
+          disabled: !json,
+          onPress: () => {
+            try {
+              downloadBotFile(name, json);
+            } catch (error) {
+              toast.error(errorText(error));
+            }
+          }
+        }
+      ) : null,
+      /* @__PURE__ */ jsx4(
+        SettingsAction,
+        {
+          label: "Copy the bot file",
+          hint: json ? "Tool environment values and headers are redacted. Review the file before sharing." : "Building...",
+          actionLabel: "Copy",
+          disabled: !json,
+          onPress: () => void copyText(json).then(() => toast.show("Bot file copied", { variant: "success" })).catch((error) => toast.error(errorText(error)))
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsx4(Text3, { ...MONO_PROPS, selectable: true, numberOfLines: 16, style: { fontFamily: MONO_FONT, fontSize: code(), lineHeight: codeLine(), color: colors2.foregroundMuted }, children: json ?? "" })
+  ] }) });
+}
+
+// client/BotSidebar.tsx
+import { Icon as Icon4, ScrollView } from "@getpaseo/plugin/client/react-native";
+import { memo, useEffect as useEffect6, useRef as useRef3, useState as useState6 } from "react";
+import { Animated, Easing, Platform as Platform7, Pressable as Pressable4, Text as Text5, View as View6 } from "react-native";
+
+// client/data.ts
+import { getPaseoClient, usePaseo, useHosts } from "@getpaseo/plugin/client";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect as useEffect5, useMemo as useMemo3 } from "react";
+function resolveHost(hostId, local, localApi, hosts) {
+  if (!hostId || hostId === local.id) {
+    return { api: localApi, key: local.id, label: local.label, isLocal: true, online: true, workspaceDirectory: local.workspaceDirectory, chatContext: local.chatContext };
+  }
+  const summary = hosts.find((host2) => host2.serverId === hostId);
+  const label = summary?.label ?? "Unknown host";
+  if (summary?.status !== "online") return { api: null, key: hostId, label, isLocal: false, online: false, workspaceDirectory: local.workspaceDirectory, chatContext: local.chatContext };
+  try {
+    return { api: getPaseoClient(hostId), key: hostId, label, isLocal: false, online: true, workspaceDirectory: local.workspaceDirectory, chatContext: local.chatContext };
+  } catch {
+    return { api: null, key: hostId, label, isLocal: false, online: false, workspaceDirectory: local.workspaceDirectory, chatContext: local.chatContext };
+  }
+}
+function useBotHost(hostId, local) {
+  const localApi = usePaseo();
+  const hosts = useHosts();
+  const summary = hostId ? hosts.find((host2) => host2.serverId === hostId) : void 0;
+  const status = summary?.status;
+  return useMemo3(
+    () => resolveHost(hostId, local, localApi, hosts),
+    // Only the fields that change the result.
+    [hostId, local.id, local.label, local.workspaceDirectory, local.chatContext, localApi, summary?.label, status]
+  );
+}
+function useHostResolver(local) {
+  const localApi = usePaseo();
+  const hosts = useHosts();
+  return (hostId) => resolveHost(hostId, local, localApi, hosts);
+}
+function useProviders(host2) {
+  return useQuery({
+    queryKey: ["paseo-bots", "providers", host2.key],
+    enabled: !!host2.api,
+    staleTime: 6e4,
+    queryFn: async () => {
+      const snapshot = await host2.api.providers.snapshot();
+      return snapshot.entries.filter((entry) => entry.enabled);
+    }
+  });
+}
+function useAgentProfiles(host2) {
+  return useQuery({
+    queryKey: ["paseo-bots", "profiles", host2.key],
+    enabled: !!host2.api,
+    staleTime: 6e4,
+    queryFn: async () => (await host2.api.config.get()).config.agentProfiles ?? []
+  });
+}
+function useHostWorkspaces(host2) {
+  return useQuery({
+    queryKey: ["paseo-bots", "workspaces", host2.key],
+    enabled: !!host2.api,
+    staleTime: 3e4,
+    queryFn: async () => {
+      const result = await host2.api.workspaces.list();
+      return result.entries.map((workspace) => ({
+        id: workspace.id,
+        label: workspace.title || `${workspace.projectDisplayName} \xB7 ${workspace.name}`,
+        directory: workspace.workspaceDirectory ?? workspace.projectRootPath
+      }));
+    }
+  });
+}
+function botChatsQuery(host2, botId) {
+  const directory = host2.workspaceDirectory;
+  const available = !directory || host2.isLocal;
+  return queryOptions({
+    // All bots in an embedded workspace share one directory snapshot.
+    queryKey: ["paseo-bots", "chats", host2.key, directory ? "workspace" : botId, directory],
+    enabled: !!host2.api && available,
+    refetchInterval: host2.isLocal ? false : 15e3,
+    queryFn: async () => {
+      const agents = [];
+      let cursor;
+      do {
+        const result = await host2.api.agents.list({
+          ...directory ? {} : { filter: { labels: { [BOT_LABEL]: botId } } },
+          page: { limit: 200, ...cursor ? { cursor } : {} }
+        });
+        agents.push(...result.entries.map((entry) => entry.agent));
+        cursor = result.pageInfo.hasMore ? result.pageInfo.nextCursor ?? void 0 : void 0;
+      } while (cursor);
+      return agents.filter((agent) => !agent.archivedAt).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+    },
+    select: (agents) => !available ? [] : directory ? agents.filter((agent) => isWorkspaceBotChat(agent, directory, botId, host2.chatContext)) : agents
+  });
+}
+function useBotChats(host2, botId) {
+  return useQuery(botChatsQuery(host2, botId));
+}
+function useChatInvalidation() {
+  const paseo = usePaseo();
+  const queryClient = useQueryClient();
+  useEffect5(() => {
+    let timer2 = null;
+    let closed = false;
+    let subscription = null;
+    const unsubscribe = paseo.agents.subscribe(() => {
+      if (timer2) return;
+      timer2 = setTimeout(() => {
+        timer2 = null;
+        void queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats"] });
+      }, 500);
+    });
+    void paseo.agents.list({ page: { limit: 1 }, subscribe: {} }).then((result) => {
+      if (closed) void result.subscription.release();
+      else subscription = result.subscription;
+    }).catch(() => {
+    });
+    return () => {
+      closed = true;
+      if (timer2) clearTimeout(timer2);
+      unsubscribe();
+      void subscription?.release();
+    };
+  }, [paseo, queryClient]);
+}
+function usePaseoTools(host2, provider) {
+  const queryClient = useQueryClient();
+  const key = ["paseo-bots", "paseo-tools", host2.key];
+  const config = useQuery({
+    queryKey: key,
+    enabled: !!host2.api,
+    staleTime: 3e4,
+    queryFn: async () => (await host2.api.config.get()).config
+  });
+  const state = config.data ? paseoToolsState(config.data, provider) : null;
+  const turnOn = async () => {
+    if (!host2.api || !state || state.on) return;
+    await host2.api.config.patch(state.reason === "provider" ? { providers: { [provider]: { paseoTools: { enabled: true } } } } : { mcp: { injectIntoAgents: true } });
+    await queryClient.invalidateQueries({ queryKey: key });
+  };
+  return { state, loading: config.isLoading, turnOn };
+}
+
+// client/navigation.ts
+var listeners = /* @__PURE__ */ new Set();
+function openLibrary(target = null) {
+  for (const listener of listeners) listener(target);
+}
+function onLibraryTarget(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+// client/Splash.tsx
+import { useMemo as useMemo4 } from "react";
+import { ExternalLink } from "@getpaseo/plugin/client/ui";
+import { Text as Text4, View as View5 } from "react-native";
+
+// shared/version.ts
+var PLUGIN_VERSION = "0.2.0";
+var PLUGIN_ID = "paseo-bots";
+
+// client/Splash.tsx
+import { jsx as jsx5, jsxs as jsxs4 } from "react/jsx-runtime";
+var AVATAR_SIZE = 48;
+var REPOSITORY_URL = "https://github.com/oliexe/paseo-bots";
+function Splash({ colors: colors2, background }) {
+  const dark = nativeTokens(colors2).dark;
+  const lineup = useMemo4(
+    () => SPLASH_LINEUP.map((entry) => {
+      return { key: entry.sprite, gray: grayscaleAvatar(spriteAvatar(entry.sprite, entry.palette, entry.accent, { dark })) };
+    }),
+    [dark]
+  );
+  return /* @__PURE__ */ jsxs4(View5, { style: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 16, backgroundColor: background ?? colors2.surface0 }, children: [
+    /* @__PURE__ */ jsx5(View5, { accessibilityElementsHidden: true, importantForAccessibility: "no-hide-descendants", style: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 12, maxWidth: 6 * AVATAR_SIZE + 5 * 12 }, children: lineup.map((entry) => /* @__PURE__ */ jsx5(PixelSprite, { sprite: entry.gray, size: AVATAR_SIZE }, entry.key)) }),
+    /* @__PURE__ */ jsxs4(View5, { style: { alignItems: "center", gap: 2 }, children: [
+      /* @__PURE__ */ jsx5(Text4, { style: { fontSize: ui(12), color: colors2.foregroundMuted }, children: "paseo-bots" }),
+      /* @__PURE__ */ jsxs4(Text4, { style: { fontSize: ui(11), color: colors2.foregroundMuted, opacity: 0.7 }, children: [
+        "v",
+        PLUGIN_VERSION
+      ] })
+    ] }),
+    /* @__PURE__ */ jsx5(View5, { style: { position: "absolute", left: 0, right: 0, bottom: 16, alignItems: "center" }, children: /* @__PURE__ */ jsx5(ExternalLink, { href: REPOSITORY_URL, accessibilityLabel: "paseo-bots on GitHub", children: "GitHub" }) })
+  ] });
+}
+
+// client/BotSidebar.tsx
+import { Fragment as Fragment4, jsx as jsx6, jsxs as jsxs5 } from "react/jsx-runtime";
+var noSelect = { userSelect: "none" };
+var CHEVRON_COLOR = "#9ca3af";
+function botChatOrder(chats, listUi, botId) {
+  const listed = new Set(chats.map((chat) => chat.id));
+  const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
+  const pinned = listUi.pinnedChats.filter((pin) => pin.botId === botId && listed.has(pin.chatId)).map((pin) => pin.chatId);
+  const rest = orderChats(chats.filter((chat) => !pinnedIds.has(chat.id)), listUi.chatSort, listUi.chatOrder[botId]);
+  return [...pinned, ...rest.map((chat) => chat.id)];
+}
+function BotSidebar(props) {
+  const { colors: colors2, bots, openTab, ui: listUi, hiddenArchivedCount, bottomInset, footerSlot: FooterSlot, onNewBot, onShowArchived, onTeamMap, onEditTeam } = props;
+  const tokens = nativeTokens(colors2);
+  const shown = openTab?.bots ?? bots;
+  const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
+  const listedBots = new Map(shown.map((bot) => [bot.id, bot]));
+  const pins = listUi.pinnedChats.filter((pin) => listedBots.has(pin.botId));
+  const leadId = openTab?.group?.leadId ?? null;
+  if (props.splash && bots.length === 0 && hiddenArchivedCount === 0 && pins.length === 0 && !openTab) {
+    return /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, paddingBottom: bottomInset, backgroundColor: tokens.surfaceSidebar }, children: [
+      /* @__PURE__ */ jsx6(Splash, { colors: colors2, background: tokens.surfaceSidebar }),
+      FooterSlot ? /* @__PURE__ */ jsx6(FooterSlot, {}) : null,
+      /* @__PURE__ */ jsx6(Footer, { colors: colors2, onNewBot, onImportBot: props.onImportBot, onExportAllBots: props.onExportAllBots, onTeamMap })
+    ] });
+  }
+  return /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, paddingBottom: bottomInset, backgroundColor: tokens.surfaceSidebar }, children: [
+    /* @__PURE__ */ jsxs5(
+      ScrollView,
+      {
+        style: { flex: 1 },
+        keyboardShouldPersistTaps: "handled",
+        showsVerticalScrollIndicator: false,
+        contentContainerStyle: { paddingHorizontal: 8, paddingTop: 2, paddingBottom: 16 },
+        children: [
+          pins.length > 0 ? /* @__PURE__ */ jsx6(PinnedSection, { ...props, pins, botById: listedBots, tokens }) : null,
+          shown.length > 0 || hiddenArchivedCount > 0 ? /* @__PURE__ */ jsx6(SectionHeader, { colors: colors2, onDisplayMenu: props.onDisplayMenu }) : null,
+          shown.map((bot) => /* @__PURE__ */ jsx6(BotGroup, { ...props, tokens, bot, lead: bot.id === leadId, pinnedIds }, bot.id)),
+          openTab?.group && shown.length === 0 ? /* @__PURE__ */ jsx6(EmptyState, { colors: colors2, title: "No bots on this team", description: "Add bots to it in the team's settings.", action: { icon: "Pencil", label: "Edit team", onPress: () => onEditTeam(openTab.group) } }) : bots.length === 0 ? hiddenArchivedCount > 0 ? /* @__PURE__ */ jsx6(
+            EmptyState,
+            {
+              colors: colors2,
+              title: "All bots are archived",
+              description: "Show archived bots to see them here.",
+              action: { icon: "Archive", label: "Show archived", onPress: onShowArchived }
+            }
+          ) : /* @__PURE__ */ jsx6(EmptyState, { colors: colors2, title: "No bots yet", description: "Create a bot to get started", action: { icon: "Plus", label: "New bot", onPress: onNewBot } }) : null
+        ]
+      }
+    ),
+    FooterSlot ? /* @__PURE__ */ jsx6(FooterSlot, {}) : null,
+    /* @__PURE__ */ jsx6(Footer, { colors: colors2, onNewBot, onImportBot: props.onImportBot, onExportAllBots: props.onExportAllBots, onTeamMap })
+  ] });
+}
+function SectionHeader({ colors: colors2, onDisplayMenu }) {
+  const ref = useRef3(null);
+  const { hovered, hoverProps } = useHover();
+  return /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingLeft: 8, paddingRight: 4, paddingTop: 4, paddingBottom: 4 }, children: [
+    /* @__PURE__ */ jsx6(Text5, { style: [{ fontSize: ui(12), color: colors2.foregroundMuted }, noSelect], children: "Bots" }),
+    /* @__PURE__ */ jsx6(
+      Pressable4,
+      {
+        ref,
+        accessibilityRole: "button",
+        accessibilityLabel: "Display preferences",
+        ...tooltip("Display preferences", "bottom"),
+        onPress: () => void measureAnchor(ref).then((anchor) => anchor && onDisplayMenu(anchor)),
+        ...hoverProps,
+        style: { width: 28, height: 28, alignItems: "center", justifyContent: "center", borderRadius: 6, backgroundColor: hovered ? colors2.surface1 : "transparent" },
+        children: /* @__PURE__ */ jsx6(Icon4, { name: "Settings2", size: 14, color: colors2.foregroundMuted })
+      }
+    )
+  ] });
+}
+function Footer({ colors: colors2, onNewBot, onImportBot, onExportAllBots, onTeamMap }) {
+  const { hovered, hoverProps } = useHover();
+  return /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors2.border }, children: [
+    /* @__PURE__ */ jsxs5(
+      Pressable4,
+      {
+        accessibilityRole: "button",
+        accessibilityLabel: "New bot",
+        onPress: onNewBot,
+        ...hoverProps,
+        style: ({ pressed }) => [
+          {
+            minWidth: 0,
+            minHeight: 32,
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingVertical: 6,
+            paddingHorizontal: 8,
+            borderRadius: 8,
+            backgroundColor: pressed ? colors2.surface2 : hovered ? colors2.surface1 : "transparent"
+          },
+          noSelect
+        ],
+        children: [
+          /* @__PURE__ */ jsx6(Icon4, { name: "Plus", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted }),
+          /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered ? colors2.foreground : colors2.foregroundMuted }, children: "New bot" })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Import", label: "Import bots", onPress: onImportBot }),
+    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Share", label: "Export all bots", onPress: onExportAllBots }),
+    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Network", label: "Team map", onPress: onTeamMap }),
+    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Blocks", label: "Skills & Tools", onPress: () => openLibrary() })
+  ] });
+}
+function FooterIconButton({ colors: colors2, icon, label, onPress }) {
+  const { hovered, hoverProps } = useHover();
+  return /* @__PURE__ */ jsx6(
+    Pressable4,
+    {
+      accessibilityRole: "button",
+      accessibilityLabel: label,
+      ...tooltip(label),
+      disabled: !onPress,
+      accessibilityState: { disabled: !onPress },
+      onPress,
+      ...hoverProps,
+      style: ({ pressed }) => [
+        { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", opacity: onPress ? 1 : 0.5, backgroundColor: pressed ? colors2.surface2 : hovered ? colors2.surface1 : "transparent" },
+        noSelect
+      ],
+      children: /* @__PURE__ */ jsx6(Icon4, { name: icon, size: 16, color: hovered ? colors2.foreground : colors2.foregroundMuted })
+    }
+  );
+}
+function EmptyState({ colors: colors2, title, description, action }) {
+  return /* @__PURE__ */ jsxs5(View6, { style: { marginHorizontal: 8, marginTop: 16, paddingTop: 24, paddingBottom: 16, paddingHorizontal: 16, borderRadius: 8, backgroundColor: colors2.surface0, alignItems: "center", gap: 12 }, children: [
+    /* @__PURE__ */ jsx6(Text5, { style: { color: colors2.foreground, fontSize: ui(12), fontWeight: "500", textAlign: "center" }, children: title }),
+    /* @__PURE__ */ jsx6(Text5, { style: { color: colors2.foregroundMuted, fontSize: ui(12), textAlign: "center" }, children: description }),
+    /* @__PURE__ */ jsx6(GhostButton, { colors: colors2, icon: action.icon, label: action.label, onPress: action.onPress })
+  ] });
+}
+function GhostButton({ colors: colors2, icon, label, onPress }) {
+  const { hovered, hoverProps } = useHover();
+  const tint = hovered ? colors2.foreground : colors2.foregroundMuted;
+  return /* @__PURE__ */ jsxs5(
+    Pressable4,
+    {
+      accessibilityRole: "button",
+      accessibilityLabel: label,
+      onPress,
+      ...hoverProps,
+      style: ({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        minHeight: 32,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "transparent",
+        opacity: pressed ? 0.85 : 1
+      }),
+      children: [
+        /* @__PURE__ */ jsx6(Icon4, { name: icon, size: 14, color: tint }),
+        /* @__PURE__ */ jsx6(Text5, { style: { fontSize: ui(14), color: tint }, children: label })
+      ]
+    }
+  );
+}
+function PinnedSection(props) {
+  const { colors: colors2, pins, ui: listUi, touch, onTogglePinnedSection } = props;
+  const collapsed = listUi.pinnedCollapsed;
+  const [expanded, setExpanded] = useState6(false);
+  const visible = expanded ? pins : pins.slice(0, SIDEBAR_GROUP_LIMIT);
+  const { hovered, hoverProps } = useHover();
+  return /* @__PURE__ */ jsxs5(View6, { style: { marginBottom: 4 }, children: [
+    /* @__PURE__ */ jsxs5(
+      Pressable4,
+      {
+        accessibilityRole: "button",
+        accessibilityLabel: "Pinned",
+        accessibilityState: { expanded: !collapsed },
+        onPress: onTogglePinnedSection,
+        ...hoverProps,
+        style: [{ minHeight: 36, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 4, paddingHorizontal: 8, paddingVertical: 4 }, noSelect],
+        children: [
+          /* @__PURE__ */ jsx6(Text5, { style: { fontSize: ui(12), color: colors2.foregroundMuted }, children: "Pinned" }),
+          hovered || touch ? /* @__PURE__ */ jsx6(Icon4, { name: collapsed ? "ChevronRight" : "ChevronDown", size: 12, color: colors2.foregroundMuted }) : null
+        ]
+      }
+    ),
+    collapsed ? null : /* @__PURE__ */ jsxs5(Fragment4, { children: [
+      visible.map((pin) => /* @__PURE__ */ jsx6(PinnedChatRow, { ...props, bot: props.botById.get(pin.botId), chatId: pin.chatId }, pin.chatId)),
+      pins.length > SIDEBAR_GROUP_LIMIT ? /* @__PURE__ */ jsx6(ShowMoreRow, { colors: colors2, expanded, onPress: () => setExpanded(!expanded) }) : null
+    ] })
+  ] });
+}
+function PinnedChatRow({ colors: colors2, tokens, bot, chatId, selection, ui: listUi, localHost, touch, onSelect, onChatMenu, onDeleteChat }) {
+  const host2 = useBotHost(bot.hostId, localHost);
+  const chats = useBotChats(host2, bot.id);
+  const chat = chats.data?.find((entry) => entry.id === chatId);
+  if (!chat) return null;
+  const context = { siblings: [], pinned: true, order: botChatOrder(chats.data ?? [], listUi, bot.id) };
+  return /* @__PURE__ */ jsx6(
+    ChatRow,
+    {
+      colors: colors2,
+      tokens,
+      chat,
+      bot,
+      hoisted: true,
+      touch,
+      selected: selection?.botId === bot.id && selection.chatId === chat.id,
+      onPress: () => onSelect({ botId: bot.id, chatId: chat.id }),
+      onMenu: (anchor, source) => onChatMenu(bot, chat, anchor, source, context),
+      onDelete: () => onDeleteChat(bot, chat, context)
+    }
+  );
+}
+function BotGroup(props) {
+  const { colors: colors2, tokens, bot, selection, ui: listUi, localHost, touch, pinnedIds, onSelect, onChatMenu, onDeleteChat } = props;
+  const host2 = useBotHost(bot.hostId, localHost);
+  const chats = useBotChats(host2, bot.id);
+  const [expanded, setExpanded] = useState6(false);
+  const isOpen = !listUi.collapsed.includes(bot.id);
+  const botSelected = selection?.botId === bot.id;
+  const draftSelected = botSelected && selection?.chatId === null;
+  const unpinned = (chats.data ?? []).filter((chat) => !pinnedIds.has(chat.id));
+  const ordered = orderChats(unpinned, listUi.chatSort, listUi.chatOrder[bot.id]);
+  const siblings = ordered.map((chat) => chat.id);
+  const context = { siblings, pinned: false, order: botChatOrder(chats.data ?? [], listUi, bot.id) };
+  const visible = expanded ? ordered : ordered.slice(0, SIDEBAR_GROUP_LIMIT);
+  const loading2 = !!host2.api && chats.isLoading;
+  const aggregate = isOpen ? null : aggregateBuckets(unpinned.map(chatBucket));
+  let children = null;
+  if (isOpen) {
+    if (loading2) children = /* @__PURE__ */ jsx6(SkeletonRows, { colors: colors2 });
+    else if (ordered.length > 0 || draftSelected) {
+      children = /* @__PURE__ */ jsxs5(Fragment4, { children: [
+        draftSelected && ordered.length > 0 ? /* @__PURE__ */ jsx6(NewChatGhostRow, { colors: colors2, tokens, selected: true, onPress: () => onSelect({ botId: bot.id, chatId: null }) }) : null,
+        visible.map((chat) => /* @__PURE__ */ jsx6(
+          ChatRow,
+          {
+            colors: colors2,
+            tokens,
+            chat,
+            bot,
+            touch,
+            selected: botSelected && selection?.chatId === chat.id,
+            onPress: () => onSelect({ botId: bot.id, chatId: chat.id }),
+            onMenu: (anchor, source) => onChatMenu(bot, chat, anchor, source, context),
+            onDelete: () => onDeleteChat(bot, chat, context)
+          },
+          chat.id
+        )),
+        ordered.length > SIDEBAR_GROUP_LIMIT ? /* @__PURE__ */ jsx6(ShowMoreRow, { colors: colors2, expanded, onPress: () => setExpanded(!expanded) }) : null,
+        ordered.length === 0 ? /* @__PURE__ */ jsx6(NewChatGhostRow, { colors: colors2, tokens, selected: true, onPress: () => onSelect({ botId: bot.id, chatId: null }) }) : null
+      ] });
+    } else if (host2.api) {
+      children = /* @__PURE__ */ jsx6(NewChatGhostRow, { colors: colors2, tokens, selected: false, onPress: () => onSelect({ botId: bot.id, chatId: null }) });
+    }
+  }
+  return /* @__PURE__ */ jsxs5(View6, { role: "group", accessibilityLabel: bot.name, style: { paddingBottom: children ? 12 : 0 }, children: [
+    /* @__PURE__ */ jsx6(BotRow, { ...props, isOpen, aggregate, hostLabel: host2.online ? null : host2.label }),
+    children
+  ] });
+}
+function BotRow({ colors: colors2, tokens, bot, lead, touch, isOpen, aggregate, hostLabel, onToggle, onSelect, onBotMenu }) {
+  const [hovered, setHovered] = useState6(false);
+  const kebabRef = useRef3(null);
+  const plus = useHover();
+  const actionsVisible = hovered || touch;
+  const backdrop = hovered ? colors2.surface1 : tokens.surfaceSidebar;
+  return /* @__PURE__ */ jsxs5(
+    View6,
+    {
+      onPointerEnter: () => setHovered(true),
+      onPointerLeave: () => setHovered(false),
+      style: [
+        {
+          position: "relative",
+          minHeight: 36,
+          paddingVertical: 8,
+          paddingHorizontal: 8,
+          borderRadius: 8,
+          marginBottom: 4,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          backgroundColor: hovered ? colors2.surface1 : "transparent"
+        },
+        noSelect
+      ],
+      children: [
+        /* @__PURE__ */ jsx6(
+          Pressable4,
+          {
+            accessibilityRole: "button",
+            accessibilityLabel: bot.name,
+            accessibilityState: { expanded: isOpen },
+            onPress: () => onToggle(bot.id),
+            ...contextMenuProps((anchor) => onBotMenu(bot, anchor, "context")),
+            style: ({ pressed }) => ({ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 8, backgroundColor: pressed ? colors2.surface2 : "transparent" })
+          }
+        ),
+        /* @__PURE__ */ jsxs5(View6, { pointerEvents: "none", style: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }, children: [
+          /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: hovered ? /* @__PURE__ */ jsx6(Icon4, { name: isOpen ? "ChevronDown" : "ChevronRight", size: 14, color: CHEVRON_COLOR }) : /* @__PURE__ */ jsxs5(View6, { style: { position: "relative", width: 16, height: 16 }, children: [
+            /* @__PURE__ */ jsx6(Avatar, { avatar: bot.avatar, size: 16 }),
+            aggregate ? /* @__PURE__ */ jsx6(StatusBadge2, { colors: colors2, tokens, bucket: aggregate, backdrop }) : null
+          ] }) }),
+          /* @__PURE__ */ jsxs5(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: colors2.foregroundMuted, opacity: bot.archived ? 0.6 : 1 }, children: [
+            bot.name,
+            hostLabel ? ` \xB7 ${hostLabel} offline` : ""
+          ] }),
+          lead ? /* @__PURE__ */ jsx6(Icon4, { name: "Crown", size: 12, color: colors2.foregroundMuted }) : null
+        ] }),
+        /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 2, flexShrink: 0, marginRight: -6 }, children: [
+          /* @__PURE__ */ jsx6(View6, { style: { width: 24, height: 24, alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: actionsVisible ? 1 : 0 }, pointerEvents: actionsVisible ? "auto" : "none", children: /* @__PURE__ */ jsx6(
+            Pressable4,
+            {
+              accessibilityRole: "button",
+              accessibilityLabel: `New chat with ${bot.name}`,
+              ...tooltip("New chat", "bottom"),
+              hitSlop: 8,
+              onPress: () => onSelect({ botId: bot.id, chatId: null }),
+              ...plus.hoverProps,
+              style: ({ pressed: down }) => ({
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: plus.hovered || down ? colors2.surface1 : "transparent"
+              }),
+              children: ({ pressed: down }) => /* @__PURE__ */ jsx6(Icon4, { name: "Plus", size: 15, color: plus.hovered || down ? colors2.foreground : colors2.foregroundMuted })
+            }
+          ) }),
+          /* @__PURE__ */ jsx6(View6, { style: { opacity: actionsVisible ? 1 : 0 }, pointerEvents: actionsVisible ? "auto" : "none", children: /* @__PURE__ */ jsx6(
+            KebabButton2,
+            {
+              colors: colors2,
+              buttonRef: kebabRef,
+              label: "Bot actions",
+              box: true,
+              onPress: () => void measureAnchor(kebabRef).then((anchor) => anchor && onBotMenu(bot, anchor, "kebab"))
+            }
+          ) })
+        ] })
+      ]
+    }
+  );
+}
+var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu, onDelete }) {
+  const [hovered, setHovered] = useState6(false);
+  const kebabRef = useRef3(null);
+  const bucket = chatBucket(chat);
+  const title = displayTitle(chat.title);
+  const showKebab = hovered || touch;
+  const background = selected ? tokens.surfaceSidebarSelected : hovered ? colors2.surface1 : "transparent";
+  return /* @__PURE__ */ jsxs5(
+    View6,
+    {
+      onPointerEnter: () => setHovered(true),
+      onPointerLeave: () => setHovered(false),
+      style: [
+        {
+          position: "relative",
+          minHeight: 36,
+          marginBottom: 2,
+          paddingVertical: 8,
+          paddingLeft: 8,
+          paddingRight: 12,
+          borderRadius: 8,
+          justifyContent: "center",
+          backgroundColor: background
+        },
+        noSelect
+      ],
+      children: [
+        /* @__PURE__ */ jsx6(
+          Pressable4,
+          {
+            accessibilityRole: "button",
+            accessibilityLabel: `${title}, ${BUCKET_LABELS[bucket]}`,
+            accessibilityState: { selected },
+            onPress,
+            ...contextMenuProps((anchor) => onMenu(anchor, "context")),
+            style: ({ pressed }) => ({ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 8, backgroundColor: pressed ? colors2.surface2 : "transparent" })
+          }
+        ),
+        /* @__PURE__ */ jsxs5(View6, { pointerEvents: "none", style: { flexDirection: "row", alignItems: "flex-start", gap: 8, width: "100%" }, children: [
+          hoisted ? /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxs5(View6, { style: { position: "relative", width: 16, height: 16 }, children: [
+            /* @__PURE__ */ jsx6(Avatar, { avatar: bot.avatar, size: 16 }),
+            bucket !== "done" ? /* @__PURE__ */ jsx6(StatusBadge2, { colors: colors2, tokens, bucket, backdrop: selected ? tokens.surfaceSidebarSelected : hovered ? colors2.surface1 : tokens.surfaceSidebar }) : null
+          ] }) }) : /* @__PURE__ */ jsx6(ChatStatusSlot, { colors: colors2, tokens, bucket }),
+          /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, minWidth: 0 }, children: [
+            /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "flex-start", gap: 8 }, children: [
+              /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(14), fontWeight: "400", lineHeight: 20, color: colors2.foreground, opacity: hovered ? 1 : 0.76 }, children: title }),
+              touch ? /* @__PURE__ */ jsx6(View6, { style: { width: 40, height: 20 } }) : null
+            ] }),
+            hoisted ? /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { fontSize: ui(12), lineHeight: 16, color: colors2.foregroundMuted }, children: bot.name }) : null
+          ] })
+        ] }),
+        showKebab ? /* @__PURE__ */ jsxs5(View6, { style: { position: "absolute", top: 8, right: 12, flexDirection: "row" }, children: [
+          touch ? null : /* @__PURE__ */ jsx6(View6, { pointerEvents: "none", style: { width: 16, backgroundColor: background } }),
+          /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: background }, children: [
+            /* @__PURE__ */ jsx6(DeleteChatButton, { colors: colors2, onPress: onDelete }),
+            /* @__PURE__ */ jsx6(KebabButton2, { colors: colors2, buttonRef: kebabRef, label: "Chat actions", onPress: () => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab")) })
+          ] })
+        ] }) : null
+      ]
+    }
+  );
+});
+function NewChatGhostRow({ colors: colors2, tokens, selected, onPress }) {
+  const { hovered, hoverProps } = useHover();
+  return /* @__PURE__ */ jsx6(
+    Pressable4,
+    {
+      accessibilityRole: "button",
+      accessibilityLabel: "New chat",
+      accessibilityState: { selected },
+      onPress,
+      ...hoverProps,
+      style: ({ pressed }) => [
+        {
+          minHeight: 36,
+          marginBottom: 2,
+          paddingVertical: 8,
+          paddingLeft: 16,
+          paddingRight: 12,
+          borderRadius: 8,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          backgroundColor: pressed ? colors2.surface2 : selected ? tokens.surfaceSidebarSelected : hovered ? colors2.surface1 : "transparent"
+        },
+        noSelect
+      ],
+      children: ({ pressed }) => /* @__PURE__ */ jsxs5(Fragment4, { children: [
+        /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }, children: /* @__PURE__ */ jsx6(Icon4, { name: "Plus", size: 14, color: hovered || pressed || selected ? colors2.foreground : colors2.foregroundMuted }) }),
+        /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered || pressed || selected ? colors2.foreground : colors2.foregroundMuted }, children: "New chat" })
+      ] })
+    }
+  );
+}
+function ShowMoreRow({ colors: colors2, expanded, onPress }) {
+  const { hovered, hoverProps } = useHover();
+  const label = expanded ? "Show less" : "Show more";
+  return /* @__PURE__ */ jsx6(
+    Pressable4,
+    {
+      accessibilityRole: "button",
+      accessibilityLabel: label,
+      accessibilityState: { expanded },
+      onPress,
+      ...hoverProps,
+      style: ({ pressed }) => [
+        {
+          minHeight: 36,
+          marginBottom: 2,
+          paddingVertical: 8,
+          paddingLeft: 8,
+          paddingRight: 12,
+          borderRadius: 8,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          backgroundColor: pressed ? colors2.surface2 : hovered ? colors2.surface1 : "transparent"
+        },
+        noSelect
+      ],
+      children: ({ pressed }) => /* @__PURE__ */ jsxs5(Fragment4, { children: [
+        /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }, children: /* @__PURE__ */ jsx6(Icon4, { name: expanded ? "ChevronUp" : "ChevronDown", size: 14, color: hovered || pressed ? colors2.foreground : colors2.foregroundMuted }) }),
+        /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered || pressed ? colors2.foreground : colors2.foregroundMuted }, children: label })
+      ] })
+    }
+  );
+}
+function DeleteChatButton({ colors: colors2, onPress }) {
+  const { hovered, hoverProps } = useHover();
+  return /* @__PURE__ */ jsx6(
+    Pressable4,
+    {
+      accessibilityRole: "button",
+      accessibilityLabel: "Delete chat",
+      ...tooltip("Delete chat", "bottom"),
+      hitSlop: 4,
+      onPress,
+      ...hoverProps,
+      style: { padding: 2, borderRadius: 4, backgroundColor: hovered ? colors2.surface2 : "transparent" },
+      children: /* @__PURE__ */ jsx6(Icon4, { name: "Trash2", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted })
+    }
+  );
+}
+function KebabButton2({ colors: colors2, buttonRef, label, box, onPress }) {
+  const { hovered, hoverProps } = useHover();
+  return /* @__PURE__ */ jsx6(
+    Pressable4,
+    {
+      ref: buttonRef,
+      accessibilityRole: "button",
+      accessibilityLabel: label,
+      ...tooltip(label, "bottom"),
+      hitSlop: 8,
+      onPress,
+      ...hoverProps,
+      style: box ? { width: 24, height: 24, borderRadius: 6, alignItems: "center", justifyContent: "center", flexShrink: 0, backgroundColor: hovered ? colors2.surface2 : "transparent" } : { padding: 2, borderRadius: 4, marginLeft: 2, marginRight: -7, backgroundColor: hovered ? colors2.surface2 : "transparent" },
+      children: /* @__PURE__ */ jsx6(Icon4, { name: "MoreVertical", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted })
+    }
+  );
+}
+function ChatStatusSlot({ colors: colors2, tokens, bucket }) {
+  let glyph;
+  if (bucket === "running") glyph = /* @__PURE__ */ jsx6(StatusRing, { color: tokens.statusDotRunning });
+  else if (bucket === "needs_input") glyph = /* @__PURE__ */ jsx6(NeedsInputGlyph, { colors: colors2, tokens });
+  else if (bucket === "attention") glyph = /* @__PURE__ */ jsx6(Dot, { color: tokens.statusDotSuccess });
+  else if (bucket === "done") glyph = /* @__PURE__ */ jsx6(Dot, { color: tokens.foregroundExtraMuted, opacity: 0.3 });
+  else {
+    glyph = /* @__PURE__ */ jsxs5(Fragment4, { children: [
+      /* @__PURE__ */ jsx6(Icon4, { name: "MessageSquare", size: 14, color: colors2.foregroundMuted }),
+      /* @__PURE__ */ jsx6(View6, { style: { position: "absolute", right: 0, bottom: 0, width: 8, height: 8, borderRadius: 4, borderWidth: 1, borderColor: colors2.surface0, backgroundColor: tokens.statusDotDanger } })
+    ] });
+  }
+  return /* @__PURE__ */ jsx6(View6, { accessibilityLabel: BUCKET_LABELS[bucket], style: { position: "relative", width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: glyph });
+}
+function Dot({ color, opacity = 1 }) {
+  return /* @__PURE__ */ jsx6(View6, { style: { width: 6, height: 6, borderRadius: 3, backgroundColor: color, opacity } });
+}
+function NeedsInputGlyph({ colors: colors2, tokens }) {
+  return /* @__PURE__ */ jsx6(View6, { style: { width: 12, height: 12, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx6(View6, { style: { width: 11, height: 11, borderRadius: 5.5, backgroundColor: colors2.surface0, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxs5(View6, { style: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: tokens.statusDotWarning, alignItems: "center", justifyContent: "center" }, children: [
+    /* @__PURE__ */ jsx6(View6, { style: { width: 1, height: 3, borderRadius: 0.5, backgroundColor: colors2.surface0 } }),
+    /* @__PURE__ */ jsx6(View6, { style: { width: 1, height: 1, marginTop: 1, borderRadius: 0.5, backgroundColor: colors2.surface0 } })
+  ] }) }) });
+}
+var BADGE_SIZE = 12;
+var BADGE_OFFSET = -4;
+var RING_FRAME = 14;
+function StatusBadge2({ colors: colors2, tokens, bucket, backdrop }) {
+  if (bucket === "done") return null;
+  if (bucket === "running") {
+    const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
+    return /* @__PURE__ */ jsx6(View6, { accessibilityLabel: BUCKET_LABELS[bucket], style: { position: "absolute", right: offset, bottom: offset }, children: /* @__PURE__ */ jsx6(StatusRing, { color: tokens.statusDotRunning, backdrop }) });
+  }
+  return /* @__PURE__ */ jsx6(
+    View6,
+    {
+      accessibilityLabel: BUCKET_LABELS[bucket],
+      style: {
+        position: "absolute",
+        right: BADGE_OFFSET,
+        bottom: BADGE_OFFSET,
+        width: BADGE_SIZE,
+        height: BADGE_SIZE,
+        borderRadius: BADGE_SIZE / 2,
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+        backgroundColor: backdrop
+      },
+      children: bucket === "needs_input" ? /* @__PURE__ */ jsx6(NeedsInputGlyph, { colors: colors2, tokens }) : /* @__PURE__ */ jsx6(Dot, { color: bucket === "failed" ? tokens.statusDotDanger : tokens.statusDotSuccess })
+    }
+  );
+}
+var RING_PERIOD_MS = 900;
+var ringProgress = new Animated.Value(0);
+var ringRotation = ringProgress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+var ringUsers = 0;
+var ringLoop = null;
+function useRingClock() {
+  useEffect6(() => {
+    ringUsers += 1;
+    if (!ringLoop) {
+      ringProgress.setValue(0);
+      ringLoop = Animated.loop(
+        Animated.timing(ringProgress, { toValue: 1, duration: RING_PERIOD_MS, easing: Easing.linear, useNativeDriver: Platform7.OS !== "web" })
+      );
+      ringLoop.start();
+    }
+    return () => {
+      ringUsers -= 1;
+      if (ringUsers === 0 && ringLoop) {
+        ringLoop.stop();
+        ringLoop = null;
+      }
+    };
+  }, []);
+  return ringRotation;
+}
+function StatusRing({ color, backdrop }) {
+  const rotate = useRingClock();
+  const circle = { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5 };
+  return /* @__PURE__ */ jsxs5(View6, { style: { width: RING_FRAME, height: RING_FRAME, borderRadius: RING_FRAME / 2, alignItems: "center", justifyContent: "center", backgroundColor: backdrop }, children: [
+    /* @__PURE__ */ jsx6(View6, { style: { ...circle, position: "absolute", borderColor: color, opacity: 0.3 } }),
+    /* @__PURE__ */ jsx6(Animated.View, { style: { position: "absolute", width: 12, height: 12, transform: [{ rotate }] }, children: /* @__PURE__ */ jsx6(View6, { style: { ...circle, borderColor: "transparent", borderTopColor: color, opacity: 0.9 } }) }),
+    /* @__PURE__ */ jsx6(View6, { style: { width: 6, height: 6, borderRadius: 3, backgroundColor: color } })
+  ] });
+}
+function SkeletonRows({ colors: colors2 }) {
+  const pulse = useRef3(new Animated.Value(0)).current;
+  useEffect6(() => {
+    const native4 = Platform7.OS !== "web";
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1e3, useNativeDriver: native4 }),
+        Animated.timing(pulse, { toValue: 0, duration: 1e3, useNativeDriver: native4 })
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse]);
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.8] });
+  return /* @__PURE__ */ jsx6(View6, { accessibilityLabel: "Loading chats", style: { gap: 4 }, children: [1, 0.7].map((rowOpacity) => /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, paddingHorizontal: 12, marginLeft: 4, opacity: rowOpacity }, children: [
+    /* @__PURE__ */ jsx6(Animated.View, { style: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors2.surface2, opacity } }),
+    /* @__PURE__ */ jsx6(Animated.View, { style: { flex: 1, height: 12, borderRadius: 2, backgroundColor: colors2.surface2, opacity } })
+  ] }, rowOpacity)) });
+}
+
+// client/ChatPane.tsx
+import { Icon as Icon16 } from "@getpaseo/plugin/client/react-native";
+import { useEffect as useEffect18, useRef as useRef13, useState as useState24 } from "react";
+import { Pressable as Pressable17, Text as Text24, View as View26 } from "react-native";
+
+// client/chat/Composer.tsx
+import { useRpc as useRpc2 } from "@getpaseo/plugin/client";
+import { Icon as Icon6, Modal as Modal4, TextInput as TextInput3, useToast as useToast2 } from "@getpaseo/plugin/client/react-native";
+import { SettingsAction as SettingsAction2, SettingsCard as SettingsCard2, SettingsRow } from "@getpaseo/plugin/client/ui";
+import { useEffect as useEffect10, useMemo as useMemo5, useRef as useRef6, useState as useState11 } from "react";
+import { ActivityIndicator as ActivityIndicator4, Platform as Platform13, Pressable as Pressable8, Text as Text8, View as View10, useWindowDimensions as useWindowDimensions3 } from "react-native";
+
+// shared/attachments.ts
+var IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+var TEXT_MAX_BYTES = 1024 * 1024;
+var FILE_MAX_BYTES = 25 * 1024 * 1024;
+var IMAGE_TYPES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+var TEXT_EXTENSIONS = /\.(txt|md|markdown|csv|tsv|json|jsonl|yaml|yml|toml|xml|html?|css|scss|js|jsx|ts|tsx|mjs|cjs|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|cs|php|sh|zsh|bash|sql|log|ini|cfg|conf|env|graphql|vue|svelte)$/i;
+function classifyFile(name, mimeType) {
+  if (IMAGE_TYPES.has(mimeType.toLowerCase())) return "image";
+  if (mimeType.startsWith("text/") || /^application\/(json|xml|x-yaml|yaml|javascript|typescript|sql)/.test(mimeType) || TEXT_EXTENSIONS.test(name)) return "text";
+  return "file";
+}
+function preflightFile(name, mimeType, size2, canUpload) {
+  let kind = classifyFile(name, mimeType);
+  if (kind === "text" && size2 > TEXT_MAX_BYTES) kind = "file";
+  return { kind, reason: rejectReason(kind, size2, canUpload) };
+}
+function normalizeMimeType(mimeType) {
+  const base = (mimeType.split(";", 1)[0] ?? "").trim().toLowerCase();
+  return base === "image/jpg" ? "image/jpeg" : base;
+}
+function getFileTypeLabel(name) {
+  const base = name.split(/[\\/]/).pop() ?? name;
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) return null;
+  const extension = base.slice(dot + 1);
+  return /^[a-z0-9]+$/i.test(extension) ? extension.toUpperCase() : null;
+}
+function rejectReason(kind, size2, canUpload) {
+  if (kind === "image" && size2 > IMAGE_MAX_BYTES) return "Images can be up to 10 MB.";
+  if (kind === "text" && size2 > TEXT_MAX_BYTES) return canUpload ? null : "Text files can be up to 1 MB.";
+  if (kind === "file" && !canUpload) return "Other files can only be attached for bots running on this host.";
+  if (size2 > FILE_MAX_BYTES) return "Files can be up to 25 MB.";
+  return null;
+}
+function toWire(attachments) {
+  const images = [];
+  const rest = [];
+  for (const attachment of attachments) {
+    if (attachment.kind === "image") images.push({ data: attachment.data, mimeType: attachment.mimeType });
+    else if (attachment.kind === "text") rest.push({ type: "text", mimeType: "text/plain", title: attachment.name, text: attachment.text });
+    else rest.push({ type: "uploaded_file", id: attachment.id, fileName: attachment.name, mimeType: attachment.mimeType, size: attachment.size, path: attachment.path });
+  }
+  return { images, attachments: rest };
+}
+function newAttachmentId() {
+  return "att-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// shared/skills.ts
+var trimSlashes = (path) => path.replace(/^\/+|\/+$/g, "");
+function parseSkillSource(input) {
+  const source = input.trim();
+  if (/^https?:\/\//i.test(source)) {
+    const url = new URL(source);
+    if (url.hostname === "github.com") {
+      const [owner2, repo2, mode, ref, ...rest2] = trimSlashes(url.pathname).split("/");
+      if (!owner2 || !repo2) throw new Error("That GitHub URL doesn't name a repository.");
+      if (mode === "blob" || mode === "tree") {
+        let path = rest2.join("/");
+        if (mode === "blob") path = path.replace(/\/?SKILL\.md$/i, "");
+        return { kind: "github", owner: owner2, repo: repo2.replace(/\.git$/, ""), ref: ref ?? null, path };
+      }
+      return { kind: "github", owner: owner2, repo: repo2.replace(/\.git$/, ""), ref: null, path: "" };
+    }
+    if (/SKILL\.md$/i.test(url.pathname)) return { kind: "raw", url: source };
+    throw new Error("Use a GitHub repository, a GitHub folder, or a link to a SKILL.md file.");
+  }
+  const parts = trimSlashes(source).split("/");
+  if (parts.length < 2 || parts.some((part) => !/^[A-Za-z0-9._-]+$/.test(part))) {
+    throw new Error('Use "owner/repo", "owner/repo/path/to/skill" or a GitHub URL.');
+  }
+  const [owner, repo, ...rest] = parts;
+  return { kind: "github", owner, repo, ref: null, path: rest.join("/").replace(/\/?SKILL\.md$/i, "") };
+}
+function parseSkillFrontmatter(text) {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+  const read = (key) => {
+    const line = match?.[1]?.split(/\r?\n/).find((entry) => entry.trim().startsWith(`${key}:`));
+    const value = line?.slice(line.indexOf(":") + 1).trim().replace(/^["']|["']$/g, "");
+    return value ? value : null;
+  };
+  return { name: read("name"), description: read("description") };
+}
+function sanitizeSkillName(name) {
+  const clean = name.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "");
+  return clean || "skill";
+}
+function skillMarkdown(id, description, body) {
+  const line = description.replace(/\s+/g, " ").trim();
+  return `---
+name: ${id}
+description: ${line}
+---
+
+${body.trim()}
+`;
+}
+function skillBody(text) {
+  return text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
+}
+var LEARN_COMMAND = { name: "learn", description: "Save what the bot just did as a skill", argumentHint: "[what to focus on]" };
+function learnPrompt(focus = "") {
+  const topic = focus.trim().replace(/[.!?]*$/, ".");
+  const about = focus.trim() ? ` Focus on: ${topic}` : "";
+  return `Turn what you just did into a reusable skill: the steps that worked, what to check, and what a good result looks like.${about} Then propose it with the propose_skill tool so I can review it. Don't write the skill file yourself.`;
+}
+function expandLearn(text) {
+  const match = /^\/learn(?:\s+([\s\S]*))?$/.exec(text.trim());
+  return match ? learnPrompt(match[1] ?? "") : null;
+}
+function scanSkillText(text) {
+  const warnings = [];
+  if (/[A-Za-z0-9+/]{400,}={0,2}/.test(text)) warnings.push("It contains a long encoded blob that could hide instructions or a program.");
+  if (/\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba|z)?sh\b/.test(text)) warnings.push("It pipes a download straight into a shell.");
+  if (/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/.test(text)) warnings.push("It contains invisible characters, which can hide text from you.");
+  if (/\b(ignore|disregard)\b[^\n]{0,30}\b(previous|prior|above|all)\b[^\n]{0,20}\binstructions\b/i.test(text)) warnings.push("It tells the bot to ignore its other instructions.");
+  if (/\b(rm\s+-rf\s+[~/]|mkfs\b|dd\s+if=)/.test(text)) warnings.push("It includes commands that can erase data.");
+  return warnings;
+}
+
+// client/AttachmentPill.tsx
+import { Icon as Icon5, Modal as Modal3, ScrollView as ScrollView2 } from "@getpaseo/plugin/client/react-native";
+import { useState as useState7 } from "react";
+import { ActivityIndicator as ActivityIndicator3, Image as Image2, Platform as Platform8, Pressable as Pressable5, Text as Text6, View as View7, useWindowDimensions as useWindowDimensions2 } from "react-native";
+import { jsx as jsx7, jsxs as jsxs6 } from "react/jsx-runtime";
+var CONTENT_HEIGHT = 48;
+function AttachmentPill({ colors: colors2, attachment, onRemove, disabled, alwaysShowRemove }) {
+  const [open, setOpen] = useState7(false);
+  const [bodyHovered, setBodyHovered] = useState7(false);
+  const [closeHovered, setCloseHovered] = useState7(false);
+  const showRemove = (alwaysShowRemove ?? Platform8.OS !== "web") || bodyHovered || closeHovered;
+  const canOpen = attachment.kind !== "file";
+  const openLabel = attachment.kind === "image" ? "Open image attachment" : `Open ${attachment.name}`;
+  const removeLabel = attachment.kind === "image" ? "Remove image attachment" : "Remove file attachment";
+  return /* @__PURE__ */ jsxs6(View7, { style: { position: "relative" }, children: [
+    /* @__PURE__ */ jsx7(
+      Pressable5,
+      {
+        accessibilityRole: canOpen ? "button" : void 0,
+        accessibilityLabel: canOpen ? openLabel : attachment.name,
+        disabled: !canOpen,
+        onPress: () => setOpen(true),
+        onHoverIn: () => setBodyHovered(true),
+        onHoverOut: () => setBodyHovered(false),
+        style: frameStyle(colors2),
+        children: attachment.kind === "image" ? /* @__PURE__ */ jsx7(Image2, { source: { uri: imageUri(attachment) }, style: { width: CONTENT_HEIGHT, height: CONTENT_HEIGHT } }) : /* @__PURE__ */ jsx7(AttachmentLabel, { colors: colors2, icon: /* @__PURE__ */ jsx7(Icon5, { name: "FileText", size: 14, color: colors2.foregroundMuted }), title: attachment.name, subtitle: subtitleFor(attachment) })
+      }
+    ),
+    onRemove ? /* @__PURE__ */ jsx7(
+      Pressable5,
+      {
+        accessibilityRole: "button",
+        accessibilityLabel: removeLabel,
+        ...tooltip("Remove"),
+        onPress: onRemove,
+        disabled: disabled || !showRemove,
+        onHoverIn: () => setCloseHovered(true),
+        onHoverOut: () => setCloseHovered(false),
+        hitSlop: 8,
+        style: {
+          position: "absolute",
+          top: -8,
+          left: -8,
+          width: 24,
+          height: 24,
+          borderRadius: 12,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors2.surface2,
+          borderWidth: 1,
+          borderColor: colors2.border,
+          zIndex: 1,
+          opacity: showRemove ? 1 : 0
+        },
+        children: /* @__PURE__ */ jsx7(Icon5, { name: "X", size: 12, color: colors2.foregroundMuted })
+      }
+    ) : null,
+    open ? /* @__PURE__ */ jsx7(AttachmentPreview, { colors: colors2, attachment, onClose: () => setOpen(false) }) : null
+  ] });
+}
+function PendingAttachmentPill({ colors: colors2, name }) {
+  return /* @__PURE__ */ jsx7(View7, { accessibilityLabel: `Attaching ${name}`, style: frameStyle(colors2), children: /* @__PURE__ */ jsx7(AttachmentLabel, { colors: colors2, icon: /* @__PURE__ */ jsx7(ActivityIndicator3, { size: "small", color: colors2.foregroundMuted }), title: name, subtitle: getFileTypeLabel(name) ?? "" }) });
+}
+function frameStyle(colors2) {
+  return { borderRadius: 6, borderWidth: 1, borderColor: nativeTokens(colors2).borderAccent, overflow: "hidden" };
+}
+function imageUri(attachment) {
+  return `data:${attachment.mimeType};base64,${attachment.data}`;
+}
+function subtitleFor(attachment) {
+  return getFileTypeLabel(attachment.name) ?? (attachment.kind === "text" ? "TXT" : "");
+}
+function AttachmentLabel({ colors: colors2, icon, title, subtitle }) {
+  return /* @__PURE__ */ jsxs6(View7, { style: { height: CONTENT_HEIGHT, maxWidth: 260, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, backgroundColor: colors2.surface1 }, children: [
+    /* @__PURE__ */ jsx7(View7, { style: { width: 18, alignItems: "center", justifyContent: "center" }, children: icon }),
+    /* @__PURE__ */ jsxs6(View7, { style: { minWidth: 0, flexShrink: 1 }, children: [
+      /* @__PURE__ */ jsx7(Text6, { numberOfLines: 1, style: { fontSize: ui(14), color: colors2.foreground }, children: title }),
+      /* @__PURE__ */ jsx7(Text6, { numberOfLines: 1, style: { fontSize: ui(12), color: colors2.foregroundMuted }, children: subtitle })
+    ] })
+  ] });
+}
+function AttachmentPreview({ colors: colors2, attachment, onClose }) {
+  const { height } = useWindowDimensions2();
+  return /* @__PURE__ */ jsx7(Modal3, { title: attachment.name, open: true, onOpenChange: (value) => !value && onClose(), children: /* @__PURE__ */ jsx7(Modal3.Content, { scrollable: attachment.kind !== "text", children: attachment.kind === "image" ? /* @__PURE__ */ jsx7(Image2, { accessibilityLabel: attachment.name, source: { uri: imageUri(attachment) }, resizeMode: "contain", style: { width: "100%", height: Math.round(height * 0.6) } }) : attachment.kind === "text" ? /* @__PURE__ */ jsx7(ScrollView2, { style: { maxHeight: Math.round(height * 0.6) }, children: /* @__PURE__ */ jsx7(Text6, { selectable: true, ...MONO_PROPS, style: { fontFamily: MONO_FONT, fontSize: code(), lineHeight: codeLine(), color: colors2.foreground }, children: attachment.text }) }) : null }) });
+}
+
+// client/keyboard.ts
+import { useEffect as useEffect7, useState as useState8 } from "react";
+import { Dimensions, Keyboard, LayoutAnimation, Platform as Platform9, TurboModuleRegistry as TurboModuleRegistry2, NativeModules as NativeModules2 } from "react-native";
+var IOS_KEYBOARD_MIN_HEIGHT = 120;
+function iosKeyboardHeight(event, screenHeight) {
+  const { height, screenY } = event.endCoordinates;
+  if (!(height > 0) || Number.isFinite(screenY) && screenY >= screenHeight) return 0;
+  return height < IOS_KEYBOARD_MIN_HEIGHT ? 0 : height;
+}
+function useKeyboardHeight() {
+  const [height, setHeight] = useState8(0);
+  useEffect7(() => {
+    if (Platform9.OS === "web") return;
+    const ios = Platform9.OS === "ios";
+    let current2 = 0;
+    const apply = (next, duration) => {
+      if (next === current2) return;
+      current2 = next;
+      if (ios) {
+        LayoutAnimation.configureNext(LayoutAnimation.create(duration || 250, LayoutAnimation.Types.keyboard, LayoutAnimation.Properties.opacity));
+      } else {
+        LayoutAnimation.configureNext(LayoutAnimation.create(duration || 200, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
+      }
+      setHeight(next);
+    };
+    const subscriptions = ios ? [
+      Keyboard.addListener("keyboardWillChangeFrame", (event) => apply(iosKeyboardHeight(event, Dimensions.get("screen").height), event.duration)),
+      Keyboard.addListener("keyboardWillHide", (event) => apply(0, event.duration))
+    ] : [
+      Keyboard.addListener("keyboardDidShow", (event) => apply(Math.max(0, event.endCoordinates.height), void 0)),
+      Keyboard.addListener("keyboardDidHide", () => apply(0, void 0))
+    ];
+    return () => subscriptions.forEach((subscription) => subscription.remove());
+  }, []);
+  return height;
+}
+var initialBottomInset;
+function readInitialBottomInset() {
+  if (initialBottomInset !== void 0) return initialBottomInset;
+  initialBottomInset = null;
+  try {
+    const module = TurboModuleRegistry2.get("RNCSafeAreaContext") ?? NativeModules2.RNCSafeAreaContext;
+    const bottom = module?.getConstants?.().initialWindowMetrics?.insets?.bottom;
+    if (typeof bottom === "number" && Number.isFinite(bottom) && bottom >= 0) initialBottomInset = bottom;
+  } catch {
+  }
+  return initialBottomInset;
+}
+function homeIndicatorInset() {
+  if (Platform9.OS === "web") return 0;
+  const { width, height } = Dimensions.get("screen");
+  const landscape = width > height;
+  const measured = readInitialBottomInset();
+  if (Platform9.OS === "ios") {
+    const pad3 = Platform9.isPad === true;
+    const portrait = measured ?? (!pad3 && Math.max(width, height) >= 812 ? 34 : 0);
+    return landscape && portrait > 0 ? Math.min(portrait, 21) : portrait;
+  }
+  return measured ?? 0;
+}
+
+// client/sent-attachments.ts
+var sent = [];
+function rememberSent(messageId, text, attachments) {
+  if (attachments.length > 0) sent.push({ messageId, text, attachments });
+}
+function sentAttachments(item) {
+  const ids = [item.messageId, item.clientMessageId].filter(Boolean);
+  return (sent.find((entry) => ids.includes(entry.messageId)) ?? sent.find((entry) => entry.text === item.text.trim()))?.attachments ?? [];
+}
+function newMessageId() {
+  return "msg-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
 // client/chat/composer/CommandMenu.tsx
@@ -8250,7 +8334,7 @@ function formatMessageTimestamp(date, now = /* @__PURE__ */ new Date()) {
 }
 
 // client/Markdown.tsx
-import { Fragment as Fragment4, jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
+import { Fragment as Fragment5, jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
 function headingSize(tier) {
   return Math.round(content() * (tier / 14));
 }
@@ -8276,7 +8360,7 @@ var Markdown = memo4(function Markdown2({ colors: colors2, text, streaming = fal
   return /* @__PURE__ */ jsx13(Blocks, { colors: colors2, blocks });
 });
 function Blocks({ colors: colors2, blocks, tight }) {
-  return /* @__PURE__ */ jsx13(Fragment4, { children: blocks.map((block, index) => /* @__PURE__ */ jsx13(BlockView, { colors: colors2, block, last: index === blocks.length - 1, next: blocks[index + 1], tight }, index)) });
+  return /* @__PURE__ */ jsx13(Fragment5, { children: blocks.map((block, index) => /* @__PURE__ */ jsx13(BlockView, { colors: colors2, block, last: index === blocks.length - 1, next: blocks[index + 1], tight }, index)) });
 }
 function bodyStyle(colors2) {
   return { color: colors2.foreground, fontSize: content(), lineHeight: contentLine() };
@@ -8378,7 +8462,7 @@ function isWebUrl(url) {
   return /^https?:\/\//i.test(url.trim());
 }
 function Inlines({ colors: colors2, inlines }) {
-  return /* @__PURE__ */ jsx13(Fragment4, { children: inlines.map((inline, index) => renderInline(colors2, inline, index)) });
+  return /* @__PURE__ */ jsx13(Fragment5, { children: inlines.map((inline, index) => renderInline(colors2, inline, index)) });
 }
 function renderInline(colors2, inline, key) {
   switch (inline.kind) {
@@ -8853,7 +8937,7 @@ function OptionRow({ colors: colors2, question, label, description, selected, di
 }
 
 // client/chat/Permission.tsx
-import { Fragment as Fragment5, jsx as jsx16, jsxs as jsxs15 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx16, jsxs as jsxs15 } from "react/jsx-runtime";
 function PermissionCard({ colors: colors2, permission, api, agentId, compact: compact2 = false, botId, cwd }) {
   const toast = useToast4();
   const allowCommand = useRpc3(commandAllowRpc);
@@ -8915,7 +8999,7 @@ function PermissionCard({ colors: colors2, permission, api, agentId, compact: co
   };
   const title = isPlan ? "Plan" : permission.title ?? permissionTitle(permission) ?? "Permission Required";
   const description = permission.description ?? "";
-  const footer = /* @__PURE__ */ jsxs15(Fragment5, { children: [
+  const footer = /* @__PURE__ */ jsxs15(Fragment6, { children: [
     /* @__PURE__ */ jsx16(Text14, { style: { fontSize: ui(14), marginVertical: 4, color: colors2.foregroundMuted }, children: "How would you like to proceed?" }),
     /* @__PURE__ */ jsxs15(View16, { style: compact2 ? { gap: 8 } : { gap: 8, flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", alignItems: "center", width: "100%" }, children: [
       actions.map((action) => /* @__PURE__ */ jsx16(
@@ -9713,7 +9797,7 @@ function ReviewSkillSheet({ colors: colors2, id, text, sha, files, onClose, onAp
 }
 
 // client/library/SkillPage.tsx
-import { Fragment as Fragment6, jsx as jsx21, jsxs as jsxs20 } from "react/jsx-runtime";
+import { Fragment as Fragment7, jsx as jsx21, jsxs as jsxs20 } from "react/jsx-runtime";
 var skillQueryKey = (id) => ["paseo-bots", "library-skill", id];
 function updateSource(source) {
   if (source.startsWith("github.com/")) return source.slice("github.com/".length);
@@ -9745,7 +9829,7 @@ function SkillPage({ colors: colors2, skill, bots, showTitle, onPatch, onToggleB
       setUpdating(false);
     }
   };
-  return /* @__PURE__ */ jsxs20(Fragment6, { children: [
+  return /* @__PURE__ */ jsxs20(Fragment7, { children: [
     showTitle ? /* @__PURE__ */ jsx21(PageTitle, { colors: colors2, title: skill.id }) : null,
     needsReview && file.data && !file.data.missing ? /* @__PURE__ */ jsxs20(View21, { style: { marginBottom: 24, gap: 12 }, children: [
       /* @__PURE__ */ jsx21(
@@ -9825,7 +9909,7 @@ function SkillPage({ colors: colors2, skill, bots, showTitle, onPatch, onToggleB
 }
 
 // client/chat/stream/ProposalCard.tsx
-import { Fragment as Fragment7, jsx as jsx22, jsxs as jsxs21 } from "react/jsx-runtime";
+import { Fragment as Fragment8, jsx as jsx22, jsxs as jsxs21 } from "react/jsx-runtime";
 var proposalQueryKey = (id) => ["paseo-bots", "proposal", id];
 var OUTCOME = { pending: "pending", accepted: "approved", dismissed: "rejected" };
 function ProposalCard({ colors: colors2, compact: compact2, proposalId }) {
@@ -9887,7 +9971,7 @@ function ProposalCard({ colors: colors2, compact: compact2, proposalId }) {
       setBusy(null);
     }
   };
-  const footer = proposal.status === "pending" ? /* @__PURE__ */ jsxs21(Fragment7, { children: [
+  const footer = proposal.status === "pending" ? /* @__PURE__ */ jsxs21(Fragment8, { children: [
     view.warnings.length ? /* @__PURE__ */ jsx22(Alert2, { colors: colors2, variant: "warning", title: "Check these first", description: view.warnings }) : null,
     view.notes.map((note) => /* @__PURE__ */ jsx22(Text20, { style: { fontSize: ui(14), color: colors2.foregroundMuted }, children: note }, note)),
     /* @__PURE__ */ jsxs21(View22, { style: compact2 ? { gap: 8, marginTop: 4 } : { gap: 8, marginTop: 4, flexDirection: "row", flexWrap: "wrap", alignItems: "center" }, children: [
@@ -9981,7 +10065,7 @@ function RoutineRunCard({ colors: colors2, card, onOpenChat }) {
 }
 
 // client/chat/stream/rows.tsx
-import { Fragment as Fragment8, jsx as jsx24, jsxs as jsxs23 } from "react/jsx-runtime";
+import { Fragment as Fragment9, jsx as jsx24, jsxs as jsxs23 } from "react/jsx-runtime";
 var METADATA_SIZE = 13;
 var TIMESTAMP_REVEAL_MS = 3e3;
 function RowFrame({ gapBelow, highlight, children }) {
@@ -10004,7 +10088,7 @@ function RowContent({ row, context, compactBottom }) {
       const proposalId = proposalIdOf(row);
       if (proposalId) return /* @__PURE__ */ jsx24(ProposalCard, { colors: colors2, compact: context.compact, proposalId });
       const signIns = appSignIns(row);
-      if (signIns.length) return /* @__PURE__ */ jsx24(Fragment8, { children: signIns.map((signIn) => /* @__PURE__ */ jsx24(ConnectCard, { colors: colors2, signIn, since: row.timestamp, agentId: context.agentId, botId: context.botId }, signIn.url)) });
+      if (signIns.length) return /* @__PURE__ */ jsx24(Fragment9, { children: signIns.map((signIn) => /* @__PURE__ */ jsx24(ConnectCard, { colors: colors2, signIn, since: row.timestamp, agentId: context.agentId, botId: context.botId }, signIn.url)) });
       return /* @__PURE__ */ jsx24(ToolCallRow, { colors: colors2, compact: context.compact, cwd: context.cwd, name: row.name, status: row.status, error: row.error, detail: row.detail, metadata: row.metadata });
     }
     case "speak":
@@ -10104,7 +10188,7 @@ var ToolCallRow = memo5(function ToolCallRow2({ colors: colors2, compact: compac
     [colors2, name, detail, presentation.errorText, presentation.isLoadingDetails, maxDetailHeight]
   );
   if (presentation.isPlan && detail.type === "plan") return /* @__PURE__ */ jsx24(PlanCard, { colors: colors2, text: detail.text, outcome: presentation.planOutcome });
-  return /* @__PURE__ */ jsxs23(Fragment8, { children: [
+  return /* @__PURE__ */ jsxs23(Fragment9, { children: [
     /* @__PURE__ */ jsx24(
       ExpandableBadge,
       {
@@ -10253,7 +10337,7 @@ function LiveElapsed({ colors: colors2, startedAt }) {
 }
 
 // client/chat/Stream.tsx
-import { Fragment as Fragment9, jsx as jsx25, jsxs as jsxs24 } from "react/jsx-runtime";
+import { Fragment as Fragment10, jsx as jsx25, jsxs as jsxs24 } from "react/jsx-runtime";
 var WEB_NEAR_BOTTOM = 64;
 var NATIVE_NEAR_BOTTOM = 32;
 var HISTORY_START_THRESHOLD = 96;
@@ -10464,7 +10548,7 @@ function ChatStream({ colors: colors2, chat, api, agentId, compact: compact2, pl
   ] });
 }
 var StreamItem = memo6(function StreamItem2({ item, context, typeVersion }) {
-  return /* @__PURE__ */ jsxs24(Fragment9, { children: [
+  return /* @__PURE__ */ jsxs24(Fragment10, { children: [
     /* @__PURE__ */ jsx25(RowFrame, { gapBelow: item.gapBelow, highlight: context.highlightKey === item.row.key ? context.colors.surface2 : void 0, children: /* @__PURE__ */ jsx25(RowContent, { row: item.row, context, compactBottom: item.compactBottom }) }, typeVersion),
     item.footer ? /* @__PURE__ */ jsx25(CompletedTurnFooter, { colors: context.colors, footer: item.footer, voice: context.voice }) : null
   ] });
@@ -10554,8 +10638,8 @@ function ArchivedCallout({ colors: colors2, compact: compact2 }) {
 }
 
 // client/ChatPane.tsx
-import { Fragment as Fragment10, jsx as jsx26, jsxs as jsxs25 } from "react/jsx-runtime";
-function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, onImported, nativeChat: NativeChat, nativeCwd, onSelectChat, botWorkspace, draftId }) {
+import { Fragment as Fragment11, jsx as jsx26, jsxs as jsxs25 } from "react/jsx-runtime";
+function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, onImported, nativeChat: NativeChat, onSelectChat, botWorkspace, draftId }) {
   const running = chat.agent?.status === "running" || chat.agent?.status === "initializing";
   const empty = chat.entries.length === 0 && !chat.loading && !chat.error && (chat.agent?.pendingPermissions.length ?? 0) === 0;
   const title = chatId ? displayTitle(chat.agent?.title) : "New chat";
@@ -10585,7 +10669,7 @@ function ChatPane({ colors: colors2, bot, host: host2, chat, chatId, panelOpen, 
       chat.agent.cwd,
       ". New chats use the current workspace."
     ] }) : null,
-    useNativeChat && NativeChat ? /* @__PURE__ */ jsx26(NativeChat, { serverId: host2.key, botId: bot.id, agentId: chatId, draftId, workspaceId: chat.agent?.workspaceId ?? botWorkspace?.id, cwd: chat.agent?.cwd || botWorkspace?.directory || bot.cwd || nativeCwd || "", provider: bot.provider, model: bot.model, modeId: bot.modeId, thinkingOptionId: bot.thinkingOptionId, active: !layout.compact || !panelOpen, onSelectChat: (id, draftId2) => onSelectChat?.(id, draftId2), importLabels: { [BOT_LABEL]: bot.id }, onImported, onStart }) : chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
+    useNativeChat && NativeChat ? /* @__PURE__ */ jsx26(NativeChat, { serverId: host2.key, botId: bot.id, agentId: chatId, draftId, workspaceId: chat.agent?.workspaceId ?? botWorkspace?.id, cwd: chat.agent?.cwd || botWorkspace?.directory || bot.cwd || "", provider: bot.provider, model: bot.model, modeId: bot.modeId, thinkingOptionId: bot.thinkingOptionId, active: !layout.compact || !panelOpen, onSelectChat: (id, draftId2) => onSelectChat?.(id, draftId2), importLabels: { [BOT_LABEL]: bot.id, ...botWorkspace?.chatContext ? { [CHAT_CONTEXT_LABEL]: botWorkspace.chatContext } : {} }, onImported, onStart }) : chatId === null || empty ? /* @__PURE__ */ jsxs25(View26, { style: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }, children: [
       /* @__PURE__ */ jsx26(Avatar, { avatar: bot.avatar, size: 56 }),
       /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foreground, fontSize: ui(18), fontWeight: "500" }, children: bot.name }),
       bot.description ? /* @__PURE__ */ jsx26(Text24, { style: { color: colors2.foregroundMuted, fontSize: ui(14), textAlign: "center", maxWidth: 420 }, children: bot.description }) : null
@@ -10618,7 +10702,7 @@ function Header({ colors: colors2, title, subtitle, hostBadge, compact: compact2
         hostBadge ? separator : null,
         hostBadge
       ] })
-    ] }) : /* @__PURE__ */ jsxs25(Fragment10, { children: [
+    ] }) : /* @__PURE__ */ jsxs25(Fragment11, { children: [
       /* @__PURE__ */ jsx26(Text24, { numberOfLines: 1, style: { flexShrink: 1, fontSize: ui(14), fontWeight: "300", color: colors2.foreground }, children: title }),
       subtitle !== title ? /* @__PURE__ */ jsxs25(Text24, { numberOfLines: 1, style: { flexShrink: 1, fontSize: ui(14), color: colors2.foregroundMuted }, children: [
         subtitle,
@@ -10760,7 +10844,7 @@ import { useToast as useToast9 } from "@getpaseo/plugin/client/react-native";
 import { SettingsAction as SettingsAction5, SettingsCard as SettingsCard6, SettingsRow as SettingsRow2, SettingsSection as SettingsSection5 } from "@getpaseo/plugin/client/ui";
 import { useState as useState26 } from "react";
 import { View as View28 } from "react-native";
-import { Fragment as Fragment11, jsx as jsx28, jsxs as jsxs26 } from "react/jsx-runtime";
+import { Fragment as Fragment12, jsx as jsx28, jsxs as jsxs26 } from "react/jsx-runtime";
 var STATUS_TEXT = {
   connected: "Connected",
   pending: "Waiting for sign-in",
@@ -10788,7 +10872,7 @@ function AppPage({ colors: colors2, app, accounts, bots, showTitle, onToggleBot,
       toast.error(`Couldn't disconnect: ${errorText(error)}`);
     }
   };
-  return /* @__PURE__ */ jsxs26(Fragment11, { children: [
+  return /* @__PURE__ */ jsxs26(Fragment12, { children: [
     showTitle ? /* @__PURE__ */ jsx28(PageTitle, { colors: colors2, title: app.name }) : null,
     /* @__PURE__ */ jsx28(SettingsSection5, { title: "Accounts", info: "The sign-ins Composio keeps for this app on this host. Name them to tell them apart; bots pick an account by its name.", children: /* @__PURE__ */ jsxs26(SettingsCard6, { children: [
       accounts.map((account) => /* @__PURE__ */ jsx28(SettingsRow2, { label: accountLabel(account, app.name), hint: [account.alias ? account.name : null, STATUS_TEXT[account.status]].filter(Boolean).join(" \xB7 "), children: /* @__PURE__ */ jsxs26(View28, { style: { flexDirection: "row", gap: 4 }, children: [
@@ -10825,13 +10909,13 @@ import { openExternalUrl as openExternalUrl3, useRpc as useRpc9 } from "@getpase
 import { SettingsAction as SettingsAction6, SettingsCard as SettingsCard7, SettingsRow as SettingsRow3, SettingsSection as SettingsSection6 } from "@getpaseo/plugin/client/ui";
 import { useState as useState27 } from "react";
 import { View as View29 } from "react-native";
-import { Fragment as Fragment12, jsx as jsx29, jsxs as jsxs27 } from "react/jsx-runtime";
+import { Fragment as Fragment13, jsx as jsx29, jsxs as jsxs27 } from "react/jsx-runtime";
 var SHOWN = 50;
 var COMPOSIO_KEYS_URL = "https://platform.composio.dev";
 function AppsPage({ colors: colors2, showTitle, pending: pending2, onConnect }) {
   const status = useAppsStatus();
   const configured = status.data?.configured ?? false;
-  return /* @__PURE__ */ jsxs27(Fragment12, { children: [
+  return /* @__PURE__ */ jsxs27(Fragment13, { children: [
     showTitle ? /* @__PURE__ */ jsx29(PageTitle, { colors: colors2, title: "Connected apps" }) : null,
     status.isLoading ? /* @__PURE__ */ jsx29(CardNote, { colors: colors2, loading: true, text: "Loading..." }) : configured ? /* @__PURE__ */ jsx29(Catalog, { colors: colors2, pending: pending2, onConnect, keyHint: status.data?.keyHint ?? null }) : /* @__PURE__ */ jsx29(Setup, { colors: colors2 })
   ] });
@@ -10894,7 +10978,7 @@ function Catalog({ colors: colors2, pending: pending2, onConnect, keyHint }) {
   const connected = new Set((accounts.data?.accounts ?? []).filter((account) => account.status === "connected").map((account) => account.slug));
   const matches = apps.filter((app) => matchesQuery(query, app.name, app.slug, app.description));
   const shown = matches.slice(0, SHOWN);
-  return /* @__PURE__ */ jsxs27(Fragment12, { children: [
+  return /* @__PURE__ */ jsxs27(Fragment13, { children: [
     /* @__PURE__ */ jsx29(View29, { style: { marginBottom: 12 }, children: /* @__PURE__ */ jsx29(SearchField, { colors: colors2, value: query, onChangeText: setQuery, placeholder: "Search apps" }) }),
     /* @__PURE__ */ jsx29(SettingsSection6, { title: "Apps", trailing: apps.length ? /* @__PURE__ */ jsx29(SectionMeta, { colors: colors2, text: `${apps.length.toLocaleString()} apps` }) : void 0, children: /* @__PURE__ */ jsxs27(SettingsCard7, { children: [
       catalog.isLoading ? /* @__PURE__ */ jsx29(CardNote, { colors: colors2, loading: true, text: "Loading apps..." }) : null,
@@ -11226,7 +11310,7 @@ function ImportSheet({ colors: colors2, onClose, onImport }) {
 }
 
 // client/library/McpPage.tsx
-import { Fragment as Fragment13, jsx as jsx32, jsxs as jsxs30 } from "react/jsx-runtime";
+import { Fragment as Fragment14, jsx as jsx32, jsxs as jsxs30 } from "react/jsx-runtime";
 function keysHint(server) {
   const { config } = server;
   const keys = Object.keys(config.type === "stdio" ? config.env : config.headers);
@@ -11251,7 +11335,7 @@ function McpPage({ colors: colors2, server, bots, otherNames, showTitle, onPatch
   const tested = mcpServerTested(server);
   const tools = server.tools ?? [];
   const toolsMeta = testing ? "Connecting..." : server.checkedAt ? `${server.tools ? `${tools.length} tools \xB7 ` : ""}checked ${relativeTime(server.checkedAt)}` : "";
-  return /* @__PURE__ */ jsxs30(Fragment13, { children: [
+  return /* @__PURE__ */ jsxs30(Fragment14, { children: [
     showTitle ? /* @__PURE__ */ jsx32(PageTitle, { colors: colors2, title: server.name }) : null,
     !server.enabled && !tested ? /* @__PURE__ */ jsxs30(View32, { style: { marginBottom: 24, gap: 12 }, children: [
       /* @__PURE__ */ jsx32(Alert2, { colors: colors2, variant: "warning", title: "Test before bots use it", description: "New servers arrive switched off. The test starts it on this host and lists its tools; it turns on once it connects." }),
@@ -11327,7 +11411,7 @@ function McpPage({ colors: colors2, server, bots, otherNames, showTitle, onPatch
 }
 
 // client/library/LibraryView.tsx
-import { Fragment as Fragment14, jsx as jsx33, jsxs as jsxs31 } from "react/jsx-runtime";
+import { Fragment as Fragment15, jsx as jsx33, jsxs as jsxs31 } from "react/jsx-runtime";
 var LIST_WIDTH = 320;
 function LibraryView({ colors: colors2, layout, values, commit, target, onTarget: setTarget, onBack, bottomInset }) {
   const compact2 = layout.compact;
@@ -11525,7 +11609,7 @@ function LibraryView({ colors: colors2, layout, values, commit, target, onTarget
           scrollPage
         ] }) }) : null
       ] })
-    ) : /* @__PURE__ */ jsxs31(Fragment14, { children: [
+    ) : /* @__PURE__ */ jsxs31(Fragment15, { children: [
       /* @__PURE__ */ jsx33(View33, { style: { width: LIST_WIDTH, borderRightWidth: 1, borderRightColor: colors2.border, backgroundColor: nativeTokens(colors2).surfaceSidebar }, children: list2 }),
       /* @__PURE__ */ jsx33(View33, { style: { flex: 1, minWidth: 0 }, children: scrollPage })
     ] }),
@@ -11837,21 +11921,74 @@ function TeamSheet({
   ] }) });
 }
 
+// client/teams/tabChats.ts
+import { useRef as useRef16 } from "react";
+var KEY = "paseo-bots:tab-chats:";
+function parse2(value) {
+  try {
+    const saved = JSON.parse(value ?? "{}");
+    if (!saved || typeof saved !== "object") return {};
+    const entries = Object.entries(saved).filter(
+      ([, chat]) => typeof chat?.botId === "string" && (chat.chatId === null || typeof chat.chatId === "string") && (chat.draftId === void 0 || typeof chat.draftId === "string")
+    );
+    return Object.fromEntries(entries.map(([tab, chat]) => [tab, { botId: chat.botId, chatId: chat.chatId, ...chat.draftId ? { draftId: chat.draftId } : {} }]));
+  } catch {
+    return {};
+  }
+}
+function useTabChats(scope) {
+  const key = KEY + scope;
+  const state = useRef16(null);
+  if (state.current?.key !== key) {
+    const loaded2 = { key, chats: parse2(readItemSync(key)) };
+    state.current = loaded2;
+    void readItem(key).then((value) => {
+      if (state.current === loaded2) loaded2.chats = { ...parse2(value), ...loaded2.chats };
+    });
+  }
+  const current2 = state.current;
+  return {
+    get: (tabId) => current2.chats[tabId],
+    remember(tabId, chat) {
+      const previous = current2.chats[tabId];
+      if (previous?.botId === chat.botId && previous.chatId === chat.chatId && previous.draftId === chat.draftId) return;
+      current2.chats = { ...current2.chats, [tabId]: { botId: chat.botId, chatId: chat.chatId, ...chat.draftId ? { draftId: chat.draftId } : {} } };
+      void writeItem(key, JSON.stringify(current2.chats));
+    }
+  };
+}
+
 // client/teams/TeamTabs.tsx
 import { Icon as Icon19, ScrollView as ScrollView8 } from "@getpaseo/plugin/client/react-native";
-import { useRef as useRef16 } from "react";
+import { useRef as useRef17 } from "react";
 import { Pressable as Pressable21, Text as Text29, View as View37 } from "react-native";
+
+// client/teams/tabStatus.ts
+import { useQueries } from "@tanstack/react-query";
+function useTabBuckets(tabs, resolveHost2) {
+  const bots = tabs.flatMap((tab) => tab.bots);
+  const results = useQueries({ queries: bots.map((bot) => botChatsQuery(resolveHost2(bot.hostId), bot.id)) });
+  const chats = new Map(bots.map((bot, index) => [bot.id, results[index]?.data ?? []]));
+  return tabBuckets(tabs, (botId) => chats.get(botId) ?? []);
+}
+
+// client/teams/TeamTabs.tsx
 import { jsx as jsx37, jsxs as jsxs35 } from "react/jsx-runtime";
 function tabLabel(tab) {
-  return tab.group ? tab.group.name || "Untitled team" : "Other bots";
+  return tab.group ? tab.group.name || "Untitled team" : "All bots";
 }
-function TabIcon({ colors: colors2, tab, highlighted }) {
-  return tab.group ? /* @__PURE__ */ jsx37(TeamLogo, { group: tab.group, size: 16, dark: nativeTokens(colors2).dark }) : /* @__PURE__ */ jsx37(Icon19, { name: "Bot", size: 14, color: highlighted ? colors2.foreground : colors2.foregroundMuted });
+function TabIcon({ colors: colors2, tab, highlighted, bucket, backdrop }) {
+  const tokens = nativeTokens(colors2);
+  return /* @__PURE__ */ jsxs35(View37, { style: { position: "relative", width: 16, height: 16, alignItems: "center", justifyContent: "center" }, children: [
+    tab.group ? /* @__PURE__ */ jsx37(TeamLogo, { group: tab.group, size: 16, dark: tokens.dark }) : /* @__PURE__ */ jsx37(Icon19, { name: "Bot", size: 14, color: highlighted ? colors2.foreground : colors2.foregroundMuted }),
+    bucket ? /* @__PURE__ */ jsx37(StatusBadge2, { colors: colors2, tokens, bucket, backdrop }) : null
+  ] });
 }
-function TeamTabsRow({ colors: colors2, tabs, openTab, onTab, onTeamMenu, onNewTeam }) {
+function TeamTabsRow({ colors: colors2, tabs, openTab, onTab, onTeamMenu, onNewTeam, resolveHost: resolveHost2 }) {
   const add = useHover();
+  const buckets = useTabBuckets(tabs, resolveHost2);
   return /* @__PURE__ */ jsxs35(View37, { accessibilityRole: "tablist", style: { height: 36, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors2.border, backgroundColor: colors2.surface0 }, children: [
-    /* @__PURE__ */ jsx37(ScrollView8, { horizontal: true, showsHorizontalScrollIndicator: false, style: { flexGrow: 0, flexShrink: 1 }, contentContainerStyle: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }, children: tabs.map((tab) => /* @__PURE__ */ jsx37(TabChip, { colors: colors2, tab, active: tab.id === openTab.id, onPress: () => onTab(tab.id), onMenu: tab.group ? (anchor) => onTeamMenu(tab.group, anchor) : void 0 }, tab.id)) }),
+    /* @__PURE__ */ jsx37(ScrollView8, { horizontal: true, showsHorizontalScrollIndicator: false, style: { flexGrow: 0, flexShrink: 1 }, contentContainerStyle: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }, children: tabs.map((tab) => /* @__PURE__ */ jsx37(TabChip, { colors: colors2, tab, bucket: buckets[tab.id], active: tab.id === openTab.id, onPress: () => onTab(tab.id), onMenu: tab.group ? (anchor) => onTeamMenu(tab.group, anchor) : void 0 }, tab.id)) }),
     /* @__PURE__ */ jsx37(View37, { style: { paddingHorizontal: 4 }, children: /* @__PURE__ */ jsx37(
       Pressable21,
       {
@@ -11866,15 +12003,16 @@ function TeamTabsRow({ colors: colors2, tabs, openTab, onTab, onTeamMenu, onNewT
     ) })
   ] });
 }
-function TabChip({ colors: colors2, tab, active, onPress, onMenu }) {
+function TabChip({ colors: colors2, tab, bucket, active, onPress, onMenu }) {
   const { hovered, hoverProps } = useHover();
   const label = tabLabel(tab);
   const highlighted = active || hovered;
+  const background = active ? colors2.surface2 : hovered ? colors2.surface1 : colors2.surface0;
   return /* @__PURE__ */ jsxs35(
     Pressable21,
     {
       accessibilityRole: "tab",
-      accessibilityLabel: label,
+      accessibilityLabel: bucket ? `${label}, ${BUCKET_LABELS[bucket]}` : label,
       accessibilityState: { selected: active },
       ...tooltip(label, "bottom", { delay: 400 }),
       onPress,
@@ -11885,21 +12023,22 @@ function TabChip({ colors: colors2, tab, active, onPress, onMenu }) {
         { userSelect: "none" }
       ],
       children: [
-        /* @__PURE__ */ jsx37(View37, { style: { width: 16, height: 16, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx37(TabIcon, { colors: colors2, tab, highlighted }) }),
+        /* @__PURE__ */ jsx37(View37, { style: { width: 16, height: 16, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx37(TabIcon, { colors: colors2, tab, highlighted, bucket, backdrop: background }) }),
         /* @__PURE__ */ jsx37(Text29, { numberOfLines: 1, style: { flexShrink: 1, minWidth: 0, fontSize: ui(14), color: highlighted ? colors2.foreground : colors2.foregroundMuted }, children: label })
       ]
     }
   );
 }
-function TeamTabSwitcher({ colors: colors2, tabs, openTab, onTab, onNewTeam }) {
+function TeamTabSwitcher({ colors: colors2, tabs, openTab, onTab, onNewTeam, resolveHost: resolveHost2 }) {
   const menu = useMenu();
-  const ref = useRef16(null);
+  const buckets = useTabBuckets(tabs, resolveHost2);
+  const ref = useRef17(null);
   const open = () => void measureAnchor(ref).then(
     (anchor) => menu.open({
       anchor: anchor ?? { x: 0, y: 0, width: 0, height: 0 },
       title: "Teams",
       entries: [
-        ...tabs.map((tab) => ({ label: tabLabel(tab), leading: /* @__PURE__ */ jsx37(TabIcon, { colors: colors2, tab, highlighted: true }), selected: tab.id === openTab.id, onSelect: () => onTab(tab.id) })),
+        ...tabs.map((tab) => ({ label: tabLabel(tab), leading: /* @__PURE__ */ jsx37(TabIcon, { colors: colors2, tab, highlighted: true, bucket: buckets[tab.id], backdrop: colors2.surface1 }), selected: tab.id === openTab.id, onSelect: () => onTab(tab.id) })),
         { kind: "separator" },
         { label: "New team", icon: "Plus", onSelect: onNewTeam }
       ]
@@ -11915,7 +12054,7 @@ function TeamTabSwitcher({ colors: colors2, tabs, openTab, onTab, onNewTeam }) {
       style: ({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 8, backgroundColor: pressed ? colors2.surface1 : "transparent" }),
       children: [
         /* @__PURE__ */ jsxs35(View37, { style: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 4 }, children: [
-          /* @__PURE__ */ jsx37(View37, { style: { flexShrink: 0 }, children: /* @__PURE__ */ jsx37(TabIcon, { colors: colors2, tab: openTab, highlighted: true }) }),
+          /* @__PURE__ */ jsx37(View37, { style: { flexShrink: 0 }, children: /* @__PURE__ */ jsx37(TabIcon, { colors: colors2, tab: openTab, highlighted: true, bucket: buckets[openTab.id], backdrop: colors2.surface0 }) }),
           /* @__PURE__ */ jsx37(Text29, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(14), color: colors2.foreground }, children: tabLabel(openTab) })
         ] }),
         /* @__PURE__ */ jsx37(Icon19, { name: "ChevronDown", size: 14, color: colors2.foregroundMuted })
@@ -12041,7 +12180,7 @@ function AppAccessSheet({
 }
 
 // client/panel/AppsPicker.tsx
-import { Fragment as Fragment15, jsx as jsx39, jsxs as jsxs37 } from "react/jsx-runtime";
+import { Fragment as Fragment16, jsx as jsx39, jsxs as jsxs37 } from "react/jsx-runtime";
 var STATUS_HINT = { connected: null, pending: "Waiting for sign-in", failed: "Sign-in failed. Connect it again in Skills & Tools." };
 function ruleHint(rule, accounts, appName) {
   if (!rule) return null;
@@ -12072,7 +12211,7 @@ function AppsPicker({ colors: colors2, bot, localHost, onPatch }) {
           host2.isLocal && status.data && !configured ? /* @__PURE__ */ jsx39(CardNote, { colors: colors2, text: "Not set up yet" }) : null,
           host2.isLocal && configured && accounts.isLoading ? /* @__PURE__ */ jsx39(CardNote, { colors: colors2, loading: true, text: "Loading..." }) : null,
           host2.isLocal && configured && !accounts.isLoading && apps.length === 0 ? /* @__PURE__ */ jsx39(CardNote, { colors: colors2, text: "No apps connected yet" }) : null,
-          host2.isLocal && configured ? apps.map((app) => /* @__PURE__ */ jsx39(PressableRow, { colors: colors2, accessibilityLabel: `${app.name} tools and account`, onPress: () => setEditing(app.slug), children: ({ hovered }) => /* @__PURE__ */ jsxs37(Fragment15, { children: [
+          host2.isLocal && configured ? apps.map((app) => /* @__PURE__ */ jsx39(PressableRow, { colors: colors2, accessibilityLabel: `${app.name} tools and account`, onPress: () => setEditing(app.slug), children: ({ hovered }) => /* @__PURE__ */ jsxs37(Fragment16, { children: [
             /* @__PURE__ */ jsx39(AppLogo, { colors: colors2, app }),
             /* @__PURE__ */ jsx39(RowText, { colors: colors2, label: app.name, hint: STATUS_HINT[app.status] ?? ruleHint(bot.appRules[app.slug], appAccounts(app.slug), app.name) }),
             /* @__PURE__ */ jsx39(Switch, { colors: colors2, label: `Use ${app.name}`, value: bot.apps.includes(app.slug), onValueChange: (on) => toggle(app.slug, on) }),
@@ -12101,7 +12240,7 @@ function AppsPicker({ colors: colors2, bot, localHost, onPatch }) {
 // client/panel/LibraryPicker.tsx
 import { Icon as Icon21 } from "@getpaseo/plugin/client/react-native";
 import { SettingsCard as SettingsCard13, SettingsSection as SettingsSection12 } from "@getpaseo/plugin/client/ui";
-import { Fragment as Fragment16, jsx as jsx40, jsxs as jsxs38 } from "react/jsx-runtime";
+import { Fragment as Fragment17, jsx as jsx40, jsxs as jsxs38 } from "react/jsx-runtime";
 function LibraryPicker({ colors: colors2, bot, library, onPatch, kind, title, info }) {
   const items = kind === "skill" ? library.skills.map((skill) => ({
     id: skill.id,
@@ -12124,7 +12263,7 @@ function LibraryPicker({ colors: colors2, bot, library, onPatch, kind, title, in
   const noun = kind === "skill" ? "skills" : "MCP servers";
   return /* @__PURE__ */ jsx40(SettingsSection12, { title, info, trailing: /* @__PURE__ */ jsx40(SectionLink, { colors: colors2, icon: "ArrowUpRight", label: "Skills & Tools", onPress: () => openLibrary() }), children: /* @__PURE__ */ jsxs38(SettingsCard13, { children: [
     items.length === 0 ? /* @__PURE__ */ jsx40(CardNote, { colors: colors2, text: `No ${noun} in Skills & Tools yet` }) : null,
-    items.map((item) => /* @__PURE__ */ jsx40(PressableRow, { colors: colors2, accessibilityLabel: `Open ${item.label} in Skills & Tools`, onPress: () => openLibrary({ kind, id: item.id }), children: ({ hovered }) => /* @__PURE__ */ jsxs38(Fragment16, { children: [
+    items.map((item) => /* @__PURE__ */ jsx40(PressableRow, { colors: colors2, accessibilityLabel: `Open ${item.label} in Skills & Tools`, onPress: () => openLibrary({ kind, id: item.id }), children: ({ hovered }) => /* @__PURE__ */ jsxs38(Fragment17, { children: [
       /* @__PURE__ */ jsx40(RowText, { colors: colors2, label: item.label, hint: item.enabled ? item.hint : item.offHint, hintLines: 2 }),
       /* @__PURE__ */ jsx40(Switch, { colors: colors2, label: `Use ${item.label}`, value: item.enabled && used.includes(item.id), disabled: !item.enabled, onValueChange: (on) => toggle(item.id, on) }),
       /* @__PURE__ */ jsx40(Icon21, { name: "ChevronRight", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted })
@@ -12133,19 +12272,19 @@ function LibraryPicker({ colors: colors2, bot, library, onPatch, kind, title, in
 }
 
 // client/panel/AgentSections.tsx
-import { Fragment as Fragment17, jsx as jsx41, jsxs as jsxs39 } from "react/jsx-runtime";
+import { Fragment as Fragment18, jsx as jsx41, jsxs as jsxs39 } from "react/jsx-runtime";
 var MANAGED = "__managed__";
 var CUSTOM = "Custom";
 var ABSOLUTE_PATH = /^(\/|~(\/|$)|[A-Za-z]:[\\/]|\\\\)/;
 function AccessSection(props) {
   const { colors: colors2, bot, localHost, onPatch } = props;
   const [advanced, setAdvanced] = useState35(bot.cwd !== null || bot.alwaysAllow.length > 0);
-  return /* @__PURE__ */ jsxs39(Fragment17, { children: [
+  return /* @__PURE__ */ jsxs39(Fragment18, { children: [
     /* @__PURE__ */ jsx41(PaseoToolsSection, { colors: colors2, bot, localHost }),
     /* @__PURE__ */ jsx41(LibraryPicker, { ...props, kind: "mcp", title: "MCP servers", info: "Added on top of the MCP servers the provider already loads. Paseo's own tools are always included. Add and edit servers in Skills & Tools." }),
     /* @__PURE__ */ jsx41(AppsPicker, { colors: colors2, bot, localHost, onPatch }),
     /* @__PURE__ */ jsx41(AdvancedToggle, { colors: colors2, open: advanced, onToggle: () => setAdvanced(!advanced) }),
-    advanced ? /* @__PURE__ */ jsxs39(Fragment17, { children: [
+    advanced ? /* @__PURE__ */ jsxs39(Fragment18, { children: [
       /* @__PURE__ */ jsx41(FolderSection, { ...props }),
       /* @__PURE__ */ jsx41(GrantsSection, { ...props })
     ] }) : null
@@ -12263,7 +12402,7 @@ function ModelSection({ colors: colors2, bot, localHost, onPatch }) {
   const profile = (profiles.data ?? []).find((entry) => entry.provider === bot.provider && (entry.model ?? null) === bot.model);
   const providerPlaceholder = providers.isLoading ? "Loading..." : "Choose a provider";
   const [advanced, setAdvanced] = useState35(bot.hostId !== null);
-  return /* @__PURE__ */ jsxs39(Fragment17, { children: [
+  return /* @__PURE__ */ jsxs39(Fragment18, { children: [
     /* @__PURE__ */ jsx41(SettingsSection13, { title: "Agent", info: "The provider and model each new chat and routine run starts with.", children: /* @__PURE__ */ jsxs39(SettingsCard14, { children: [
       /* @__PURE__ */ jsx41(
         SettingsSelect4,
@@ -12336,7 +12475,7 @@ function PermissionsSection({ colors: colors2, bot, localHost, onPatch }) {
   const provider = providers.data?.find((entry) => entry.provider === bot.provider);
   const modes = provider?.modes ?? [];
   const current2 = modes.find((mode) => mode.id === (bot.modeId ?? provider?.defaultModeId));
-  return /* @__PURE__ */ jsxs39(Fragment17, { children: [
+  return /* @__PURE__ */ jsxs39(Fragment18, { children: [
     /* @__PURE__ */ jsx41(SettingsSection13, { title: "Approval", info: "How much the bot may do before asking you. Also applies to its routines.", children: /* @__PURE__ */ jsx41(SettingsCard14, { children: /* @__PURE__ */ jsx41(
       SettingsSelect4,
       {
@@ -12455,14 +12594,14 @@ function AvatarSheet({ colors: colors2, bot, onClose, onPicture }) {
 }
 
 // client/panel/IdentitySection.tsx
-import { Fragment as Fragment18, jsx as jsx43, jsxs as jsxs41 } from "react/jsx-runtime";
+import { Fragment as Fragment19, jsx as jsx43, jsxs as jsxs41 } from "react/jsx-runtime";
 var DESCRIPTION_MAX = 4e3;
 function IdentitySection({ colors: colors2, bot, onPatch }) {
   const setAvatar = (patch) => onPatch({ avatar: { ...bot.avatar, ...patch } });
   const [sheet, setSheet] = useState37(null);
   const [nameEmpty, setNameEmpty] = useState37(!bot.name.trim());
   const length = bot.description.length;
-  return /* @__PURE__ */ jsxs41(Fragment18, { children: [
+  return /* @__PURE__ */ jsxs41(Fragment19, { children: [
     /* @__PURE__ */ jsx43(SettingsSection15, { title: "Avatar", children: /* @__PURE__ */ jsx43(SettingsCard16, { children: /* @__PURE__ */ jsx43(DrillRow, { colors: colors2, label: "Picture", hint: pictureHint(bot), hintLines: 2, trailing: /* @__PURE__ */ jsx43(Avatar, { avatar: bot.avatar, size: 40 }), onPress: () => setSheet("avatar") }) }) }),
     sheet === "avatar" ? /* @__PURE__ */ jsx43(AvatarEditor, { colors: colors2, bot, setAvatar, onGenerate: () => setSheet("generate"), onClose: () => setSheet(null) }) : null,
     sheet === "generate" ? /* @__PURE__ */ jsx43(
@@ -12531,7 +12670,7 @@ function AvatarEditor({ colors: colors2, bot, setAvatar, onGenerate, onClose }) 
     /* @__PURE__ */ jsxs41(SettingsCard16, { children: [
       /* @__PURE__ */ jsx43(SettingsRow7, { label: "Picture", hint: pictureHint(bot), children: /* @__PURE__ */ jsx43(Avatar, { avatar: bot.avatar, size: 56 }) }),
       /* @__PURE__ */ jsx43(SettingsAction13, { label: "New face", hint: "Draws a different one", actionLabel: "Reroll", onPress: () => setAvatar({ seed: randomSeed(), imageUrl: null }) }),
-      canPickFiles ? /* @__PURE__ */ jsxs41(Fragment18, { children: [
+      canPickFiles ? /* @__PURE__ */ jsxs41(Fragment19, { children: [
         /* @__PURE__ */ jsx43(SettingsAction13, { label: "Upload a picture", hint: "Cropped to a square", actionLabel: "Upload", onPress: upload }),
         /* @__PURE__ */ jsx43(SettingsAction13, { label: "Generate a picture", hint: "Drawn by OpenAI with your key", actionLabel: "Generate", onPress: onGenerate })
       ] }) : null,
@@ -12579,7 +12718,7 @@ import { useRpc as useRpc17 } from "@getpaseo/plugin/client";
 import { copyText as copyText4, Modal as Modal14, useToast as useToast15 } from "@getpaseo/plugin/client/react-native";
 import { SettingsAction as SettingsAction14, SettingsCard as SettingsCard18, SettingsRow as SettingsRow8, SettingsSection as SettingsSection16 } from "@getpaseo/plugin/client/ui";
 import { useQuery as useQuery10, useQueryClient as useQueryClient9 } from "@tanstack/react-query";
-import { useEffect as useEffect21, useRef as useRef17, useState as useState39 } from "react";
+import { useEffect as useEffect21, useRef as useRef18, useState as useState39 } from "react";
 import { ActivityIndicator as ActivityIndicator10, View as View41 } from "react-native";
 
 // client/panel/MemoryActivity.tsx
@@ -12681,7 +12820,7 @@ function LogDay2({ colors: colors2, bot, day, onBack, onClose }) {
 }
 
 // client/panel/KnowledgeSections.tsx
-import { Fragment as Fragment19, jsx as jsx45, jsxs as jsxs43 } from "react/jsx-runtime";
+import { Fragment as Fragment20, jsx as jsx45, jsxs as jsxs43 } from "react/jsx-runtime";
 var kb = (bytes) => (bytes / 1e3).toFixed(1);
 function LocalOnly({ colors: colors2, what }) {
   return /* @__PURE__ */ jsx45(View41, { style: { marginBottom: 24 }, children: /* @__PURE__ */ jsx45(Alert2, { colors: colors2, description: `${what} live on the host that stores this bot, so they only apply while the bot runs there.` }) });
@@ -12689,7 +12828,7 @@ function LocalOnly({ colors: colors2, what }) {
 function SoulSection({ colors: colors2, bot, onPatch }) {
   const [editing, setEditing] = useState39(false);
   const bytes = utf8Bytes(bot.soul);
-  return /* @__PURE__ */ jsxs43(Fragment19, { children: [
+  return /* @__PURE__ */ jsxs43(Fragment20, { children: [
     /* @__PURE__ */ jsx45(SettingsSection16, { title: "Instructions", info: "Comes right after the bot's identity in the system prompt and outranks memory and skills.", children: /* @__PURE__ */ jsxs43(SettingsCard18, { children: [
       /* @__PURE__ */ jsx45(SettingsAction14, { label: "Standing instructions", hint: "How the bot behaves in every chat", actionLabel: "Edit", onPress: () => setEditing(true) }),
       /* @__PURE__ */ jsx45(
@@ -12745,7 +12884,7 @@ function SoulSheet({ colors: colors2, saved, onClose, onSave }) {
 }
 function SkillsSection(props) {
   const host2 = useBotHost(props.bot.hostId, props.localHost);
-  return /* @__PURE__ */ jsxs43(Fragment19, { children: [
+  return /* @__PURE__ */ jsxs43(Fragment20, { children: [
     !host2.isLocal ? /* @__PURE__ */ jsx45(LocalOnly, { colors: props.colors, what: "Skills" }) : null,
     /* @__PURE__ */ jsx45(LibraryPicker, { ...props, kind: "skill", title: "Skills", info: "Switched-on skills are listed in the bot's prompt and read when a task needs them. Add and edit skills in Skills & Tools." })
   ] });
@@ -12768,7 +12907,7 @@ function MemorySection({ colors: colors2, bot, localHost }) {
   const over = data ? data.injectedLines > MEMORY_LINES || data.injectedBytes > MEMORY_BYTES : false;
   const changes = journal.data?.entries.length ?? 0;
   const days = log.data?.days.length ?? 0;
-  return /* @__PURE__ */ jsxs43(Fragment19, { children: [
+  return /* @__PURE__ */ jsxs43(Fragment20, { children: [
     !host2.isLocal ? /* @__PURE__ */ jsx45(LocalOnly, { colors: colors2, what: "Memory files" }) : null,
     /* @__PURE__ */ jsx45(
       SettingsSection16,
@@ -12844,7 +12983,7 @@ function MemorySheet({ colors: colors2, botId, name, onChanged, onClose }) {
   const write = useRpc17(memoryWriteRpc);
   const remove = useRpc17(memoryDeleteRpc);
   const toast = useToast15();
-  const toastRef = useRef17(toast);
+  const toastRef = useRef18(toast);
   toastRef.current = toast;
   const [text, setText] = useState39(null);
   const [saved, setSaved] = useState39("");
@@ -12912,7 +13051,7 @@ function PlaybooksSection({ colors: colors2, bot, onPatch }) {
     onPatch({ playbooks: bot.playbooks.filter((entry) => entry.id !== playbook.id) });
     setEditing(null);
   };
-  return /* @__PURE__ */ jsxs43(Fragment19, { children: [
+  return /* @__PURE__ */ jsxs43(Fragment20, { children: [
     /* @__PURE__ */ jsx45(
       SettingsSection16,
       {
@@ -12972,7 +13111,7 @@ import { SettingsAction as SettingsAction15, SettingsCard as SettingsCard19, Set
 import { useQuery as useQuery11 } from "@tanstack/react-query";
 import { useEffect as useEffect22, useState as useState40 } from "react";
 import { Text as Text31, View as View42 } from "react-native";
-import { Fragment as Fragment20, jsx as jsx46, jsxs as jsxs44 } from "react/jsx-runtime";
+import { Fragment as Fragment21, jsx as jsx46, jsxs as jsxs44 } from "react/jsx-runtime";
 function useDebounced(value, ms) {
   const [debounced, setDebounced] = useState40(value);
   useEffect22(() => {
@@ -13010,7 +13149,7 @@ function OverviewSection({ colors: colors2, bot, library, groups, localHost, onS
     ...appsStatus.data?.configured && host2.isLocal ? bot.apps.map((slug) => `${appNames.get(slug) ?? slug} (app)`) : []
   ];
   const sections = prompt.data?.sections ?? [];
-  return /* @__PURE__ */ jsxs44(Fragment20, { children: [
+  return /* @__PURE__ */ jsxs44(Fragment21, { children: [
     /* @__PURE__ */ jsx46(SettingsSection17, { title: "Setup", children: /* @__PURE__ */ jsx46(SettingsCard19, { children: /* @__PURE__ */ jsx46(SettingsAction15, { label: "Set up with the bot", hint: "Starts a chat where the bot interviews you and proposes its own instructions and memory", actionLabel: "Start", onPress: onSetup }) }) }),
     /* @__PURE__ */ jsx46(SettingsSection17, { title: "About this bot", children: /* @__PURE__ */ jsxs44(SettingsCard19, { children: [
       /* @__PURE__ */ jsx46(DrillRow, { colors: colors2, label: "Summary", hint: "What it does, reaches and won't do", onPress: () => setSheet("summary") }),
@@ -13094,7 +13233,7 @@ import { SettingsAction as SettingsAction16, SettingsCard as SettingsCard20, Set
 import { useQuery as useQuery12, useQueryClient as useQueryClient10 } from "@tanstack/react-query";
 import { useState as useState41 } from "react";
 import { View as View43 } from "react-native";
-import { Fragment as Fragment21, jsx as jsx47, jsxs as jsxs45 } from "react/jsx-runtime";
+import { Fragment as Fragment22, jsx as jsx47, jsxs as jsxs45 } from "react/jsx-runtime";
 function formatNextRun(next, now = Date.now()) {
   const diff = next.getTime() - now;
   if (diff < 6e4) return "soon";
@@ -13185,7 +13324,7 @@ function RoutinesSection({ colors: colors2, bot, localHost, onPatch, flush, onOp
   const now = /* @__PURE__ */ new Date();
   const upcoming = bot.routines.filter((routine) => routine.enabled).flatMap((routine) => upcomingRuns(routine.schedule, new Date(recordOf(routine)?.lastRunAt ?? routine.createdAt), now, UPCOMING).map((at) => ({ at, routine }))).filter(({ at }) => at.getTime() - now.getTime() <= UPCOMING_DAYS * 864e5).sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, UPCOMING);
   const recent = bot.routines.flatMap((routine) => (recordOf(routine)?.runs ?? []).map((entry) => ({ run: entry, routine }))).filter(({ run: run2 }) => !localHost.workspaceDirectory || chats.data?.some((chat) => chat.id === run2.agentId)).sort((a, b) => Date.parse(b.run.startedAt) - Date.parse(a.run.startedAt)).slice(0, RECENT);
-  return /* @__PURE__ */ jsxs45(Fragment21, { children: [
+  return /* @__PURE__ */ jsxs45(Fragment22, { children: [
     records.data?.scheduler === false ? /* @__PURE__ */ jsx47(View43, { style: { marginBottom: 24 }, children: /* @__PURE__ */ jsx47(Alert2, { colors: colors2, variant: "warning", description: "The scheduler on this host is starting" }) }) : null,
     /* @__PURE__ */ jsx47(
       SettingsSection18,
@@ -13199,7 +13338,7 @@ function RoutinesSection({ colors: colors2, bot, localHost, onPatch, flush, onOp
             const record = recordOf(routine);
             const next = nextRun(routine.schedule, new Date(record?.lastRunAt ?? routine.createdAt), now);
             const badge = routineState(routine, next);
-            return /* @__PURE__ */ jsx47(PressableRow, { colors: colors2, accessibilityLabel: `Edit routine ${routine.name}`, onPress: () => setEditing(routine), children: () => /* @__PURE__ */ jsxs45(Fragment21, { children: [
+            return /* @__PURE__ */ jsx47(PressableRow, { colors: colors2, accessibilityLabel: `Edit routine ${routine.name}`, onPress: () => setEditing(routine), children: () => /* @__PURE__ */ jsxs45(Fragment22, { children: [
               /* @__PURE__ */ jsx47(RowText, { colors: colors2, label: routine.name || "Untitled routine", hint: routineMeta(routine, record?.runs.at(-1), next), hintLines: 2 }),
               /* @__PURE__ */ jsxs45(View43, { style: { flexDirection: "row", alignItems: "center", gap: 8 }, children: [
                 /* @__PURE__ */ jsx47(StatusBadge, { colors: colors2, label: badge.label, variant: badge.variant }),
@@ -13410,7 +13549,7 @@ function WebhookRows({ colors: colors2, routineId }) {
     }
   };
   const value = url.data?.url;
-  return /* @__PURE__ */ jsxs45(Fragment21, { children: [
+  return /* @__PURE__ */ jsxs45(Fragment22, { children: [
     /* @__PURE__ */ jsx47(
       SettingsAction16,
       {
@@ -13615,7 +13754,7 @@ function HeaderButton2({ colors: colors2, compact: compact2, icon, label, iconSi
 }
 
 // client/useChat.ts
-import { useCallback as useCallback5, useEffect as useEffect23, useRef as useRef18, useState as useState43 } from "react";
+import { useCallback as useCallback5, useEffect as useEffect23, useRef as useRef19, useState as useState43 } from "react";
 var TIMELINE_PAGE_SIZE = 40;
 async function fullTimeline(api, agentId) {
   const handle = api.agents.ref(agentId);
@@ -13638,7 +13777,7 @@ function message(error) {
 }
 function useChat(api, agentId) {
   const [state, setState] = useState43(EMPTY3);
-  const actions = useRef18({ loadOlder: noop, retry: noop });
+  const actions = useRef19({ loadOlder: noop, retry: noop });
   useEffect23(() => {
     if (!api || !agentId) {
       setState(EMPTY3);
@@ -13771,7 +13910,7 @@ function newUuid() {
 }
 
 // client/BotsSurface.tsx
-import { Fragment as Fragment22, jsx as jsx49, jsxs as jsxs47 } from "react/jsx-runtime";
+import { Fragment as Fragment23, jsx as jsx49, jsxs as jsxs47 } from "react/jsx-runtime";
 var SETUP_PROMPT = "Let's set you up. Interview me one short question at a time about what I want from you, how I like to work, and what you should never do. Then propose standing instructions for yourself and a starting MEMORY.md. Write the memory file once I confirm, and give me the instructions to paste into your Soul settings.";
 var SAVE_DELAY_MS = 600;
 function BotsSurface(props) {
@@ -13780,13 +13919,13 @@ function BotsSurface(props) {
   if (props.botWorkspace && !props.botWorkspace.directory) return /* @__PURE__ */ jsx49(View45, { children: /* @__PURE__ */ jsx49(Text33, { children: "Opening workspace\u2026" }) });
   return /* @__PURE__ */ jsx49(MenuProvider, { colors: colors2, compact: props.layout.compact, children: /* @__PURE__ */ jsx49(AvatarTheme, { dark: nativeTokens(colors2).dark, children: /* @__PURE__ */ jsx49(BotsSurfaceContent, { ...props }) }) });
 }
-function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat, botWorkspace, workspaceBridge: WorkspaceBridge }) {
+function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat, botWorkspace, workspaceBridge: WorkspaceBridge, sidebarFooter }) {
   const { colors: colors2 } = theme;
   const { settings, latest, commit } = useBotSettings();
   const toast = useToast17();
   const menu = useMenu();
   const queryClient = useQueryClient11();
-  const localHost = { id: host2.id, label: host2.label, workspaceDirectory: botWorkspace?.directory };
+  const localHost = { id: host2.id, label: host2.label, workspaceDirectory: botWorkspace?.directory, chatContext: botWorkspace?.chatContext };
   const localProviders = useProviders(useBotHost(null, localHost));
   const resolveHost2 = useHostResolver(localHost);
   const exportBot = useRpc20(exportBotRpc);
@@ -13803,17 +13942,17 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
   const [exporting, setExporting] = useState44(null);
   const [drafts2, setDrafts] = useState44({});
   const [uiOverride, setUiOverride] = useState44(null);
-  const uiRef = useRef19(null);
-  const paneRef = useRef19(null);
+  const uiRef = useRef20(null);
+  const paneRef = useRef20(null);
   const keyboardHeight = useKeyboardHeight();
   const bottomInset = keyboardHeight > 0 ? 0 : homeIndicatorInset();
   const [surfaceWidth, setSurfaceWidth] = useState44(0);
   const [dragWidths, setDragWidths] = useState44({});
   const typeVersion = useTypeScale();
   useChatInvalidation();
-  const draftsRef = useRef19(drafts2);
+  const draftsRef = useRef20(drafts2);
   draftsRef.current = drafts2;
-  const saveTimer = useRef19(null);
+  const saveTimer = useRef20(null);
   const flush = async () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = null;
@@ -13869,7 +14008,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     void flush();
     setLibraryView({ target });
   };
-  const enterLibraryRef = useRef19(enterLibrary);
+  const enterLibraryRef = useRef20(enterLibrary);
   enterLibraryRef.current = enterLibrary;
   useEffect24(
     () => onLibraryTarget((target) => {
@@ -13877,7 +14016,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     }),
     []
   );
-  const back = useRef19({ panel, compact: layout.compact, selection, teamMap, libraryView });
+  const back = useRef20({ panel, compact: layout.compact, selection, teamMap, libraryView });
   back.current = { panel, compact: layout.compact, selection, teamMap, libraryView };
   const goBack = () => {
     const state = back.current;
@@ -13900,7 +14039,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     }
     return false;
   };
-  const goBackRef = useRef19(goBack);
+  const goBackRef = useRef20(goBack);
   goBackRef.current = goBack;
   useEffect24(() => {
     if (Platform21.OS !== "android") return;
@@ -13909,9 +14048,9 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
   }, []);
   useEffect24(() => {
     const intent = takeIntent();
-    if (intent?.kind === "new-bot") setCreating(true);
+    if (intent?.kind === "new-bot") setCreating("new");
   }, []);
-  const initializingGeneral = useRef19(false);
+  const initializingGeneral = useRef20(false);
   useEffect24(() => {
     if (!botWorkspace || settings.status !== "ready" || settings.values.bots.some((bot2) => bot2.id === "vibing-general") || !localProviders.data || initializingGeneral.current) return;
     const ready = localProviders.data.filter((entry) => entry.status === "ready");
@@ -13933,6 +14072,17 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     setLibraryView(null);
     setTeamMap(false);
   }, [host2.id, latest]);
+  const tabChats = useTabChats(`${host2.id}:${botWorkspace?.directory ?? ""}:${botWorkspace?.chatContext ?? "workspace"}`);
+  const selectionRef = useRef20(selection);
+  selectionRef.current = selection;
+  useEffect24(() => {
+    const groups2 = latest.current.status === "ready" ? latest.current.values.groups ?? [] : [];
+    if (!selection || groups2.length === 0) return;
+    for (const tab of tabsOf(selection.botId, groups2)) tabChats.remember(tab, selection);
+    const team = teamOf(selection.botId, groups2);
+    const open = groups2.find((group) => group.id === currentUi().tab);
+    if (open && open !== team) updateUi((current2) => ({ ...current2, tab: team?.id ?? ALL_BOTS_TAB }));
+  }, [selection]);
   if (settings.status !== "ready") {
     return /* @__PURE__ */ jsxs47(View45, { style: { flex: 1, padding: 24, gap: 12, backgroundColor: colors2.surface0, justifyContent: settings.status === "loading" ? "center" : "flex-start", alignItems: settings.status === "loading" ? "center" : "stretch" }, children: [
       settings.status === "loading" ? /* @__PURE__ */ jsx49(ActivityIndicator11, { size: "large", color: colors2.foregroundMuted, accessibilityLabel: "Loading bots" }) : /* @__PURE__ */ jsxs47(Text33, { style: { fontSize: ui(14), color: colors2.statusDanger }, children: [
@@ -13963,10 +14113,28 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
   const select = (next) => {
     setSelection(next);
     setTeamMap(false);
-    const tab = openTab && tabOf(next.botId, groups) !== openTab.id ? tabOf(next.botId, groups) : null;
+    const tab = openTab && !openTab.bots.some((bot) => bot.id === next.botId) ? teamOf(next.botId, groups)?.id ?? ALL_BOTS_TAB : null;
     if (tab || currentUi().collapsed.includes(next.botId)) {
       updateUi((current2) => ({ ...current2, tab: tab ?? current2.tab, collapsed: current2.collapsed.filter((id) => id !== next.botId) }));
     }
+  };
+  const openTeamTab = (tabId) => {
+    updateUi((current2) => ({ ...current2, tab: tabId }));
+    const tab = tabs.find((entry) => entry.id === tabId);
+    if (!tab || layout.compact || selection && tab.bots.some((bot) => bot.id === selection.botId)) return;
+    const before = selection;
+    const chatsOf = async (bot) => {
+      const query = botChatsQuery(resolveHost2(bot.hostId), bot.id);
+      if (!query.enabled) return [];
+      const chats = query.select(await queryClient.ensureQueryData({ queryKey: query.queryKey, queryFn: query.queryFn }));
+      return chats.map((chat) => ({ botId: bot.id, id: chat.id, updatedAt: chat.updatedAt }));
+    };
+    void Promise.all(tab.bots.map((bot) => chatsOf(bot).catch(() => []))).then((lists) => {
+      const target = chatForTab(tab, tabChats.get(tabId), lists.flat());
+      if (!target || selectionRef.current !== before || currentUi().tab !== tabId) return;
+      setSelection(target);
+      setTeamMap(false);
+    });
   };
   const openPanel = (bot, section) => {
     if (selection?.botId !== bot.id) select({ botId: bot.id, chatId: null });
@@ -14057,7 +14225,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
         onMoveDown: moveBot(bot, 1),
         onRename: () => setRenaming(bot),
         onDuplicate: () => duplicate(bot).catch((error) => toast.error(`Couldn't duplicate: ${errorText(error)}`)),
-        onExport: () => setExporting(bot),
+        onExport: () => setExporting({ kind: "bot", bot }),
         onCopyId: () => copy(bot.id, "Bot ID copied"),
         onSaveAsPreset: () => void flush().then(() => commit((values) => ({ ...values, presets: [...values.presets ?? [], presetFromBot(values.bots.find((entry) => entry.id === bot.id) ?? bot)] }))).then((saved) => saved && toast.show(`Saved ${bot.name} as a preset. It's under New bot.`, { variant: "success" })),
         onToggleArchive: () => void updateBot(bot.id, { archived: !bot.archived }),
@@ -14197,6 +14365,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       touch: layout.compact || layout.platform !== "web",
       splash: layout.compact,
       bottomInset,
+      footerSlot: sidebarFooter,
       onToggle: (botId) => updateUi((current2) => ({
         ...current2,
         collapsed: current2.collapsed.includes(botId) ? current2.collapsed.filter((id) => id !== botId) : [...current2.collapsed, botId]
@@ -14204,7 +14373,9 @@ Its chats stay on the host and remain in Paseo's history.`,
       onTogglePinnedSection: () => updateUi((current2) => ({ ...current2, pinnedCollapsed: !current2.pinnedCollapsed })),
       onShowArchived: () => updateUi((current2) => ({ ...current2, showArchived: true })),
       onSelect: select,
-      onNewBot: () => setCreating(true),
+      onNewBot: () => setCreating("new"),
+      onImportBot: () => setCreating("import"),
+      onExportAllBots: allBots.length ? () => setExporting({ kind: "all", bots: allBots, groups }) : void 0,
       onBotMenu: openBotMenu,
       onChatMenu: openChatMenu,
       onDeleteChat: (bot, chat, context) => void deleteChat(bot, chat, context),
@@ -14213,7 +14384,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       onTeamMap: () => setTeamMap(true)
     }
   );
-  const tabProps = openTab ? { colors: colors2, tabs, openTab, onTab: (tab) => updateUi((current2) => ({ ...current2, tab })), onTeamMenu: openTeamMenu, onNewTeam: () => setEditingTeam("new") } : null;
+  const tabProps = openTab ? { colors: colors2, tabs, openTab, onTab: openTeamTab, resolveHost: resolveHost2, onTeamMenu: openTeamMenu, onNewTeam: () => setEditingTeam("new") } : null;
   const pane = teamMap ? /* @__PURE__ */ jsx49(
     TeamMap,
     {
@@ -14295,14 +14466,15 @@ Its chats stay on the host and remain in Paseo's history.`,
       onBack: () => setLibraryView(null)
     }
   ) : null;
-  const workspaceHeader = WorkspaceBridge ? /* @__PURE__ */ jsx49(WorkspaceBridge, { selectedAgentId: selection?.chatId, botId: selection?.botId ?? "vibing-general", onActivate: activateWorkspaceChat }) : null;
+  const localBotIds = allBots.some((bot) => bot.id === "vibing-general") ? allBots.filter((bot) => !bot.hostId || bot.hostId === host2.id).map((bot) => bot.id) : void 0;
+  const workspaceHeader = WorkspaceBridge ? /* @__PURE__ */ jsx49(WorkspaceBridge, { localBotIds, selectedAgentId: selection?.chatId, selectedDraftId: selection?.draftId, botId: selection?.botId ?? "vibing-general", onActivate: activateWorkspaceChat }) : null;
   if (libraryScreen && !layout.compact) {
-    return /* @__PURE__ */ jsxs47(Fragment22, { children: [
+    return /* @__PURE__ */ jsxs47(Fragment23, { children: [
       workspaceHeader,
       /* @__PURE__ */ jsx49(View45, { style: { flex: 1, backgroundColor: colors2.surface0, paddingBottom: keyboardHeight }, children: libraryScreen })
     ] });
   }
-  return /* @__PURE__ */ jsxs47(Fragment22, { children: [
+  return /* @__PURE__ */ jsxs47(Fragment23, { children: [
     workspaceHeader,
     /* @__PURE__ */ jsxs47(
       View45,
@@ -14316,7 +14488,7 @@ Its chats stay on the host and remain in Paseo's history.`,
             selection || teamMap ? /* @__PURE__ */ jsx49(SlideOver, { onClose: () => teamMap ? setTeamMap(false) : setSelection(null), children: pane }) : null,
             settingsPanel ? /* @__PURE__ */ jsx49(SlideOver, { onClose: () => setPanel({ open: false, section: null }), onBack: () => panel.section ? goBack() : false, children: settingsPanel }) : null,
             libraryScreen ? /* @__PURE__ */ jsx49(SlideOver, { onClose: () => setLibraryView(null), children: libraryScreen }) : null
-          ] }) : /* @__PURE__ */ jsxs47(Fragment22, { children: [
+          ] }) : /* @__PURE__ */ jsxs47(Fragment23, { children: [
             tabProps ? /* @__PURE__ */ jsx49(TeamTabsRow, { ...tabProps }) : null,
             /* @__PURE__ */ jsxs47(View45, { style: { flex: 1, flexDirection: "row" }, children: [
               /* @__PURE__ */ jsxs47(View45, { style: { width: columns.list, borderRightWidth: 1, borderRightColor: colors2.border, backgroundColor: nativeTokens(colors2).surfaceSidebar }, children: [
@@ -14351,6 +14523,7 @@ Its chats stay on the host and remain in Paseo's history.`,
             NewBotDialog,
             {
               colors: colors2,
+              importOnly: creating === "import",
               onClose: () => setCreating(false),
               presets: settings.status === "ready" ? settings.values.presets ?? [] : [],
               onCreate: (start) => {
@@ -14361,13 +14534,14 @@ Its chats stay on the host and remain in Paseo's history.`,
               },
               onImport: async (json) => {
                 const { bots, teams } = await importTeam({ json });
-                setCreating(false);
                 const saved = await commit((values) => addImportedBots(values, bots, teams));
+                if (!saved) throw new Error("Unable to save the imported bot. Try again.");
+                setCreating(false);
                 const first = bots[0]?.bot;
                 if (saved && first) {
                   select({ botId: first.id, chatId: null });
                   setPanel({ open: true, section: "overview" });
-                  if (bots.length > 1) toast.show(`Added ${bots.length} bots`, { variant: "success" });
+                  toast.show(bots.length > 1 ? `Added ${bots.length} bots` : "Bot imported", { variant: "success" });
                 }
               }
             }
@@ -14386,7 +14560,7 @@ Its chats stay on the host and remain in Paseo's history.`,
               }
             }
           ) : null,
-          exporting ? /* @__PURE__ */ jsx49(ExportDialog, { colors: colors2, bot: exporting, onClose: () => setExporting(null) }) : null
+          exporting ? /* @__PURE__ */ jsx49(ExportDialog, { colors: colors2, target: exporting, onClose: () => setExporting(null) }) : null
         ]
       }
     )
@@ -14399,17 +14573,6 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
   const allowed = !botWorkspace || host2.isLocal && (!selection.chatId || Boolean(scopedChat));
   const chat = useChat(host2.api, allowed ? selection.chatId : null);
   const ensureHome = useRpc20(ensureBotHomeRpc);
-  const [nativeCwd, setNativeCwd] = useState44("");
-  useEffect24(() => {
-    if (!nativeChat || !host2.isLocal || selection.chatId || bot.cwd) return;
-    let current2 = true;
-    void ensureHome({ botId: bot.id }).then((home) => {
-      if (current2) setNativeCwd(home.path);
-    }).catch((error) => toast.error(`Could not open bot folder: ${errorText(error)}`));
-    return () => {
-      current2 = false;
-    };
-  }, [nativeChat, host2.isLocal, bot.id, bot.cwd, selection.chatId]);
   const compose = useRpc20(systemPromptRpc);
   const mountServers = useRpc20(mountRpc);
   const queryClient = useQueryClient11();
@@ -14424,6 +14587,7 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
     const plugin = host2.isLocal ? await mountServers({ botId: bot.id, agentId }) : {};
     const id = await startBotChat(host2.api, {
       bot,
+      labels: botWorkspace?.chatContext ? { [CHAT_CONTEXT_LABEL]: botWorkspace.chatContext } : {},
       library,
       ...host2.isLocal ? { agentId } : {},
       plugin,
@@ -14450,7 +14614,7 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
     }, 1e3);
     return () => clearTimeout(timer2);
   }, [bot.name, host2.api]);
-  const autoStarted = useRef19(false);
+  const autoStarted = useRef20(false);
   useEffect24(() => {
     if (selection.chatId !== null || !selection.prompt || autoStarted.current || !host2.api) return;
     autoStarted.current = true;
@@ -14464,7 +14628,6 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
     ChatPane,
     {
       nativeChat,
-      nativeCwd: botWorkspace?.directory ?? nativeCwd,
       botWorkspace,
       draftId: selection.draftId,
       onSelectChat,
@@ -14492,13 +14655,13 @@ import { useRpc as useRpc21 } from "@getpaseo/plugin/client";
 import { copyText as copyText7, useToast as useToast18 } from "@getpaseo/plugin/client/react-native";
 import { SettingsAction as SettingsAction18, SettingsCard as SettingsCard22, SettingsSection as SettingsSection19, SettingsSelect as SettingsSelect7, SettingsSwitch as SettingsSwitch7 } from "@getpaseo/plugin/client/ui";
 import { useState as useState45 } from "react";
-import { Fragment as Fragment23, jsx as jsx50, jsxs as jsxs48 } from "react/jsx-runtime";
+import { Fragment as Fragment24, jsx as jsx50, jsxs as jsxs48 } from "react/jsx-runtime";
 function BotsSettings({ theme, host: host2 }) {
   const colors2 = theme.colors;
   const { settings, commit } = useBotSettings();
   if (settings.status !== "ready") return /* @__PURE__ */ jsx50(CardNote, { colors: colors2, text: settings.status === "loading" ? "Loading..." : "Bot settings can't be read.", loading: settings.status === "loading" });
   const values = settings.values;
-  return /* @__PURE__ */ jsxs48(Fragment23, { children: [
+  return /* @__PURE__ */ jsxs48(Fragment24, { children: [
     /* @__PURE__ */ jsx50(
       DefaultsSection,
       {
@@ -14540,7 +14703,7 @@ function DefaultsSection({ localHost, defaults, onChange }) {
         onValueChange: (value) => onChange({ provider: value, model: null, modeId: null, thinkingOptionId: null })
       }
     ),
-    provider ? /* @__PURE__ */ jsxs48(Fragment23, { children: [
+    provider ? /* @__PURE__ */ jsxs48(Fragment24, { children: [
       /* @__PURE__ */ jsx50(SettingsSelect7, { label: "Model", value: defaults.model ?? "", options: [{ label: "Default", value: "" }, ...models.map((entry) => ({ label: entry.label, value: entry.id }))], onValueChange: (value) => onChange({ model: value || null, thinkingOptionId: null }) }),
       /* @__PURE__ */ jsx50(SettingsSelect7, { label: "Mode", value: defaults.modeId ?? "", options: [{ label: "Default", value: "" }, ...(provider.modes ?? []).map((mode) => ({ label: mode.label, value: mode.id }))], onValueChange: (value) => onChange({ modeId: value || null }) })
     ] }) : null,

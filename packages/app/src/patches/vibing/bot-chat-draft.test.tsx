@@ -6,6 +6,7 @@ import type { ImportSessionSheet } from "@/components/import-session-sheet";
 import { act, fireEvent, render, screen, cleanup, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { NativeBotChatDraft } from "./bot-chat-draft";
+import { useCreateFlowStore } from "@/stores/create-flow-store";
 import {
   buildDraftWorkspaceAttachmentScopeKey,
   useWorkspaceAttachmentsStore,
@@ -30,11 +31,21 @@ vi.mock("@/composer", async () => {
       mocks.composer = props;
       const context = useWorkspaceAttachmentsForScopes(props.attachmentScopeKeys);
       mocks.submit = (payload) =>
-        props.onSubmitMessage!({ ...payload, attachments: [...payload.attachments, ...context] });
+        props.onSubmitMessage!({
+          ...payload,
+          attachments: [...payload.attachments, ...context],
+        });
       return <div data-testid="native-composer" />;
     },
   };
 });
+vi.mock("@/plugins", () => ({
+  useHasPluginComposerPills: () => true,
+  PluginComposerPills: ({ agentId }: { agentId: string }) => (
+    <div data-testid="draft-prompts">{agentId}</div>
+  ),
+}));
+vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
 vi.mock("@/composer/dock", () => ({
   ComposerDock: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -75,11 +86,14 @@ vi.mock("@/runtime/host-runtime", () => ({
 }));
 vi.mock("@/utils/encode-images", () => ({ encodeImages: mocks.encodeImages }));
 vi.mock("@/stores/session-store", () => ({
-  useSessionStore: Object.assign(() => null, { getState: () => ({ sessions: {} }) }),
+  useSessionStore: Object.assign(() => null, {
+    getState: () => ({ sessions: {} }),
+  }),
 }));
 
 afterEach(() => {
   cleanup();
+  useCreateFlowStore.getState().clearAll();
   useWorkspaceAttachmentsStore.setState({ attachmentsByScope: {} });
 });
 
@@ -100,7 +114,12 @@ describe("native bot draft", () => {
       />,
     );
     expect(screen.getByTestId("native-composer")).toBeTruthy();
-    const file = { type: "text", text: "context", title: "Notes", mimeType: "text/plain" } as const;
+    const file = {
+      type: "text",
+      text: "context",
+      title: "Notes",
+      mimeType: "text/plain",
+    } as const;
     await act(async () =>
       mocks.submit!({
         text: "Review this",
@@ -174,10 +193,12 @@ it("scopes native drafts to their workspace and resolves the created agent for L
   const view = render(<NativeBotChatDraft {...props} />);
   const first = mocks.composer!.agentId;
   expect(mocks.composer!.workspaceId).toBe("one");
+  expect(screen.getByTestId("draft-prompts").textContent).toBe(first);
   await act(async () => mocks.submit!({ text: "Review", cwd: "/one", attachments: [] }));
   expect(mocks.composer!.resolveLiveDesignAgentId!()).toBe("created-bot-agent");
   view.rerender(<NativeBotChatDraft {...props} cwd="/two" workspaceId="two" />);
   expect(mocks.composer!.agentId).not.toBe(first);
+  expect(screen.getByTestId("draft-prompts").textContent).toBe(mocks.composer!.agentId);
 });
 
 it("submits only this fork draft's history to the new bot chat", async () => {
@@ -285,5 +306,61 @@ it("focuses the new chat composer while its pane is active and idle", async () =
     finishStart("created");
     await sent;
   });
+  view.rerender(<NativeBotChatDraft {...props} active draftId="next-draft" />);
   expect(mocks.composer!.autoFocus).toBe(true);
+});
+
+it("keeps one creation in flight across draft remounts and retries a failed request", async () => {
+  let rejectStart: (reason: Error) => void = () => {};
+  const start = vi.fn(
+    () =>
+      new Promise<string>((_resolve, reject) => {
+        rejectStart = reject;
+      }),
+  );
+  mocks.encodeImages.mockResolvedValue([]);
+  const props = {
+    active: true,
+    serverId: "host",
+    botId: "bot",
+    draftId: "retry",
+    cwd: "/worktree",
+    provider: "codex" as const,
+    onStart: start,
+  };
+  let view = render(<NativeBotChatDraft {...props} />);
+  let first: Promise<void> = Promise.resolve();
+  act(() => {
+    first = mocks.submit!({
+      text: "Review",
+      cwd: "/worktree",
+      attachments: [],
+    });
+  });
+  const failed = expect(first).rejects.toThrow("Try again");
+  await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+  view.unmount();
+  view = render(<NativeBotChatDraft {...props} />);
+  await act(async () => {
+    await expect(
+      mocks.submit!({ text: "Duplicate", cwd: "/worktree", attachments: [] }),
+    ).rejects.toThrow();
+    rejectStart(new Error("Try again"));
+    await failed;
+  });
+  expect(start).toHaveBeenCalledTimes(1);
+  start.mockImplementation(async () => "retried-chat");
+  await act(async () => {
+    await mocks.submit!({
+      text: "Review again",
+      cwd: "/worktree",
+      attachments: [],
+    });
+  });
+  expect(start).toHaveBeenCalledTimes(2);
+  expect(mocks.handoff).toHaveBeenLastCalledWith(
+    "host",
+    "retried-chat",
+    expect.objectContaining({ text: "Review again" }),
+  );
 });

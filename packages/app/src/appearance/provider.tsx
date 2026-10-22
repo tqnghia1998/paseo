@@ -1,3 +1,5 @@
+import { usePathname } from "expo-router";
+import { resolveChatContentMaxWidth } from "@/patches/vibing/chat-appearance";
 import {
   createContext,
   type ReactNode,
@@ -8,12 +10,7 @@ import {
   useState,
 } from "react";
 import { UnistylesRuntime } from "react-native-unistyles";
-import {
-  DEFAULT_THEME_PREFERENCE,
-  resolveContentMaxWidth,
-  useAppSettings,
-  type AppSettings,
-} from "@/hooks/use-settings";
+import { DEFAULT_THEME_PREFERENCE, useAppSettings, type AppSettings } from "@/hooks/use-settings";
 import {
   rememberPluginThemeHost,
   usePluginThemeCatalog,
@@ -58,6 +55,8 @@ function applyTheme({ preference, contributedTheme }: ApplyThemeInput): void {
 
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const { settings, updateSettings, isLoading } = useAppSettings();
+  const pathname = usePathname();
+  const contentMaxWidth = resolveChatContentMaxWidth(settings, pathname);
   const [hasAppliedAppearance, setHasAppliedAppearance] = useState(false);
   const options = usePluginThemeCatalog();
   const selected = useMemo(() => {
@@ -74,7 +73,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
       uiBaseFontSize: settings.uiBaseFontSize,
       contentFontSize: settings.contentFontSize,
       codeFontSize: settings.codeFontSize,
-      contentMaxWidth: resolveContentMaxWidth({ contentMaxWidth: settings.contentMaxWidth }),
+      contentMaxWidth,
       syntaxTheme: settings.syntaxTheme,
     });
     setHasAppliedAppearance(true);
@@ -87,7 +86,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     settings.uiBaseFontSize,
     settings.contentFontSize,
     settings.codeFontSize,
-    settings.contentMaxWidth,
+    contentMaxWidth,
     settings.syntaxTheme,
   ]);
 
