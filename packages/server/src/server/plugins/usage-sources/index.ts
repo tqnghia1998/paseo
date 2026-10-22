@@ -49,7 +49,7 @@ interface AgentReports {
   reports: Map<string, KnownReport>;
 }
 
-/** Owns account identity, ordered logins for each account, and the five-minute fetch cache. */
+/** Owns account identity, ordered logins for each account, and the one-minute fetch cache. */
 export class UsageSourceRegistry {
   private readonly sources = new Map<string, UsageSource>();
   private readonly known = new Map<string, KnownReport>();
@@ -61,7 +61,7 @@ export class UsageSourceRegistry {
 
   constructor(
     private readonly now: () => number = Date.now,
-    private readonly ttlMs = 300_000,
+    private readonly ttlMs = 60_000,
     private readonly logger: Pick<Logger, "warn"> = { warn: console.warn },
     private readonly agents: AgentUsageLookup = { hasAgent: () => false, usageSession: () => null },
     private readonly deadlineMs = 20_000,
