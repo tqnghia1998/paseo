@@ -51,6 +51,18 @@ describe("Codex terminal interactions", () => {
     expect(terminal.turnId("shell-1")).toBe("turn-1");
   });
 
+  it("keeps a still-running command's turn after its turn ends, then forgets it once finished", () => {
+    const terminal = new CodexTerminalInteractions();
+    terminal.track(shell, "turn-1");
+
+    expect(terminal.resetTurn()).toEqual(new Set(["shell-1"]));
+    expect(terminal.track({ ...shell, status: "completed" }).callId).toBe("shell-1");
+    expect(terminal.turnId("shell-1")).toBe("turn-1");
+
+    expect(terminal.resetTurn()).toEqual(new Set());
+    expect(terminal.turnId("shell-1")).toBeUndefined();
+  });
+
   it("attaches early process-only input once its command is known without repeating its mirror", () => {
     const terminal = new CodexTerminalInteractions();
     expect(terminal.input({ ...input, callId: null, source: "codex_event" })).toBeNull();
