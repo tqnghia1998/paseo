@@ -7683,3 +7683,138 @@ describe("Codex interactive resume startup", () => {
     },
   );
 });
+
+// Vibing: Codex background terminals are Shell rows in the subagents track.
+describe("Codex background terminals", () => {
+  // Wire shape captured from codex-cli 0.163.0: the command stays inProgress past turn/completed
+  // and completes on its own once the process exits.
+  function commandItem(status: "inProgress" | "completed", output: string | null) {
+    return {
+      type: "commandExecution",
+      id: "exec-background-1",
+      command: "/bin/zsh -lc 'sleep 30; echo PROBE_DONE'",
+      cwd: "/tmp/repo",
+      processId: "33893",
+      source: "unifiedExecStartup",
+      status,
+      commandActions: [{ type: "unknown", command: "sleep 30; echo PROBE_DONE" }],
+      aggregatedOutput: output,
+      exitCode: status === "completed" ? 0 : null,
+      durationMs: null,
+    };
+  }
+
+  function providerEvents(events: AgentStreamEvent[]) {
+    return events.flatMap((event) => (event.type === "provider_subagent" ? [event.event] : []));
+  }
+
+  test("declares a command still running at turn completion and finishes it later", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    const internals = asInternals(session);
+
+    internals.handleNotification("item/started", {
+      threadId: "test-thread",
+      turnId: "turn-1",
+      item: commandItem("inProgress", null),
+    });
+    expect(providerEvents(events)).toEqual([]);
+
+    internals.handleNotification("turn/completed", {
+      threadId: "test-thread",
+      turn: { id: "turn-1", status: "completed" },
+    });
+    expect(providerEvents(events)).toEqual([
+      expect.objectContaining({
+        type: "upsert",
+        id: "exec-background-1",
+        title: "Shell",
+        status: "running",
+        toolCallId: "exec-background-1",
+        description: expect.stringContaining("sleep 30; echo PROBE_DONE"),
+      }),
+      expect.objectContaining({
+        type: "timeline",
+        id: "exec-background-1",
+        item: expect.objectContaining({
+          status: "running",
+          detail: expect.objectContaining({ type: "shell" }),
+        }),
+      }),
+    ]);
+
+    events.length = 0;
+    internals.handleNotification("item/completed", {
+      threadId: "test-thread",
+      turnId: "turn-1",
+      item: commandItem("completed", "PROBE_DONE\n"),
+    });
+    expect(
+      events.some(
+        (event) =>
+          event.type === "timeline" &&
+          event.item.type === "tool_call" &&
+          event.item.callId === "exec-background-1" &&
+          event.item.status === "completed",
+      ),
+    ).toBe(true);
+    expect(providerEvents(events)).toEqual([
+      expect.objectContaining({
+        type: "timeline",
+        id: "exec-background-1",
+        item: expect.objectContaining({
+          status: "completed",
+          detail: expect.objectContaining({
+            type: "shell",
+            output: expect.stringContaining("PROBE_DONE"),
+          }),
+        }),
+      }),
+      { type: "upsert", id: "exec-background-1", status: "completed" },
+    ]);
+  });
+
+  test("ignores commands the turn waited for", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    const internals = asInternals(session);
+
+    internals.handleNotification("item/started", {
+      threadId: "test-thread",
+      turnId: "turn-1",
+      item: commandItem("inProgress", null),
+    });
+    internals.handleNotification("item/completed", {
+      threadId: "test-thread",
+      turnId: "turn-1",
+      item: commandItem("completed", "PROBE_DONE\n"),
+    });
+    internals.handleNotification("turn/completed", {
+      threadId: "test-thread",
+      turn: { id: "turn-1", status: "completed" },
+    });
+
+    expect(providerEvents(events)).toEqual([]);
+  });
+
+  test("does not declare commands from an interrupted turn", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    const internals = asInternals(session);
+
+    internals.handleNotification("item/started", {
+      threadId: "test-thread",
+      turnId: "turn-1",
+      item: commandItem("inProgress", null),
+    });
+    internals.handleNotification("turn/completed", {
+      threadId: "test-thread",
+      turn: { id: "turn-1", status: "interrupted" },
+    });
+
+    expect(providerEvents(events)).toEqual([]);
+  });
+});

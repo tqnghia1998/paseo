@@ -77,6 +77,7 @@ import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import { spawnProcess } from "../../../utils/spawn.js";
 import { nonEmptyString } from "./tool-call-mapper-utils.js";
 import { CodexTerminalInteractions } from "../../../patches/vibing/codex/terminal-interactions.js";
+import { CodexBackgroundTerminals } from "../../../patches/vibing/codex/background-terminals.js";
 import {
   buildCodexFeatures,
   CodexServiceTierSchema,
@@ -3490,6 +3491,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private pendingFileChangeOutputDeltas = new Map<string, string[]>();
   private pendingAssistantMessageBoundary = false;
   private terminalInteractions = new CodexTerminalInteractions();
+  private backgroundTerminals = new CodexBackgroundTerminals();
   private terminalOutputDirtyIds = new Set<string>();
   private terminalOutputFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private emittedExecCommandStartedCallIds = new Set<string>();
@@ -3721,6 +3723,7 @@ export class CodexAppServerAgentSession implements AgentSession {
 
   private handleUnexpectedTermination(error: Error): void {
     this.connectionState = "disconnected";
+    for (const event of this.backgroundTerminals.failAll()) this.emitEvent(event);
     const hasActiveRootTurn = this.activeForegroundTurnId !== null || this.currentTurnId !== null;
     this.clearPendingPermissions({ preservePlanApprovals: !hasActiveRootTurn });
     if (hasActiveRootTurn) {
@@ -5398,6 +5401,13 @@ export class CodexAppServerAgentSession implements AgentSession {
       );
       const turnId = this.terminalInteractions.turnId(item.callId);
       event = { ...event, item, ...(turnId ? { turnId } : {}) };
+      this.notifySubscribers(event);
+      if (!this.loadingPersistedHistory) {
+        for (const shellEvent of this.backgroundTerminals.observe(item)) {
+          this.notifySubscribers(shellEvent);
+        }
+      }
+      return;
     }
     this.notifySubscribers(event);
   }
@@ -6210,6 +6220,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     this.completePendingRootCompactions();
+    for (const event of this.backgroundTerminals.turnEnded(parsed.status)) this.emitEvent(event);
     if (parsed.status === "failed") {
       this.emitEvent({
         type: "turn_failed",
