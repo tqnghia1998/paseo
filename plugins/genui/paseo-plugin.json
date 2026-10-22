@@ -1,0 +1,14 @@
+{
+  "id": "genui",
+  "name": "Generative UI",
+  "description": "Agents answer with charts, diagrams, maps, plans and forms rendered inline in the chat.",
+  "icon": "assets/icon.png",
+  "media": [
+    "assets/screenshot-chat.png",
+    "assets/screenshot-gallery.png",
+    "assets/screenshot-playground.png"
+  ],
+  "requirements": {
+    "paseo": ">=0.11.2"
+  }
+}
