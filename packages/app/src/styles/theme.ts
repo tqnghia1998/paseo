@@ -1,6 +1,5 @@
 import { Platform } from "react-native";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
-import { selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 
 export const baseColors = {
   // Base colors
@@ -646,7 +645,7 @@ export const DEFAULT_MONO_FONT_STACK: string = Platform.select({
 });
 
 // Chat and markdown content column; the appearance updater patches the user's width in.
-export const DEFAULT_CONTENT_MAX_WIDTH = selectEmbeddedFocusMode(1200, 820);
+export const DEFAULT_CONTENT_MAX_WIDTH = 820;
 
 // `fontSize`, `fontFamily`, `lineHeight`, and `contentMaxWidth` are deliberately widened to plain
 // `number`/`string` (not narrowed by `as const`) so the appearance updater can patch

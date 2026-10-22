@@ -1165,7 +1165,7 @@ var BotListUiSchema = z.object({
   chatOrder: z.record(z.string(), z.array(z.string())).default({}),
   chatSort: z.enum(["manual", "activity"]).default("manual"),
   showArchived: z.boolean().default(false),
-  /** The open team tab: a team id, or OTHER_BOTS_TAB. Null opens the first. */
+  /** The open team tab: a team id, or ALL_BOTS_TAB. Null (or a retired id) opens the first. */
   tab: z.string().nullable().default(null),
   /** Desktop column widths, like Paseo's resizable sidebar (default 320) and explorer (default 320). */
   listWidth: z.number().default(320),
@@ -1198,7 +1198,7 @@ var TeamFileTeamSchema = z.object({
   name: z.string().max(60),
   logo: TeamLogoSchema.nullable().default(null),
   lead: z.number().int().min(0).nullable().default(null),
-  members: z.array(z.number().int().min(0)).max(50).default([]),
+  members: z.array(z.number().int().min(0)).default([]),
   instructions: z.string().max(2e4).default("")
 });
 var BotDefaultsSchema = z.object({
@@ -1739,6 +1739,7 @@ import { join as join8 } from "node:path";
 
 // shared/chat.ts
 var ROUTINE_LABEL = "paseo-bots.routine";
+var CHAT_CONTEXT_LABEL = "paseo-bots.context";
 var MAX_TITLE_CHARS = 200;
 var normalize2 = (path) => (path ?? "").replace(/\/+$/, "");
 async function botsProjectId(api, root) {
@@ -3274,7 +3275,7 @@ var importBotRpc = defineRpc({
 var ImportedBotSchema = z5.object({ bot: BotSchema, skills: z5.array(ImportedSkillSchema), mcpServers: z5.array(BotMcpServerSchema) });
 var exportTeamRpc = defineRpc({
   name: "bots.export-team",
-  input: z5.object({ bots: z5.array(BotSchema).min(1).max(50), groups: z5.array(BotGroupSchema).max(50).default([]), includeMemory: z5.boolean() }),
+  input: z5.object({ bots: z5.array(BotSchema).min(1), groups: z5.array(BotGroupSchema).default([]), includeMemory: z5.boolean() }),
   output: z5.object({ json: z5.string() })
 });
 var importTeamRpc = defineRpc({
@@ -3400,7 +3401,7 @@ async function startChat(host, relay, bot, input) {
     library,
     agentId,
     plugin: { tools: await relay.mountTools(bot.id, agentId), apps: bot.apps.length ? await relay.mountApps(bot.id) : null },
-    placement: bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root },
+    placement: input.placement ?? (bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root }),
     prompt: input.prompt,
     systemPrompt: system,
     title: input.title,
@@ -4067,8 +4068,7 @@ async function importBot({ botId, json: json2 }) {
   return { bot, skills, mcpServers: parsed.mcpServers };
 }
 var TEAM_FORMAT = "paseo-bots-team";
-var MAX_TEAM = 50;
-var TeamSchema = z7.object({ format: z7.literal(TEAM_FORMAT), version: z7.literal(1), bots: z7.array(z7.unknown()).min(1).max(MAX_TEAM), teams: z7.array(TeamFileTeamSchema).max(MAX_TEAM).default([]) });
+var TeamSchema = z7.object({ format: z7.literal(TEAM_FORMAT), version: z7.literal(1), bots: z7.array(z7.unknown()).min(1), teams: z7.array(TeamFileTeamSchema).default([]) });
 function isTeamFile(json2) {
   try {
     return JSON.parse(json2).format === TEAM_FORMAT;
@@ -4086,10 +4086,9 @@ function teamsInFile(bots, groups) {
   });
 }
 async function exportTeam({ bots, groups, includeMemory }, library) {
-  const shared = bots.slice(0, MAX_TEAM);
   const entries = [];
-  for (const bot of shared) entries.push(JSON.parse((await exportBot({ bot, includeMemory }, library)).json));
-  return { json: JSON.stringify({ format: TEAM_FORMAT, version: 1, bots: entries, teams: teamsInFile(shared, groups) }, null, 2) };
+  for (const bot of bots) entries.push(JSON.parse((await exportBot({ bot, includeMemory }, library)).json));
+  return { json: JSON.stringify({ format: TEAM_FORMAT, version: 1, bots: entries, teams: teamsInFile(bots, groups) }, null, 2) };
 }
 async function importTeam({ json: json2 }) {
   if (!isTeamFile(json2)) return { bots: [await importBot({ botId: newBotId(), json: json2 })], teams: [] };
@@ -4619,6 +4618,14 @@ async function mayAsk({ bot, agentId, host }) {
   const chat = await host.chatOf(agentId);
   return !chat?.labels[ASKED_BY_LABEL];
 }
+var normalize3 = (path) => path.replace(/\/+$/, "");
+async function askedPlacement({ bot, agentId, host }) {
+  const agent = (await host.requirePaseo().agents.ref(agentId).refresh().catch(() => null))?.agent;
+  if (!agent?.cwd || !agent.workspaceId) return null;
+  if (normalize3(agent.cwd) === normalize3(bot.cwd ?? botDataPath(bot.id))) return null;
+  const context = agent.labels?.[CHAT_CONTEXT_LABEL];
+  return { placement: { path: agent.cwd, projectRoot: null, workspaceId: agent.workspaceId }, labels: context ? { [CHAT_CONTEXT_LABEL]: context } : {} };
+}
 var askBot = defineTool({
   name: "ask_bot",
   description: "Ask another bot on this Paseo for help. It gets your message in a new chat of its own, works with its own tools and settings, and its answer comes back here. Use list_bots to see who does what.",
@@ -4634,7 +4641,13 @@ var askBot = defineTool({
     const key = wanted.trim().toLowerCase();
     const target = others.find((entry) => entry.id === wanted.trim()) ?? others.find((entry) => entry.name.trim().toLowerCase() === key);
     if (!target) throw new Error(others.length ? `There's no other bot called "${wanted}". Ask one of: ${others.map((entry) => entry.name).join(", ")}.` : "There are no other bots to ask.");
-    const chatId = await startChat(host, relay, target, { prompt: askPrompt(bot.name, message), title: `${bot.name}: ${foldText(message, 60)}`, labels: { [ASKED_BY_LABEL]: bot.id } });
+    const workspace = await askedPlacement(caller);
+    const chatId = await startChat(host, relay, target, {
+      prompt: askPrompt(bot.name, message),
+      title: `${bot.name}: ${foldText(message, 60)}`,
+      labels: { ...workspace?.labels, [ASKED_BY_LABEL]: bot.id },
+      ...workspace ? { placement: workspace.placement } : {}
+    });
     if (!wait) return `Asked ${target.name} in chat ${chatId}. Use check_chat with that id for the answer.`;
     const paseo = host.requirePaseo();
     await paseo.agents.ref(chatId).waitForFinish(ASK_WAIT_MS).catch(() => null);

@@ -46,7 +46,8 @@ import {
 import { useChatFindSelectedMessageId } from "@/agent-stream/chat-find";
 import { getStreamItemMessageId } from "./presentation";
 import { useScrollToMessage } from "./use-scroll-to-message.web";
-import { selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
+import { usePathname } from "expo-router";
+import { isBotsChatPath } from "@/patches/vibing/chat-appearance";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -1192,19 +1193,22 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     viewportRef,
   ]);
 
+  const isBotsChat = isBotsChatPath(usePathname());
   const contentContainerStyle = useMemo((): CSSProperties => {
+    let gutter = isBotsChat ? 36 : 16;
+    if (isMobileBreakpoint) gutter = 8;
     return {
       display: "flex",
       flexDirection: "column",
       minHeight: "100%",
       paddingTop: CONTENT_PADDING_TOP_PX,
       paddingBottom: 16,
-      // Embedded chats are wider than the outline rail's gutter assumes; clear it explicitly.
-      paddingLeft: isMobileBreakpoint ? 8 : selectEmbeddedFocusMode(48, 16),
-      paddingRight: isMobileBreakpoint ? 8 : selectEmbeddedFocusMode(48, 16),
+      // Bots chats are wider than the outline rail's gutter assumes; clear it explicitly.
+      paddingLeft: gutter,
+      paddingRight: gutter,
       boxSizing: "border-box",
     };
-  }, [isMobileBreakpoint]);
+  }, [isMobileBreakpoint, isBotsChat]);
   const scrollContainerStyle = useMemo((): CSSProperties => {
     const overlayScrollbarEnabled = scrollEnabled && !isMobileBreakpoint;
     return {

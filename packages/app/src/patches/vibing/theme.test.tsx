@@ -11,12 +11,15 @@ const themes = vi.hoisted(() => ({
   options: [] as PluginThemeOption[],
   selected: null as PluginThemeOption | null,
   select: vi.fn(),
+  pathname: "/h/server/plugin/paseo-bots/sidebar/bots",
 }));
+vi.mock("expo-router", () => ({ usePathname: () => themes.pathname }));
 vi.mock("@/appearance/provider", () => ({ useContributedThemes: () => themes }));
 import { useEmbeddedTheme } from "./theme";
 
 // Node's own localStorage global shadows jsdom's, so give the hook a plain store.
 beforeEach(() => {
+  themes.pathname = "/h/server/plugin/paseo-bots/sidebar/bots";
   const items = new Map<string, string>();
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => items.get(key) ?? null,
@@ -69,4 +72,30 @@ it("keeps a user's later appearance choice across remounts", () => {
   hook.unmount();
   renderHook(() => useEmbeddedTheme());
   expect(themes.select).toHaveBeenCalledTimes(1);
+});
+
+it("does not force the palette on normal chats", () => {
+  themes.pathname = "/h/server/workspace/one";
+  themes.options = [option];
+  renderHook(() => useEmbeddedTheme());
+  expect(themes.select).not.toHaveBeenCalled();
+});
+
+it("keeps native normal-chat widths and the Bots default while preserving saved widths", async () => {
+  const { resolveChatContentMaxWidth } = await import("./chat-appearance");
+  expect(resolveChatContentMaxWidth({ contentMaxWidth: null }, "/h/server/workspace/one")).toBe(
+    820,
+  );
+  expect(
+    resolveChatContentMaxWidth(
+      { contentMaxWidth: null },
+      "/h/server/plugin/paseo-bots/sidebar/bots",
+    ),
+  ).toBe(1200);
+  expect(
+    resolveChatContentMaxWidth(
+      { contentMaxWidth: 1600 },
+      "/h/server/plugin/paseo-bots/sidebar/bots",
+    ),
+  ).toBe(1600);
 });

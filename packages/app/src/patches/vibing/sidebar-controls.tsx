@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { isEmbeddedBotsTool } from "./embedded-tools";
+import { isEmbeddedFocusMode } from "./focus-mode";
 
 export function EmbeddedPluginHeader({
   pluginId,
@@ -8,5 +8,5 @@ export function EmbeddedPluginHeader({
   pluginId: string;
   children: ReactNode;
 }) {
-  return isEmbeddedBotsTool && pluginId === "paseo-bots" ? null : children;
+  return isEmbeddedFocusMode && pluginId === "paseo-bots" ? null : children;
 }

@@ -6,7 +6,7 @@ import {
   parseHostAgentRouteFromPathname,
 } from "@/utils/host-routes";
 import { isEmbeddedFocusMode } from "./focus-mode";
-import { isEmbeddedBotsTool, resolveEmbeddedToolEntryRoute } from "./embedded-tools";
+import { resolveEmbeddedToolEntryRoute } from "./embedded-tools";
 
 interface Workspace {
   serverId: string;
@@ -104,13 +104,12 @@ export function isEmbeddedRouteAllowed(path: string): boolean {
   const pathname = path.split(/[?#]/, 1)[0].replace(/\/$/, "") || "/";
   if (!workspace) return pathname === "/" || /^\/h\/[^/]+$/.test(pathname);
   const target = parseHostWorkspaceRouteFromPathname(pathname);
-  if (target)
-    return !isEmbeddedBotsTool && isEmbeddedWorkspaceAllowed(target.serverId, target.workspaceId);
+  if (target) return false;
   if (pathname === "/settings") return true;
   const plugin = parsePluginSurfaceRoute(pathname);
   if (plugin) return plugin.serverId === workspace.serverId;
   const agent = parseHostAgentRouteFromPathname(pathname);
-  if (agent) return !isEmbeddedBotsTool && agent.serverId === workspace.serverId;
+  if (agent) return false;
   return isEmbeddedSettingsRouteAllowed(pathname, workspace);
 }
 

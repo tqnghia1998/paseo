@@ -24,6 +24,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { stripHostWorkspaceRouteEchoSearchFromBrowserUrlAfterCommit } from "@/utils/host-route-browser";
 import { navigateToHostWorkspaceRoute } from "@/navigation/workspace-route-navigation";
+import { openEmbeddedTarget } from "@/patches/vibing/embedded-targets";
 
 export type { ActiveWorkspaceSelection } from "@/stores/last-workspace-selection";
 export type { NavigateToWorkspaceInput } from "./navigation";
@@ -69,6 +70,7 @@ export function getIsLastWorkspaceSelectionHydrated(): boolean {
 export function navigateToWorkspace(input: NavigateToWorkspaceInput): string {
   if (!isEmbeddedRouteAllowed(buildHostWorkspaceRoute(input.serverId, input.workspaceId))) {
     const route = embeddedWorkspaceRoute();
+    if (input.target && openEmbeddedTarget(input.target)) return route ?? "";
     if (route) router.replace(route as Href);
     return route ?? "";
   }

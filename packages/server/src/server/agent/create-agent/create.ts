@@ -21,6 +21,7 @@ import { buildAgentPrompt } from "../prompt-attachments.js";
 import { normalizeClientMessageId, resolveClientMessageId } from "../../client-message-id.js";
 import { resolveRequiredProviderModel, type ResolvedProviderModel } from "../mcp-shared.js";
 import { resolveCreateAgentIntent } from "./intent.js";
+import { botChatChildLabels } from "../../../patches/vibing/bot-chat-context.js";
 
 export interface CreateAgentCommandDependencies {
   agentMessages?: AgentMessageDelivery;
@@ -289,7 +290,10 @@ async function resolveMcpCreateAgent(
       ? { id: parentAgent.id, cwd: parentAgent.cwd, workspaceId: parentAgent.workspaceId }
       : null,
     labels: input.labels,
-    childAgentDefaultLabels: input.callerContext?.childAgentDefaultLabels,
+    childAgentDefaultLabels: {
+      ...botChatChildLabels(parentAgent),
+      ...input.callerContext?.childAgentDefaultLabels,
+    },
     legacyDetached: input.detached ?? false,
     resolveWorkspace: async (workspaceId) => ({ workspaceId, cwd: resolvedCwd }),
     createWorkspace: async () => ({
