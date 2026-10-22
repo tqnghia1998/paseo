@@ -139,6 +139,33 @@ test("coalesces per account, caches errors, and refreshes only requested IDs", a
   expect(counts.get("a")).toBe(3);
 });
 
+test("refreshes quota after 60 seconds while coalescing readers within the minute", async () => {
+  let now = 0;
+  let usedPct = 10;
+  let fetches = 0;
+  const registry = new UsageSourceRegistry(() => now);
+  registry.register(
+    source({
+      id: "quota",
+      discover: async () => [{ key: "account", input: {} }],
+      fetch: async () => {
+        fetches++;
+        return { status: "available", windows: [{ id: "monthly", label: "Monthly", usedPct }] };
+      },
+    }),
+  );
+  const first = await registry.listReports();
+  usedPct = 20;
+  now = 59_999;
+  expect(await registry.listReports()).toEqual(first);
+  expect(fetches).toBe(1);
+  now = 60_000;
+  const [sidebar, modal] = await Promise.all([registry.listReports(), registry.listReports()]);
+  expect(sidebar[0]?.report.windows[0]?.usedPct).toBe(20);
+  expect(modal).toEqual(sidebar);
+  expect(fetches).toBe(2);
+});
+
 test("legacy listing uses oldest fetchedAt", async () => {
   let now = 1000;
   const registry = new UsageSourceRegistry(() => now);
