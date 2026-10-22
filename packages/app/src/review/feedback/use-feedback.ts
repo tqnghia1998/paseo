@@ -23,6 +23,7 @@ import {
   type FeedbackRecipient,
 } from "./index";
 import { useToast } from "@/contexts/toast-context";
+import { getEmbeddedChatTab, useEmbeddedActiveChat } from "@/patches/vibing/embedded-targets";
 import { FeedbackSentMessage } from "./surface";
 
 const feedbackScope = createReviewFeedbackScope();
@@ -105,9 +106,10 @@ export function useReviewFeedback(input: {
       }),
     [reviewDraftKey, serverId, workspaceKey, workspaceId],
   );
+  const botsChat = useEmbeddedActiveChat();
   useEffect(() => {
     model.refresh();
-  }, [model, comments, layout, connected, input.attachment]);
+  }, [model, comments, layout, connected, input.attachment, botsChat]);
   const state = useSyncExternalStore(model.subscribe, model.getState, model.getState);
   return {
     model,
@@ -129,5 +131,7 @@ function readRecipients(workspaceKey: string | null): FeedbackRecipient[] {
     if (descriptor.target.kind === "agent")
       recipients.push({ agentId: descriptor.target.agentId, tab: descriptor });
   }
+  const botsChat = recipients.length === 0 ? getEmbeddedChatTab() : null;
+  if (botsChat) recipients.push({ agentId: botsChat.target.agentId, tab: botsChat });
   return recipients;
 }

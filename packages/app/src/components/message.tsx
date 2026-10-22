@@ -84,7 +84,6 @@ import Svg, { Defs, Rect, Stop, LinearGradient as SvgLinearGradient } from "reac
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { getLiveDesignRewindText } from "@/patches/vibing/live-design";
-import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import { capAssistantMessageForRender, getUtf8ByteLength } from "./assistant-message-render-limit";
 import { getTurnDurationLabel } from "./assistant-turn-footer-label";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
@@ -726,9 +725,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
           containerStyle={assistantTurnFooterStylesheet.copyButton}
         />
       ) : null}
-      {canFork ? (
-        <AssistantForkMenu onFork={handleFork} allowWorkspaceFork={!isEmbeddedFocusMode} />
-      ) : null}
+      {canFork ? <AssistantForkMenu onFork={handleFork} /> : null}
       {primaryLabel ? (
         <Pressable
           onPress={handlePress}

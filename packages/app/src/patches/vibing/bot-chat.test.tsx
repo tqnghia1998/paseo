@@ -38,6 +38,9 @@ vi.mock("expo-router", async () => ({
   useRouter: () => ({ push: vi.fn() }),
   ...(await vi.importActual("expo-router/build/react-navigation/core/useIsFocused")),
 }));
+vi.mock("./bot-usage-card", () => ({ BotUsageCard: () => null }));
+// Subagent panels register every workspace panel; these tests only open the chat itself.
+vi.mock("@/panels/register-panels", () => ({ ensurePanelsRegistered: () => {} }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./bot-workspace", () => ({ BotWorkspaceBridge: () => null }));
 vi.mock("./workspace-boundary", () => ({
@@ -107,6 +110,7 @@ vi.mock("@/stores/session-store", () => ({
     }),
 }));
 import { NativeBotChat, embeddedBotChatProps } from "./bot-chat";
+import { BotUsageCard } from "./bot-usage-card";
 
 // Expo Router owns a different navigation context from @react-navigation/native.
 const navigation = {
@@ -157,10 +161,11 @@ it("hands a newly created bot chat to the native panel and releases visibility w
   expect(fake.visible).toHaveBeenLastCalledWith(expect.any(String), []);
 });
 
-it("only supplies the native chat slot to Bots", () => {
+it("only supplies the native chat and sidebar usage slots to Bots", () => {
   expect(embeddedBotChatProps("paseo-bots")).toMatchObject({
     nativeChat: NativeBotChat,
     botWorkspace: { id: "", directory: "" },
+    sidebarFooter: BotUsageCard,
   });
   expect(embeddedBotChatProps("mermaid")).toEqual({});
 });

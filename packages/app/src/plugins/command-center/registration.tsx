@@ -3,6 +3,10 @@ import { useMemo } from "react";
 import { useCommandCenterActions } from "@/command-center/provider";
 import { useToast } from "@/contexts/toast-context";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import {
+  useEmbeddedFocusedAgentId,
+  useEmbeddedWorkspaceSelection,
+} from "@/patches/vibing/embedded-command-center";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceExists } from "@/stores/session-store-hooks";
@@ -17,7 +21,7 @@ import { createPluginNavigation } from "../navigation";
 
 export function PluginCommandCenterActions() {
   const pathname = usePathname();
-  const selection = useActiveWorkspaceSelection();
+  const selection = useEmbeddedWorkspaceSelection(useActiveWorkspaceSelection());
   const serverId = selection?.serverId ?? hostIdFromPathname(pathname);
   const workspaceId = selection?.workspaceId ?? null;
   const workspaceExists = useWorkspaceExists(serverId, workspaceId);
@@ -25,7 +29,7 @@ export function PluginCommandCenterActions() {
   const layout = useWorkspaceLayoutStore((state) =>
     workspaceKey ? (state.layoutByWorkspace[workspaceKey] ?? null) : null,
   );
-  const focusedAgentId = getFocusedAgentId(layout);
+  const focusedAgentId = useEmbeddedFocusedAgentId(getFocusedAgentId(layout));
   const agentExists = useSessionStore((state) => {
     if (!serverId || !focusedAgentId) return null;
     const session = state.sessions[serverId];

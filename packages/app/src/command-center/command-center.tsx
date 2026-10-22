@@ -72,6 +72,7 @@ import {
 } from "@/utils/command-center-focus-restore";
 import { focusWithRetries } from "@/utils/web-focus";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { scopeEmbeddedCommandCenterRows } from "@/patches/vibing/embedded-command-center";
 import { shortenPath } from "@/utils/shorten-path";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import {
@@ -240,9 +241,7 @@ function useBuiltInRows(open: boolean): {
       });
     });
     previousRows.current = nextRows;
-
-
-    return { workspaces: allWorkspaces, agents: agentRows };
+    return scopeEmbeddedCommandCenterRows({ workspaces: allWorkspaces, agents: agentRows });
   }, [agents, iconDataByProjectViewKey, open, projects, showHost, t]);
 }
 
