@@ -1,5 +1,5 @@
 diff --git a/client/BotDialogs.tsx b/client/BotDialogs.tsx
-index 9d97c7f..af989dc 100644
+index 9d97c7f..3ba957c 100644
 --- a/client/BotDialogs.tsx
 +++ b/client/BotDialogs.tsx
 @@ -4,14 +4,15 @@ import { Icon, Modal, TextInput, copyText, useToast } from "@getpaseo/plugin/cli
@@ -12,10 +12,12 @@ index 9d97c7f..af989dc 100644
 +import { exportBotRpc, exportTeamRpc } from "../shared/rpc";
  import { BOT_TEMPLATES, type BotTemplate } from "../shared/templates";
  import { Avatar } from "./Avatar";
- import { errorText, MONO_FONT, MONO_PROPS, nativeTokens, useHover } from "./native";
+-import { errorText, MONO_FONT, MONO_PROPS, nativeTokens, useHover } from "./native";
++import { errorText, nativeTokens, useHover } from "./native";
  import { Button, FormTextArea, SheetActions } from "./panel/controls";
  import type { MenuEntry } from "./ui/Menu";
- import { code, codeLine, ui } from "./typography";
+-import { code, codeLine, ui } from "./typography";
++import { ui } from "./typography";
 +import { canPickFiles, decodeUtf8, downloadBotFile, pickFileHandles } from "./web";
  
  type Colors = PluginTheme["colors"];
@@ -61,13 +63,14 @@ index 9d97c7f..af989dc 100644
          <SettingsSection title="Start from">
            <SettingsCard>
              <StartRow colors={colors} label="Blank bot" hint="Set everything up yourself in the settings panel." onPress={() => onCreate()} />
-@@ -53,29 +73,34 @@ export function NewBotDialog({
+@@ -53,34 +73,40 @@ export function NewBotDialog({
              </SettingsCard>
            </SettingsSection>
          ) : null}
 -        <SettingsSection title="Import" info="Paste a bot or team file from paseo-bots. Routines arrive paused, skills need a review and secrets must be filled in again.">
 +        </> : null}
-+        <SettingsSection title="Import" info="Choose a single-bot or all-bots file, or paste its JSON. All bots and teams in the file are imported as new copies. Routines arrive paused, skills need a review and tool credentials must be filled in again.">
++        <View style={{ gap: 12 }}>
++          <Text style={{ color: colors.foregroundMuted, fontSize: ui(14) }}>Choose a bot file or paste its JSON. Bots and teams are added as new copies. Routines stay paused; review skills and reconnect tool credentials after importing.</Text>
 +          {canPickFiles ? <Button colors={colors} label={reading ? "Reading file..." : "Choose bot file"} icon="Upload" disabled={busy} onPress={() => void chooseFile()} /> : null}
            <FormTextArea
              colors={colors}
@@ -100,7 +103,13 @@ index 9d97c7f..af989dc 100644
                    .finally(() => setImporting(false));
                }}
              />
-@@ -314,25 +339,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
+           </SheetActions>
+-        </SettingsSection>
++        </View>
+       </Modal.Content>
+     </Modal>
+   );
+@@ -314,25 +340,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
  
  // ------------------------------------------------------------------ export
  
@@ -136,7 +145,7 @@ index 9d97c7f..af989dc 100644
          <SettingsCard>
            <SettingsSwitch
              label="Include memory"
-@@ -340,12 +371,22 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
+@@ -340,17 +372,24 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
              value={includeMemory}
              onValueChange={setIncludeMemory}
            />
@@ -160,9 +169,14 @@ index 9d97c7f..af989dc 100644
 +            onPress={() => void copyText(json!).then(() => toast.show("Bot file copied", { variant: "success" })).catch((error: unknown) => toast.error(errorText(error)))}
            />
          </SettingsCard>
-         <Text {...MONO_PROPS} selectable numberOfLines={16} style={{ fontFamily: MONO_FONT, fontSize: code(), lineHeight: codeLine(), color: colors.foregroundMuted }}>
+-        <Text {...MONO_PROPS} selectable numberOfLines={16} style={{ fontFamily: MONO_FONT, fontSize: code(), lineHeight: codeLine(), color: colors.foregroundMuted }}>
+-          {json ?? ""}
+-        </Text>
+       </Modal.Content>
+     </Modal>
+   );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 7533cb6..8513431 100644
+index 7533cb6..77f0b76 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
 @@ -1,7 +1,7 @@
@@ -174,6 +188,15 @@ index 7533cb6..8513431 100644
  import { Animated, Easing, Platform, Pressable, Text, View, type LayoutRectangle } from "react-native";
  import type { Bot, BotGroup, BotListUi } from "../shared/bot";
  import { displayTitle } from "../shared/chat";
+@@ -13,7 +13,7 @@ import { openLibrary } from "./navigation";
+ import { nativeTokens, useHover, type NativeTokens } from "./native";
+ import { Splash } from "./Splash";
+ import { ui } from "./typography";
+-import { contextMenuProps, measureAnchor } from "./ui/Menu";
++import { contextMenuProps, measureAnchor, useMenu } from "./ui/Menu";
+ import { tooltip } from "./ui/Tooltip";
+
+ // Paseo's sidebar, reproduced from components/left-sidebar.tsx, sidebar-workspace-list.tsx
 @@ -27,6 +27,8 @@ export interface Selection {
    chatId: string | null;
    /** First message to send straight away when starting a new chat. */
@@ -250,33 +273,45 @@ index 7533cb6..8513431 100644
      </View>
    );
  }
-@@ -141,7 +161,7 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
+@@ -141,8 +161,19 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
    );
  }
  
 -function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): void; onTeamMap(): void }) {
 +function Footer({ colors, onNewBot, onImportBot, onExportAllBots, onTeamMap }: { colors: Colors; onNewBot(): void; onImportBot(): void; onExportAllBots?: () => void; onTeamMap(): void }) {
    const { hovered, hoverProps } = useHover();
++  const menu = useMenu();
++  const sharingRef = useRef<View>(null);
++  const openSharing = () => void measureAnchor(sharingRef).then((anchor) => anchor && menu.open({
++    anchor,
++    align: "end",
++    title: "Import or export bots",
++    entries: [
++      { label: "Import bots", icon: "Import", onSelect: onImportBot },
++      { label: "Export all bots", icon: "Share", disabled: !onExportAllBots, onSelect: () => onExportAllBots?.() },
++    ],
++  }));
    return (
      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
-@@ -171,6 +191,8 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
+       <Pressable
+@@ -171,6 +202,7 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
            New bot
          </Text>
        </Pressable>
-+      <FooterIconButton colors={colors} icon="Import" label="Import bots" onPress={onImportBot} />
-+      <FooterIconButton colors={colors} icon="Share" label="Export all bots" onPress={onExportAllBots} />
++      <FooterIconButton colors={colors} icon="ArrowDownUp" label="Import or export bots" buttonRef={sharingRef} onPress={openSharing} />
        <FooterIconButton colors={colors} icon="Network" label="Team map" onPress={onTeamMap} />
        <FooterIconButton colors={colors} icon="Blocks" label="Skills & Tools" onPress={() => openLibrary()} />
      </View>
-@@ -178,17 +200,19 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
+@@ -178,17 +210,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
  }
  
  /** The sidebar footer's trailing icon buttons (Paseo's host, import and settings buttons): 32 box, 16pt icon. */
 -function FooterIconButton({ colors, icon, label, onPress }: { colors: Colors; icon: string; label: string; onPress(): void }) {
-+function FooterIconButton({ colors, icon, label, onPress }: { colors: Colors; icon: string; label: string; onPress?: () => void }) {
++function FooterIconButton({ colors, icon, label, buttonRef, onPress }: { colors: Colors; icon: string; label: string; buttonRef?: RefObject<View | null>; onPress?: () => void }) {
    const { hovered, hoverProps } = useHover();
    return (
      <Pressable
++      ref={buttonRef}
        accessibilityRole="button"
        accessibilityLabel={label}
        {...tooltip(label)}
@@ -290,7 +325,7 @@ index 7533cb6..8513431 100644
          noSelect,
        ]}
      >
-@@ -272,11 +296,12 @@ function PinnedSection(props: PinnedProps) {
+@@ -272,11 +307,12 @@ function PinnedSection(props: PinnedProps) {
    );
  }
  
@@ -304,7 +339,7 @@ index 7533cb6..8513431 100644
    return (
      <ChatRow
        colors={colors}
-@@ -287,7 +312,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -287,7 +323,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
        touch={touch}
        selected={selection?.botId === bot.id && selection.chatId === chat.id}
        onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -314,7 +349,7 @@ index 7533cb6..8513431 100644
      />
    );
  }
-@@ -297,7 +323,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -297,7 +334,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
  type GroupProps = BotSidebarProps & { bot: Bot; tokens: NativeTokens; pinnedIds: ReadonlySet<string>; /** The team's Chief of Staff. */ lead?: boolean };
  
  function BotGroup(props: GroupProps) {
@@ -323,7 +358,7 @@ index 7533cb6..8513431 100644
    const host = useBotHost(bot.hostId, localHost);
    const chats = useBotChats(host, bot.id);
    const [expanded, setExpanded] = useState(false);
-@@ -308,6 +334,7 @@ function BotGroup(props: GroupProps) {
+@@ -308,6 +345,7 @@ function BotGroup(props: GroupProps) {
    const unpinned = (chats.data ?? []).filter((chat) => !pinnedIds.has(chat.id));
    const ordered = orderChats(unpinned, listUi.chatSort, listUi.chatOrder[bot.id]);
    const siblings = ordered.map((chat) => chat.id);
@@ -331,7 +366,7 @@ index 7533cb6..8513431 100644
    const visible = expanded ? ordered : ordered.slice(0, SIDEBAR_GROUP_LIMIT);
    const loading = !!host.api && chats.isLoading;
    // Collapsed rows carry their chats' most urgent status; open ones leave it to the rows.
-@@ -330,7 +357,8 @@ function BotGroup(props: GroupProps) {
+@@ -330,7 +368,8 @@ function BotGroup(props: GroupProps) {
                touch={touch}
                selected={botSelected && selection?.chatId === chat.id}
                onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -341,7 +376,7 @@ index 7533cb6..8513431 100644
              />
            ))}
            {ordered.length > SIDEBAR_GROUP_LIMIT ? <ShowMoreRow colors={colors} expanded={expanded} onPress={() => setExpanded(!expanded)} /> : null}
-@@ -452,10 +480,11 @@ interface ChatRowProps {
+@@ -452,10 +491,11 @@ interface ChatRowProps {
    hoisted?: boolean;
    onPress(): void;
    onMenu(anchor: LayoutRectangle, source: MenuSource): void;
@@ -354,7 +389,7 @@ index 7533cb6..8513431 100644
    const [hovered, setHovered] = useState(false);
    const kebabRef = useRef<View>(null);
    const bucket = chatBucket(chat);
-@@ -508,7 +537,7 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -508,7 +548,7 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
                {title}
              </Text>
              {/* On touch the kebab stays, so its space is reserved; on desktop it overlays the title's tail. */}
@@ -363,7 +398,7 @@ index 7533cb6..8513431 100644
            </View>
            {hoisted ? (
              <Text numberOfLines={1} style={{ fontSize: ui(12), lineHeight: 16, color: colors.foregroundMuted }}>
-@@ -520,8 +549,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -520,8 +560,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
        {showKebab ? (
          <View style={{ position: "absolute", top: 8, right: 12, flexDirection: "row" }}>
            {/* A short scrim in the row's colour hides the title's tail under the kebab, as native does. */}
@@ -375,7 +410,7 @@ index 7533cb6..8513431 100644
              <KebabButton colors={colors} buttonRef={kebabRef} label="Chat actions" onPress={() => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab"))} />
            </View>
          </View>
-@@ -611,6 +641,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -611,6 +652,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
    );
  }
  
@@ -400,7 +435,7 @@ index 7533cb6..8513431 100644
  /**
   * Kebab triggers. Chat rows use Paseo's workspace trigger (padding 2, radius 4, pulled
   * onto the rail with marginRight -7); bot rows use the 24pt project kebab (`box`).
-@@ -688,7 +736,7 @@ const BADGE_SIZE = 12;
+@@ -688,7 +747,7 @@ const BADGE_SIZE = 12;
  const BADGE_OFFSET = -4;
  const RING_FRAME = 14;
  
@@ -1915,16 +1950,16 @@ index f049d61..69e4da6 100644
  });
 diff --git a/tests/sharing-dialogs.test.tsx b/tests/sharing-dialogs.test.tsx
 new file mode 100644
-index 0000000..1560576
+index 0000000..b539707
 --- /dev/null
 +++ b/tests/sharing-dialogs.test.tsx
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,130 @@
 +// @vitest-environment jsdom
 +import React from "react";
 +import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 +import { afterEach, expect, it, vi } from "vitest";
 +
-+const mocks = vi.hoisted(() => ({ pick: vi.fn(), download: vi.fn(), exportBot: vi.fn(), exportTeam: vi.fn(), toast: { error: vi.fn(), show: vi.fn() } }));
++const mocks = vi.hoisted(() => ({ menu: vi.fn(), pick: vi.fn(), download: vi.fn(), exportBot: vi.fn(), exportTeam: vi.fn(), toast: { error: vi.fn(), show: vi.fn() } }));
 +vi.mock("@getpaseo/plugin/client", () => ({ useRpc: (rpc: { name: string }) => rpc.name === "bots.export-team" ? mocks.exportTeam : mocks.exportBot }));
 +vi.mock("@getpaseo/plugin/client/react-native", () => {
 +  const Modal = Object.assign(({ title, children }: any) => <section aria-label={title}>{children}</section>, { Content: ({ children }: any) => <div>{children}</div> });
@@ -1937,12 +1972,17 @@ index 0000000..1560576
 +  SettingsAction: ({ actionLabel, disabled, onPress }: any) => <button disabled={disabled} onClick={onPress}>{actionLabel}</button>,
 +}));
 +vi.mock("react-native", () => ({
++  Animated: { Value: class { interpolate() { return 0; } } },
 +  Platform: { OS: "web" },
-+  Pressable: ({ children, onPress, disabled }: any) => <button disabled={disabled} onClick={onPress}>{children}</button>,
++  Pressable: ({ children, onPress, disabled, accessibilityLabel }: any) => <button aria-label={accessibilityLabel} disabled={disabled} onClick={onPress}>{children}</button>,
 +  Text: ({ children, accessibilityRole }: any) => <div role={accessibilityRole}>{children}</div>,
 +  View: ({ children }: any) => <div>{children}</div>,
 +}));
 +vi.mock("../client/Avatar", () => ({ Avatar: () => null }));
++vi.mock("../client/Splash", () => ({ Splash: () => null }));
++vi.mock("../client/data", () => ({}));
++vi.mock("../client/ui/Tooltip", () => ({ tooltip: () => ({}) }));
++vi.mock("../client/ui/Menu", () => ({ contextMenuProps: () => ({}), measureAnchor: async () => ({ x: 10, y: 20, width: 32, height: 32 }), useMenu: () => ({ open: mocks.menu }) }));
 +vi.mock("../client/native", () => ({ errorText: (error: Error) => error.message, MONO_PROPS: {}, MONO_FONT: "monospace", nativeTokens: () => ({}), useHover: () => ({}) }));
 +vi.mock("../client/panel/controls", () => ({
 +  Button: ({ label, disabled, onPress }: any) => <button disabled={disabled} onClick={onPress}>{label}</button>,
@@ -1951,6 +1991,8 @@ index 0000000..1560576
 +}));
 +vi.mock("../client/web", () => ({ canPickFiles: true, pickFileHandles: mocks.pick, decodeUtf8: (text: string) => Buffer.from(text, "base64").toString("utf8"), downloadBotFile: mocks.download }));
 +import { ExportDialog, NewBotDialog } from "../client/BotDialogs";
++import { BotSidebar } from "../client/BotSidebar";
++import { DEFAULT_BOT_LIST_UI } from "../shared/bot";
 +import { makeBot } from "./helpers";
 +
 +afterEach(() => { cleanup(); vi.clearAllMocks(); });
@@ -1995,6 +2037,7 @@ index 0000000..1560576
 +  render(<ExportDialog colors={{} as never} target={{ kind: "bot", bot }} onClose={vi.fn()} />);
 +  await waitFor(() => expect((screen.getByText("Download") as HTMLButtonElement).disabled).toBe(false));
 +  expect(mocks.exportBot).toHaveBeenCalledWith({ bot, includeMemory: false });
++  expect(screen.queryByText('{"format":"paseo-bots"}')).toBeNull();
 +  fireEvent.click(screen.getByText("Download"));
 +  expect(mocks.download).toHaveBeenCalledWith(bot.name, '{"format":"paseo-bots"}');
 +});
@@ -2009,8 +2052,25 @@ index 0000000..1560576
 +  expect(screen.getByLabelText("Export all bots")).toBeTruthy();
 +  expect(mocks.exportTeam).toHaveBeenCalledWith({ bots, groups, includeMemory: false });
 +  expect(mocks.exportBot).not.toHaveBeenCalled();
++  expect(screen.queryByText(json)).toBeNull();
 +  fireEvent.click(screen.getByText("Download"));
 +  expect(mocks.download).toHaveBeenCalledWith("All bots", json);
++});
++
++it("opens Import and Export from one sidebar sharing button", async () => {
++  const onImportBot = vi.fn(), onExportAllBots = vi.fn();
++  render(<BotSidebar {...({ colors: {}, bots: [], hiddenArchivedCount: 0, openTab: null, selection: null, ui: DEFAULT_BOT_LIST_UI, splash: true, bottomInset: 0, onNewBot: vi.fn(), onTeamMap: vi.fn(), onImportBot, onExportAllBots } as any)} />);
++  expect(screen.queryByRole("button", { name: "Import bots" })).toBeNull();
++  expect(screen.queryByRole("button", { name: "Export all bots" })).toBeNull();
++  fireEvent.click(screen.getByRole("button", { name: "Import or export bots" }));
++  await waitFor(() => expect(mocks.menu).toHaveBeenCalledOnce());
++  const spec = mocks.menu.mock.calls[0][0];
++  expect(spec.anchor).toEqual({ x: 10, y: 20, width: 32, height: 32 });
++  expect(spec.entries.map((entry: any) => entry.label)).toEqual(["Import bots", "Export all bots"]);
++  spec.entries[0].onSelect();
++  spec.entries[1].onSelect();
++  expect(onImportBot).toHaveBeenCalledOnce();
++  expect(onExportAllBots).toHaveBeenCalledOnce();
 +});
 +
 +it("imports every bot from a collection through the same import form", async () => {
