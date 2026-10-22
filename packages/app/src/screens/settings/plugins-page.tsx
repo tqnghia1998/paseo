@@ -1,14 +1,6 @@
 import { formatPluginInstallation } from "@getpaseo/protocol/plugin-source-reference";
 import { PluginSettingsMenuItems } from "@/plugins/settings";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -39,9 +31,6 @@ import { openPluginInstallForm } from "@/screens/settings/plugin-install-form-mo
 import { pluginRegistry, useInstalledPlugins } from "@/plugins/registry";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
-import { CommunityPluginsSection, VibingPluginsSection } from "@/patches/vibing/customizations";
-import { getCommunityPluginSource, groupPluginInventory } from "@/patches/vibing/plugin-inventory";
 
 const pluginQueryKey = (serverId: string) => ["plugins", serverId] as const;
 const PLUGIN_SOURCE_DOCS_URL = "https://paseo.sh/docs/plugins/reference#plugin-sources";
@@ -100,28 +89,24 @@ function PluginActionsMenu({
             {t("settings.plugins.logs.action")}
           </DropdownMenuItem>
         ) : null}
-        {!plugin.builtin ? (
-          <DropdownMenuItem
-            onSelect={reload}
-            disabled={pending || !plugin.enabled}
-            status={pendingAction === "reload" ? "pending" : "idle"}
-            pendingLabel={t("settings.plugins.actions.reloading")}
-          >
-            {t("settings.plugins.actions.reload")}
-          </DropdownMenuItem>
-        ) : null}
-        {!plugin.builtin ? (
-          <DropdownMenuItem
-            destructive
-            leading={removeIcon}
-            onSelect={remove}
-            disabled={pending}
-            status={pendingAction === "remove" ? "pending" : "idle"}
-            pendingLabel={t("settings.plugins.actions.removing")}
-          >
-            {t("settings.plugins.actions.remove")}
-          </DropdownMenuItem>
-        ) : null}
+        <DropdownMenuItem
+          onSelect={reload}
+          disabled={pending || !plugin.enabled}
+          status={pendingAction === "reload" ? "pending" : "idle"}
+          pendingLabel={t("settings.plugins.actions.reloading")}
+        >
+          {t("settings.plugins.actions.reload")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          destructive
+          leading={removeIcon}
+          onSelect={remove}
+          disabled={pending}
+          status={pendingAction === "remove" ? "pending" : "idle"}
+          pendingLabel={t("settings.plugins.actions.removing")}
+        >
+          {t("settings.plugins.actions.remove")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -155,19 +140,14 @@ function PluginRow({
   let badgeVariant: "success" | "error" | "muted" = "muted";
   if (status === "running") badgeVariant = "success";
   else if (status === "failed") badgeVariant = "error";
-  const statusLabel = t(
-    plugin.builtin && status === "running"
-      ? "settings.plugins.builtinLoaded"
-      : `settings.plugins.status.${status}`,
-  );
+  const statusLabel = t(`settings.plugins.status.${status}`);
   const statusBadge = useMemo(
     () => <StatusBadge label={statusLabel} variant={badgeVariant} />,
     [badgeVariant, statusLabel],
   );
-  const communitySource = getCommunityPluginSource(plugin, isEmbeddedFocusMode);
   const hint = useMemo(
     () =>
-      plugin.description || plugin.installation || communitySource ? (
+      plugin.description || plugin.installation ? (
         <View>
           {plugin.description ? (
             <Text style={styles.pluginDescription}>{plugin.description}</Text>
@@ -175,44 +155,37 @@ function PluginRow({
           {plugin.installation ? (
             <Text style={styles.pluginSource}>{formatPluginInstallation(plugin.installation)}</Text>
           ) : null}
-          {communitySource ? (
-            <ExternalLink href={`https://github.com/${communitySource}`} label={communitySource} />
-          ) : null}
         </View>
       ) : undefined,
-    [plugin.description, plugin.installation, communitySource],
+    [plugin.description, plugin.installation],
   );
   const toggleLabel = `${plugin.id}: ${t(
     plugin.enabled ? "settings.plugins.actions.disable" : "settings.plugins.actions.enable",
   )}`;
   return (
     <SettingsRow
-      label={plugin.name ?? plugin.id}
+      label={plugin.id}
       labelAccessory={statusBadge}
       hint={hint}
       error={clientError ?? plugin.error}
       testID={`plugin-row-${plugin.id}`}
     >
       <View style={styles.pluginControls} accessibilityLabel={`${plugin.id} ${statusLabel}`}>
-        {!plugin.builtin ? (
-          <Switch
-            value={plugin.enabled}
-            onValueChange={toggle}
-            disabled={pending}
-            accessibilityLabel={toggleLabel}
-          />
-        ) : null}
-        {!plugin.builtin || supportsLogs ? (
-          <PluginActionsMenu
-            plugin={plugin}
-            serverId={serverId}
-            pending={pending}
-            pendingAction={pendingAction}
-            onAction={onAction}
-            onOpenLogs={onOpenLogs}
-            supportsLogs={supportsLogs}
-          />
-        ) : null}
+        <Switch
+          value={plugin.enabled}
+          onValueChange={toggle}
+          disabled={pending}
+          accessibilityLabel={toggleLabel}
+        />
+        <PluginActionsMenu
+          plugin={plugin}
+          serverId={serverId}
+          pending={pending}
+          pendingAction={pendingAction}
+          onAction={onAction}
+          onOpenLogs={onOpenLogs}
+          supportsLogs={supportsLogs}
+        />
       </View>
     </SettingsRow>
   );
@@ -291,59 +264,11 @@ function PluginLogsSheet({
   );
 }
 
-function PluginList({
-  plugins,
-  renderRow,
-  emptyLabel,
-}: {
-  plugins: PluginListItem[];
-  renderRow(plugin: PluginListItem): ReactNode;
-  emptyLabel: string;
-}) {
-  return (
-    <SettingsCard>
-      {plugins.length ? (
-        plugins.map(renderRow)
-      ) : (
-        <View style={styles.empty}>
-          <Text style={settingsStyles.rowHint}>{emptyLabel}</Text>
-        </View>
-      )}
-    </SettingsCard>
-  );
-}
-
-function BuiltinPluginsSection({
-  supported,
-  pageState,
-  children,
-}: {
-  supported: boolean;
-  pageState: ReturnType<typeof resolvePluginPageState>;
-  children: ReactNode;
-}) {
-  const { t } = useTranslation();
-  let content = null;
-  if (!supported) content = <Alert size="sm" title={t("settings.plugins.builtinUpdateTitle")} />;
-  else if (pageState !== "loading" && pageState !== "error") content = children;
-  return (
-    <SettingsSection
-      title={t("settings.plugins.builtinTitle")}
-      info={t("settings.plugins.builtinHint")}
-      testID="paseo-builtin-plugins"
-    >
-      {content}
-    </SettingsSection>
-  );
-}
-
 export function HostPluginsPage({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
   const supported = useHostFeature(serverId, "pluginManagement");
-  // COMPAT(builtinPluginListing): added in v0.12.0, remove gate after 2027-10-19.
-  const builtinListingSupported = useHostFeature(serverId, "builtinPluginListing");
   // COMPAT(pluginSourceInstallation): added in v0.8.0; remove gate after 2027-03-16 once daemon floor supports source identifiers.
   const sourceInstallSupported = useHostFeature(serverId, "pluginSourceInstallation");
   // COMPAT(pluginLogs): added in v0.4.0, remove gate after 2027-08-16.
@@ -351,10 +276,7 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
   const { config, patchConfig } = useDaemonConfig(serverId);
   const refreshQueue = useRef(Promise.resolve());
   useInstalledPlugins();
-  const queryKey = useMemo(
-    () => [...pluginQueryKey(serverId), builtinListingSupported],
-    [serverId, builtinListingSupported],
-  );
+  const queryKey = useMemo(() => pluginQueryKey(serverId), [serverId]);
   const [installForm] = useState(openPluginInstallForm);
   const installState = useSyncExternalStore(
     installForm.subscribe,
@@ -379,7 +301,7 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
     queryKey,
     queryFn: async () => {
       if (!client) throw new Error("Plugin host is offline");
-      return client.listPlugins({ includeBuiltins: builtinListingSupported });
+      return client.listPlugins();
     },
     enabled: Boolean(client && connected && supported),
     dataShape: "list",
@@ -487,31 +409,6 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
     void refetchPlugins();
   }, [refetchPlugins]);
   const closeLogs = useCallback(() => setLogsPluginId(null), []);
-  const { vibing, community, paseo, additional } = groupPluginInventory({
-    plugins: plugins.data ?? [],
-    embedded: isEmbeddedFocusMode,
-  });
-
-  const renderPluginRow = useCallback(
-    (plugin: PluginListItem) => {
-      const clientError = pluginRegistry.getEvaluationError(serverId, plugin.id);
-      const pending = mutation.isPending && mutation.variables?.pluginId === plugin.id;
-      return (
-        <PluginRow
-          key={plugin.id}
-          serverId={serverId}
-          plugin={plugin}
-          clientError={clientError}
-          pending={mutation.isPending}
-          pendingAction={pending ? pluginRowAction(mutation.variables?.action) : undefined}
-          onAction={action}
-          onOpenLogs={setLogsPluginId}
-          supportsLogs={logsSupported}
-        />
-      );
-    },
-    [serverId, mutation.isPending, mutation.variables, action, logsSupported],
-  );
 
   if (pageState === "offline") {
     return (
@@ -543,42 +440,37 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
     );
   } else if (pageState !== "loading") {
     catalogContent = (
-      <PluginList
-        plugins={additional}
-        renderRow={renderPluginRow}
-        emptyLabel={t("settings.plugins.additionalEmpty")}
-      />
+      <SettingsCard>
+        {plugins.data?.length ? (
+          plugins.data.map((plugin) => {
+            const clientError = pluginRegistry.getEvaluationError(serverId, plugin.id);
+            const pending = mutation.isPending && mutation.variables?.pluginId === plugin.id;
+            return (
+              <PluginRow
+                key={plugin.id}
+                serverId={serverId}
+                plugin={plugin}
+                clientError={clientError}
+                pending={mutation.isPending}
+                pendingAction={pending ? pluginRowAction(mutation.variables?.action) : undefined}
+                onAction={action}
+                onOpenLogs={setLogsPluginId}
+                supportsLogs={logsSupported}
+              />
+            );
+          })
+        ) : (
+          <View style={styles.empty}>
+            <Text style={settingsStyles.rowHint}>{t("settings.plugins.states.empty")}</Text>
+          </View>
+        )}
+      </SettingsCard>
     );
   }
 
   return (
     <View>
-      <VibingPluginsSection
-        serverId={serverId}
-        supported={builtinListingSupported}
-        pageState={pageState}
-      >
-        <PluginList
-          plugins={vibing}
-          renderRow={renderPluginRow}
-          emptyLabel={t("settings.plugins.vibingEmpty")}
-        />
-      </VibingPluginsSection>
-      <CommunityPluginsSection pageState={pageState} hasPlugins={community.length > 0}>
-        <PluginList
-          plugins={community}
-          renderRow={renderPluginRow}
-          emptyLabel={t("settings.plugins.communityEmpty")}
-        />
-      </CommunityPluginsSection>
-      <BuiltinPluginsSection supported={builtinListingSupported} pageState={pageState}>
-        <PluginList
-          plugins={paseo}
-          renderRow={renderPluginRow}
-          emptyLabel={t("settings.plugins.builtinEmpty")}
-        />
-      </BuiltinPluginsSection>
-      <SettingsSection title={t("settings.plugins.additionalTitle")} testID="additional-plugins">
+      <SettingsSection title={t("settings.plugins.title")}>
         <Alert
           size="sm"
           variant="warning"

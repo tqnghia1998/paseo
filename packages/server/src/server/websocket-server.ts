@@ -1999,7 +1999,6 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(plugins): added in v0.3.0, remove gate after 2027-08-07.
         plugins: true,
         pluginManagement: true,
-        builtinPluginListing: true,
         pluginGitManagement: true,
         pluginSourceInstallation: true,
         pluginSourceUpdates: true,

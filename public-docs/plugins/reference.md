@@ -1176,6 +1176,11 @@ function hideAlerts() {
 
 ## Host UI
 
+For custom Markdown or reasoning renderers, `useRevealedText(text, phase)` from
+`@getpaseo/plugin/client/ui` returns text with the host's streaming pacing. Pass
+`"streaming"` while receiving text and `"complete"` when the turn settles. `StreamedText`
+provides the same pacing when a plain text component is sufficient.
+
 Import Paseo-owned UI from `@getpaseo/plugin/client/ui` in client code. This example
 opens a controlled modal, renders a host icon, and confirms the action with a toast:
 
@@ -2199,9 +2204,14 @@ decisions.
 
 ## Composer pills
 
+`client.insertComposerText({ agentId, text })` appends text to that agent's open, editable
+composer on the plugin's host and focuses the input without sending. Existing draft text and
+attachments are preserved. It throws when no editable composer is active for that agent.
+
 `client.addComposerPill({ id, workspaceId, agentId, button })` uses the same [button descriptor](#button-descriptor)
 and returns the same registration. It targets one agent's composer track alongside Tasks and
-Subagents. Composer pills always show the icon and `label` (or `title` when `label` is omitted).
+Subagents. Pass `placement: "input"` to render a control inside the input toolbar instead;
+omitting it (or `"above"`) keeps the track placement. Composer pills always show the icon and `label` (or `title` when `label` is omitted).
 They never show a chevron, including for menus and popovers.
 
 ```tsx
@@ -2228,6 +2238,11 @@ The [local plugin example](https://github.com/getpaseo/paseo/blob/main/plugin-ex
 replaces registrations on each snapshot and aborts the observation during entry cleanup, including pending bootstrap.
 
 ## Button descriptor
+
+A menu entry with `kind: "actions"`, `id`, `title`, and an `actions` array renders a
+non-clickable label with icon buttons aligned to its right. Each action has its own `id`,
+`title` (used for accessibility and its tooltip), `icon`, `onPress`, and optional `disabled`.
+Selecting an action closes the menu; selecting the label performs no action.
 
 These contracts are exported from `@getpaseo/plugin/client`.
 

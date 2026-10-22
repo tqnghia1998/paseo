@@ -43,6 +43,7 @@ export type {
   PluginButtonIcon,
   PluginButtonIconProps,
   PluginButtonMenuEntry,
+  PluginButtonMenuAction,
   PluginButtonRegistration,
   PluginComposerPillContribution,
   PluginHeaderButtonContribution,

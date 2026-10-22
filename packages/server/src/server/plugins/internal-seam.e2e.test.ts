@@ -74,15 +74,6 @@ test("a failing built-in does not stop the daemon or the next built-in", async (
     await client.connect();
     expect(await client.invokePluginRpc("internal-seam", "state", {})).toEqual({ workspaces: 0 });
     expect(await client.listPlugins()).toEqual([]);
-    expect(await client.listPlugins({ includeBuiltins: true })).toMatchObject([
-      {
-        id: "failing-builtin",
-        builtin: true,
-        status: "failed",
-        error: expect.stringContaining("fixture startup failure"),
-      },
-      { id: "internal-seam", builtin: true, status: "running" },
-    ]);
   } finally {
     await client.close();
     await daemon.close();

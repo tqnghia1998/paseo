@@ -1,0 +1,242 @@
+diff --git a/plugins/quick-prompts/client/pills.test.ts b/plugins/quick-prompts/client/pills.test.ts
+new file mode 100644
+index 0000000..14e3a27
+--- /dev/null
++++ b/plugins/quick-prompts/client/pills.test.ts
+@@ -0,0 +1,34 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { createPromptPills } from './pills.ts';
++
++test('draft prompts survive agent snapshots, route Send/Insert, and clean up', async () => {
++  const active = new Map();
++  const sent: unknown[] = [];
++  const inserted: unknown[] = [];
++  const pills = createPromptPills({
++    addComposerPill: (entry) => {
++      active.set(entry.agentId, entry);
++      return { update: (button) => { entry.button = button; }, remove: () => { active.delete(entry.agentId); } };
++    },
++    send: async (...args) => { sent.push(args); },
++    insert: (...args) => { inserted.push(args); },
++    openSettings() {},
++  });
++  pills.setDrafts([{id:'draft', workspaceId:'workspace'}]);
++  pills.setSettings({display:'menu', prompts:[{id:'review',label:'Review',text:'Review this'}]});
++  pills.setAgents([{id:'chat',workspaceId:'workspace'}]);
++  assert.deepEqual([...active.keys()], ['draft','chat']);
++  const menu = active.get('draft');
++  assert.equal(menu.button.label,'Prompts');
++  assert.equal(menu.workspaceId,'workspace');
++  const actions = menu.button.behavior.items[0].actions;
++  await actions[0].onPress();
++  actions[1].onPress();
++  assert.deepEqual(sent,[['draft','Review this']]);
++  assert.deepEqual(inserted,[['draft','Review this']]);
++  pills.setDrafts([]);
++  assert.deepEqual([...active.keys()],['chat']);
++  pills.removeAll();
++  assert.equal(active.size,0);
++});
+diff --git a/plugins/quick-prompts/client/pills.ts b/plugins/quick-prompts/client/pills.ts
+index 6e5dd82..e8c3dc7 100644
+--- a/plugins/quick-prompts/client/pills.ts
++++ b/plugins/quick-prompts/client/pills.ts
+@@ -5,12 +5,13 @@ import type {
+ } from "@getpaseo/plugin/client";
+ import type { QuickPrompt, QuickPromptsSettings } from "../shared/prompts";
+ 
+-const ADD_PILL_ID = "add-quick-prompt";
++const MANAGE_PILL_ID = "manage-quick-prompts";
+ const MENU_PILL_ID = "quick-prompts";
+ 
+ export interface PromptPillHost {
+   addComposerPill(contribution: PluginComposerPillContribution): PluginButtonRegistration;
+   send(agentId: string, text: string): Promise<void>;
++  insert(agentId: string, text: string): void;
+   openSettings(): void;
+ }
+ 
+@@ -24,6 +25,7 @@ export interface PromptPills {
+   setSettings(settings: QuickPromptsSettings): void;
+   /** Replaces the agent list with a full snapshot. */
+   setAgents(agents: readonly PillAgent[]): void;
++  setDrafts(drafts: readonly PillAgent[]): void;
+   upsertAgent(agent: PillAgent): void;
+   removeAgent(agentId: string): void;
+   removeAll(): void;
+@@ -33,6 +35,7 @@ export interface PromptPills {
+ interface PillSpec {
+   id: string;
+   content: string;
++  placement?: PluginComposerPillContribution["placement"];
+   button(agentId: string): PluginButton;
+ }
+ 
+@@ -49,7 +52,7 @@ interface AgentPills {
+ 
+ /**
+  * Keeps one composer pill per saved prompt on every agent, a single "Prompts" pill whose menu
+- * lists them, or a single "Add quick prompt" pill when none are saved. Pills whose order is
++ * lists them, and a "Prompts" management control in the input toolbar. Pills whose order is
+  * unchanged update in place; a reorder, addition, removal, or display switch re-registers that
+  * agent's pills, because registration order is display order.
+  *
+@@ -57,10 +60,11 @@ interface AgentPills {
+  * transforms, and Hermes rejects class syntax (getpaseo/paseo#5783).
+  */
+ export function createPromptPills(host: PromptPillHost): PromptPills {
+-  /** Null until the first read, so agents do not flash the "Add quick prompt" pill. */
++  /** Null until the first read, so agents do not flash the empty-state management pill. */
+   let specs: readonly PillSpec[] | null = null;
+   /** Agents that get pills, by id, with their workspace. */
+   const targets = new Map<string, string>();
++  const draftIds = new Set<string>();
+   const registered = new Map<string, AgentPills>();
+   /**
+    * Sends in flight by agent and prompt. Kept outside the registrations, which a reorder or display
+@@ -77,13 +81,14 @@ export function createPromptPills(host: PromptPillHost): PromptPills {
+     return next;
+   };
+ 
+-  const addSpec: PillSpec = {
+-    id: ADD_PILL_ID,
++  const manageSpec: PillSpec = {
++    id: MANAGE_PILL_ID,
+     content: "",
++    placement: "input",
+     button: () => ({
+-      title: "Add a quick prompt in settings",
+-      icon: "Plus",
+-      label: "Add quick prompt",
++      title: "Prompts",
++      icon: "Settings",
++      label: "Prompts",
+       behavior: { kind: "action", onPress: () => host.openSettings() },
+     }),
+   };
+@@ -111,10 +116,13 @@ export function createPromptPills(host: PromptPillHost): PromptPills {
+         kind: "menu",
+         items: [
+           ...prompts.map((prompt) => ({
+-            kind: "item" as const,
++            kind: "actions" as const,
+             id: `prompt-${prompt.id}`,
+             title: prompt.label,
+-            behavior: { kind: "action" as const, onPress: () => send(agentId, prompt) },
++            actions: [
++              { id: "send", title: "Send", icon: "Send", onPress: () => send(agentId, prompt) },
++              { id: "insert", title: "Insert", icon: "TextCursorInput", onPress: () => host.insert(agentId, prompt.text) },
++            ],
+           })),
+           { kind: "separator", id: "manage-divider" },
+           {
+@@ -155,8 +163,8 @@ export function createPromptPills(host: PromptPillHost): PromptPills {
+     clear(agentId);
+     registered.set(agentId, {
+       workspaceId,
+-      pills: next.map(({ id, content, button }) => {
+-        const registration = host.addComposerPill({ id, workspaceId, agentId, button: button(agentId) });
++      pills: next.map(({ id, content, placement, button }) => {
++        const registration = host.addComposerPill({ id, workspaceId, agentId, placement, button: button(agentId) });
+         return { id, content, registration };
+       }),
+     });
+@@ -175,15 +183,24 @@ export function createPromptPills(host: PromptPillHost): PromptPills {
+ 
+   return {
+     setSettings({ prompts, display }) {
+-      if (prompts.length === 0) specs = [addSpec];
+-      else specs = display === "menu" ? [menuSpec(prompts)] : prompts.map(promptSpec);
++      if (prompts.length === 0) specs = [manageSpec];
++      else specs = display === "menu" ? [menuSpec(prompts)] : [...prompts.map(promptSpec), manageSpec];
+       for (const [agentId, workspaceId] of targets) sync(agentId, workspaceId);
+     },
+     setAgents(list) {
+       const ids = new Set(list.map(({ id }) => id));
+-      for (const agentId of [...targets.keys()]) if (!ids.has(agentId)) removeAgent(agentId);
++      for (const agentId of [...targets.keys()]) if (!ids.has(agentId) && !draftIds.has(agentId)) removeAgent(agentId);
+       for (const agent of list) upsertAgent(agent);
+     },
++    setDrafts(drafts) {
++      const ids = new Set(drafts.map(({ id }) => id));
++      for (const id of draftIds) if (!ids.has(id)) removeAgent(id);
++      draftIds.clear();
++      for (const draft of drafts) {
++        draftIds.add(draft.id);
++        upsertAgent(draft);
++      }
++    },
+     upsertAgent,
+     removeAgent,
+     removeAll() {
+diff --git a/plugins/quick-prompts/client/settings-screen.tsx b/plugins/quick-prompts/client/settings-screen.tsx
+index 4bf54e6..bdc8e7d 100644
+--- a/plugins/quick-prompts/client/settings-screen.tsx
++++ b/plugins/quick-prompts/client/settings-screen.tsx
+@@ -67,7 +67,7 @@ function useStyles(theme: Theme, compact: boolean) {
+         borderColor: theme.colors.border,
+         backgroundColor: theme.colors.surface2,
+       },
+-      input: { padding: 0, color: theme.colors.foreground, fontSize: 14, lineHeight: LINE_HEIGHT },
++      input: { padding: 0, color: theme.colors.foreground, fontSize: 14 },
+       error: { color: theme.colors.statusDanger, fontSize: 12, marginTop: 2 },
+       actions: { flexDirection: "row" as const, gap: 2, paddingTop: 3 },
+       iconButton: {
+@@ -167,7 +167,7 @@ function CompactInput({
+           onChangeText={onChangeText}
+           onBlur={onBlur}
+           onContentSizeChange={multiline ? (event) => setContentHeight(event.nativeEvent.contentSize.height) : undefined}
+-          style={[styles.input, { height }]}
++          style={[styles.input, { height }, multiline && { lineHeight: LINE_HEIGHT }]}
+         />
+       </View>
+       {error ? <Text style={styles.error}>{error}</Text> : null}
+diff --git a/plugins/quick-prompts/index.client.tsx b/plugins/quick-prompts/index.client.tsx
+index 37bd52c..58a779b 100644
+--- a/plugins/quick-prompts/index.client.tsx
++++ b/plugins/quick-prompts/index.client.tsx
+@@ -13,17 +13,26 @@ export default function contribute(client: PluginClientContext) {
+     Component: QuickPromptsSettingsScreen,
+   });
+ 
++  const drafts = new Map<string, { send(text: string): Promise<void> }>();
+   const pills = createPromptPills({
+     addComposerPill: (contribution) => client.addComposerPill(contribution),
+-    send: (agentId, text) => client.paseo.agents.ref(agentId).send(text),
++    send: (agentId, text) => drafts.get(agentId)?.send(text) ?? client.paseo.agents.ref(agentId).send(text),
++    insert: (agentId, text) => client.insertComposerText({ agentId, text }),
+     openSettings: () => client.openSettings(SETTINGS_SCREEN_ID),
+   });
++  const removeDrafts = client.observeComposerDrafts?.((next) => {
++    drafts.clear();
++    for (const draft of next) drafts.set(draft.agentId, draft);
++    pills.setDrafts(next.map((draft) => ({ id: draft.agentId, workspaceId: draft.workspaceId })));
++  });
+   const lifetime = new AbortController();
+   followAgents(client, pills, lifetime.signal);
+   followPrompts(client, pills, lifetime.signal);
+ 
+   return () => {
+     lifetime.abort();
++    removeDrafts?.();
++    drafts.clear();
+     pills.removeAll();
+     removeSettings();
+   };
+diff --git a/plugins/quick-prompts/shared/prompts.ts b/plugins/quick-prompts/shared/prompts.ts
+index 548ecb9..e5ff6a6 100644
+--- a/plugins/quick-prompts/shared/prompts.ts
++++ b/plugins/quick-prompts/shared/prompts.ts
+@@ -38,9 +38,8 @@ export const quickPromptsSettings = defineSettings({
+       .max(MAX_PROMPTS, `Save at most ${MAX_PROMPTS} quick prompts`)
+       .refine((prompts) => new Set(prompts.map(({ id }) => id)).size === prompts.length, "Quick prompt ids must be unique")
+       .default([]),
+-    // Documents saved before this field existed, or with a display this version does not know,
+-    // keep separate pills and their prompts.
+-    display: z.enum(PROMPT_DISPLAYS).catch("pills"),
++    // Missing or unknown display preferences use a single menu without changing saved prompts.
++    display: z.enum(PROMPT_DISPLAYS).catch("menu"),
+   }),
+ });
+ 

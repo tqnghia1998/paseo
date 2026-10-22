@@ -4,32 +4,20 @@ import { subscriptionFixture } from "@/runtime/subscription-fixture";
  */
 import { i18n as testI18n } from "@/i18n/i18next";
 import React, { type ReactElement } from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { PluginListItem, PluginLogEntry } from "@getpaseo/protocol/messages";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HostPluginsPage } from "./plugins-page";
-import { openExternalUrl } from "@/utils/open-external-url";
 
 void testI18n;
 
-vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: vi.fn(async () => {}) }));
-
 const runtime = vi.hoisted(() => ({
-  embedded: false,
   connected: true,
   supported: true,
   logsSupported: true,
-  builtinListingSupported: true,
   client: null as DaemonClient | null,
-}));
-
-vi.mock("@/patches/vibing/focus-mode", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/patches/vibing/focus-mode")>()),
-  get isEmbeddedFocusMode() {
-    return runtime.embedded;
-  },
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
@@ -40,7 +28,6 @@ vi.mock("@/runtime/host-runtime", () => ({
 vi.mock("@/runtime/host-features", () => ({
   useHostFeature: (_serverId: string, feature: string) => {
     if (feature === "pluginLogs") return runtime.logsSupported;
-    if (feature === "builtinPluginListing") return runtime.builtinListingSupported;
     return runtime.supported;
   },
 }));
@@ -160,11 +147,9 @@ function renderPage(client: PluginClient | null): void {
 describe("HostPluginsPage", () => {
   beforeEach(() => {
     vi.stubGlobal("React", React);
-    runtime.embedded = false;
     runtime.connected = true;
     runtime.supported = true;
     runtime.logsSupported = true;
-    runtime.builtinListingSupported = true;
     runtime.client = null;
     vi.stubGlobal(
       "confirm",
@@ -195,68 +180,7 @@ describe("HostPluginsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     await waitFor(() => expect(client.listPlugins).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText("No additional plugins installed")).toBeDefined();
-  });
-
-  it("lists bundled community plugins with author links outside Vibing customizations", async () => {
-    runtime.embedded = true;
-    const client = createClient();
-    const ids = ["beautiful-chat", "mermaid", "paseo-bots", "annotations"];
-    client.listPlugins.mockResolvedValue([
-      ...ids.map((id) => ({ ...plugin(), id, builtin: true })),
-      { ...plugin(), id: "space-app-vibing-theme", builtin: true },
-    ]);
-    renderPage(client);
-    const section = await screen.findByTestId("community-plugins");
-    expect(within(section).getByText("Community plugins")).toBeDefined();
-    for (const id of ids) {
-      expect(within(section).getByTestId(`plugin-row-${id}`)).toBeDefined();
-      expect(
-        within(screen.getByTestId("vibing-plugin-section")).queryByTestId(`plugin-row-${id}`),
-      ).toBeNull();
-    }
-    for (const source of [
-      "ABorakati/beautiful-chat",
-      "dutchakdev/paseo-plugin-mermaid",
-      "oliexe/paseo-bots",
-      "neunzig-zehn/paseo-annotations",
-    ]) {
-      fireEvent.click(within(section).getByRole("link", { name: source }));
-      expect(openExternalUrl).toHaveBeenLastCalledWith(`https://github.com/${source}`);
-    }
-    expect(within(section).getAllByText("loaded")).toHaveLength(4);
-    expect(within(section).queryAllByRole("switch")).toHaveLength(0);
-  });
-
-  it("shows built-ins as loaded while additional plugins are disabled, with logs and no lifecycle controls", async () => {
-    const client = createClient();
-    client.getDaemonConfig.mockResolvedValue({ config: { pluginsEnabled: false } });
-    client.listPlugins.mockResolvedValue([
-      { ...plugin(), id: "codex-usage-source", builtin: true },
-    ]);
-    renderPage(client);
-    expect(await screen.findByText("Paseo built-ins")).toBeDefined();
-    expect(await screen.findByText("codex-usage-source")).toBeDefined();
-    expect(screen.getByText("loaded")).toBeDefined();
-    expect(screen.queryByRole("switch", { name: "codex-usage-source: Disable" })).toBeNull();
-    expect(client.listPlugins).toHaveBeenCalledWith({ includeBuiltins: true });
-    expect(screen.getByText("No additional plugins installed")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Actions for codex-usage-source" }));
-    expect(screen.getByRole("menuitem", { name: "Logs" })).toBeDefined();
-    expect(screen.queryByRole("menuitem", { name: "Reload" })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: "Remove" })).toBeNull();
-  });
-
-  it("keeps additional plugins available when the host cannot list built-ins", async () => {
-    runtime.builtinListingSupported = false;
-    const client = createClient();
-    client.listPlugins.mockResolvedValue([plugin()]);
-    renderPage(client);
-
-    expect(await screen.findByText("example")).toBeDefined();
-    expect(screen.getByText("Update the host to view built-in plugins")).toBeDefined();
-    expect(client.listPlugins).toHaveBeenCalledWith({ includeBuiltins: false });
-    expect(screen.getByRole("switch", { name: "example: Disable" })).toBeDefined();
+    expect(await screen.findByText("No plugins configured")).toBeDefined();
   });
 
   it.each([

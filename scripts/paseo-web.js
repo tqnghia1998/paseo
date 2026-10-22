@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import path from "node:path";
+import { prepareCommunityPlugins } from "./paseo-web-plugins.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import os from "node:os";
@@ -52,9 +53,13 @@ if (fs.existsSync(webUiDist)) {
 
 // Import server entrypoint
 const serverModulePath = path.join(__dirname, "server.mjs");
-const { createPaseoDaemon, loadConfig, createRootLogger } = await import(
-  `file://${serverModulePath}`
-);
+const {
+  createPaseoDaemon,
+  loadConfig,
+  createRootLogger,
+  readPersistedConfig,
+  savePersistedConfig,
+} = await import(`file://${serverModulePath}`);
 
 function parseArgs(args) {
   let port = 6768;
@@ -95,6 +100,14 @@ function parseArgs(args) {
 
 const { port, host, home: customHome, cleanupWorktrees } = parseArgs(process.argv.slice(2));
 const home = customHome || path.join(os.homedir(), ".paseo-web");
+
+if (!cleanupWorktrees)
+  prepareCommunityPlugins({
+    home,
+    sourceRoot: path.join(__dirname, "community-plugins"),
+    readPersistedConfig,
+    savePersistedConfig,
+  });
 
 const config = loadConfig(home, {
   cli: {

@@ -47,6 +47,92 @@ function button(onPress = () => {}): PluginButton {
 }
 
 describe("plugin buttons", () => {
+  it("keeps inline actions separate and only executes the selected enabled action", async () => {
+    const buttons = store();
+    const sent: string[] = [];
+    const inserted: string[] = [];
+    const registration = buttons.addComposerPill(installation(), {
+      id: "prompts",
+      workspaceId: "workspace",
+      agentId: "agent",
+      button: {
+        ...button(),
+        behavior: {
+          kind: "menu",
+          items: [
+            {
+              kind: "actions",
+              id: "review",
+              title: "Review",
+              actions: [
+                {
+                  id: "send",
+                  title: "Send",
+                  icon: "Scan",
+                  onPress: () => {
+                    sent.push("review");
+                  },
+                },
+                {
+                  id: "insert",
+                  title: "Insert",
+                  icon: "Scan",
+                  onPress: () => {
+                    inserted.push("review");
+                  },
+                },
+                {
+                  id: "disabled",
+                  title: "Disabled",
+                  icon: "Scan",
+                  disabled: true,
+                  onPress: () => {
+                    sent.push("disabled");
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const key = buttons.getSnapshot()[0].key;
+    await buttons.run(key, ["review"]);
+    await buttons.run(key, ["review", "missing"]);
+    await buttons.run(key, ["review", "disabled"]);
+    expect(sent).toEqual([]);
+    expect(inserted).toEqual([]);
+    await buttons.run(key, ["review", "insert"]);
+    expect(inserted).toEqual(["review"]);
+    expect(sent).toEqual([]);
+    await buttons.run(key, ["review", "send"]);
+    expect(sent).toEqual(["review"]);
+    registration.update({ disabled: true });
+    await buttons.run(key, ["review", "insert"]);
+    expect(inserted).toEqual(["review"]);
+  });
+  it("keeps input controls out of the track and preserves their agent scope", async () => {
+    const buttons = store();
+    const plugin = installation();
+    let opened = false;
+    buttons.addComposerPill(plugin, {
+      id: "prompts",
+      workspaceId: "workspace",
+      agentId: "agent",
+      placement: "input",
+      button: button(() => {
+        opened = true;
+      }),
+    });
+    const entry = buttons.getSnapshot()[0];
+    expect(buttonMatches(entry, "host-a", "workspace", "agent")).toBe(false);
+    expect(buttonMatches(entry, "host-a", "workspace", "agent", "input")).toBe(true);
+    expect(buttonMatches(entry, "host-b", "workspace", "agent", "input")).toBe(false);
+    expect(buttonMatches(entry, "host-a", "workspace", "other-agent", "input")).toBe(false);
+    expect(buttonMatches(entry, "host-a", "workspace", null)).toBe(false);
+    await buttons.run(entry.key);
+    expect(opened).toBe(true);
+  });
   it("updates visibility in place, closes hidden content, and scopes each placement", () => {
     const buttons = store();
     const plugin = installation();

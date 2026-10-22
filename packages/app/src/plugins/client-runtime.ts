@@ -12,6 +12,7 @@ import type { PluginClientRuntime } from "./evaluate";
 import { createPluginNavigation } from "./navigation";
 import { pluginButtonStore } from "./buttons";
 import type { InstalledPlugin } from "./types";
+import { insertComposerText, observeComposerDrafts } from "@/composer/text-insertion";
 
 export function createPluginClientRuntime(
   installation: InstalledPlugin,
@@ -20,10 +21,29 @@ export function createPluginClientRuntime(
   const state = createPluginClientStateSource(installation.serverId);
   const capabilities = createPluginCapabilities(
     installation,
-    createPluginNavigation({ serverId: installation.serverId, workspaceId: null }),
+    createPluginNavigation({
+      serverId: installation.serverId,
+      workspaceId: null,
+    }),
   );
   return {
     ...capabilities,
+    insertComposerText(input) {
+      if (installation.lifetime.signal.aborted) throw new Error("Plugin is no longer active");
+      insertComposerText({ ...input, serverId: installation.serverId });
+    },
+    observeComposerDrafts(listener) {
+      if (installation.lifetime.signal.aborted) return () => {};
+      const remove = observeComposerDrafts(installation.serverId, listener);
+      const cleanup = () => {
+        remove();
+        installation.lifetime.signal.removeEventListener("abort", cleanup);
+      };
+      installation.lifetime.signal.addEventListener("abort", cleanup, {
+        once: true,
+      });
+      return cleanup;
+    },
     i18n: installation.i18n,
     playAudio: createPlayAudio(audio, installation.lifetime.signal),
     hosts: createPluginHosts(getHostRuntimeStore(), installation.lifetime.signal),
@@ -48,7 +68,10 @@ function openClientPanel(input: {
   const { installation, state, panelId, options } = input;
   const workspaceId = options.workspaceId.trim();
   const agentId = options.agentId?.trim();
-  const navigation = createPluginNavigation({ serverId: installation.serverId, workspaceId });
+  const navigation = createPluginNavigation({
+    serverId: installation.serverId,
+    workspaceId,
+  });
   const action = agentId
     ? createPluginAgentActionContext({
         plugin: installation,
