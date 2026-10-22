@@ -1,0 +1,34 @@
+diff --git a/plugins/recap/server/models.ts b/plugins/recap/server/models.ts
+index f3f8328..de17c85 100644
+--- a/plugins/recap/server/models.ts
++++ b/plugins/recap/server/models.ts
+@@ -70,7 +70,7 @@ export function resolveCandidates(
+       ...PASEO_SMALL_MODELS.flatMap((needle) => {
+         for (const entry of runnable) {
+           const model = entry.models?.find((candidate) => matches(candidate, needle));
+-          if (model) return [{ provider: entry.provider, model: model.id }];
++          if (model) return [{ provider: entry.provider, model: smallModelId(entry, needle, model.id) }];
+         }
+         return [];
+       }),
+@@ -117,11 +117,19 @@ function configuredModels(config: GeneratorConfig, byProvider: ReadonlyMap<strin
+ function smallModel(entry: ProviderModels): string | null {
+   for (const needle of PASEO_SMALL_MODELS) {
+     const model = entry.models?.find((candidate) => matches(candidate, needle));
+-    if (model) return model.id;
++    if (model) return smallModelId(entry, needle, model.id);
+   }
+   return null;
+ }
+ 
++/**
++ * Claude's `haiku` alias honors ANTHROPIC_DEFAULT_HAIKU_MODEL, so gateways that map Haiku to an
++ * older model (and reject the newest one's reasoning-effort setting) still produce recaps.
++ */
++function smallModelId(entry: ProviderModels, needle: string, id: string): string {
++  return entry.provider === "claude" && needle === "haiku" ? "haiku" : id;
++}
++
+ function matches(model: { id: string; label: string }, needle: string): boolean {
+   return [model.id, model.label].some((value) => value.toLowerCase().includes(needle));
+ }
