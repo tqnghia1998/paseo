@@ -2,7 +2,7 @@ import { Platform, type ViewStyle } from "react-native";
 import { isWeb } from "@/constants/platform";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
 import { deriveSurfaceStates } from "./derive-colors";
-import { selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
+
 
 
 export const baseColors = {
@@ -643,7 +643,7 @@ export const DEFAULT_MONO_FONT_STACK: string = Platform.select({
 });
 
 // Chat and markdown content column; the appearance updater patches the user's width in.
-export const DEFAULT_CONTENT_MAX_WIDTH = selectEmbeddedFocusMode(1200, 820);
+export const DEFAULT_CONTENT_MAX_WIDTH = 820;
 
 // On web Unistyles puts string tokens in CSS variables, so mounted content
 // receives width changes without regenerating its classes. The px string is

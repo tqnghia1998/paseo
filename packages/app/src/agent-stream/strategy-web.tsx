@@ -42,7 +42,8 @@ import {
 import { useChatFindSelectedMessageId } from "@/agent-stream/chat-find";
 import { CHAT_COLUMN_BASE_GUTTER, resolveChatColumnGutters } from "@/chat-rail/gutters";
 import { useScrollToMessage } from "./use-scroll-to-message.web";
-import { selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
+import { usePathname } from "expo-router";
+import { isBotsChatPath } from "@/patches/vibing/chat-appearance";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -1232,8 +1233,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     viewportRef,
   ]);
 
+  const isBotsChat = isBotsChatPath(usePathname());
   const contentContainerStyle = useMemo((): CSSProperties => {
-    const desktopGutter = selectEmbeddedFocusMode(48, CHAT_COLUMN_BASE_GUTTER);
+    const desktopGutter = isBotsChat ? 36 : CHAT_COLUMN_BASE_GUTTER;
     const gutter = isMobileBreakpoint ? 8 : desktopGutter;
     const { paddingLeft, paddingRight } = resolveChatColumnGutters({
       gutter,
@@ -1250,7 +1252,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       paddingRight,
       boxSizing: "border-box",
     };
-  }, [contentMaxWidth, isMobileBreakpoint, outlineInset]);
+  }, [contentMaxWidth, isBotsChat, isMobileBreakpoint, outlineInset]);
   const scrollContainerStyle = useMemo((): CSSProperties => {
     const overlayScrollbarEnabled = scrollEnabled && !isMobileBreakpoint;
     return {

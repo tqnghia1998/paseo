@@ -34,7 +34,13 @@ describe("assistant fork destinations", () => {
           finish = resolve;
         }),
     );
-    flushSync(() => root.render(<AssistantForkMenu allowWorkspaceFork={false} onFork={onFork} />));
+    flushSync(() =>
+      root.render(
+        <BotChatForkProvider openDraft={vi.fn()}>
+          <AssistantForkMenu onFork={onFork} />
+        </BotChatForkProvider>,
+      ),
+    );
 
     flushSync(() => trigger().click());
     await expect
