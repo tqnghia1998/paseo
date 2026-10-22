@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState, type ReactElement, type ReactNode } fro
 import { Pressable, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+
 import {
   MENU_ITEM_HEIGHT,
   MenuRoot,
@@ -43,12 +44,12 @@ import { COMPOSER_PILL_CLEARANCE, composerPillStyles } from "./pill-styles";
  * or without pills: that keeps the final footer clear, and pills that come and go every turn do not
  * move the transcript.
  */
-export function ComposerTrackBar({ children }: { children: ReactNode }): ReactElement {
+function ComposerTrackBarContent({ children, contentMaxWidth }: { children: ReactNode; contentMaxWidth: number }): ReactElement {
   const scrollGesture = usePanelAwareHorizontalScrollGesture();
   const scrollBoundary = useHorizontalScrollBoundary();
   return (
     <View style={styles.bar} pointerEvents="box-none">
-      <View style={styles.trackViewport} pointerEvents="box-none">
+      <View style={[styles.trackViewport, { maxWidth: contentMaxWidth }]} pointerEvents="box-none">
         <GestureDetector gesture={scrollGesture}>
           <Animated.ScrollView
             testID="composer-track-scroll"
@@ -76,10 +77,17 @@ export function ComposerTrackBar({ children }: { children: ReactNode }): ReactEl
         />
 
 
+
       </View>
     </View>
   );
 }
+
+// Settings routes use the ordinary chat width. Observe the width when this retained rail
+// remounts so returning to Bots cannot leave it narrower than the input.
+export const ComposerTrackBar = withUnistyles(ComposerTrackBarContent, (theme) => ({
+  contentMaxWidth: theme.contentMaxWidth,
+}));
 
 export interface ComposerTrackPillSegment {
   /** Leading mark — a dot, or the running ring. `null` draws the text on its own. */
@@ -410,7 +418,6 @@ const styles = StyleSheet.create((theme) => {
     },
     trackViewport: {
       width: "100%",
-      maxWidth: theme.contentMaxWidth,
       minWidth: 0,
       flexGrow: 0,
       flexShrink: 1,
@@ -423,6 +430,7 @@ const styles = StyleSheet.create((theme) => {
       maxWidth: "100%",
     },
     track: {
+
 
 
       flexDirection: "row",
