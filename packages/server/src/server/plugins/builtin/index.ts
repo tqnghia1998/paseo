@@ -2,25 +2,15 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Vibing ships only the usage sources for its supported agents; the other upstream
+// provider and usage-source plugins stay in plugins/ for their own tests.
 export const builtinPlugins = [
-  "annotations",
-  "antigravity-provider",
-  "beautiful-chat",
   "claude-usage-source",
   "codex-usage-source",
-  "copilot-usage-source",
-  "cursor-usage-source",
-  "grok-usage-source",
-  "hoplite-provider",
-  "kimi-usage-source",
-  "mermaid",
-  "minimax-usage-source",
-  "muse-provider",
-  "opencode-go-usage-source",
+  "ais-switch-usage-source",
   "paseo-bots",
   "worktree-include",
   "space-app-vibing-theme",
-  "zai-usage-source",
 ] as const;
 
 export function resolveBuiltinPluginsRoot(moduleUrl: string | URL = import.meta.url): string {
@@ -46,7 +36,7 @@ export interface BuiltinPlugin {
 }
 
 // Stateful community plugins read PASEO_HOME and own timers or local servers.
-const isolatedBuiltins = new Set(["annotations", "paseo-bots"]);
+const isolatedBuiltins = new Set(["paseo-bots"]);
 
 export class BuiltinPluginLoader {
   readonly ids: ReadonlySet<string>;
@@ -58,17 +48,13 @@ export class BuiltinPluginLoader {
     this.ids = new Set(list);
   }
 
-  entries(): BuiltinPlugin[] {
-    return this.list.map((id) => ({
-      id,
-      directory: path.join(this.root, id),
-      ...(isolatedBuiltins.has(id) ? { isolated: true } : {}),
-    }));
-  }
-
   async load(start: (plugin: BuiltinPlugin) => Promise<void>): Promise<void> {
-    for (const plugin of this.entries()) {
-      await start(plugin);
+    for (const id of this.list) {
+      await start({
+        id,
+        directory: path.join(this.root, id),
+        ...(isolatedBuiltins.has(id) ? { isolated: true } : {}),
+      });
     }
   }
 }

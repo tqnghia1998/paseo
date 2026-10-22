@@ -364,6 +364,32 @@ const loginWindows: UsageReportEntry["report"] = {
   ],
 };
 
+test("automatically refreshes quota in the sidebar and Usage every 60 seconds", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const fixture = await installLoginUsage(loginWindows);
+  try {
+    await gotoAppShell(page);
+    await openUsageFromIcon(page);
+    const card = page.getByTestId("usage-report-login-journey:account");
+    await expect(card.getByText("31% used", { exact: true })).toBeVisible();
+    await expectPinnedUsage(page, ["31% 5h", "54% wk"]);
+    await fixture.setReport({
+      status: "available",
+      windows: [
+        { id: "five_hour", label: "Session", shortLabel: "5h", summary: true, usedPct: 42 },
+        { id: "weekly", label: "Weekly", shortLabel: "wk", summary: true, usedPct: 65 },
+      ],
+    });
+    // Keep the real daemon clock and transport: this must outlive its cache too.
+    await expect(card.getByText("42% used", { exact: true })).toBeVisible({ timeout: 75_000 });
+    await expectPinnedUsage(page, ["42% 5h", "65% wk"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("expired login refreshes to windows with visible pin toggles", async ({ page }) => {
   const fixture = await installLoginUsage({
     status: "unavailable",
