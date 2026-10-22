@@ -33,6 +33,7 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
 | Interactive Codex shells                | Server: `codex/terminal-interactions.ts`                                                                             | Codex event mapping, optional protocol `stdin`, Shell card renderer                                                                                                                                                                                                         | Colocated terminal tests; Codex provider tests; tool-call schema/browser tests                                                                                                                        |
 | Claude background shells                | Server: `claude/background-shells.ts`                                                                                | `ClaudeTaskProtocolSource` (`claude/subagents/live-source.ts`): `local_bash` tasks become Shell subagent rows once backgrounded; `isDeclaredTask` stays false for them so the parent keeps its notification row                                                             | Colocated output-tail test; `live-source.test.ts`; `agent.background-subagent.test.ts`                                                                                                                |
 | Codex background terminals              | Server: `codex/background-terminals.ts`                                                                              | `CodexAppServerAgentSession`: `emitEvent` follows root shell cards, root `turn/completed` declares still-running ones as Shell rows, `handleUnexpectedTermination` fails them                                                                                               | Colocated unit test; `codex-app-server-agent.test.ts` (Codex background terminals)                                                                                                                    |
+| Idle agent reaper                       | Server: `idle-agent-reaper.ts`                                                                                       | `AgentManager.closeIdleAgent` (re-checks after the event drain, before the provider session closes); daemon bootstrap starts and stops the sweep                                                                                                                            | Colocated reaper and `closeIdleAgent` tests                                                                                                                                                           |
 | Standalone distribution                 | `scripts/bundle-paseo-web.mjs`, `scripts/paseo-web.js`                                                               | Root build command, embedded build flag, packaged version and built-in plugin discovery                                                                                                                                                                                     | Runner tests, full standalone build and Vibing bundle guard; see [porting guide](../README-PORT.md)                                                                                                   |
 
 ## Plugin boundary
@@ -248,6 +249,16 @@ Do not label these patches as installed plugins merely to make them discoverable
   Explicit terminal teardown force-signals the discovered process tree before its
   root exits, including hangup-resistant jobs. Deliberately detached processes and
   concurrent external process creation are not a complete ownership boundary.
+- Idle agents are closed, not archived: after `PASEO_IDLE_AGENT_CLOSE_MINUTES`
+  (default 10, `0` turns it off) with nothing in flight, the reaper closes the
+  provider session so its process and MCP servers exit, and the chat keeps its
+  record, attention and history. Opening it only reloads the record; the next
+  message, mode/model change or slash-command list starts the provider again from
+  persistence. Internal agents, agents without a resumable handle, and agents with
+  a run, turn, pending permission, pending replacement or running provider
+  subagent (background shell or subagent) are never closed. A message that loads
+  the agent just before the close and starts its turn during the provider shutdown
+  can still be cancelled; the post-drain re-check only narrows that window.
 - Codex questions stay session-local, respect explicit feature opt-out, exclude
   internal agents and preserve native developer instructions. A native config
   read failure must not replace unknown instructions. Keep Default/Full Access,
