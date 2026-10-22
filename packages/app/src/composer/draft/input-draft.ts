@@ -200,10 +200,13 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
   );
 
   useEffect(() => {
-    const flushWhenHidden = () => {
-      if (document.visibilityState === "hidden") textPublication.flush();
+    const flush = () => {
+      textPublication.flush();
+      void flushDraftPersistStorage();
     };
-    const flush = () => textPublication.flush();
+    const flushWhenHidden = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
     const canListenForPageHide =
       isWeb && typeof window !== "undefined" && typeof window.addEventListener === "function";
     if (isWeb && typeof document !== "undefined") {
