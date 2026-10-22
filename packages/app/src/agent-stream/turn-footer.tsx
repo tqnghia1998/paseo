@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, type ReactNode } from "react";
+import React, { memo, useCallback, type ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";
@@ -43,6 +43,7 @@ export type InFlightTurnForkHandler = (target: AssistantForkTarget) => Promise<v
 
 export const TurnFooter = memo(function TurnFooter({
   isRunning,
+  contentMaxWidth,
   inFlightTurnStartedAt,
   host,
   strategy,
@@ -51,6 +52,7 @@ export const TurnFooter = memo(function TurnFooter({
   onForkInFlightTurn,
 }: {
   isRunning: boolean;
+  contentMaxWidth: number;
   inFlightTurnStartedAt: Date | null;
   host: TurnFooterHost | null;
   strategy: TurnContentStrategy;
@@ -60,7 +62,7 @@ export const TurnFooter = memo(function TurnFooter({
 }) {
   if (isRunning) {
     return (
-      <TurnFooterRow>
+      <TurnFooterRow contentMaxWidth={contentMaxWidth}>
         <RunningTurnFooter
           inFlightTurnStartedAt={inFlightTurnStartedAt}
           onForkInFlightTurn={onForkInFlightTurn}
@@ -73,6 +75,7 @@ export const TurnFooter = memo(function TurnFooter({
   }
   return (
     <CompletedTurnFooterRow
+      contentMaxWidth={contentMaxWidth}
       strategy={strategy}
       items={host.items}
       timing={host.timing}
@@ -84,6 +87,7 @@ export const TurnFooter = memo(function TurnFooter({
 });
 
 export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
+  contentMaxWidth,
   strategy,
   items,
   timing,
@@ -91,6 +95,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
+  contentMaxWidth: number;
   strategy: TurnContentStrategy;
   items: StreamItem[];
   timing?: TurnTiming;
@@ -99,7 +104,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
   return (
-    <TurnFooterRow>
+    <TurnFooterRow contentMaxWidth={contentMaxWidth}>
       <CompletedTurnFooter
         strategy={strategy}
         items={items}
@@ -206,15 +211,31 @@ function CompletedTurnFooter({
   );
 }
 
-function TurnFooterRow({ children }: { children: ReactNode }) {
-  const rowStyle = useMemo(() => [stylesheet.streamItemWrapper, stylesheet.turnFooterRow], []);
-  return <View style={rowStyle}>{children}</View>;
+function TurnFooterRow({
+  children,
+  contentMaxWidth,
+}: {
+  children: ReactNode;
+  contentMaxWidth: number;
+}) {
+  // Use the transcript's resolved width: numeric theme tokens can lag behind
+  // route/appearance changes on web while this footer stays mounted.
+  return (
+    <View
+      style={[
+        stylesheet.streamItemWrapper,
+        stylesheet.turnFooterRow,
+        { maxWidth: contentMaxWidth },
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
 
 const stylesheet = StyleSheet.create((theme) => ({
   streamItemWrapper: {
     width: "100%",
-    maxWidth: theme.contentMaxWidth,
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
   },

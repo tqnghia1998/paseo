@@ -148,7 +148,7 @@ import { ensureOsNotificationPermission } from "@/utils/os-notifications";
 import { EmbeddedAgentActivityBridge } from "@/patches/vibing/agent-activity";
 import { useEmbeddedTheme } from "@/patches/vibing/theme";
 import { isEmbeddedFocusMode, selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
-import { isEmbeddedBotsTool } from "@/patches/vibing/embedded-tools";
+
 
 polyfillCrypto();
 
@@ -392,12 +392,13 @@ const WINDOW_SIDEBAR_TOGGLE_HORIZONTAL_PADDING = 12;
 
 // The embedded Bots tool owns its own navigation, so app chrome stays off there.
 function resolveChromeEnabled(override: boolean | undefined, hasDaemons: boolean): boolean {
-  return !isEmbeddedBotsTool && (override ?? hasDaemons);
+  return !isEmbeddedFocusMode && (override ?? hasDaemons);
 }
 
 // Embedded workspaces are bound to one worktree: no first-run setup, no adding projects or hosts.
 function ProjectSetupHosts() {
-  if (isEmbeddedFocusMode) return null;
+  useActiveWorktreeNewAction();
+  useGlobalNewWorkspaceAction();
   return (
     <>
       <OnboardingHost />
@@ -471,9 +472,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     exitFocusMode,
     cycleTheme,
   });
-
-  useActiveWorktreeNewAction(!isEmbeddedFocusMode);
-  useGlobalNewWorkspaceAction(!isEmbeddedFocusMode);
 
   const activeWorkspace = useActiveWorkspaceSelection();
   const explorerVisible = useIsExplorerSidebarOpen({
@@ -580,7 +578,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <LegacyAgentSkillsMigration />
         <WorktreeSetupCalloutSource />
         <CommandCenterRootActions />
-        <ProjectSetupHosts />
+        {!isEmbeddedFocusMode ? <ProjectSetupHosts /> : null}
         <PluginCommandCenterActions />
         <CommandCenterWorkspaceActions />
         <WorkspacePinShortcutHandler />

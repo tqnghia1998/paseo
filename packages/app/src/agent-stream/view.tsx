@@ -1,3 +1,5 @@
+import { usePathname } from "expo-router";
+import { resolveChatContentMaxWidth } from "@/patches/vibing/chat-appearance";
 import { ChatFind, ChatFindExpansion } from "@/agent-stream/chat-find";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
@@ -55,7 +57,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { useRevealedText } from "@/hooks/use-revealed-text";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
-import { resolveContentMaxWidth, useSettings } from "@/hooks/use-settings";
+import { useSettings } from "@/hooks/use-settings";
 import type { ToastApi } from "@/components/toast-host";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
@@ -168,6 +170,7 @@ function renderStreamItemWithTurnFooter(input: {
   content: ReactNode;
   layoutItem: StreamLayoutItem;
   turnIndent: TurnIndent;
+  contentMaxWidth: number;
   strategy: TurnContentStrategy;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
@@ -179,6 +182,7 @@ function renderStreamItemWithTurnFooter(input: {
   const footerHost = input.layoutItem.completedFooter;
   const footer = footerHost ? (
     <CompletedTurnFooterRow
+      contentMaxWidth={input.contentMaxWidth}
       strategy={input.strategy}
       items={footerHost.items}
       timing={footerHost.timing}
@@ -358,7 +362,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const autoExpandReasoning = useSettings((settings) => settings.autoExpandReasoning);
     const chatDisplay = useSettings((settings) => settings.chatDisplay);
     const chatOutlineEnabled = useSettings((settings) => settings.chatOutlineEnabled);
-    const contentMaxWidth = useSettings(resolveContentMaxWidth);
+    const pathname = usePathname();
+    const contentMaxWidth = useSettings((settings) =>
+      resolveChatContentMaxWidth(settings, pathname),
+    );
     const viewportRef = useRef<StreamViewportHandle | null>(null);
     const pendingClientMessageIds = useMemo(
       () => new Set(pendingMessageSubmissions.map((submission) => submission.clientMessageId)),
@@ -992,6 +999,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           content,
           layoutItem,
           turnIndent: getTurnIndent(layoutItem),
+          contentMaxWidth,
           strategy: streamRenderStrategy,
           supportsTimelineCursor: supportsAgentForkContextCursor,
           onForkAssistantTurn: readOnly ? undefined : handleForkAssistantTurn,
@@ -999,6 +1007,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       },
       [
         getTurnIndent,
+        contentMaxWidth,
         handleForkAssistantTurn,
         readOnly,
         renderStreamItemContent,
@@ -1024,6 +1033,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       () =>
         isTurnActive || bottomTurnFooterHost ? (
           <TurnFooter
+            contentMaxWidth={contentMaxWidth}
             isRunning={isTurnActive}
             inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
             host={bottomTurnFooterHost}
@@ -1034,6 +1044,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         ) : null,
       [
+        contentMaxWidth,
         handleForkAssistantTurn,
         handleForkInFlightTurn,
         readOnly,

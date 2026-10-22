@@ -17,7 +17,6 @@ export type AssistantForkTarget = "tab" | "workspace";
 
 interface AssistantForkMenuProps {
   onFork: (target: AssistantForkTarget) => Promise<void> | void;
-  allowWorkspaceFork?: boolean;
   testID?: string;
 }
 
@@ -28,13 +27,11 @@ const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.for
 
 export const AssistantForkMenu = memo(function AssistantForkMenu({
   onFork,
-  allowWorkspaceFork: allowWorkspaceForkProp = true,
   testID = "assistant-fork-menu",
 }: AssistantForkMenuProps) {
   const { t } = useTranslation();
   // Bots chats fork only into the same bot; they have no workspace to fork into.
-  const isBotChat = useBotChatFork() !== null;
-  const allowWorkspaceFork = allowWorkspaceForkProp && !isBotChat;
+  const allowWorkspaceFork = useBotChatFork() === null;
   const [isOpen, setIsOpen] = useState(false);
   const [pendingTarget, setPendingTarget] = useState<AssistantForkTarget | null>(null);
   const isLocked = pendingTarget !== null;

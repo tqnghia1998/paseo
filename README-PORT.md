@@ -12,7 +12,7 @@ Paseo Web is packaged as a standalone server that embeds:
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions, with `shell-integration/` beside the bundled modules.
 4. **Local Speech Worker (`worker-process.js`)**: Isolated worker for embedded dictation and voice mode.
-5. **Built-in plugins (`builtin-plugins/`)**: The daemon's provider/usage sources, native Space App Vibing theme and [Beautiful Chat](plugins/beautiful-chat/README.md), with runtime compilers included in the dependency archive.
+5. **Built-in plugins (`builtin-plugins/`)**: The Claude, Codex and AIS Switch usage sources, native Space App Vibing theme and Bots, with runtime compilers included in the dependency archive.
 6. **Embedded workspace**: The Bots surface bound to the selected worktree, with host-owned global navigation. See the [patch contracts](docs/vibing-patches.md#contracts-to-preserve) for navigation and Live Design.
 
 ### Canonical embedded mode
@@ -37,7 +37,7 @@ PASEO_WEB_DEST_DIR=/absolute/consumer/worktree/scripts/paseo-web npm run build:w
 The fork bundler supplies `EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS=true` to its web
 export; shared Paseo build commands keep their native behavior.
 
-For changes limited to `scripts/paseo-web.js`, refresh an existing bundle without
+For changes limited to `scripts/paseo-web.js` or `scripts/paseo-web-plugins.mjs`, refresh an existing bundle without
 rebuilding or replacing its backend, native archive, or UI:
 
 ```bash
@@ -51,6 +51,8 @@ not in the environment inherited by providers, external commands, or terminals.
 ### Bundle Output Structure (`scripts/paseo-web/`)
 
 - `paseo-web.js` — Executable CLI runner
+- `paseo-web-plugins.mjs` — One-time ordinary directory installation of each community addon in `communityPluginIds`
+- `community-plugins/` — Prebundled offline addon sources (Beautiful Chat, Annotations, PDF and Office viewer, Shell Yeah, Recap, Quick prompts, Generative UI), each copied into a runtime home the first time a bundle containing it starts there
 - `plugin-process.js` — Bundled worker for isolated built-ins and installed plugins
 - `package.json` — Packaged daemon name/version and ESM metadata
 - `server.mjs` — Standalone bundled daemon
@@ -59,7 +61,9 @@ not in the environment inherited by providers, external commands, or terminals.
 - `web-ui/` — Static web client bundle
 - `runtime-node-modules.tgz` — PTY and speech dependencies, TypeScript, esbuild, and the build host's esbuild binary
 - `bridge-plugin.bundle.mjs` — OpenCode bridge runtime artifact
-- `builtin-plugins/` — Provider, usage-source and embedded theme plugins loaded beside `server.mjs`; checkout-only `tsconfig.json` files are omitted because their parent configuration is not shipped
+- `builtin-plugins/` — Only the plugins in the daemon's built-in list (Claude, Codex and AIS Switch usage sources, Bots and embedded theme), loaded beside `server.mjs`; checkout-only `tsconfig.json` files are omitted because their parent configuration is not shipped
+
+Community addons use native plugin management after one-time installation. Later launches preserve removal and disablement, including a global plugin opt-out. See the [plugin boundary](docs/vibing-patches.md#plugin-boundary).
 
 The runner extracts the archive when a required runtime package is missing. Plugin loading must work without the Paseo checkout's `node_modules`. The built-in registry is `packages/server/src/server/plugins/builtin/index.ts`; see [built-in plugin behavior](docs/plugins.md#built-in-plugins).
 
@@ -124,11 +128,11 @@ pnpm exec vitest run scripts/paseo-web/paseoWebBundle.test.ts
 
 `host-prompts.ts` handles host prompt insertion in embedded workspaces. Parent-origin/source-checked readiness requests activate the nearest conversation or create a draft; insertion appends to the active unlocked composer and focuses it without submitting or changing attachments. Readiness echoes a host request ID and composer ID; insertion targets that composer and acknowledges the request. The host retries unacknowledged requests, while the iframe deduplicates the latest 1024 delivered IDs across composer switches. Only editable workspace chat composers participate; terminal, read-only, and workspace-setup inputs are excluded. Keep its source tests and the consumer bundle guard when refreshing the fork.
 
-`server/routes/paseo.ts` owns two independent runtimes: the shared Paseo tab instance and the Live Design instance, each with its own port and persistent home. They use the same bundle, but their conversations do not share state. `src/components/PaseoWeb.tsx` owns the workspace iframe and activity bridge.
+`server/routes/paseo.ts` owns one shared runtime/home for workspace Bots and Live Design, with single-flight startup. Bot configuration and memory are shared; `paseo-bots.context=live-design` and surface-scoped drafts, selections and command-center results keep conversations separate. `src/components/PaseoWeb.tsx` owns the workspace iframe and activity bridge.
 
 The host also polls `/api/worktrees/activity` with its existing isolated worktree capability token. Keep this endpoint loopback-only and token-gated: it restores feature indicators after host refresh without mounting inactive iframes or starting agents. Internal agents and archived workspaces do not contribute. Running state comes from live turns rather than persisted lifecycle records. Both iframe messages and snapshots consider every live conversation in the workspace, so a newer idle conversation cannot hide a running one.
 
-Offload calls `/api/worktrees/stop` in both running runtime homes and retains workspace/conversation records. Deletion requires successful cleanup before removing worktrees. Worktree deletion cleans matching agent persistence from both runtime homes; startup also prunes agents whose working directories no longer exist. Preserve cleanup-token isolation when changing the runner. Refreshing the bundle does not restart running daemons. Reload an already-mounted
+Offload calls `/api/worktrees/stop` in the shared runtime and retains workspace/conversation records. Deletion requires successful cleanup before removing worktrees. Worktree deletion cleans matching agent persistence from the shared runtime; startup also prunes agents whose working directories no longer exist. Preserve cleanup-token isolation when changing the runner. Refreshing the bundle does not restart running daemons. Reload an already-mounted
 Live Design iframe after the prepared-text transport update; its readiness
 capability prevents sending the new payload to an older client.
 

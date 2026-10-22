@@ -67,6 +67,7 @@ import { isSheetTabModified, resolveCompactSheetPolicy } from "@/workspace-tabs/
 import { panelResourceKey, type CompactSheetPolicy } from "@/panels/panel-manifest";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 import { panelTargetSupportsHostForWorkspaceKey } from "@/plugins/workspace-panels/locations";
+import { openEmbeddedTarget } from "@/patches/vibing/embedded-targets";
 
 export {
   AMBIENT_PLACEMENT,
@@ -1093,6 +1094,8 @@ export function createWorkspaceLayoutStore(
         sidePaneIdByWorkspace: {},
         pullRequestTabAutoOpenedByWorkspace: {},
         openTab: (input) => {
+          // Vibing: the embedded build has no workspace screen; the Bots chat shows the target.
+          if (input.intent !== "background" && openEmbeddedTarget(input.target)) return null;
           const normalizedWorkspaceKey = trimNonEmpty(input.workspaceKey);
           const normalizedTarget = normalizeWorkspaceTabTarget(input.target);
           if (!normalizedWorkspaceKey || !normalizedTarget) {
