@@ -5,6 +5,12 @@ import type { ProviderSubagentStatus } from "../../../provider-subagents/store.j
 import { resolveObservedClaudeModelId } from "../models.js";
 import type { SubagentObservation } from "./observation.js";
 import {
+  buildClaudeBackgroundShellCard,
+  CLAUDE_BACKGROUND_SHELL_TITLE,
+  isClaudeShellTask,
+  readClaudeBackgroundShellOutput,
+} from "../../../../../patches/vibing/claude/background-shells.js";
+import {
   buildClaudeSubagentSubtitle,
   type ClaudeSubagentPresentationFacts,
   type ClaudeSubagentUsage,
@@ -153,6 +159,15 @@ export interface ClaudeTaskProtocolSourceInput {
   getToolInput?: (toolUseId: string) => AgentMetadata | null | undefined;
   /** Reads the safe, provider-owned result from a completed workflow's task output file. */
   readWorkflowResult?: (outputFile: string) => string | undefined;
+  /** Vibing: reads the tail of a finished background shell's output file. */
+  readShellOutput?: (outputFile: string) => string | undefined;
+}
+
+/** Vibing: a shell Claude registered in the foreground, declared only if it is backgrounded. */
+interface ForegroundShell {
+  toolUseId: string;
+  description?: string;
+  parentSubagentId?: string;
 }
 
 export class ClaudeTaskProtocolSource {
@@ -186,14 +201,26 @@ export class ClaudeTaskProtocolSource {
   /** Claude facts stay inside the provider boundary; clients receive one compact subtitle. */
   private readonly presentationById = new Map<string, ClaudeSubagentPresentationFacts>();
   private readonly lastSubtitleById = new Map<string, string>();
+  /** Vibing: task ids declared as background shells, and those whose output was already shown. */
+  private readonly shellTaskIds = new Set<string>();
+  private readonly shellTaskIdsWithOutput = new Set<string>();
+  /** Vibing: what each declared shell ran, kept for its finished card. */
+  private readonly shellCommandById = new Map<
+    string,
+    { input: AgentMetadata | null | undefined; description?: string }
+  >();
+  /** Vibing: foreground shells by task id, until they are backgrounded or finish. */
+  private readonly foregroundShells = new Map<string, ForegroundShell>();
   private sawTaskStarted = false;
   private sawAnyTask = false;
   private readonly getToolInput: (toolUseId: string) => AgentMetadata | null | undefined;
   private readonly readWorkflowResult: (outputFile: string) => string | undefined;
+  private readonly readShellOutput: (outputFile: string) => string | undefined;
 
   constructor(input: ClaudeTaskProtocolSourceInput = {}) {
     this.getToolInput = input.getToolInput ?? (() => null);
     this.readWorkflowResult = input.readWorkflowResult ?? (() => undefined);
+    this.readShellOutput = input.readShellOutput ?? readClaudeBackgroundShellOutput;
   }
 
   /**
@@ -233,8 +260,14 @@ export class ClaudeTaskProtocolSource {
     return canonicalId && this.declaredIds.has(canonicalId) ? canonicalId : undefined;
   }
 
-  /** Whether Claude's task protocol declared this task as a provider subagent. */
+  /**
+   * Whether Claude's task protocol declared this task as a provider subagent.
+   *
+   * Vibing: a background shell's row does not replace its notification in the parent transcript,
+   * so shells answer false here and the parent keeps its Background task row.
+   */
   isDeclaredTask(taskId: string): boolean {
+    if (this.shellTaskIds.has(taskId)) return false;
     const subagentId = this.subagentIdByTaskId.get(taskId);
     return subagentId !== undefined && this.declaredIds.has(subagentId);
   }
@@ -287,6 +320,10 @@ export class ClaudeTaskProtocolSource {
     this.lastStatusById.clear();
     this.presentationById.clear();
     this.lastSubtitleById.clear();
+    this.shellTaskIds.clear();
+    this.shellTaskIdsWithOutput.clear();
+    this.shellCommandById.clear();
+    this.foregroundShells.clear();
     this.sawTaskStarted = false;
     this.sawAnyTask = false;
   }
@@ -333,7 +370,11 @@ export class ClaudeTaskProtocolSource {
     const parentSubagentId = id ? this.ownerSubagentIdByToolUseId.get(id) : undefined;
     if (parentSubagentId) this.ownerSubagentIdByTaskId.set(message.task_id, parentSubagentId);
     // skip_transcript marks ambient housekeeping the transcript should not show.
-    if (!id || message.skip_transcript === true || !isProviderSubagentTask(message)) return [];
+    if (!id || message.skip_transcript === true) return [];
+    if (isClaudeShellTask(message.task_type)) {
+      return this.observeShellStarted(message, id, parentSubagentId);
+    }
+    if (!isProviderSubagentTask(message)) return [];
 
     this.sawTaskStarted = true;
     const existingId = this.subagentIdByTaskId.get(message.task_id);
@@ -420,9 +461,94 @@ export class ClaudeTaskProtocolSource {
   }
 
   private observeTaskUpdated(message: TaskUpdatedMessage): SubagentObservation[] {
+    const shell = this.observeForegroundShellUpdated(message);
     const id = this.subagentIdByTaskId.get(message.task_id);
     if (id) this.recordBackgrounded(id, message.patch?.is_backgrounded);
-    return this.observeStatus(message.task_id, message.patch?.status);
+    return [...shell, ...this.observeStatus(message.task_id, message.patch?.status)];
+  }
+
+  /** Vibing: a shell registered in the background is declared at once; others wait. */
+  private observeShellStarted(
+    message: TaskStartedMessage,
+    toolUseId: string,
+    parentSubagentId: string | undefined,
+  ): SubagentObservation[] {
+    if (this.subagentIdByTaskId.has(message.task_id)) return [];
+    const shell: ForegroundShell = {
+      toolUseId,
+      ...(readString(message.description) ? { description: readString(message.description) } : {}),
+      ...(parentSubagentId ? { parentSubagentId } : {}),
+    };
+    // Older CLIs omit the flag; they announced only backgrounded shells as tasks.
+    if (message.is_backgrounded !== false) return this.declareShell(message.task_id, shell);
+    this.foregroundShells.set(message.task_id, shell);
+    return [];
+  }
+
+  /** Vibing: a foreground shell moved to the background joins the track; a finished one never will. */
+  private observeForegroundShellUpdated(message: TaskUpdatedMessage): SubagentObservation[] {
+    const shell = this.foregroundShells.get(message.task_id);
+    if (!shell) return [];
+    if (message.patch?.is_backgrounded === true) {
+      this.foregroundShells.delete(message.task_id);
+      return this.declareShell(message.task_id, shell);
+    }
+    const status = mapTaskStatus(message.patch?.status);
+    if (status && status !== "running") this.foregroundShells.delete(message.task_id);
+    return [];
+  }
+
+  private declareShell(taskId: string, shell: ForegroundShell): SubagentObservation[] {
+    const id = shell.toolUseId;
+    this.sawTaskStarted = true;
+    this.subagentIdByTaskId.set(taskId, id);
+    this.canonicalIdByToolUseId.set(id, id);
+    this.declaredIds.add(id);
+    this.shellTaskIds.add(taskId);
+    this.backgroundedIds.add(id);
+    // The parent transcript already holds the real Bash card for this command.
+    this.idsWithExistingParentToolCard.add(id);
+    this.lastStatusById.set(id, "running");
+    const presentation = { title: CLAUDE_BACKGROUND_SHELL_TITLE };
+    this.presentationById.set(id, presentation);
+    const subtitle = buildClaudeSubagentSubtitle(presentation);
+    if (subtitle) this.lastSubtitleById.set(id, subtitle);
+
+    const observations: SubagentObservation[] = [
+      {
+        kind: "declared",
+        id,
+        toolCallId: id,
+        title: CLAUDE_BACKGROUND_SHELL_TITLE,
+        ...(shell.description ? { description: shell.description } : {}),
+        ...(shell.parentSubagentId ? { parentSubagentId: shell.parentSubagentId } : {}),
+      },
+    ];
+    const command = { input: this.getToolInput(id), description: shell.description };
+    this.shellCommandById.set(id, command);
+    const card = buildClaudeBackgroundShellCard({ id, ...command, status: "running" });
+    if (card) observations.push({ kind: "timeline", id, item: card });
+    return observations;
+  }
+
+  /** Vibing: a finished background shell's card gains the tail of its output. */
+  private observeShellResult(message: TaskNotificationMessage): SubagentObservation[] {
+    this.foregroundShells.delete(message.task_id);
+    if (!this.shellTaskIds.has(message.task_id)) return [];
+    if (this.shellTaskIdsWithOutput.has(message.task_id)) return [];
+    const id = this.subagentIdByTaskId.get(message.task_id);
+    const status = mapTaskStatus(message.status);
+    if (!id || !status || status === "running") return [];
+    this.shellTaskIdsWithOutput.add(message.task_id);
+    const outputFile = readString(message.output_file);
+    const card = buildClaudeBackgroundShellCard({
+      id,
+      input: this.shellCommandById.get(id)?.input,
+      description: this.shellCommandById.get(id)?.description,
+      status,
+      ...(outputFile ? { output: this.readShellOutput(outputFile) } : {}),
+    });
+    return card ? [{ kind: "timeline", id, item: card }] : [];
   }
 
   private recordBackgrounded(id: string, backgrounded: boolean | undefined): void {
@@ -431,7 +557,10 @@ export class ClaudeTaskProtocolSource {
   }
 
   private observeTaskNotification(message: TaskNotificationMessage): SubagentObservation[] {
-    const observations = this.observeWorkflowResult(message);
+    const observations = [
+      ...this.observeWorkflowResult(message),
+      ...this.observeShellResult(message),
+    ];
     observations.push(...this.observeUsage(message.task_id, message.usage));
     observations.push(...this.observeStatus(message.task_id, message.status));
     return observations;
