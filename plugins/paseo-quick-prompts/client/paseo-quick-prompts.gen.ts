@@ -215,8 +215,8 @@ function createPromptPills(host) {
             kind: "actions",
             id: `prompt-${prompt.id}`,
             title: prompt.label,
+            onPress: () => send(agentId, prompt),
             actions: [
-              { id: "send", title: "Send", icon: "Send", onPress: () => send(agentId, prompt) },
               { id: "insert", title: "Insert", icon: "TextCursorInput", onPress: () => host.insert(agentId, prompt.text) }
             ]
           })),
