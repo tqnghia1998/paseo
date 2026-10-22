@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { flushDraftPersistStorage, useDraftStore } from "@/stores/draft-store";
 import type { AttachmentMetadata, ComposerAttachment } from "@/attachments/types";
 import { createWorkspaceFileAttachment } from "@/attachments/workspace-file";
+import { createWebDraftStorage } from "@/stores/draft-store/web-storage";
 
 const { asyncStorage } = vi.hoisted(() => ({
   asyncStorage: new Map<string, string>(),
@@ -141,6 +142,7 @@ beforeAll(async () => {
 describe("useAgentInputDraft live contract", () => {
   beforeEach(() => {
     asyncStorage.clear();
+    window.localStorage.clear();
     document.body.innerHTML = "<div id='root'></div>";
     localStorage.clear();
 
@@ -303,6 +305,32 @@ describe("useAgentInputDraft live contract", () => {
     });
 
     expect(getLatest().textSource.getSnapshot()).toBe("keep this draft");
+  });
+
+  it("checkpoints the latest staged text before the iframe unloads", async () => {
+    const draftKey = "agent:host-1:unloading";
+    const input: { current?: ReturnType<typeof useAgentInputDraft> } = {};
+    function Probe() {
+      input.current = useAgentInputDraft({ draftKey });
+      return null;
+    }
+    const root = createRoot(document.getElementById("root")!);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+    useDraftStore.getState().editDraftText({ draftKey, text: "first checkpoint" });
+    await flushDraftPersistStorage();
+    act(() => {
+      input.current!.editText("last keystrokes");
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    const saved = await createWebDraftStorage(window.localStorage).getItem("paseo-drafts");
+    expect(saved?.state.drafts?.[draftKey]).toMatchObject({ input: { text: "last keystrokes" } });
+    act(() => root.unmount());
   });
 
   it("migrates legacy image drafts to image attachments on hydration", async () => {
