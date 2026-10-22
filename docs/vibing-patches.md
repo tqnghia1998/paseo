@@ -264,6 +264,17 @@ AIS credentials. The Bots sidebar shows separate AIS Switch and Codex cards thro
 the existing Usage modal and styles. See `plugins/ais-switch-usage-source/README.md`
 for the verified disk/API contract and its version boundary.
 
+Plugin menu `actions` rows accept an optional row-level `onPress` declared in
+`packages/plugin/src/client/buttons.ts` and documented in
+`public-docs/plugins/reference.md`. In `packages/app/src/plugins/buttons/`,
+`validation.ts` checks it, `model.ts` runs it for a one-segment row path, and
+`view.tsx` renders such a row as a pressable menu item whose trailing icon actions
+stop propagation so they never trigger the row. Pending or disabled buttons and
+disabled rows or actions run nothing; rows without `onPress` stay upstream labels.
+Quick Prompts (`scripts/paseo-quick-prompts-vibing.patch`) depends on it as its only
+Send path, keeping Insert as the trailing action. Keep `model.test.ts`, the patch's
+`pills.test.ts` and the Vibing bundle guard.
+
 Some fixes need the upstream execution path: active/archived Codex import
 pagination, terminal output event mapping, optional wait/protocol fields, Pi turn
 settlement, assistant-only citation normalization shared by transcript and clipboard HTML, retained-panel tooltip cleanup,
