@@ -68,6 +68,8 @@ export interface StreamedTextProps extends Omit<TextProps, "children"> {
 }
 /** Plain assistant text with host-owned streaming pacing and typography. */
 export declare const StreamedText: ComponentType<StreamedTextProps>;
+/** Paces streamed text for plugins with a custom renderer. */
+export declare function useRevealedText(text: string, phase: StreamedTextProps["phase"]): string;
 
 export type { PluginIconProps } from "../icons.js";
 

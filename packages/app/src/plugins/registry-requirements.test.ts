@@ -30,6 +30,7 @@ function registry(version: string) {
         rpc: async () => {
           throw new Error("No RPC in this plugin");
         },
+        insertComposerText() {},
         openSettings() {
           cleanups++;
         },

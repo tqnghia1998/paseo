@@ -1,10 +1,25 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  lstatSync,
+  statSync,
+  symlinkSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import {
+  readPersistedConfig,
+  savePersistedConfig,
+} from "../packages/server/dist/server/server/persisted-config.js";
 
 test("runner keeps cleanup capability out of external commands and Bash sessions", () => {
   const directory = mkdtempSync(path.join(os.tmpdir(), "paseo-runner-token-"));
@@ -14,6 +29,10 @@ test("runner keeps cleanup capability out of external commands and Bash sessions
     copyFileSync(
       path.join(import.meta.dirname, "paseo-web.js"),
       path.join(directory, "paseo-web.mjs"),
+    );
+    copyFileSync(
+      path.join(import.meta.dirname, "paseo-web-plugins.mjs"),
+      path.join(directory, "paseo-web-plugins.mjs"),
     );
     // This adapter probes import-time inheritance, before daemon construction.
     writeFileSync(
@@ -97,3 +116,154 @@ test("runner-only bundling preserves existing backend and UI artifacts", () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("community plugins install once as ordinary directory sources and respect removal and disablement", async () => {
+  const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+  try {
+    const home = path.join(root, "home");
+    const sourceRoot = path.join(root, "sources");
+    mkdirSync(home);
+    for (const id of ["beautiful-chat", "annotations"]) {
+      mkdirSync(path.join(sourceRoot, id), { recursive: true });
+      writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
+    }
+    writeFileSync(
+      path.join(home, "config.json"),
+      JSON.stringify({ version: 1, pluginsEnabled: false, log: { level: "warn" } }),
+    );
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    const configPath = path.join(home, "config.json");
+    const config = JSON.parse(readFileSync(configPath, "utf8"));
+    assert.equal(config.pluginsEnabled, false);
+    assert.equal(config.log.level, "warn");
+    for (const id of ["beautiful-chat", "annotations"]) {
+      assert.equal(config.plugins[id].source, "directory");
+      assert.equal(config.plugins[id].enabled, true);
+      assert.ok(existsSync(path.join(config.plugins[id].path, "paseo-plugin.json")));
+    }
+    delete config.plugins["beautiful-chat"];
+    config.plugins.annotations.enabled = false;
+    writeFileSync(configPath, JSON.stringify(config));
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), config);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("homes bootstrapped by the legacy marker receive only newly bundled community plugins", async () => {
+  const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+  try {
+    const home = path.join(root, "home");
+    const sourceRoot = path.join(root, "sources");
+    mkdirSync(home);
+    for (const id of ["beautiful-chat", "annotations", "genui", "paseo-recap"]) {
+      mkdirSync(path.join(sourceRoot, id), { recursive: true });
+      writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
+    }
+    const configPath = path.join(home, "config.json");
+    // Beautiful Chat was removed and Recap was installed separately before the upgrade.
+    const recap = { source: "directory", path: "/elsewhere/paseo-recap", enabled: false };
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        plugins: {
+          annotations: { source: "directory", path: "/a", enabled: false },
+          "paseo-recap": recap,
+        },
+      }),
+    );
+    writeFileSync(path.join(home, ".vibing-community-plugins-v1"), "1\n");
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    const config = JSON.parse(readFileSync(configPath, "utf8"));
+    assert.equal(config.plugins["beautiful-chat"], undefined);
+    assert.equal(config.plugins.annotations.enabled, false);
+    assert.deepEqual(config.plugins["paseo-recap"], recap);
+    assert.equal(config.plugins.genui.source, "directory");
+    assert.equal(config.plugins.genui.enabled, true);
+
+    delete config.plugins.genui;
+    writeFileSync(configPath, JSON.stringify(config));
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), config);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const marker of ['["beautiful-chat","annot', '{"offered":true}']) {
+  test(`an unreadable community plugin marker neither blocks startup nor reinstalls: ${marker}`, async () => {
+    const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+    const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+    try {
+      const home = path.join(root, "home");
+      const sourceRoot = path.join(root, "sources");
+      mkdirSync(home);
+      for (const id of ["beautiful-chat", "genui"]) {
+        mkdirSync(path.join(sourceRoot, id), { recursive: true });
+        writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
+      }
+      // A crash mid-write leaves a truncated marker; the user had removed Beautiful Chat.
+      writeFileSync(path.join(home, ".vibing-community-plugins.json"), marker);
+      const configPath = path.join(home, "config.json");
+      writeFileSync(configPath, JSON.stringify({ version: 1, plugins: {} }));
+      prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+      assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")).plugins, {});
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const kind of ["bom", "permissions", "symlink"]) {
+  test(
+    `community installation preserves native config handling: ${kind}`,
+    { skip: process.platform === "win32" && kind !== "bom" },
+    async () => {
+      const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+      const root = mkdtempSync(path.join(os.tmpdir(), "paseo-config-bootstrap-"));
+      try {
+        const home = path.join(root, "home");
+        const sourceRoot = path.join(root, "sources");
+        mkdirSync(home, { mode: 0o755 });
+        for (const id of ["beautiful-chat", "annotations"]) {
+          mkdirSync(path.join(sourceRoot, id), { recursive: true });
+          writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
+        }
+        const configPath = path.join(home, "config.json");
+        const target = path.join(root, "linked-config.json");
+        const content = JSON.stringify({
+          version: 1,
+          features: { dictation: { stt: { provider: "openai", apiKey: "test-only-key" } } },
+        });
+        if (kind === "symlink") {
+          writeFileSync(target, content, { mode: 0o600 });
+          symlinkSync(target, configPath);
+        } else {
+          writeFileSync(configPath, (kind === "bom" ? "\uFEFF" : "") + content, { mode: 0o600 });
+        }
+        prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+        const config = JSON.parse(readFileSync(configPath, "utf8"));
+        assert.equal(config.features.dictation.stt.apiKey, "test-only-key");
+        assert.equal(config.plugins.annotations.source, "directory");
+        if (kind === "permissions") {
+          assert.equal(statSync(configPath).mode & 0o777, 0o600);
+          assert.equal(statSync(home).mode & 0o777, 0o700);
+        }
+        if (kind === "symlink") {
+          assert.ok(lstatSync(configPath).isSymbolicLink());
+          assert.equal(
+            JSON.parse(readFileSync(target, "utf8")).plugins.annotations.source,
+            "directory",
+          );
+          assert.equal(statSync(target).mode & 0o777, 0o600);
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+}

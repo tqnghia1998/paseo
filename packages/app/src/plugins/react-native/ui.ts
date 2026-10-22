@@ -26,5 +26,6 @@ export { TextInput } from "./text-input";
 export { copyText } from "./clipboard";
 export { useToast } from "./toast";
 export { StreamedText } from "./streamed-text";
+export { useRevealedText } from "@/hooks/use-revealed-text";
 
 export { Markdown } from "./markdown";
