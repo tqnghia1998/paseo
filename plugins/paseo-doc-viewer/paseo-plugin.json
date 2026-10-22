@@ -1,0 +1,16 @@
+{
+  "id": "paseo-doc-viewer",
+  "name": "PDF and Office viewer",
+  "description": "Read PDFs and Office documents, inspect spreadsheets and data, and send PDF page notes to an agent without leaving Paseo.",
+  "icon": "assets/icon.png",
+  "media": [
+    "assets/listing/cover-hd.png",
+    "assets/listing/data-hd.png",
+    "assets/listing/review-hd.png",
+    "assets/listing/turns-hd.png",
+    "assets/listing/phone-hd.png"
+  ],
+  "requirements": {
+    "paseo": ">=0.11.2"
+  }
+}

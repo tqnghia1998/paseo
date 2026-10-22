@@ -197,7 +197,6 @@ var CODE_SPAN = '[data-paseo-markdown-tag="code"]';
 var CODE_LANGUAGE_ATTRIBUTE = "data-paseo-markdown-language";
 var CODE_SURFACE = "[data-pmono]";
 var OPEN_AGENT_EVENT = "paseo:web-notification-click";
-var APP_SETTINGS_KEYS = ["@paseo:app-settings", "@paseo:settings"];
 var web = globalThis;
 var ELEMENT_NODE = 1;
 var SHOW_TEXT = 4;
@@ -262,19 +261,6 @@ function openAgentTab(target) {
   web.window.dispatchEvent(
     new web.CustomEvent(OPEN_AGENT_EVENT, { cancelable: true, detail: { data: target } })
   );
-}
-function readSendBehavior() {
-  for (const key of APP_SETTINGS_KEYS) {
-    try {
-      const raw = web.localStorage.getItem(key);
-      if (raw === null) continue;
-      const settings = JSON.parse(raw);
-      const value = settings && typeof settings === "object" && "sendBehavior" in settings ? settings.sendBehavior : void 0;
-      return value === "interrupt" || value === "queue" || value === "steer" ? value : "queue";
-    } catch {
-    }
-  }
-  return "queue";
 }
 function readPassage(selection, range, start) {
   const common = elementOf(range.commonAncestorContainer);
@@ -1235,7 +1221,7 @@ function collapseParent(node) {
   element.parentElement?.style.setProperty("display", "none");
 }
 function defaultSendBehavior() {
-  return Platform.OS === "web" && isWebDom() ? readSendBehavior() : "queue";
+  return "queue";
 }
 function focusComposerWhenShown(agentId) {
   const deadline = Date.now() + COMPOSER_WAIT_MS;

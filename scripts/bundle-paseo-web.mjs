@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { execSync } from "node:child_process";
 import esbuild from "esbuild";
+import { communityPluginIds } from "./paseo-web-plugins.mjs";
 
 const ROOT_DIR = process.cwd();
 const SHERPA_PLATFORM = process.platform === "win32" ? "win" : process.platform;
@@ -16,6 +18,10 @@ if (process.argv.includes("--runner-only")) {
     throw new Error("--runner-only requires an existing standalone bundle");
   }
   fs.copyFileSync(path.join(ROOT_DIR, "scripts/paseo-web.js"), path.join(DEST_DIR, "paseo-web.js"));
+  fs.copyFileSync(
+    path.join(ROOT_DIR, "scripts/paseo-web-plugins.mjs"),
+    path.join(DEST_DIR, "paseo-web-plugins.mjs"),
+  );
   console.log("Updated paseo-web runner in", DEST_DIR);
   process.exit(0);
 }
@@ -33,6 +39,10 @@ execSync("npm run build:server", { cwd: ROOT_DIR, stdio: "inherit" });
 console.log("3. Bundling server backend with esbuild...");
 fs.mkdirSync(DEST_DIR, { recursive: true });
 fs.copyFileSync(path.join(ROOT_DIR, "scripts/paseo-web.js"), path.join(DEST_DIR, "paseo-web.js"));
+fs.copyFileSync(
+  path.join(ROOT_DIR, "scripts/paseo-web-plugins.mjs"),
+  path.join(DEST_DIR, "paseo-web-plugins.mjs"),
+);
 
 const serverPackageJson = JSON.parse(
   fs.readFileSync(path.join(ROOT_DIR, "packages/server/package.json"), "utf8"),
@@ -155,11 +165,28 @@ fs.cpSync(
   { recursive: true },
 );
 const builtinPluginsDest = path.join(DEST_DIR, "builtin-plugins");
+const builtinPluginsSrc = path.join(ROOT_DIR, "packages/server/dist/server/builtin-plugins");
+// Ship only the daemon's built-in list; other plugins/ entries stay checkout-only.
+const { builtinPlugins } = await import(
+  pathToFileURL(path.join(ROOT_DIR, "packages/server/dist/server/server/plugins/builtin/index.js"))
+    .href
+);
+const shippedBuiltinEntries = new Set(["", "package.json", ...builtinPlugins]);
 fs.rmSync(builtinPluginsDest, { recursive: true, force: true });
-fs.cpSync(path.join(ROOT_DIR, "packages/server/dist/server/builtin-plugins"), builtinPluginsDest, {
+fs.cpSync(builtinPluginsSrc, builtinPluginsDest, {
   recursive: true,
-  filter: (source) => path.basename(source) !== "tsconfig.json",
+  filter: (source) =>
+    path.basename(source) !== "tsconfig.json" &&
+    shippedBuiltinEntries.has(path.relative(builtinPluginsSrc, source).split(path.sep)[0]),
 });
+const communityPluginsDest = path.join(DEST_DIR, "community-plugins");
+fs.rmSync(communityPluginsDest, { recursive: true, force: true });
+for (const id of communityPluginIds) {
+  fs.cpSync(path.join(ROOT_DIR, "plugins", id), path.join(communityPluginsDest, id), {
+    recursive: true,
+    filter: (source) => path.basename(source) !== "tsconfig.json",
+  });
+}
 const webUiSrc = path.join(ROOT_DIR, "packages/server/dist/server/web-ui");
 const webUiDest = path.join(DEST_DIR, "web-ui");
 fs.rmSync(webUiDest, { recursive: true, force: true });
@@ -210,7 +237,10 @@ zeroMtimes(runtimeNmTmp);
 // gzip:!timestamp drops the current time from the gzip header, which bsdtar stamps in and
 // which made even mtime-zeroed rebuilds produce different bytes.
 execSync(
-  `tar --options='gzip:!timestamp' -czf "${path.join(DEST_DIR, "runtime-node-modules.tgz")}" -C "${runtimeNmTmp}" .`,
+  `tar --options='gzip:!timestamp' -czf "${path.join(
+    DEST_DIR,
+    "runtime-node-modules.tgz",
+  )}" -C "${runtimeNmTmp}" .`,
 );
 fs.rmSync(runtimeNmTmp, { recursive: true, force: true });
 

@@ -20,6 +20,14 @@ export type PluginButtonBehavior<Text extends PluginText = string> =
 export type PluginButtonMenuEntry<Text extends PluginText = string> =
   | { kind: "separator"; id: string }
   | {
+      kind: "actions";
+      id: string;
+      title: Text;
+      visible?: boolean;
+      disabled?: boolean;
+      actions: readonly PluginButtonMenuAction<Text>[];
+    }
+  | {
       kind: "item";
       id: string;
       title: Text;
@@ -28,6 +36,14 @@ export type PluginButtonMenuEntry<Text extends PluginText = string> =
       disabled?: boolean;
       behavior: PluginButtonBehavior<Text>;
     };
+
+export interface PluginButtonMenuAction<Text extends PluginText = string> {
+  id: string;
+  title: Text;
+  icon: PluginButtonIcon;
+  disabled?: boolean;
+  onPress(): void | Promise<void>;
+}
 
 export interface PluginButton<Text extends PluginText = string> {
   title: Text;
@@ -53,4 +69,6 @@ export interface PluginComposerPillContribution<
   Text extends PluginText = string,
 > extends PluginHeaderButtonContribution<Text> {
   agentId: string;
+  /** Defaults to the track above the input. Use input for a composer toolbar control. */
+  placement?: "above" | "input";
 }
