@@ -5934,11 +5934,11 @@ export class DaemonClient {
     }
   }
 
-  async listPlugins(options: { includeBuiltins?: boolean } = {}): Promise<PluginListItem[]> {
+  async listPlugins(): Promise<PluginListItem[]> {
     const requestId = this.createRequestId();
     const payload = await this.sendCorrelatedSessionRequest({
       requestId,
-      message: { type: "plugin.list.request", requestId, includeBuiltins: options.includeBuiltins },
+      message: { type: "plugin.list.request", requestId },
       responseType: "plugin.list.response",
     });
     return payload.plugins;

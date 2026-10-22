@@ -115,7 +115,7 @@ export class PluginService {
     this.logger = logger.child({ module: "plugin-service" });
     this.usageSources = new UsageSourceRegistry(
       Date.now,
-      300_000,
+      undefined,
       this.logger,
       dependencies.usageAgents,
     );
@@ -228,7 +228,6 @@ export class PluginService {
         await this.publishProviderRegistrations(plugin.id, plugin.directory);
         this.publishUsageSources(plugin.id);
       } catch (error) {
-        this.errors.set(plugin.id, error instanceof Error ? error.message : String(error));
         this.logger.error({ err: error, pluginId: plugin.id }, "Failed to start built-in plugin");
       }
     });
@@ -244,29 +243,11 @@ export class PluginService {
     });
   }
 
-  async listPlugins(options: { includeBuiltins?: boolean } = {}): Promise<PluginListItem[]> {
+  async listPlugins(): Promise<PluginListItem[]> {
     const config = this.configStore.get();
     const running = new Set(this.runtime.catalog().map((plugin) => plugin.id));
-    const sources: {
-      id: string;
-      source: Pick<PluginSource, "path" | "enabled">;
-      builtin: boolean;
-    }[] = Object.entries(config.plugins ?? {}).map(([id, source]) => ({
-      id,
-      source,
-      builtin: false,
-    }));
-    if (options.includeBuiltins) {
-      sources.push(
-        ...this.builtinPlugins.entries().map(({ id, directory }) => ({
-          id,
-          source: { path: directory, enabled: true },
-          builtin: true,
-        })),
-      );
-    }
     const plugins = await Promise.all(
-      sources.map(async ({ id, source, builtin }) => {
+      Object.entries(config.plugins ?? {}).map(async ([id, source]) => {
         const enabled = source.enabled !== false;
         const item: PluginListItem = {
           id,
@@ -274,11 +255,10 @@ export class PluginService {
           enabled,
           status: resolvePluginStatus({
             enabled,
-            globallyEnabled: builtin || config.pluginsEnabled === true,
-            running: running.has(id) && !(builtin && this.errors.has(id)),
+            globallyEnabled: config.pluginsEnabled === true,
+            running: running.has(id),
           }),
         };
-        if (builtin) item.builtin = true;
         const manifest = await readPluginManifest(path.resolve(source.path)).catch(() => null);
         if (manifest) {
           item.name = manifest.name;
@@ -286,19 +266,15 @@ export class PluginService {
           item.icon = manifest.icon;
           item.media = manifest.media;
         }
-        if (!builtin) {
-          item.installation = await this.managedSources
-            ?.describe(id, source.path)
-            .catch(() => undefined);
-          if (!this.managedSources)
-            item.installation = {
-              identity: { kind: "directory", path: path.resolve(source.path) },
-            };
-          if (item.installation?.identity.kind === "git") {
-            item.source = "git";
-            item.remote = item.installation.identity.remote;
-            item.commit = item.installation.currentRevision;
-          }
+        item.installation = await this.managedSources
+          ?.describe(id, source.path)
+          .catch(() => undefined);
+        if (!this.managedSources)
+          item.installation = { identity: { kind: "directory", path: path.resolve(source.path) } };
+        if (item.installation?.identity.kind === "git") {
+          item.source = "git";
+          item.remote = item.installation.identity.remote;
+          item.commit = item.installation.currentRevision;
         }
         const error = this.errors.get(id);
         if (error && item.status === "failed") item.error = error;

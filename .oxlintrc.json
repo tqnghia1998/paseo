@@ -5,7 +5,7 @@
   },
   "ignorePatterns": [
     ".dev/**",
-    "plugins/{annotations,beautiful-chat,mermaid,paseo-bots}/**/*.gen.ts"
+    "plugins/{annotations,beautiful-chat,genui,mermaid,paseo-bots,paseo-doc-viewer,paseo-quick-prompts,paseo-recap,shell-yeah}/**/*.gen.ts"
   ],
   "plugins": ["react", "react-perf", "unicorn", "typescript", "oxc", "import", "promise"],
   "jsPlugins": ["./scripts/oxlint/paseo-plugin.mjs"],

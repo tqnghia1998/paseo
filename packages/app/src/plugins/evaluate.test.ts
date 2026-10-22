@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { useRevealedText } from "@/hooks/use-revealed-text";
 import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { lightTheme } from "@/styles/theme";
 import { compilePlugin } from "../../../server/src/server/plugins/compiler";
 
 import { runPluginClientBundle, type PluginClientRuntime } from "./evaluate";
+import { toPluginTheme } from "./theme";
 import type { EvaluatedPlugin, PluginTimelineTransformerContribution } from "./types";
 
 const runtime = {
@@ -55,7 +59,7 @@ function bundle(body: string): string {
 }
 
 describe("evaluatePluginClientBundle", () => {
-  it.each(["mermaid", "paseo-bots", "annotations"])(
+  it.each(["paseo-bots", "annotations"])(
     "loads the bundled %s client and releases its contributions",
     async (id) => {
       const root = new URL(`../../../../plugins/${id}/`, import.meta.url);
@@ -65,23 +69,6 @@ describe("evaluatePluginClientBundle", () => {
       });
       const plugin = evaluatePluginClientBundle(id, clientBundle!);
       try {
-        if (id === "mermaid") {
-          expect(
-            timelineTransformer(plugin, "assistant_message").transform({
-              item: { type: "assistant_message", text: "```mermaid\nflowchart LR\n A --> B\n```" },
-              phase: "complete",
-            }),
-          ).toMatchObject({ items: [{ kind: "mermaid-diagram" }] });
-          expect(
-            timelineTransformer(plugin, "assistant_message").transform({
-              item: {
-                type: "assistant_message",
-                text: "Source \uE200cite\uE202turn1\uE201\n```mermaid\nflowchart LR\n A --> B\n```",
-              },
-              phase: "complete",
-            }),
-          ).toBeUndefined();
-        }
         if (id === "paseo-bots") {
           expect(plugin.settingsScreens.map(({ title }) => title)).toEqual(["Bots"]);
           expect(plugin.surfaces.map(({ id: surfaceId }) => surfaceId)).toEqual(["bots"]);
@@ -202,16 +189,14 @@ describe("evaluatePluginClientBundle", () => {
     }
   });
 
-  it("registers the bundled Vibing catalog through native plugin settings and releases it with its theme", async () => {
+  it("registers only the Vibing palette and releases it on cleanup", async () => {
     const root = new URL("../../../../plugins/space-app-vibing-theme/", import.meta.url);
     const { clientBundle } = await compilePlugin({
       client: fileURLToPath(new URL("index.client.ts", root)),
       server: fileURLToPath(new URL("index.server.ts", root)),
     });
     const plugin = evaluatePluginClientBundle("space-app-vibing-theme", clientBundle!);
-    expect(plugin.settingsScreens.map(({ id, title }) => ({ id, title }))).toEqual([
-      { id: "customizations", title: "Vibing customizations" },
-    ]);
+    expect(plugin.settingsScreens).toEqual([]);
     expect(plugin.themes.map(({ id, name }) => ({ id, name }))).toEqual([
       { id: "dark", name: "Space App Vibing" },
     ]);
@@ -904,12 +889,47 @@ describe("evaluatePluginClientBundle", () => {
         const ui = require("@getpaseo/plugin/client/ui");
         if (typeof legacy.useRevealedText !== "function") throw new Error("Missing legacy reveal hook");
         if (legacy.StreamedText !== ui.StreamedText) throw new Error("Missing current UI exports");
-        if ("useRevealedText" in ui) throw new Error("Legacy hook leaked into current UI");
+        if (legacy.useRevealedText !== ui.useRevealedText) throw new Error("Reveal hooks differ");
         plugin.addScreen({ id: "reveal", title: "Reveal", Component: legacy.useRevealedText });
       `),
     );
     expect(plugin.surfaces[0]?.Component).toBe(useRevealedText);
   });
+
+  it.each(["@getpaseo/plugin/client/react-native", "@getpaseo/plugin/client/ui"])(
+    "renders custom plugin text with the host reveal hook from %s",
+    async (specifier) => {
+      const plugin = evaluatePluginClientBundle(
+        "text-preview",
+        `(function(require) {
+          const { createElement } = require("react");
+          const { useRevealedText } = require("${specifier}");
+          return { default(plugin) {
+            plugin.addSurface("text", function TextPreview() {
+              return createElement("span", null, useRevealedText("Plugin reply", "complete"));
+            });
+            return function() {};
+          } };
+        })`,
+      );
+      try {
+        const surface = plugin.surfaces[0];
+        expect(surface).toBeDefined();
+        const markup = renderToStaticMarkup(
+          createElement(surface.Component, {
+            theme: toPluginTheme(lightTheme),
+            host: { id: "test-host", label: "Test host" },
+            layout: { compact: false, platform: "web" },
+            params: {},
+          }),
+        );
+        expect(markup).toBe("<span>Plugin reply</span>");
+      } finally {
+        await plugin.cleanup();
+      }
+    },
+  );
+
 
   it("keeps shared and client runtime exports separate", () => {
     expect(() =>

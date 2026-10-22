@@ -113,6 +113,8 @@ export type PluginClientRuntime = Pick<
   | "openPanel"
   | "addComposerPill"
   | "addHeaderButton"
+  | "insertComposerText"
+  | "observeComposerDrafts"
 > & { hosts: ReturnType<typeof createPluginHosts> };
 
 // COMPAT(pluginReactNativeEntrypoint): added in v0.13.0, remove after 2027-04-20

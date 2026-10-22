@@ -174,6 +174,18 @@ interface PluginClientContextAliases {
 }
 
 export interface PluginClientContext extends PluginCommandCapabilities, PluginClientContextAliases {
+  /** Append text to an open editable agent composer on this client, without sending it. */
+  insertComposerText(input: { agentId: string; text: string }): void;
+  /** Observe editable local drafts; draft IDs can also target composer pills and insertion. */
+  observeComposerDrafts?(
+    listener: (
+      drafts: readonly {
+        agentId: string;
+        workspaceId: string;
+        send(text: string): Promise<void>;
+      }[],
+    ) => void,
+  ): PluginCleanup;
   readonly i18n: import("./translations.js").PluginI18n;
   /** Play a base64-encoded audio file on this client; resolves when playback ends. */
   playAudio(source: { base64: string; mimeType: string }): Promise<void>;
