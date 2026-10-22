@@ -8266,4 +8266,38 @@ describe("Codex background terminals", () => {
 
     expect(providerEvents(events)).toEqual([]);
   });
+
+  test("files the late completion under the turn that started the command", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    const internals = asInternals(session);
+
+    internals.handleNotification("item/started", {
+      threadId: "test-thread",
+      turnId: "turn-1",
+      item: commandItem("inProgress", null),
+    });
+    internals.handleNotification("turn/completed", {
+      threadId: "test-thread",
+      turn: { id: "turn-1", status: "completed" },
+    });
+    internals.handleNotification("item/completed", {
+      threadId: "test-thread",
+      turnId: "turn-1",
+      item: commandItem("completed", "PROBE_DONE\n"),
+    });
+
+    // Tool cards merge by turn and call id; an untagged completion becomes a second card and
+    // leaves the first one running forever.
+    const cards = events.flatMap((event) =>
+      event.type === "timeline" && event.item.type === "tool_call"
+        ? [{ status: event.item.status, turnId: event.turnId }]
+        : [],
+    );
+    expect(cards).toEqual([
+      { status: "running", turnId: "test-turn" },
+      { status: "completed", turnId: "test-turn" },
+    ]);
+  });
 });

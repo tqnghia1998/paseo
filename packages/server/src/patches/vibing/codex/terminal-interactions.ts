@@ -20,8 +20,13 @@ export class CodexTerminalInteractions {
   private unpairedNotifications = new Map<string, number>();
 
   resetTurn(): Set<string> {
-    // A yielded PTY can receive input in later turns. Only forget ordinary commands.
+    // A yielded PTY can receive input in later turns, and a command still running when its turn
+    // ends completes later, outside any turn. Both keep their turn so the late card replaces the
+    // running one instead of appearing beside it. Only forget finished, ordinary commands.
     const retained = new Set(this.callIdByProcessId.values());
+    for (const [callId, shell] of this.shells) {
+      if (shell.status === "running") retained.add(callId);
+    }
     for (const callId of this.shells.keys()) {
       if (retained.has(callId)) continue;
       this.shells.delete(callId);
