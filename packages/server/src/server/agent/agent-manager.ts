@@ -21,6 +21,7 @@ import type { ToolPolicy } from "@getpaseo/protocol/agent-types";
 import type { ProviderPaseoToolsPolicy } from "@getpaseo/protocol/provider-config";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
+import { canCloseIdleAgent } from "../../patches/vibing/idle-agent-reaper.js";
 
 import {
   getAgentStreamEventTurnId,
@@ -1774,7 +1775,34 @@ export class AgentManager {
     return close;
   }
 
-  private async closeAgentRuntime(agentId: string): Promise<void> {
+  /** Vibing idle-agent reaper: closes the agent only while nothing is in flight. */
+  closeIdleAgent(agentId: string): Promise<boolean> {
+    if (this.inFlightAgentCloses.has(agentId)) return Promise.resolve(false);
+    const isIdle = () => {
+      const agent = this.agents.get(agentId);
+      return Boolean(
+        agent &&
+        canCloseIdleAgent(agent, {
+          hasRun: this.runs.hasRun(agentId),
+          providerSubagents: this.providerSubagents.list(agentId),
+        }),
+      );
+    };
+    const close = this.runLifecycleMutation(agentId, async () =>
+      isIdle() ? this.closeAgentRuntime(agentId, isIdle) : false,
+    );
+    const tracked = close.then(() => undefined);
+    this.inFlightAgentCloses.set(agentId, tracked);
+    const clearClose = () => {
+      if (this.inFlightAgentCloses.get(agentId) === tracked) {
+        this.inFlightAgentCloses.delete(agentId);
+      }
+    };
+    void close.then(clearClose, clearClose);
+    return close;
+  }
+
+  private async closeAgentRuntime(agentId: string, stillIdle?: () => boolean): Promise<boolean> {
     const agent = this.requireAgent(agentId);
     this.logger.trace(
       {
@@ -1789,6 +1817,8 @@ export class AgentManager {
       "agent.manager.close.start",
     );
     await this.drainSessionEvents(agentId);
+    // A turn may have started while events drained.
+    if (stillIdle && !stillIdle()) return false;
     // Retain ownership until shutdown succeeds. A failed close may still own a
     // native writer, so publishing a resumable closed snapshot would orphan it.
     await agent.session.close();
@@ -1814,6 +1844,7 @@ export class AgentManager {
     if (persistError !== undefined) {
       throw persistError;
     }
+    return true;
   }
 
   private cancelRunningProviderSubagents(parentAgentId: string): void {
