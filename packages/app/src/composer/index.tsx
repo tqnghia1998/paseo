@@ -129,6 +129,8 @@ import {
   persistAttachmentFromFileUri,
 } from "@/attachments/service";
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
+import { PluginComposerPills } from "@/plugins/buttons/view";
+import { registerComposerTextInsertion, registerComposerDraft } from "@/composer/text-insertion";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { useIsInputLive } from "./input/use-input-live";
 import { resolveActiveSendBehavior } from "./input/state";
@@ -1881,6 +1883,57 @@ function ComposerContentImpl({
     ],
   );
 
+  useEffect(() => {
+    if (!isActiveComposer || readOnly || isComposerLocked || inputMode !== "chat") return;
+    return registerComposerTextInsertion({ serverId, agentId }, (text) => {
+      const current = messageInputRef.current?.getText() ?? textSource.getSnapshot();
+      replaceUserInput(current ? `${current}\n\n${text}` : text);
+      focusMessageInputWithPlatformStrategy(messageInputRef);
+    });
+  }, [
+    agentId,
+    serverId,
+    isActiveComposer,
+    readOnly,
+    isComposerLocked,
+    inputMode,
+    replaceUserInput,
+    textSource,
+  ]);
+
+  useEffect(() => {
+    if (
+      !workspaceId ||
+      !agentControls ||
+      !isActiveComposer ||
+      readOnly ||
+      isComposerLocked ||
+      isSubmitLoading ||
+      inputMode !== "chat"
+    )
+      return;
+    return registerComposerDraft(serverId, {
+      agentId,
+      workspaceId,
+      send: async (text) => {
+        await sendMessageWithContent(text, buildOutgoingAttachments(attachments));
+      },
+    });
+  }, [
+    serverId,
+    workspaceId,
+    agentId,
+    agentControls,
+    isActiveComposer,
+    readOnly,
+    isComposerLocked,
+    isSubmitLoading,
+    inputMode,
+    sendMessageWithContent,
+    buildOutgoingAttachments,
+    attachments,
+  ]);
+
   useEmbeddedComposerBridge({
     enabled: isWeb && isActiveComposer,
     agentId,
@@ -2407,29 +2460,42 @@ function ComposerContentImpl({
     [attachments, setSelectedAttachments, setGithubSearchQuery, setIsGithubPickerOpen],
   );
 
-  const leftContent = useMemo(() => {
-    const controls = renderLeftContent({
+  const leftContent = useMemo(
+    () => (
+      <ComposerInputProvider value={composerInput}>
+        {renderLeftContent({
+          composerInput,
+          agentControls,
+          agentId,
+          serverId,
+          focusInput,
+          isCompactLayout,
+          showAgentControls: mode.showAgentControls,
+          showToolbar: !isFullscreen,
+        })}
+        {workspaceId ? (
+          <PluginComposerPills
+            serverId={serverId}
+            workspaceId={workspaceId}
+            agentId={agentId}
+            compact={isCompactLayout}
+            placement="input"
+          />
+        ) : null}
+      </ComposerInputProvider>
+    ),
+    [
+      composerInput,
       agentControls,
       agentId,
-      serverId,
       focusInput,
       isCompactLayout,
-      showAgentControls: mode.showAgentControls,
-      showToolbar: !isFullscreen,
-    });
-    return controls ? (
-      <ComposerInputProvider value={composerInput}>{controls}</ComposerInputProvider>
-    ) : null;
-  }, [
-    agentControls,
-    agentId,
-    composerInput,
-    focusInput,
-    isCompactLayout,
-    isFullscreen,
-    mode.showAgentControls,
-    serverId,
-  ]);
+      isFullscreen,
+      mode.showAgentControls,
+      serverId,
+      workspaceId,
+    ],
+  );
 
   const handleAttachButtonRef = useCallback((node: View | null) => {
     attachButtonRef.current = node;
