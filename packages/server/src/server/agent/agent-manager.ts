@@ -371,6 +371,8 @@ function stripSteerOptions(options?: AgentSteerOptions): AgentRunOptions | undef
 export interface WaitForAgentOptions {
   signal?: AbortSignal;
   waitForActive?: boolean;
+  /** Vibing Live Design: with `waitForActive`, keep waiting for a turn even while idle. */
+  waitUntilActive?: boolean;
   waitThroughPermission?: boolean;
 }
 
@@ -3631,13 +3633,16 @@ export class AgentManager {
     const initialBusy =
       isAgentBusy(initialStatus) || hasForegroundTurn || Boolean(immediatePermission);
     const waitForActive = options?.waitForActive ?? false;
-    if (!waitForActive && !initialBusy) {
+    // `initialBusy` covers a pending foreground turn, so an idle agent returns at
+    // once unless Live Design asked to wait until its turn starts.
+    if (!initialBusy && !(waitForActive && options?.waitUntilActive)) {
       return {
         status: initialStatus,
         permission: null,
         lastMessage: await this.getLastAssistantMessage(agentId),
       };
     }
+
     if (options?.signal?.aborted) {
       throw createAbortError(options.signal, "wait_for_agent aborted");
     }
