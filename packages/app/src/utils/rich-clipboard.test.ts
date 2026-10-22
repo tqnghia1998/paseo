@@ -76,6 +76,22 @@ describe("createMarkdownClipboardContent", () => {
     expect(content.html).toContain("&lt;script&gt;");
   });
 
+  it("normalizes citations in rich prose while preserving raw text, code and link targets", () => {
+    const citation = "\uE200cite\uE202turn511321view1\uE201";
+    const markdown = `Result${citation} &amp; **bold**
+
+\`${citation}\`
+
+[reference](https://example.com/${citation})`;
+    const content = createMarkdownClipboardContent(markdown);
+    expect(content.plainText).toBe(markdown);
+    expect(content.html).toContain("Result[source unavailable] &amp; <strong>bold</strong>");
+    expect(content.html).toContain(`<code>${citation}</code>`);
+    expect(content.html).toContain(
+      'href="https://example.com/%EE%88%80cite%EE%88%82turn511321view1%EE%88%81"',
+    );
+  });
+
   it("preserves assistant file links without allowing unsafe link schemes", () => {
     const content = createMarkdownClipboardContent(
       [

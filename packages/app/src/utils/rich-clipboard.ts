@@ -1,4 +1,7 @@
-import { createAssistantMarkdownParser } from "./assistant-markdown-parser";
+import {
+  createAssistantMarkdownParser,
+  normalizeAssistantCitations,
+} from "./assistant-markdown-parser";
 
 const markdownRenderer = createAssistantMarkdownParser();
 
@@ -22,7 +25,7 @@ export interface MarkdownClipboardEnvironment {
 export function createMarkdownClipboardContent(markdown: string): MarkdownClipboardContent {
   return {
     plainText: markdown,
-    html: `<meta charset="utf-8">${markdownRenderer.render(markdown)}`,
+    html: `<meta charset="utf-8">${markdownRenderer.render(normalizeAssistantCitations(markdown, false))}`,
   };
 }
 
