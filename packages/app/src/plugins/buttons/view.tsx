@@ -11,7 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, Text, View, useWindowDimensions, type GestureResponderEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AlertCircle, ChevronDown, MoreHorizontal } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -148,9 +148,13 @@ function InlineMenuAction({
     () => ({ menuItem: "true", menuDisabled: disabled ? "true" : "false" }),
     [disabled],
   );
-  const select = useCallback(() => {
-    menu.selectItem(() => pressButton(view, [...path, action.id]), true);
-  }, [menu, view, path, action.id]);
+  const select = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      menu.selectItem(() => pressButton(view, [...path, action.id]), true);
+    },
+    [menu, view, path, action.id],
+  );
   return (
     <Tooltip enabledOnMobile={false}>
       <TooltipTrigger asChild>
@@ -182,16 +186,34 @@ function InlineMenuActions({
   row: InlineActionRow;
   path: readonly string[];
 }) {
-  return (
-    <View style={styles.actionRow}>
-      <Text numberOfLines={1} style={styles.actionRowLabel}>
-        {row.title}
-      </Text>
+  const select = useCallback(() => pressButton(view, path), [view, path]);
+  const actions = useMemo(
+    () => (
       <View style={styles.inlineActions}>
         {row.actions.map((action) => (
           <InlineMenuAction key={action.id} view={view} row={row} action={action} path={path} />
         ))}
       </View>
+    ),
+    [row, view, path],
+  );
+  if (row.onPress) {
+    return (
+      <MenuItem
+        onSelect={select}
+        disabled={view.entry.pending || view.entry.button.disabled || row.disabled === true}
+        trailing={actions}
+      >
+        {row.title}
+      </MenuItem>
+    );
+  }
+  return (
+    <View style={styles.actionRow}>
+      <Text numberOfLines={1} style={styles.actionRowLabel}>
+        {row.title}
+      </Text>
+      {actions}
     </View>
   );
 }

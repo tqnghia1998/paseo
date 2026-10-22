@@ -2240,9 +2240,10 @@ replaces registrations on each snapshot and aborts the observation during entry 
 ## Button descriptor
 
 A menu entry with `kind: "actions"`, `id`, `title`, and an `actions` array renders a
-non-clickable label with icon buttons aligned to its right. Each action has its own `id`,
+label with icon buttons aligned to its right. Add `onPress` to make the whole row run a
+primary action; the icon buttons still run only their own actions. Each action has its own `id`,
 `title` (used for accessibility and its tooltip), `icon`, `onPress`, and optional `disabled`.
-Selecting an action closes the menu; selecting the label performs no action.
+Selecting an action closes the menu. Without `onPress`, selecting the label performs no action.
 
 These contracts are exported from `@getpaseo/plugin/client`.
 

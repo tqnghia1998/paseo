@@ -68,6 +68,8 @@ function validateBehavior(
           if (item.kind === "separator") return { ...item };
           if (item.kind === "actions") {
             const actionIds = new Set<string>();
+            if (item.onPress !== undefined && typeof item.onPress !== "function")
+              throw new Error("Plugin menu row action needs onPress");
             if (!item.actions.length) throw new Error("Plugin menu action row needs actions");
             return {
               ...item,
@@ -118,6 +120,7 @@ export type ResolvedPluginButtonMenuEntry =
       title: string;
       visible?: boolean;
       disabled?: boolean;
+      onPress?(): void | Promise<void>;
       actions: readonly (Omit<PluginButtonMenuAction<PluginText>, "title"> & { title: string })[];
     }
   | {

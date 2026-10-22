@@ -37,6 +37,7 @@ function resolveAction(
   const item = behavior.items.find((entry) => entry.id === path[0]);
   if (!item || item.kind === "separator" || item.visible === false || item.disabled) return null;
   if (item.kind === "actions") {
+    if (path.length === 1) return item.onPress ?? null;
     if (path.length !== 2) return null;
     const action = item.actions.find((candidate) => candidate.id === path[1]);
     return action && !action.disabled ? action.onPress : null;

@@ -47,6 +47,52 @@ function button(onPress = () => {}): PluginButton {
 }
 
 describe("plugin buttons", () => {
+  it("runs a row action separately from Insert and skips both while disabled", async () => {
+    const buttons = store();
+    const calls: string[] = [];
+    const registration = buttons.addComposerPill(installation(), {
+      id: "prompts",
+      workspaceId: "workspace",
+      agentId: "agent",
+      button: {
+        ...button(),
+        behavior: {
+          kind: "menu",
+          items: [
+            {
+              kind: "actions",
+              id: "review",
+              title: "Review",
+              onPress: () => {
+                calls.push("send");
+              },
+              actions: [
+                {
+                  id: "insert",
+                  title: "Insert",
+                  icon: "Scan",
+                  onPress: () => {
+                    calls.push("insert");
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const entry = buttons.getSnapshot()[0];
+    await buttons.run(entry.key, ["review", "insert"]);
+    expect(calls).toEqual(["insert"]);
+    await buttons.run(entry.key, ["review"]);
+    expect(calls).toEqual(["insert", "send"]);
+    registration.update({ disabled: true });
+    await buttons.run(entry.key, ["review"]);
+    await buttons.run(entry.key, ["review", "insert"]);
+    buttons.setOpen(entry.key, true);
+    expect(calls).toEqual(["insert", "send"]);
+    expect(buttons.getSnapshot()[0].open).toBe(false);
+  });
   it("keeps inline actions separate and only executes the selected enabled action", async () => {
     const buttons = store();
     const sent: string[] = [];

@@ -4330,7 +4330,8 @@ function NewBotDialog({
       ] }) }),
       presets.length ? /* @__PURE__ */ jsx4(SettingsSection, { title: "Your presets", info: "Bots you saved as presets from their menu. Manage them in Settings, Plugins, paseo-bots.", children: /* @__PURE__ */ jsx4(SettingsCard, { children: presets.map((preset) => /* @__PURE__ */ jsx4(StartRow, { colors: colors2, label: preset.name, hint: preset.title || preset.description, avatar: preset.avatar, onPress: () => onCreate({ preset }) }, preset.id)) }) }) : null
     ] }) : null,
-    /* @__PURE__ */ jsxs3(SettingsSection, { title: "Import", info: "Choose a single-bot or all-bots file, or paste its JSON. All bots and teams in the file are imported as new copies. Routines arrive paused, skills need a review and tool credentials must be filled in again.", children: [
+    /* @__PURE__ */ jsxs3(View4, { style: { gap: 12 }, children: [
+      /* @__PURE__ */ jsx4(Text3, { style: { color: colors2.foregroundMuted, fontSize: ui(14) }, children: "Choose a bot file or paste its JSON. Bots and teams are added as new copies. Routines stay paused; review skills and reconnect tool credentials after importing." }),
       canPickFiles ? /* @__PURE__ */ jsx4(Button, { colors: colors2, label: reading ? "Reading file..." : "Choose bot file", icon: "Upload", disabled: busy, onPress: () => void chooseFile() }) : null,
       /* @__PURE__ */ jsx4(
         FormTextArea,
@@ -4578,8 +4579,7 @@ function ExportDialog({ colors: colors2, target, onClose }) {
           onPress: () => void copyText(json).then(() => toast.show("Bot file copied", { variant: "success" })).catch((error) => toast.error(errorText(error)))
         }
       )
-    ] }),
-    /* @__PURE__ */ jsx4(Text3, { ...MONO_PROPS, selectable: true, numberOfLines: 16, style: { fontFamily: MONO_FONT, fontSize: code(), lineHeight: codeLine(), color: colors2.foregroundMuted }, children: json ?? "" })
+    ] })
   ] }) });
 }
 
@@ -4847,6 +4847,17 @@ function SectionHeader({ colors: colors2, onDisplayMenu }) {
 }
 function Footer({ colors: colors2, onNewBot, onImportBot, onExportAllBots, onTeamMap }) {
   const { hovered, hoverProps } = useHover();
+  const menu = useMenu();
+  const sharingRef = useRef3(null);
+  const openSharing = () => void measureAnchor(sharingRef).then((anchor) => anchor && menu.open({
+    anchor,
+    align: "end",
+    title: "Import or export bots",
+    entries: [
+      { label: "Import bots", icon: "Import", onSelect: onImportBot },
+      { label: "Export all bots", icon: "Share", disabled: !onExportAllBots, onSelect: () => onExportAllBots?.() }
+    ]
+  }));
   return /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors2.border }, children: [
     /* @__PURE__ */ jsxs5(
       Pressable4,
@@ -4876,17 +4887,17 @@ function Footer({ colors: colors2, onNewBot, onImportBot, onExportAllBots, onTea
         ]
       }
     ),
-    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Import", label: "Import bots", onPress: onImportBot }),
-    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Share", label: "Export all bots", onPress: onExportAllBots }),
+    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "ArrowDownUp", label: "Import or export bots", buttonRef: sharingRef, onPress: openSharing }),
     /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Network", label: "Team map", onPress: onTeamMap }),
     /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Blocks", label: "Skills & Tools", onPress: () => openLibrary() })
   ] });
 }
-function FooterIconButton({ colors: colors2, icon, label, onPress }) {
+function FooterIconButton({ colors: colors2, icon, label, buttonRef, onPress }) {
   const { hovered, hoverProps } = useHover();
   return /* @__PURE__ */ jsx6(
     Pressable4,
     {
+      ref: buttonRef,
       accessibilityRole: "button",
       accessibilityLabel: label,
       ...tooltip(label),
