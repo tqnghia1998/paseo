@@ -1,19 +1,13 @@
-import React, { useRef, useState, useMemo, useCallback } from "react";
+import React, { useRef, useState, useMemo, useCallback, type ReactNode } from "react";
 import { View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Composer } from "@/composer";
 import { ComposerDock } from "@/composer/dock";
 import { useComposerEditingSession, useComposerFullscreen } from "@/composer/editing-session";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
-import {
-  splitComposerAttachmentsForSubmit,
-  resolveComposerAttachmentSubmitFormat,
-} from "@/composer/attachments/submit";
+import { useDraftAgentCreateFlow } from "@/composer/draft/create-flow";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { encodeImages } from "@/utils/encode-images";
-import { generateMessageId, createUserMessage } from "@/types/stream";
-import { handoffCreatedAgentMessageSubmission } from "@/composer/submission/writer";
-import { useSessionStore } from "@/stores/session-store";
 import type { MessagePayload } from "@/composer/types";
 import type { NativeBotChatProps } from "./bot-chat-types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
@@ -23,9 +17,23 @@ import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 
+import { PluginComposerPills, useHasPluginComposerPills } from "@/plugins";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { botChatDraftId } from "./bot-chat-scope";
+
 export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "onSelectChat">) {
-  const { serverId, botId, cwd, onStart, importLabels, onImported } = props;
-  const draftId = props.draftId ?? `paseo-bots:${botId}:${props.workspaceId ?? cwd}`;
+  const draftId = props.draftId ?? botChatDraftId(props.botId, props.workspaceId ?? props.cwd);
+  return <BotChatDraft key={draftId} {...props} draftId={draftId} />;
+}
+
+function BotChatDraft(
+  props: Omit<NativeBotChatProps, "agentId" | "onSelectChat"> & {
+    draftId: string;
+  },
+) {
+  const { serverId, cwd, onStart, importLabels, onImported, draftId } = props;
+  const hasPluginPills = useHasPluginComposerPills(serverId, props.workspaceId ?? "", draftId);
+  const compact = useIsCompactFormFactor();
   const draftAttachmentScopeKey = useDraftWorkspaceAttachmentScopeKey(draftId);
   const attachmentScopeKeys = useMemo(() => [draftAttachmentScopeKey], [draftAttachmentScopeKey]);
   const createdAgentId = useRef<string | undefined>(undefined);
@@ -46,51 +54,34 @@ export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "
   });
   const editingSession = useComposerEditingSession("chat");
   const fullscreen = useComposerFullscreen(editingSession);
-  const [submitting, setSubmitting] = useState(false);
-  const submittingRef = useRef(false);
-  const messageId = useRef(generateMessageId());
-  const submit = useCallback(
-    async (payload: MessagePayload) => {
-      if (submittingRef.current) throw new Error("Bot chat creation is already in progress");
-      submittingRef.current = true;
-      setSubmitting(true);
-      try {
-        const supportsForgeAttachments =
-          useSessionStore.getState().sessions[serverId]?.serverInfo?.features?.forgeSearch === true;
-        const wire = splitComposerAttachmentsForSubmit(payload.attachments, {
-          format: resolveComposerAttachmentSubmitFormat({ supportsForgeAttachments }),
-        });
-        const images = await encodeImages(wire.images);
-        if (wire.images.length && images?.length !== wire.images.length)
-          throw new Error("Could not encode every image attachment");
-        const timestamp = new Date();
-        const text = payload.text.trim() || "See the attached files.";
-        createdAgentId.current = await onStart({
-          text,
-          messageId: messageId.current,
-          images: images ?? [],
-          attachments: wire.attachments,
-        });
-        if (createdAgentId.current) {
-          handoffCreatedAgentMessageSubmission(
-            serverId,
-            createdAgentId.current,
-            createUserMessage({
-              clientMessageId: messageId.current,
-              text,
-              timestamp,
-              images: wire.images,
-              attachments: wire.attachments,
-            }),
-          );
-        }
-        messageId.current = generateMessageId();
-      } finally {
-        submittingRef.current = false;
-        setSubmitting(false);
-      }
+  const flow = useDraftAgentCreateFlow({
+    draftId,
+    getPendingServerId: () => serverId,
+    buildDraftAgent: () => null,
+    createRequest: async ({ attempt, text, images = [], attachments = [] }) => {
+      const encoded = await encodeImages(images);
+      if (images.length && encoded?.length !== images.length)
+        throw new Error("Could not encode every image attachment");
+      const agentId = await onStart({
+        text,
+        messageId: attempt.clientMessageId,
+        images: encoded ?? [],
+        attachments,
+      });
+      createdAgentId.current = agentId;
+      return { agentId, result: undefined };
     },
-    [serverId, onStart],
+    onCreateSuccess: () => {},
+  });
+  const { handleCreateFromInput, isSubmitting: submitting } = flow;
+  const submit = useCallback(
+    (payload: MessagePayload) =>
+      handleCreateFromInput({
+        text: payload.text.trim() || "See the attached files.",
+        attachments: payload.attachments,
+        cwd,
+      }),
+    [handleCreateFromInput, cwd],
   );
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
@@ -109,9 +100,21 @@ export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "
       <ComposerDock fullscreen={fullscreen}>
         <View style={styles.container} />
         <View style={styles.inputArea}>
-          {canImport && !submitting && !fullscreen ? (
+          {(canImport || hasPluginPills) && !submitting && !fullscreen ? (
             <View style={styles.importPillRow}>
-              <ComposerImportPill onPress={openImport} disabled={!connected} />
+              <DraftPillContent>
+                {canImport ? (
+                  <ComposerImportPill onPress={openImport} disabled={!connected} />
+                ) : null}
+                {props.workspaceId ? (
+                  <PluginComposerPills
+                    serverId={serverId}
+                    workspaceId={props.workspaceId}
+                    agentId={draftId}
+                    compact={compact}
+                  />
+                ) : null}
+              </DraftPillContent>
             </View>
           ) : null}
           <Composer
@@ -157,12 +160,38 @@ export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "
   );
 }
 
+function DraftPillContentView({
+  children,
+  contentMaxWidth,
+}: {
+  children: ReactNode;
+  contentMaxWidth: number;
+}) {
+  return <View style={[styles.importPillContent, { maxWidth: contentMaxWidth }]}>{children}</View>;
+}
+
+// Settings temporarily uses the ordinary chat width; subscribe when this retained draft returns.
+const DraftPillContent = withUnistyles(DraftPillContentView, (theme) => ({
+  contentMaxWidth: theme.contentMaxWidth,
+}));
+
 const styles = StyleSheet.create((theme) => ({
   container: { flex: 1 },
-  inputArea: { paddingHorizontal: theme.spacing[4], paddingBottom: theme.spacing[4] },
+  // Composer pads itself; extra inset here would shift it when the draft becomes a chat.
+  inputArea: { width: "100%" },
   importPillRow: {
-    flexDirection: "row",
+    width: "100%",
+    alignItems: "center",
     paddingHorizontal: theme.spacing[4],
-    paddingBottom: { xs: COMPOSER_PILL_CLEARANCE.compact, md: COMPOSER_PILL_CLEARANCE.wide },
+    paddingBottom: {
+      xs: COMPOSER_PILL_CLEARANCE.compact,
+      md: COMPOSER_PILL_CLEARANCE.wide,
+    },
+  },
+  importPillContent: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
   },
 }));

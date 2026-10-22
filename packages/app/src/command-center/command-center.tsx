@@ -75,6 +75,7 @@ import {
 } from "@/utils/command-center-focus-restore";
 import { focusWithRetries } from "@/utils/web-focus";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import { getProjectSummaryForHostProject } from "@/utils/projects";
 import {
@@ -326,6 +327,7 @@ function useWorkspaceRows(
     // are no sign that the list is complete.
     loading: agentsLoading || projectsLoading || workspacesArriving,
   };
+
 
 
 }
