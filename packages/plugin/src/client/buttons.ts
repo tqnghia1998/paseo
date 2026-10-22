@@ -25,6 +25,8 @@ export type PluginButtonMenuEntry<Text extends PluginText = string> =
       title: Text;
       visible?: boolean;
       disabled?: boolean;
+      /** Optional primary action for the whole row; trailing actions stay independent. */
+      onPress?(): void | Promise<void>;
       actions: readonly PluginButtonMenuAction<Text>[];
     }
   | {
