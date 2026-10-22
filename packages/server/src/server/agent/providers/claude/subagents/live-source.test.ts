@@ -27,6 +27,15 @@ function taskUpdated(status: string, taskId = "a1730a6215e1f5cf6"): SDKMessage {
   } as unknown as SDKMessage;
 }
 
+function taskBackgrounded(taskId: string): SDKMessage {
+  return {
+    type: "system",
+    subtype: "task_updated",
+    task_id: taskId,
+    patch: { is_backgrounded: true },
+  } as unknown as SDKMessage;
+}
+
 function taskNotification(status: string, taskId = "a1730a6215e1f5cf6"): SDKMessage {
   return {
     type: "system",
@@ -289,10 +298,50 @@ describe("ClaudeTaskProtocolSource", () => {
     expect(source.isActive).toBe(false);
   });
 
-  it("ignores a backgrounded shell command", () => {
+  // Vibing: backgrounded shells are rows in the subagents track.
+  it("declares a backgrounded shell command as a Shell row with its command", () => {
+    const source = new ClaudeTaskProtocolSource({
+      getToolInput: () => ({ command: "sleep 20", run_in_background: true }),
+    });
+    // Real wire shape: a backgrounded Bash announces with a tool_use_id but no subagent_type.
+    const observations = source.observe(
+      taskStarted({
+        task_id: "b51skux0z",
+        tool_use_id: "toolu_01MgVdcGPYnqE8cJQuccFtkU",
+        task_type: "local_bash",
+        subagent_type: undefined,
+        description: "Sleep 20 seconds in background",
+        is_backgrounded: true,
+      }),
+    );
+
+    expect(observations).toEqual([
+      {
+        kind: "declared",
+        id: "toolu_01MgVdcGPYnqE8cJQuccFtkU",
+        toolCallId: "toolu_01MgVdcGPYnqE8cJQuccFtkU",
+        title: "Shell",
+        description: "Sleep 20 seconds in background",
+      },
+      {
+        kind: "timeline",
+        id: "toolu_01MgVdcGPYnqE8cJQuccFtkU",
+        item: expect.objectContaining({
+          type: "tool_call",
+          name: "Bash",
+          status: "running",
+          detail: expect.objectContaining({ type: "shell", command: "sleep 20" }),
+        }),
+      },
+    ]);
+    expect(source.isDeclared("toolu_01MgVdcGPYnqE8cJQuccFtkU")).toBe(true);
+    // The parent already shows the real Bash card and keeps its notification row.
+    expect(source.needsSyntheticParentToolCard("toolu_01MgVdcGPYnqE8cJQuccFtkU")).toBe(false);
+    expect(source.isDeclaredTask("b51skux0z")).toBe(false);
+  });
+
+  it("treats a shell without the backgrounded flag as backgrounded, as older CLIs sent it", () => {
     const source = new ClaudeTaskProtocolSource();
-    // Real wire shape: a backgrounded Bash announces with a tool_use_id but no subagent_type,
-    // so filtering on the id alone would put `sleep 20` in the subagents track.
     expect(
       source.observe(
         taskStarted({
@@ -303,8 +352,117 @@ describe("ClaudeTaskProtocolSource", () => {
           description: "Sleep 20 seconds in background",
         }),
       ),
+    ).toContainEqual(expect.objectContaining({ kind: "declared", title: "Shell" }));
+  });
+
+  it("keeps a foreground shell out of the track until it is moved to the background", () => {
+    const source = new ClaudeTaskProtocolSource();
+    expect(
+      source.observe(
+        taskStarted({
+          task_id: "fg-shell",
+          tool_use_id: "toolu_fg",
+          task_type: "local_bash",
+          subagent_type: undefined,
+          description: "Run the test suite",
+          is_backgrounded: false,
+        }),
+      ),
     ).toEqual([]);
-    expect(source.isActive).toBe(false);
+    expect(source.isDeclared("toolu_fg")).toBe(false);
+
+    const moved = source.observe(taskBackgrounded("fg-shell"));
+    expect(moved).toContainEqual(
+      expect.objectContaining({
+        kind: "declared",
+        id: "toolu_fg",
+        title: "Shell",
+        description: "Run the test suite",
+      }),
+    );
+    // A turn ending does not stop a backgrounded shell.
+    expect(source.cancelRunningForegroundTasks()).toEqual([]);
+  });
+
+  it("never declares a foreground shell that finished in the foreground", () => {
+    const source = new ClaudeTaskProtocolSource();
+    source.observe(
+      taskStarted({
+        task_id: "fg-shell",
+        tool_use_id: "toolu_fg",
+        task_type: "local_bash",
+        subagent_type: undefined,
+        is_backgrounded: false,
+      }),
+    );
+    expect(source.observe(taskUpdated("completed", "fg-shell"))).toEqual([]);
+    expect(source.observe(taskBackgrounded("fg-shell"))).toEqual([]);
+  });
+
+  it("finishes a background shell's card with the tail of its output, once", () => {
+    const readShellOutput = vi.fn(() => "ok 12 passed");
+    const source = new ClaudeTaskProtocolSource({
+      getToolInput: () => ({ command: "pnpm test" }),
+      readShellOutput,
+    });
+    source.observe(
+      taskStarted({
+        task_id: "bash-1",
+        tool_use_id: "toolu_bash_1",
+        task_type: "local_bash",
+        subagent_type: undefined,
+        description: "Run tests",
+        is_backgrounded: true,
+      }),
+    );
+
+    const finished = source.observe(taskNotification("completed", "bash-1"));
+    expect(readShellOutput).toHaveBeenCalledWith("/tmp/x.output");
+    expect(finished).toEqual([
+      {
+        kind: "timeline",
+        id: "toolu_bash_1",
+        item: expect.objectContaining({
+          type: "tool_call",
+          callId: "toolu_bash_1",
+          status: "completed",
+          detail: expect.objectContaining({
+            type: "shell",
+            command: "pnpm test",
+            output: "ok 12 passed",
+          }),
+        }),
+      },
+      { kind: "status", id: "toolu_bash_1", status: "completed" },
+    ]);
+    expect(source.observe(taskNotification("completed", "bash-1"))).toEqual([]);
+  });
+
+  it("marks a failed background shell failed and keeps its command", () => {
+    const source = new ClaudeTaskProtocolSource({
+      getToolInput: (id) => (id === "toolu_bash_1" ? { command: "exit 1" } : null),
+      readShellOutput: () => undefined,
+    });
+    source.observe(
+      taskStarted({
+        task_id: "bash-1",
+        tool_use_id: "toolu_bash_1",
+        task_type: "local_bash",
+        subagent_type: undefined,
+        is_backgrounded: true,
+      }),
+    );
+    expect(source.observe(taskNotification("failed", "bash-1"))).toEqual([
+      {
+        kind: "timeline",
+        id: "toolu_bash_1",
+        item: expect.objectContaining({
+          status: "failed",
+          detail: expect.objectContaining({ type: "shell", command: "exit 1" }),
+        }),
+      },
+      { kind: "status", id: "toolu_bash_1", status: "failed" },
+    ]);
   });
 
   it("declares a workflow as a provider subagent with a provider-owned Workflow label", () => {
@@ -450,7 +608,7 @@ describe("ClaudeTaskProtocolSource", () => {
 
   it("does not readmit a filtered task through its notification", () => {
     const source = new ClaudeTaskProtocolSource();
-    // A backgrounded shell is filtered at declaration, but it still gets a task_notification
+    // A foreground shell is filtered at declaration, but it still gets a task_notification
     // carrying a tool_use_id. Routing status off that id would recreate the descriptor with a
     // status and no identity — a nameless row in the subagents track.
     source.observe(
@@ -459,6 +617,7 @@ describe("ClaudeTaskProtocolSource", () => {
         tool_use_id: "toolu_01MgVdcGPYnqE8cJQuccFtkU",
         task_type: "local_bash",
         subagent_type: undefined,
+        is_backgrounded: false,
       }),
     );
 
@@ -665,6 +824,7 @@ describe("ClaudeTaskProtocolSource usage and runtime", () => {
         tool_use_id: "toolu_01MgVdcGPYnqE8cJQuccFtkU",
         task_type: "local_bash",
         subagent_type: undefined,
+        is_backgrounded: false,
       }),
     );
 

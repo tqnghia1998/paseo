@@ -707,6 +707,115 @@ describe("background Claude subagents", () => {
       );
     },
   );
+
+  // Vibing: a backgrounded shell gets a Shell row; the parent keeps its Bash card and notification.
+  test("tracks a top-level background shell as a Shell row with its output", async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "paseo-shell-output-"));
+    testTempDirs.push(directory);
+    const outputFile = path.join(directory, "bg-1.output");
+    writeFileSync(outputFile, "Test Files  3 passed (3)\n", "utf8");
+    queryFactory.mockImplementation(() =>
+      buildQueryMock([
+        { type: "system", subtype: "init", session_id: "shell-session" },
+        {
+          type: "assistant",
+          message: {
+            model: "claude-opus-5-5",
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_bg",
+                name: "Bash",
+                input: { command: "pnpm test", description: "Run tests", run_in_background: true },
+              },
+            ],
+          },
+        },
+        {
+          type: "system",
+          subtype: "task_started",
+          task_id: "bg-1",
+          tool_use_id: "toolu_bg",
+          task_type: "local_bash",
+          description: "Run tests",
+          is_backgrounded: true,
+        },
+        {
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_bg",
+                content: "Command running in background with ID: bg-1",
+              },
+            ],
+          },
+        },
+        {
+          type: "system",
+          subtype: "task_notification",
+          task_id: "bg-1",
+          tool_use_id: "toolu_bg",
+          status: "completed",
+          output_file: outputFile,
+          summary: 'Background command "Run tests" completed (exit code 0)',
+        },
+        { type: "result", subtype: "success", usage: {}, total_cost_usd: 0 },
+      ]),
+    );
+    const session = await new ClaudeAgentClient({
+      logger: createTestLogger(),
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+    }).createSession({ provider: "claude", cwd: process.cwd() });
+    const events = await collectUntilTerminal(streamSession(session, "run the tests"));
+    await session.close();
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "provider_subagent",
+        event: expect.objectContaining({
+          type: "upsert",
+          id: "toolu_bg",
+          title: "Shell",
+          description: "Run tests",
+          status: "running",
+        }),
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "provider_subagent",
+        event: expect.objectContaining({
+          type: "timeline",
+          id: "toolu_bg",
+          item: expect.objectContaining({
+            status: "completed",
+            detail: expect.objectContaining({
+              type: "shell",
+              command: "pnpm test",
+              output: "Test Files  3 passed (3)",
+            }),
+          }),
+        }),
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "provider_subagent",
+        event: expect.objectContaining({ type: "upsert", id: "toolu_bg", status: "completed" }),
+      }),
+    );
+    const parentItems = events.flatMap((event) =>
+      event.type === "timeline" && event.item.type === "tool_call" ? [event.item] : [],
+    );
+    expect(parentItems.some((item) => item.callId === "toolu_bg" && item.name === "Bash")).toBe(
+      true,
+    );
+    expect(parentItems.some((item) => item.name === "task_notification")).toBe(true);
+  });
 });
 
 test("Claude runtime safety protects silent shells, monitors and pending completion notifications", () => {
