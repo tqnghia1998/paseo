@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   MENU_ITEM_HEIGHT,
   MenuRoot,
@@ -32,15 +32,27 @@ import { COMPOSER_PILL_CLEARANCE, composerPillStyles } from "./pill-styles";
  * Its host gives the scroll viewport a small bottom inset only when the bar exists; that keeps
  * the final footer clear without turning the overlay into a layout band.
  */
-export function ComposerTrackBar({ children }: { children: ReactNode }): ReactElement {
+function ComposerTrackBarContent({
+  children,
+  contentMaxWidth,
+}: {
+  children: ReactNode;
+  contentMaxWidth: number;
+}): ReactElement {
   return (
     <View style={styles.bar} pointerEvents="box-none">
-      <View style={styles.track} pointerEvents="box-none">
+      <View style={[styles.track, { maxWidth: contentMaxWidth }]} pointerEvents="box-none">
         {children}
       </View>
     </View>
   );
 }
+
+// Settings routes use the ordinary chat width. Observe the width when this retained rail
+// remounts so returning to Bots cannot leave it narrower than the input.
+export const ComposerTrackBar = withUnistyles(ComposerTrackBarContent, (theme) => ({
+  contentMaxWidth: theme.contentMaxWidth,
+}));
 
 export interface ComposerTrackPillSegment {
   /** Leading mark — a dot, or the running ring. `null` draws the text on its own. */
@@ -370,7 +382,6 @@ const styles = StyleSheet.create((theme) => {
     },
     track: {
       width: "100%",
-      maxWidth: theme.contentMaxWidth,
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing[1],

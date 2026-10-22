@@ -116,6 +116,8 @@ import {
   persistAttachmentFromFileUri,
 } from "@/attachments/service";
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
+import { PluginComposerPills } from "@/plugins/buttons/view";
+import { registerComposerTextInsertion, registerComposerDraft } from "@/composer/text-insertion";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { resolveActiveSendBehavior } from "./input/state";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
@@ -1741,6 +1743,57 @@ function ComposerContentImpl({
     ],
   );
 
+  useEffect(() => {
+    if (!isActiveComposer || readOnly || isComposerLocked || inputMode !== "chat") return;
+    return registerComposerTextInsertion({ serverId, agentId }, (text) => {
+      const current = messageInputRef.current?.getText() ?? textSource.getSnapshot();
+      replaceUserInput(current ? `${current}\n\n${text}` : text);
+      focusMessageInputWithPlatformStrategy(messageInputRef);
+    });
+  }, [
+    agentId,
+    serverId,
+    isActiveComposer,
+    readOnly,
+    isComposerLocked,
+    inputMode,
+    replaceUserInput,
+    textSource,
+  ]);
+
+  useEffect(() => {
+    if (
+      !workspaceId ||
+      !agentControls ||
+      !isActiveComposer ||
+      readOnly ||
+      isComposerLocked ||
+      isSubmitLoading ||
+      inputMode !== "chat"
+    )
+      return;
+    return registerComposerDraft(serverId, {
+      agentId,
+      workspaceId,
+      send: async (text) => {
+        await sendMessageWithContent(text, buildOutgoingAttachments(attachments));
+      },
+    });
+  }, [
+    serverId,
+    workspaceId,
+    agentId,
+    agentControls,
+    isActiveComposer,
+    readOnly,
+    isComposerLocked,
+    isSubmitLoading,
+    inputMode,
+    sendMessageWithContent,
+    buildOutgoingAttachments,
+    attachments,
+  ]);
+
   useEmbeddedComposerBridge({
     enabled: isWeb && isActiveComposer,
     agentId,
@@ -2268,16 +2321,36 @@ function ComposerContentImpl({
   );
 
   const leftContent = useMemo(
-    () =>
-      renderLeftContent({
-        agentControls,
-        agentId,
-        serverId,
-        focusInput,
-        isCompactLayout,
-        showAgentControls: mode.showAgentControls,
-      }),
-    [agentControls, agentId, focusInput, isCompactLayout, mode.showAgentControls, serverId],
+    () => (
+      <>
+        {renderLeftContent({
+          agentControls,
+          agentId,
+          serverId,
+          focusInput,
+          isCompactLayout,
+          showAgentControls: mode.showAgentControls,
+        })}
+        {workspaceId ? (
+          <PluginComposerPills
+            serverId={serverId}
+            workspaceId={workspaceId}
+            agentId={agentId}
+            compact={isCompactLayout}
+            placement="input"
+          />
+        ) : null}
+      </>
+    ),
+    [
+      agentControls,
+      agentId,
+      focusInput,
+      isCompactLayout,
+      mode.showAgentControls,
+      serverId,
+      workspaceId,
+    ],
   );
 
   const handleAttachButtonRef = useCallback((node: View | null) => {

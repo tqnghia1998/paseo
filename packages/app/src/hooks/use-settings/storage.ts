@@ -371,7 +371,7 @@ export async function saveAppSettings(input: {
     (await loadAppSettingsFromStorage(input.deps));
   const current = normalizeAppSettings(storedCurrent);
   const updates = typeof input.updates === "function" ? input.updates(current) : input.updates;
-  const next = { ...current, ...updates };
+  const next = normalizeAppSettings({ ...current, ...updates });
   input.queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, next);
   await writeAppSettings(
     input.deps.storage,
@@ -464,7 +464,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     uiFontSize: _uiFontSize,
     ...settings
   } = StoredAppSettingsSchema.parse(value);
-  return settings;
+  return { ...settings, sendBehavior: "queue" };
 }
 
 function pickAppSettingsFromLegacy(legacy: StoredAppSettings): AppSettings {

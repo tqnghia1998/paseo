@@ -71,7 +71,7 @@ describe("loadAppSettingsFromStorage", () => {
     },
   );
 
-  it("flips a persisted steer send behavior to queue once via the queue-default migration", async () => {
+  it("always uses queue-first even after an older client stores steer", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
         "@paseo:app-settings": JSON.stringify({ sendBehavior: "steer" }),
@@ -79,9 +79,9 @@ describe("loadAppSettingsFromStorage", () => {
     });
     expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("queue");
 
-    // A deliberate steer pick after the migration has run sticks.
+    // Obsolete preferences from older clients cannot change the fixed sending policy.
     await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify({ sendBehavior: "steer" }));
-    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");
+    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("queue");
   });
 
   it("keeps valid settings when another build wrote unknown fields or enum values", async () => {
@@ -105,10 +105,10 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.sidebarRowItems.host).toBe(false);
     expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "null")).toEqual(stored);
   });
-  it("migrates a stored interrupt to queue and persists it", async () => {
+  it("uses queue-first without migrating the obsolete stored preference", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "interrupt" }),
+        [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "interrupt", contentFontSize: 16 }),
       }),
     });
 
@@ -116,7 +116,7 @@ describe("loadAppSettingsFromStorage", () => {
 
     expect(result.sendBehavior).toBe("queue");
     expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "{}").sendBehavior).toBe(
-      "queue",
+      "interrupt",
     );
     expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "{}")).not.toHaveProperty(
       "needsWrite",
@@ -146,7 +146,7 @@ describe("loadAppSettingsFromStorage", () => {
     expect((await loadAppSettingsFromStorage(deps)).sidebarRowItems.services).toBe(true);
   });
 
-  it("keeps an interrupt the user picked after the migration ran", async () => {
+  it("ignores obsolete interrupt updates after settings are saved", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
         [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "interrupt" }),
@@ -159,7 +159,7 @@ describe("loadAppSettingsFromStorage", () => {
       deps,
     });
 
-    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("interrupt");
+    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("queue");
   });
 
   it("defaults theme to auto and send behavior to queue when storage is empty", async () => {

@@ -36,6 +36,8 @@ import {
 } from "./migration";
 import { createDraftPersistStorage } from "./persistence";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
+import { isWeb } from "@/constants/platform";
+import { createWebDraftStorage } from "./web-storage";
 
 export type { DraftInput, DraftLifecycleState } from "./state";
 
@@ -66,7 +68,9 @@ type DraftStore = DraftStoreState & DraftStoreRuntimeState & DraftStoreActions;
 
 let gcScheduled = false;
 const draftPersistStorage = createDraftPersistStorage(
-  createValidatedPersistStorage(AsyncStorage, PersistedDraftStoreSchema),
+  isWeb && typeof window !== "undefined"
+    ? createWebDraftStorage(window.localStorage)
+    : createValidatedPersistStorage(AsyncStorage, PersistedDraftStoreSchema),
 );
 
 export function flushDraftPersistStorage(): Promise<void> {
