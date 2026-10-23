@@ -3464,7 +3464,6 @@ function WorkspaceScreenContent({
       workspaceHeaderTitle,
     ],
   );
-
   const desktopSplitContent = useMemo(() => {
     if (!canRenderDesktopPaneSplits || !workspaceLayout || !persistenceKey) {
       return null;

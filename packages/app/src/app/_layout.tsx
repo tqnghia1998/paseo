@@ -133,7 +133,6 @@ import { EmbeddedAgentActivityBridge } from "@/patches/vibing/agent-activity";
 import { useEmbeddedTheme } from "@/patches/vibing/theme";
 import { isEmbeddedFocusMode, selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 
-
 polyfillCrypto();
 
 export interface HostRuntimeBootstrapState {

@@ -282,7 +282,6 @@ export function WorkspaceHeaderMenuMobile({
         {pluginMenu.rows}
         {pluginMenu.rows.length > 0 ? <DropdownMenuSeparator /> : null}
         {showCreateBrowserTab ? (
-
           <DropdownMenuItem
             testID="workspace-header-new-browser"
             leading={MENU_NEW_BROWSER_ICON}
