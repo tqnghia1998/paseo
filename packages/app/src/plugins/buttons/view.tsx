@@ -11,7 +11,13 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Pressable, Text, View, useWindowDimensions, type GestureResponderEvent } from "react-native";
+import {
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
+  type GestureResponderEvent,
+} from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AlertCircle, ChevronDown, MoreHorizontal } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -659,7 +665,6 @@ function useButtons(
   agentId: string | null,
   placement: "above" | "input" = "above",
 ) {
-
   const entries = useSyncExternalStore(
     pluginButtonStore.subscribe,
     pluginButtonStore.getSnapshot,
