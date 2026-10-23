@@ -13,6 +13,8 @@ const existingWorkspace: WorkspaceDescriptor = {
   name: "feature-test",
   status: "done",
   statusEnteredAt: null,
+  createdAt: null,
+  lastUserMessageAt: null,
   archivingAt: null,
   diffStat: null,
   scripts: [],
