@@ -930,7 +930,6 @@ describe("evaluatePluginClientBundle", () => {
     },
   );
 
-
   it("keeps shared and client runtime exports separate", () => {
     expect(() =>
       evaluatePluginClientBundle(
