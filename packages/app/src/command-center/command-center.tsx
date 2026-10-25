@@ -3,7 +3,6 @@ import { Modal } from "@/components/ui/modal";
 import equal from "fast-deep-equal";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
 
-
 import {
   FlatList,
   Pressable,
@@ -267,8 +266,6 @@ function useWorkspaceRows(
               openAgent: createAgentResultAction(host.serverId),
             }),
           );
-
-
         }
       }
     }

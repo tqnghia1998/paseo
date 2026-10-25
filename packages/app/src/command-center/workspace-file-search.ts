@@ -3,7 +3,6 @@ import { openWorkspaceFileFromExplorer } from "@/screens/workspace/workspace-fil
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { revealWorkspaceTab } from "@/workspace-tabs/navigation";
 import { useEmbeddedWorkspaceSelection } from "@/patches/vibing/embedded-command-center";
-import { usePanelStore } from "@/stores/panel-store";
 
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";

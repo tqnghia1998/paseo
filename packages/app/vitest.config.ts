@@ -208,7 +208,6 @@ export default defineConfig({
             );
           },
         },
-
       ],
     },
     // Bundle the CJS dependencies of the excluded gesture-handler package for the browser.
