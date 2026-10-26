@@ -2180,7 +2180,10 @@ export class AgentManager {
     const close = this.runLifecycleMutation(agentId, async () =>
       isIdle() ? this.closeAgentRuntime(agentId, isIdle) : false,
     );
-    const tracked = close.then(() => undefined);
+    const tracked = close.then(
+      () => undefined,
+      () => undefined,
+    );
     this.inFlightAgentCloses.set(agentId, tracked);
     const clearClose = () => {
       if (this.inFlightAgentCloses.get(agentId) === tracked) {
