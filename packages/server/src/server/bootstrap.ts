@@ -236,10 +236,6 @@ import {
   pruneMissingWorktreeAgents,
   registerWorktreeRoutes,
 } from "../patches/vibing/worktree-runtime.js";
-import {
-  idleAgentCloseMsFromEnv,
-  startIdleAgentReaper,
-} from "../patches/vibing/idle-agent-reaper.js";
 import { configureGitProcessPolicy } from "../utils/run-git-command.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
@@ -1083,10 +1079,6 @@ export async function createPaseoDaemon(
     logger,
   });
   await archiveMissingWorkspaces(workspaceRegistry);
-  const idleAgentCloseMs = idleAgentCloseMsFromEnv(process.env);
-  const stopIdleAgentReaper = idleAgentCloseMs
-    ? startIdleAgentReaper({ agentManager, logger, idleMs: idleAgentCloseMs })
-    : () => undefined;
   await workspaceLabelService.initialize();
   logger.info({ elapsed: elapsed() }, "Workspace registries bootstrapped");
   const teardownArchivedWorkspaceRuntime = (workspaceId: string): void => {
@@ -2020,7 +2012,6 @@ export async function createPaseoDaemon(
     scriptHealthMonitor.stop();
     unsubscribeIdleRuntimeCleanup();
     await idleRuntimeCleanup.close();
-    stopIdleAgentReaper();
     // Freeze both ingress and registration before taking the agent closure snapshot.
     wsServer?.prepareForShutdown();
     await finishSubscriptions.close();
