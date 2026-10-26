@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import React, { type ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({
@@ -55,6 +56,8 @@ vi.mock("./live-design", () => ({
   },
 }));
 import { BotWorkspaceBridge } from "./bot-workspace";
+import { BotChatForkProvider, useBotChatFork } from "./bot-chat-fork";
+import { botChatDraftId } from "./bot-chat-scope";
 const localBotIds = ["reviewer", "vibing-general"];
 const LAST_CHAT = "vibing:paseo-bots:last-chat:/worktree";
 // Node's own localStorage global shadows jsdom's, so give the bridge a plain store.
@@ -203,6 +206,49 @@ it("restores the exact unsent draft and its bot after the feature unmounts", () 
     botId: "reviewer",
     draftId: "paseo-bots:reviewer:workspace:live-design",
   });
+});
+
+it("restores a fork's allocated draft after a warm switch and a remount", () => {
+  const fork = renderHook(() => useBotChatFork(), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <BotChatForkProvider
+        openDraft={vi.fn()}
+        draftIdPrefix={botChatDraftId("reviewer", "workspace")}
+      >
+        {children}
+      </BotChatForkProvider>
+    ),
+  });
+  const draftId = fork.result.current!.createDraftId();
+  const activate = vi.fn();
+  const first = renderHook(
+    ({ selected }) =>
+      BotWorkspaceBridge({
+        localBotIds,
+        botId: "reviewer",
+        selectedAgentId: selected,
+        selectedDraftId: draftId,
+        onActivate: activate,
+      }),
+    { initialProps: { selected: "existing" as string | null } },
+  );
+  first.rerender({ selected: null });
+  act(() =>
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window.parent,
+        origin: "http://host",
+        data: { type: "space:paseo-workspace-activated" },
+      }),
+    ),
+  );
+  expect(activate).toHaveBeenLastCalledWith({ botId: "reviewer", draftId });
+  first.unmount();
+  activate.mockClear();
+  renderHook(() =>
+    BotWorkspaceBridge({ localBotIds, botId: "vibing-general", onActivate: activate }),
+  );
+  expect(activate).toHaveBeenCalledWith({ botId: "reviewer", draftId });
 });
 
 it("stops restoring an unsent draft after the user selects a started chat", () => {
