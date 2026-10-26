@@ -38,6 +38,7 @@ import { registerEmbeddedTargetOpener } from "./embedded-targets";
 import { openFileInHost } from "./host-file-open";
 import { BotUsageCard } from "./bot-usage-card";
 import type { NativeBotChatProps } from "./bot-chat-types";
+import { botChatDraftId } from "./bot-chat-scope";
 
 const spinnerColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
@@ -240,7 +241,12 @@ function NativeBotChatContent(props: NativeBotChatProps) {
                   isPaneFocused: active && !panel,
                 })}
               >
-                <BotChatForkProvider openDraft={openForkDraft}>{content}</BotChatForkProvider>
+                <BotChatForkProvider
+                  openDraft={openForkDraft}
+                  draftIdPrefix={botChatDraftId(botId, workspaceId)}
+                >
+                  {content}
+                </BotChatForkProvider>
               </PaneFocusProvider>
             </PaneProvider>
           </DiffDocumentWorkspaceCacheProvider>
