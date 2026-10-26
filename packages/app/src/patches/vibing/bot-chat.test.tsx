@@ -186,6 +186,7 @@ it("opens a fork in the same bot with the draft that owns its bounded history", 
   await act(async () => fake.fork!());
   expect(props.onSelectChat).toHaveBeenCalledWith(null, expect.any(String));
   const draftId = vi.mocked(props.onSelectChat).mock.calls[0][1]!;
+  expect(draftId).toMatch(/^paseo-bots:bot:workspace:draft_/);
   expect(
     useWorkspaceAttachmentsStore.getState().attachmentsByScope[
       buildDraftWorkspaceAttachmentScopeKey(draftId)
