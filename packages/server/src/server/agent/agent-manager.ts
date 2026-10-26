@@ -36,7 +36,6 @@ import type { ToolPolicy } from "@getpaseo/protocol/agent-types";
 import type { ProviderPaseoToolsPolicy } from "@getpaseo/protocol/provider-config";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
-import { canCloseIdleAgent } from "../../patches/vibing/idle-agent-reaper.js";
 
 import {
   AgentTurnStartCanceledError,
@@ -2405,36 +2404,6 @@ export class AgentManager {
     this.inFlightAgentCloses.set(agentId, close);
     const clearClose = () => {
       if (this.inFlightAgentCloses.get(agentId) === close) {
-        this.inFlightAgentCloses.delete(agentId);
-      }
-    };
-    void close.then(clearClose, clearClose);
-    return close;
-  }
-
-  /** Vibing idle-agent reaper: closes the agent only while nothing is in flight. */
-  closeIdleAgent(agentId: string): Promise<boolean> {
-    if (this.inFlightAgentCloses.has(agentId)) return Promise.resolve(false);
-    const isIdle = () => {
-      const agent = this.agents.get(agentId);
-      return Boolean(
-        agent &&
-        canCloseIdleAgent(agent, {
-          hasRun: this.runs.hasRun(agentId),
-          providerSubagents: this.providerSubagents.list(agentId),
-        }),
-      );
-    };
-    const close = this.runLifecycleMutation(agentId, async () =>
-      isIdle() ? Boolean(await this.closeAgentRuntime(agentId, isIdle)) : false,
-    );
-    const tracked = close.then(
-      () => undefined,
-      () => undefined,
-    );
-    this.inFlightAgentCloses.set(agentId, tracked);
-    const clearClose = () => {
-      if (this.inFlightAgentCloses.get(agentId) === tracked) {
         this.inFlightAgentCloses.delete(agentId);
       }
     };
