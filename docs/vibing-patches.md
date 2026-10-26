@@ -102,6 +102,8 @@ Definitions remain runtime-global and local conversation lists stay worktree-sco
 Native fork actions open a fresh draft in the same bot, preserving the draft ID
 that owns the bounded Chat history attachment. The Bots composer reads that
 draft's attachment scope so the copied conversation reaches its first message.
+Fork drafts allocate their bot/workspace/context-scoped ID before saving history
+attachments, so unsent forks restore after warm activation and iframe remount.
 Bot chat rows show a Delete icon before their kebab; it confirms, then permanently
 deletes the agent through the client handle's `delete()` (hosts without it report an
 error). Deleting or archiving the open chat selects the bot's next chat in sidebar
@@ -259,6 +261,9 @@ Do not label these patches as installed plugins merely to make them discoverable
   subagent (background shell or subagent) are never closed. A message that loads
   the agent just before the close and starts its turn during the provider shutdown
   can still be cancelled; the post-drain re-check only narrows that window.
+  Idle-close failures propagate to the reaper for logging while its internal
+  lifecycle barrier settles without an unhandled rejection; a provider shutdown
+  failure retains the live session for a later cleanup attempt.
 - Codex questions stay session-local, respect explicit feature opt-out, exclude
   internal agents and preserve native developer instructions. A native config
   read failure must not replace unknown instructions. Keep Default/Full Access,
