@@ -125,7 +125,7 @@ export function useForkAgent(
   const { serverId, toast, readOnly = false } = input;
   const { t } = useTranslation();
   const router = useRouter();
-  const openBotForkDraft = useBotChatFork();
+  const botFork = useBotChatFork();
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const supportsAgentForkContext = useHostFeature(serverId, "agentForkContext") && !readOnly;
 
@@ -140,7 +140,7 @@ export function useForkAgent(
       }
       const draftSetup = buildForkDraftSetup(agent);
       const prepareForkDraft = async () => {
-        const draftId = generateDraftId();
+        const draftId = botFork?.createDraftId() ?? generateDraftId();
         const payload = await client.buildAgentForkContext(agentId, boundary);
         const attachment = buildChatHistoryAttachment({
           draftId,
@@ -161,8 +161,8 @@ export function useForkAgent(
           throw new Error(t("message.actions.forkMissingWorkspace"));
         }
         const draftId = await prepareForkDraft();
-        if (openBotForkDraft) {
-          openBotForkDraft(draftId);
+        if (botFork) {
+          botFork.openDraft(draftId);
           return;
         }
         navigateToWorkspace({
