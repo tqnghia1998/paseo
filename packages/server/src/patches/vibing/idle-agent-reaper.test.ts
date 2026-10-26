@@ -151,6 +151,27 @@ describe("AgentManager.closeIdleAgent", () => {
     expect(manager.getAgent(agentId)).toBeNull();
   });
 
+  test("a failed idle close keeps the session loaded without an unhandled rejection", async () => {
+    const { manager, agentId, session } = await createIdleAgent();
+    const closeError = new Error("provider shutdown failed");
+    const close = vi.spyOn(session, "close").mockRejectedValueOnce(closeError);
+    const unhandled: unknown[] = [];
+    const observeUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", observeUnhandled);
+    try {
+      await expect(manager.closeIdleAgent(agentId)).rejects.toBe(closeError);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(manager.getAgent(agentId)?.session).toBe(session);
+      expect(session.closed).toBe(false);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", observeUnhandled);
+      close.mockRestore();
+      await manager.closeAgent(agentId);
+    }
+  });
+
   test("keeps an agent whose background shell or subagent is still running", async () => {
     const { manager, agentId, session } = await createIdleAgent();
     session.push({
