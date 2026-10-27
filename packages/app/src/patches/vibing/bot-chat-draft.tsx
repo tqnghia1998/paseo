@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useCallback, type ReactNode } from "react";
+import React, { useId, useRef, useState, useMemo, useCallback, type ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Composer } from "@/composer";
@@ -20,10 +20,28 @@ import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/works
 import { PluginComposerPills, useHasPluginComposerPills } from "@/plugins";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { botChatDraftId } from "./bot-chat-scope";
+import { FormPreferencesScopeContext } from "@/hooks/use-form-preferences";
+import { CreateAgentPreferencesService } from "@/create-agent-preferences/service";
 
 export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "onSelectChat">) {
   const draftId = props.draftId ?? botChatDraftId(props.botId, props.workspaceId ?? props.cwd);
-  return <BotChatDraft key={draftId} {...props} draftId={draftId} />;
+  return <ScopedBotChatDraft key={draftId} {...props} draftId={draftId} />;
+}
+
+function ScopedBotChatDraft(
+  props: Omit<NativeBotChatProps, "agentId" | "onSelectChat"> & { draftId: string },
+) {
+  // Keep per-conversation choices out of global composer defaults and later bot drafts.
+  const id = useId();
+  const [service] = useState(
+    () => new CreateAgentPreferencesService({ read: async () => null, write: async () => {} }),
+  );
+  const scope = useMemo(() => ({ id: `bot:${id}`, service }), [id, service]);
+  return (
+    <FormPreferencesScopeContext.Provider value={scope}>
+      <BotChatDraft {...props} />
+    </FormPreferencesScopeContext.Provider>
+  );
 }
 
 function BotChatDraft(
@@ -59,6 +77,17 @@ function BotChatDraft(
     getPendingServerId: () => serverId,
     buildDraftAgent: () => null,
     createRequest: async ({ attempt, text, images = [], attachments = [] }) => {
+      const selection = input.composerState;
+      if (!selection?.selectedProvider || selection.isModelLoading || !selection.effectiveModelId)
+        throw new Error("Choose an available provider and model before starting this chat.");
+      if (selection.modelError) throw new Error(selection.modelError);
+      const agentSettings = {
+        provider: selection.selectedProvider,
+        model: selection.effectiveModelId,
+        modeId: selection.effectiveModeId || null,
+        thinkingOptionId: selection.effectiveThinkingOptionId || null,
+        featureValues: selection.featureValues,
+      };
       const encoded = await encodeImages(images);
       if (images.length && encoded?.length !== images.length)
         throw new Error("Could not encode every image attachment");
@@ -67,6 +96,7 @@ function BotChatDraft(
         messageId: attempt.clientMessageId,
         images: encoded ?? [],
         attachments,
+        agentSettings,
       });
       createdAgentId.current = agentId;
       return { agentId, result: undefined };
@@ -92,8 +122,10 @@ function BotChatDraft(
   const canImport = Boolean(importLabels && onImported && props.workspaceId && cwd);
   const agentControls = useMemo(
     () =>
-      input.composerState ? { ...input.composerState.agentControls, disabled: true } : undefined,
-    [input.composerState],
+      input.composerState
+        ? { ...input.composerState.agentControls, disabled: submitting }
+        : undefined,
+    [input.composerState, submitting],
   );
   return (
     <FileDropZone style={styles.container}>
