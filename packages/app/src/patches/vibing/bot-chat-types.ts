@@ -24,5 +24,12 @@ export interface NativeBotChatProps {
     messageId: string;
     images: { data: string; mimeType: string }[];
     attachments: AgentAttachment[];
+    agentSettings?: {
+      provider: AgentProvider;
+      model: string | null;
+      modeId: string | null;
+      thinkingOptionId: string | null;
+      featureValues?: Record<string, unknown>;
+    };
   }): Promise<string>;
 }

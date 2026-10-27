@@ -445,7 +445,7 @@ index 7533cb6..77f0b76 100644
    if (bucket === "running") {
      const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..f5ffa70 100644
+index ebc4ed2..ec04829 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
 @@ -1,32 +1,34 @@
@@ -468,7 +468,7 @@ index ebc4ed2..f5ffa70 100644
  import { addImportedBots } from "../shared/library";
 -import { displayTitle, startBotChat, syncBotWorkspaceTitle } from "../shared/chat";
 -import { moveKey } from "../shared/sidebar";
-+import { CHAT_CONTEXT_LABEL, displayTitle, startBotChat, syncBotWorkspaceTitle } from "../shared/chat";
++import { CHAT_CONTEXT_LABEL, botForChat, displayTitle, startBotChat, syncBotWorkspaceTitle } from "../shared/chat";
 +import { chatAfterRemoval, moveKey } from "../shared/sidebar";
  import { chatTranscript } from "../shared/transcript";
  import { ensureBotHomeRpc, mountRpc, exportBotRpc, importBotRpc, importTeamRpc, systemPromptRpc } from "../shared/rpc";
@@ -853,7 +853,7 @@ index ebc4ed2..f5ffa70 100644
    const ensureHome = useRpc(ensureBotHomeRpc);
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
-@@ -754,15 +852,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -754,15 +852,19 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
  
    const start = async (message: OutgoingMessage) => {
      if (!host.api) throw new Error(`${host.label} is offline.`);
@@ -861,18 +861,21 @@ index ebc4ed2..f5ffa70 100644
      // The bot's folder holds its memory and skills even when it works elsewhere.
      const home = await ensureHome({ botId: bot.id });
 -    const placement = bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root };
+-    const { systemPrompt } = await compose({ bot, local: host.isLocal, message: message.text });
 +    const placement = botWorkspace && host.isLocal ? { path: botWorkspace.directory, projectRoot: null, workspaceId: botWorkspace.id } : bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root };
-     const { systemPrompt } = await compose({ bot, local: host.isLocal, message: message.text });
++    const chatBot = botForChat(bot, message.agentSettings);
++    const { systemPrompt } = await compose({ bot: chatBot, local: host.isLocal, message: message.text });
      // The plugin's tools and connected apps go through this host's relay, so only bots here get them.
      const agentId = newUuid();
      const plugin = host.isLocal ? await mountServers({ botId: bot.id, agentId }) : {};
      const id = await startBotChat(host.api, {
        bot,
++      agentSettings: message.agentSettings,
 +      labels: botWorkspace?.chatContext ? { [CHAT_CONTEXT_LABEL]: botWorkspace.chatContext } : {},
        library,
        ...(host.isLocal ? { agentId } : {}),
        plugin,
-@@ -773,13 +873,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -773,13 +875,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        attachments: message.attachments,
        clientMessageId: message.messageId,
      });
@@ -896,7 +899,7 @@ index ebc4ed2..f5ffa70 100644
      const api = host.api;
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
-@@ -799,8 +907,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -799,8 +909,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
      // Runs once for the selection that carries the prompt.
    }, [host.api]);
  
@@ -914,7 +917,7 @@ index ebc4ed2..f5ffa70 100644
        colors={colors}
        bot={bot}
        host={host}
-@@ -815,6 +932,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -815,6 +934,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        onTogglePanel={onTogglePanel}
        onStart={start}
        onOpenChat={onStarted}
@@ -923,7 +926,7 @@ index ebc4ed2..f5ffa70 100644
    );
  }
 diff --git a/client/ChatPane.tsx b/client/ChatPane.tsx
-index 7d1bf84..accf79c 100644
+index 7d1bf84..bfa0f9d 100644
 --- a/client/ChatPane.tsx
 +++ b/client/ChatPane.tsx
 @@ -3,8 +3,8 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
@@ -933,7 +936,7 @@ index 7d1bf84..accf79c 100644
 -import type { Bot } from "../shared/bot";
 -import { displayTitle } from "../shared/chat";
 +import { BOT_LABEL, type Bot } from "../shared/bot";
-+import { CHAT_CONTEXT_LABEL, displayTitle } from "../shared/chat";
++import { CHAT_CONTEXT_LABEL, displayTitle, type ChatAgentSettings } from "../shared/chat";
  import { Avatar } from "./Avatar";
  import { Composer } from "./chat/Composer";
  import { ChatStream } from "./chat/Stream";
@@ -952,7 +955,7 @@ index 7d1bf84..accf79c 100644
    colors: Colors;
    bot: Bot;
    host: BotHost;
-@@ -34,9 +38,11 @@ export interface ChatPaneProps {
+@@ -34,23 +38,27 @@ export interface ChatPaneProps {
    onBotMenu(anchor: LayoutRectangle | null): void;
    onTogglePanel(): void;
    /** Creates the chat with its first message. */
@@ -965,7 +968,10 @@ index 7d1bf84..accf79c 100644
  }
  
  export interface OutgoingMessage {
-@@ -46,11 +52,12 @@ export interface OutgoingMessage {
++  agentSettings?: ChatAgentSettings;
+   text: string;
+   messageId: string;
+   images: { data: string; mimeType: string }[];
    attachments: ReturnType<typeof toWire>["attachments"];
  }
  
@@ -980,7 +986,7 @@ index 7d1bf84..accf79c 100644
    const [findOpen, setFindOpen] = useState(false);
    useEffect(() => setFindOpen(false), [chatId]);
    // ⌘F / Ctrl+F finds in the open chat on the desktop.
-@@ -70,7 +77,10 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
+@@ -70,7 +78,10 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
          onTogglePanel={onTogglePanel}
          onFind={canFind ? () => setFindOpen((open) => !open) : undefined}
        />
@@ -992,7 +998,7 @@ index 7d1bf84..accf79c 100644
          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }}>
            <Avatar avatar={bot.avatar} size={56} />
            <Text style={{ color: colors.foreground, fontSize: ui(18), fontWeight: "500" }}>{bot.name}</Text>
-@@ -81,7 +91,7 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
+@@ -81,7 +92,7 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
        ) : (
          <ChatStream key={chatId} colors={colors} chat={chat} api={host.api} agentId={chatId} compact={layout.compact} platform={layout.platform} typeVersion={typeVersion} onOpenChat={onOpenChat} voice={bot.voice} findOpen={findOpen} onCloseFind={() => setFindOpen(false)} {...(host.isLocal ? { botId: bot.id } : {})} />
        )}
@@ -1585,7 +1591,7 @@ index 8c4ecdd..7082cfd 100644
  });
  export type TeamFileTeam = z.infer<typeof TeamFileTeamSchema>;
 diff --git a/shared/chat.ts b/shared/chat.ts
-index cd27e0d..364bb10 100644
+index cd27e0d..7246abc 100644
 --- a/shared/chat.ts
 +++ b/shared/chat.ts
 @@ -3,6 +3,8 @@ import { BOT_LABEL, buildAgentConfig, defaultModelId, type Bot, type Library, ty
@@ -1619,15 +1625,46 @@ index cd27e0d..364bb10 100644
  // The part of Paseo's API these helpers use. Shared code may only import the plugin SDK's
  // root, so the app and the server pass their Paseo API in, and it's checked against this.
  
-@@ -133,7 +143,7 @@ export interface StartChatInput {
+@@ -107,8 +117,20 @@ export async function syncBotWorkspaceTitle(api: ChatApi, bot: Bot, placement: B
+   if (mine && mine.title !== bot.name) await api.workspaces.ref(mine).setTitle(bot.name);
+ }
+
++export interface ChatAgentSettings extends Pick<Bot, "provider" | "model" | "modeId" | "thinkingOptionId"> {
++  featureValues?: Record<string, unknown>;
++}
++
++/** A conversation's runtime choice must not rewrite shared bot defaults. */
++export function botForChat(bot: Bot, settings?: ChatAgentSettings): Bot {
++  if (!settings) return bot;
++  const { provider, model, modeId, thinkingOptionId } = settings;
++  return { ...bot, provider, model, modeId, thinkingOptionId };
++}
++
+ export interface StartChatInput {
+   bot: Bot;
++  agentSettings?: ChatAgentSettings;
+   /** Resolves the bot's MCP servers. */
+   library: Library;
+   /** The chat's agent id, picked in advance so its tools URL can name it. */
+@@ -131,12 +153,15 @@ export interface StartChatInput {
+  * and sends the first message. Used by the app and by the routine scheduler.
+  */
  export async function startBotChat(api: ChatApi, input: StartChatInput): Promise<string> {
-   const { bot } = input;
+-  const { bot } = input;
++  const bot = botForChat(input.bot, input.agentSettings);
    const model = bot.model ?? (await resolveDefaultModel(api, bot.provider));
 -  const workspace = await ensureBotWorkspace(api, bot, input.placement);
 +  const workspace = input.placement.workspaceId ? api.workspaces.ref(input.placement.workspaceId) : await ensureBotWorkspace(api, bot, input.placement);
    const agent = await workspace.agents.create({
      ...(input.agentId ? { agentId: input.agentId } : {}),
-     config: buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
+-    config: buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
++    config: {
++      ...buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
++      ...(input.agentSettings?.featureValues ? { featureValues: input.agentSettings.featureValues } : {}),
++    },
+     labels: { [BOT_LABEL]: bot.id, ...input.labels },
+     prompt: input.prompt,
+     ...(input.title ? { title: input.title.slice(0, MAX_TITLE_CHARS) } : {}),
 diff --git a/shared/groups.ts b/shared/groups.ts
 index 174863a..a8e4aad 100644
 --- a/shared/groups.ts
@@ -1746,7 +1783,7 @@ index 0ffd98e..420e450 100644
 +  return rest[Math.min(Math.max(index, 0), rest.length - 1)] ?? null;
 +}
 diff --git a/tests/bots.test.ts b/tests/bots.test.ts
-index 9e592cd..ba7fc8a 100644
+index 9e592cd..e96b19c 100644
 --- a/tests/bots.test.ts
 +++ b/tests/bots.test.ts
 @@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
@@ -1819,13 +1856,52 @@ index 9e592cd..ba7fc8a 100644
    it("checks only the bot's own chats and the ones it asked", async () => {
      const { checkChat } = await import("../server/tools/bots");
      const scout = makeBot({ id: "bot-scout", name: "Scout" });
-@@ -102,3 +130,24 @@ describe("asking other bots", () => {
+@@ -102,3 +130,63 @@ describe("asking other bots", () => {
      expect(granted("ask")).toContain("check_chat");
    });
  });
 +
 +
 +describe("Vibing workspace conversations", () => {
++  it("overrides a chat runtime while retaining the bot identity, tools and saved defaults", async () => {
++    const { startBotChat, botForChat } = await import("../shared/chat");
++    const bot = Object.freeze(makeBot({ id: "review", provider: "claude", model: "opus", modeId: "bypassPermissions", thinkingOptionId: "high" }));
++    const create = vi.fn(async () => ({ id: "codex-chat" }));
++    const api = { workspaces: { ref: () => ({ agents: { create } }) }, providers: {} } as unknown as Parameters<typeof startBotChat>[0];
++    const agentSettings = { provider: "codex", model: "gpt", modeId: "default", thinkingOptionId: "medium", featureValues: { planMode: true } };
++    expect(botForChat(bot, agentSettings)).toEqual({ ...bot, provider: "codex", model: "gpt", modeId: "default", thinkingOptionId: "medium" });
++    await startBotChat(api, {
++      bot, agentSettings, library: EMPTY_LIBRARY,
++      placement: { path: "/feature", projectRoot: null, workspaceId: "feature-workspace" },
++      systemPrompt: "Review Lead instructions", prompt: "Review",
++      plugin: { tools: { type: "http", url: "http://localhost/tools", headers: {} } },
++    });
++    expect(create).toHaveBeenLastCalledWith(expect.objectContaining({
++      labels: { "paseo-bots.bot": "review" },
++      config: expect.objectContaining({ provider: "codex/gpt", modeId: "default", thinkingOptionId: "medium", systemPrompt: "Review Lead instructions", featureValues: { planMode: true }, mcpServers: expect.any(Object), toolPolicy: expect.any(Object) }),
++    }));
++    // A subsequent routine or ordinary chat still uses the saved Claude settings.
++    await startBotChat(api, { bot, library: EMPTY_LIBRARY, placement: { path: "/feature", projectRoot: null, workspaceId: "feature-workspace" }, systemPrompt: "Review Lead instructions", prompt: "Again" });
++    expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ config: expect.objectContaining({ provider: "claude/opus", modeId: "bypassPermissions", thinkingOptionId: "high" }) }));
++    expect(bot.provider).toBe("claude");
++    expect(bot.model).toBe("opus");
++  });
++
++  it("resolves the chosen provider's default without retaining another provider's model or modes", async () => {
++    const { startBotChat } = await import("../shared/chat");
++    const bot = makeBot({ provider: "claude", model: "opus", modeId: "bypassPermissions", thinkingOptionId: "high" });
++    const create = vi.fn(async (_options: { config: ReturnType<typeof buildAgentConfig> }) => ({ id: "chat" }));
++    const snapshot = vi.fn(async () => ({ entries: [{ provider: "claude", models: [{ id: "opus", isDefault: true }] }, { provider: "codex", models: [{ id: "gpt-default", isDefault: true }] }] }));
++    const api = { workspaces: { ref: () => ({ agents: { create } }) }, providers: { snapshot } } as unknown as Parameters<typeof startBotChat>[0];
++    await startBotChat(api, { bot, agentSettings: { provider: "codex", model: null, modeId: null, thinkingOptionId: null }, library: EMPTY_LIBRARY, placement: { path: "/feature", projectRoot: null, workspaceId: "workspace" }, systemPrompt: "Review", prompt: "Review" });
++    const config = create.mock.calls[0]![0].config;
++    expect(config.provider).toBe("codex/gpt-default");
++    expect(config).not.toHaveProperty("modeId");
++    expect(config).not.toHaveProperty("thinkingOptionId");
++    expect(config).not.toHaveProperty("featureValues");
++    expect(bot).toMatchObject({ provider: "claude", model: "opus", modeId: "bypassPermissions", thinkingOptionId: "high" });
++  });
++
 +  it("uses the bound workspace without creating or renaming a bot workspace", async () => {
 +    const { startBotChat } = await import("../shared/chat");
 +    const create = vi.fn(async () => ({ id: "chat" }));
