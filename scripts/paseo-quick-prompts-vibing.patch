@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..2e96254
 --- /dev/null
 +++ b/plugins/quick-prompts/client/pills.test.ts
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,37 @@
 +import { test } from 'node:test';
 +import assert from 'node:assert/strict';
 +import { createPromptPills } from './pills.ts';
@@ -27,6 +27,7 @@ index 0000000..2e96254
 +  assert.deepEqual([...active.keys()], ['draft','chat']);
 +  const menu = active.get('draft');
 +  assert.equal(menu.button.label,'Prompts');
++  assert.equal(menu.button.behavior.openOnHover,true);
 +  assert.equal(menu.workspaceId,'workspace');
 +  const row = menu.button.behavior.items[0];
 +  assert.deepEqual(row.actions.map(action => action.id),['insert']);
@@ -117,10 +118,11 @@ index 6e5dd82..85d90ba 100644
        behavior: { kind: "action", onPress: () => host.openSettings() },
      }),
    };
-@@ -109,12 +114,15 @@ export function createPromptPills(host: PromptPillHost): PromptPills {
+@@ -109,12 +114,16 @@ export function createPromptPills(host: PromptPillHost): PromptPills {
        label: "Prompts",
        behavior: {
          kind: "menu",
++        openOnHover: true,
          items: [
            ...prompts.map((prompt) => ({
 -            kind: "item" as const,
