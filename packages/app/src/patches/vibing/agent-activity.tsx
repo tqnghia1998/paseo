@@ -2,11 +2,12 @@ import { useEmbeddedWorkspace, isEmbeddedWorkspaceAllowed } from "./workspace-bo
 import { useEffect } from "react";
 import { isWeb } from "@/constants/platform";
 import { selectAgentTurnPresentation, useSessionStore, type Agent } from "@/stores/session-store";
+import { isBotChatContext } from "./bot-chat-scope";
 export const EMBEDDED_AGENT_ACTIVITY_EVENT_TYPE = "paseo:agent-activity";
 export const EMBEDDED_AGENT_ACTIVITY_REQUEST_TYPE = "space:paseo-agent-activity-request";
 
 export function isEmbeddedWorkspaceRunning(
-  agents: Iterable<Pick<Agent, "id" | "workspaceId" | "archivedAt">>,
+  agents: Iterable<Pick<Agent, "id" | "workspaceId" | "archivedAt" | "labels">>,
   workspaceId: string,
   isTurnActive: (agentId: string) => boolean,
   isWorkspaceAllowed?: (workspaceId: string | null | undefined) => boolean,
@@ -15,7 +16,8 @@ export function isEmbeddedWorkspaceRunning(
     const belongs = isWorkspaceAllowed
       ? isWorkspaceAllowed(agent.workspaceId)
       : agent.workspaceId === workspaceId;
-    if (!agent.archivedAt && belongs && isTurnActive(agent.id)) return true;
+    if (!agent.archivedAt && belongs && isBotChatContext(agent) && isTurnActive(agent.id))
+      return true;
   }
   return false;
 }
