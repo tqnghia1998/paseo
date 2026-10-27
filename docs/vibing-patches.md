@@ -35,6 +35,19 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
 | Codex background terminals              | Server: `codex/background-terminals.ts`                                                                              | `CodexAppServerAgentSession`: `emitEvent` follows root shell cards, root `turn/completed` declares still-running ones as Shell rows, `handleUnexpectedTermination` fails them                                                                                               | Colocated unit test; `codex-app-server-agent.test.ts` (Codex background terminals)                                                                                                                    |
 | Standalone distribution                 | `scripts/bundle-paseo-web.mjs`, `scripts/paseo-web.js`                                                               | Root build command, embedded build flag, packaged version and built-in plugin discovery                                                                                                                                                                                     | Runner tests, full standalone build and Vibing bundle guard; see [porting guide](../README-PORT.md)                                                                                                   |
 
+## Interrupted Bots conversations
+
+Recovery belongs to the daemon so leaving a feature tab does not disable it. Only live
+failed/interrupted turns in top-level Bots workspace chats qualify; silence and a normal
+completion do not establish unfinished work. `bot-auto-resume.ts` owns the bounded retry
+window. AgentManager retains admission and lifecycle ownership, including queued-message
+protection. Closing/offloading, permissions, and a new prompt cancel pending recovery.
+
+Client Stop requests carry optional `preventAutoResume`; anonymous cancellation requests
+remain recoverable. Update the client and daemon together to preserve explicit Stop intent.
+The window is process-local and does not survive a daemon restart. Live Design and child
+agents keep their existing completion and parent-owned recovery contracts.
+
 ## Plugin boundary
 
 Keep `useRevealedText` in the plugin UI exports: vendored Bots, Beautiful Chat and
