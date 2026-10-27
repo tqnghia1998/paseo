@@ -1738,8 +1738,10 @@ import { mkdir as mkdir7, readFile as readFile6, writeFile as writeFile6 } from 
 import { join as join8 } from "node:path";
 
 // shared/chat.ts
+import { z as z2 } from "zod";
 var ROUTINE_LABEL = "paseo-bots.routine";
 var CHAT_CONTEXT_LABEL = "paseo-bots.context";
+var CHAT_RUNTIME_LABEL = "paseo-bots.runtime";
 var MAX_TITLE_CHARS = 200;
 var normalize2 = (path) => (path ?? "").replace(/\/+$/, "");
 async function botsProjectId(api, root) {
@@ -1769,6 +1771,22 @@ async function ensureBotWorkspace(api, bot, placement) {
     source: { kind: "directory", path: placement.path, ...projectId ? { projectId } : {} }
   });
 }
+var DelegatedRuntimeSchema = z2.object({
+  provider: z2.string().min(1),
+  model: z2.string().min(1),
+  modeId: z2.string().nullable(),
+  thinkingOptionId: z2.string().nullable(),
+  featureValues: z2.record(z2.string(), z2.unknown()).optional()
+});
+function delegatedAgentSettings(labels) {
+  const value = labels?.[CHAT_RUNTIME_LABEL];
+  if (value === void 0) return void 0;
+  try {
+    return DelegatedRuntimeSchema.parse(JSON.parse(value));
+  } catch {
+    throw new Error("This conversation's runtime choice is invalid. Start a new chat before delegating.");
+  }
+}
 function botForChat(bot, settings) {
   if (!settings) return bot;
   const { provider, model, modeId, thinkingOptionId } = settings;
@@ -1784,7 +1802,13 @@ async function startBotChat(api, input) {
       ...buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
       ...input.agentSettings?.featureValues ? { featureValues: input.agentSettings.featureValues } : {}
     },
-    labels: { [BOT_LABEL]: bot.id, ...input.labels },
+    labels: {
+      [BOT_LABEL]: bot.id,
+      ...input.labels,
+      ...input.inheritAgentSettings && input.agentSettings ? {
+        [CHAT_RUNTIME_LABEL]: JSON.stringify({ ...input.agentSettings, model })
+      } : {}
+    },
     prompt: input.prompt,
     ...input.title ? { title: input.title.slice(0, MAX_TITLE_CHARS) } : {},
     ...input.images?.length ? { images: input.images } : {},
@@ -1803,13 +1827,13 @@ async function resolveDefaultModel(api, provider) {
 
 // shared/rpc.ts
 import { defineRpc } from "@getpaseo/plugin";
-import { z as z5 } from "zod";
+import { z as z6 } from "zod";
 
 // shared/proposals.ts
-import { z as z4 } from "zod";
+import { z as z5 } from "zod";
 
 // shared/changes.ts
-import { z as z3 } from "zod";
+import { z as z4 } from "zod";
 
 // shared/pixel.ts
 function hslToHex(h, s, l) {
@@ -2178,7 +2202,7 @@ function mcpServerTested(server) {
 }
 
 // shared/routines.ts
-import { z as z2 } from "zod";
+import { z as z3 } from "zod";
 var CATCH_UP_MS = 12 * 60 * 60 * 1e3;
 function atLocalTime(day, time) {
   const [hours, minutes] = time.split(":").map(Number);
@@ -2421,13 +2445,13 @@ function describeCron(expression) {
   else if (/^\d$/.test(dayOfWeek)) days = CRON_DAY_NAMES[Number.parseInt(dayOfWeek, 10)] ? `${CRON_DAY_NAMES[Number.parseInt(dayOfWeek, 10)]}s` : null;
   return days ? `${days} at ${time}` : null;
 }
-var ScheduleInput = z2.object({
-  type: z2.enum(["once", "daily", "cron", "interval", "webhook"]),
-  at: z2.string().max(40).optional().describe('For "once": local date and time, "YYYY-MM-DD HH:MM".'),
-  time: z2.string().max(5).optional().describe('For "daily": local time, "HH:MM".'),
-  weekdays: z2.array(z2.number().int().min(0).max(6)).max(7).optional().describe('For "daily": the days to run, 0 = Sunday to 6 = Saturday. Every day when left out.'),
-  expression: z2.string().max(100).optional().describe('For "cron": five fields (minute hour day-of-month month day-of-week) in local time.'),
-  every_minutes: z2.number().int().min(5).max(1440).optional().describe('For "interval": minutes between runs, 5 to 1440.')
+var ScheduleInput = z3.object({
+  type: z3.enum(["once", "daily", "cron", "interval", "webhook"]),
+  at: z3.string().max(40).optional().describe('For "once": local date and time, "YYYY-MM-DD HH:MM".'),
+  time: z3.string().max(5).optional().describe('For "daily": local time, "HH:MM".'),
+  weekdays: z3.array(z3.number().int().min(0).max(6)).max(7).optional().describe('For "daily": the days to run, 0 = Sunday to 6 = Saturday. Every day when left out.'),
+  expression: z3.string().max(100).optional().describe('For "cron": five fields (minute hour day-of-month month day-of-week) in local time.'),
+  every_minutes: z3.number().int().min(5).max(1440).optional().describe('For "interval": minutes between runs, 5 to 1440.')
 });
 function scheduleFrom(input, now) {
   switch (input.type) {
@@ -2531,141 +2555,141 @@ function newBot(provider, template) {
 }
 
 // shared/changes.ts
-var Ref = (what) => z3.string().min(1).max(100).describe(`${what}: its name or id.`);
-var Ids = (what) => z3.array(z3.string().min(1).max(100)).max(100).describe(what);
+var Ref = (what) => z4.string().min(1).max(100).describe(`${what}: its name or id.`);
+var Ids = (what) => z4.array(z4.string().min(1).max(100)).max(100).describe(what);
 var IMAGE_URL = /^(https?:\/\/\S+|data:image\/\S+)$/i;
 var APP_SLUG = /^[a-z0-9_-]{1,60}$/i;
 var TOOL_GRANT = /^[A-Za-z0-9_-]{1,64}\/\S{1,200}$/;
-var Colour = z3.number().int().min(0).max(PALETTE_COUNT - 1).nullable().optional();
-var ImageUrl = z3.string().max(2e3).nullable().optional().describe("An https:// picture shown instead of the pixel art; null removes it.");
-var AvatarInput = z3.object({
-  new_face: z3.boolean().optional().describe("Draw a different pixel-art face."),
+var Colour = z4.number().int().min(0).max(PALETTE_COUNT - 1).nullable().optional();
+var ImageUrl = z4.string().max(2e3).nullable().optional().describe("An https:// picture shown instead of the pixel art; null removes it.");
+var AvatarInput = z4.object({
+  new_face: z4.boolean().optional().describe("Draw a different pixel-art face."),
   colour: Colour.describe(`Colour of the face, 0 to ${PALETTE_COUNT - 1}; null lets the face pick one.`),
-  shape: z3.enum(["circle", "rounded", "square"]).optional(),
+  shape: z4.enum(["circle", "rounded", "square"]).optional(),
   image_url: ImageUrl
 });
-var LogoInput = z3.object({
-  new_logo: z3.boolean().optional().describe("Draw a different pixel-art logo."),
+var LogoInput = z4.object({
+  new_logo: z4.boolean().optional().describe("Draw a different pixel-art logo."),
   colour: Colour.describe(`Colour of the logo, 0 to ${PALETTE_COUNT - 1}; null lets the logo pick one.`),
   image_url: ImageUrl
 });
-var PlaybookInput = z3.object({
-  name: z3.string().min(1).max(80),
-  triggers: z3.array(z3.string().min(1).max(60)).min(1).max(20).describe("Words or phrases that bring the playbook into a chat when its first message has one."),
-  instructions: z3.string().min(1).max(2e4)
+var PlaybookInput = z4.object({
+  name: z4.string().min(1).max(80),
+  triggers: z4.array(z4.string().min(1).max(60)).min(1).max(20).describe("Words or phrases that bring the playbook into a chat when its first message has one."),
+  instructions: z4.string().min(1).max(2e4)
 });
-var AppInput = z3.object({
-  app: z3.string().min(1).max(60).describe("The connected app's slug, like gmail or slack."),
-  tools: z3.union([z3.enum(["all", "read"]), z3.array(z3.string().min(1).max(200)).min(1).max(200)]).optional().describe('Which of its tools: "all" (the default), "read" for the read-only ones, or exact tool names.'),
-  account: z3.string().max(200).nullable().optional().describe("The one account it must use, by its name; null or left out lets it pick.")
+var AppInput = z4.object({
+  app: z4.string().min(1).max(60).describe("The connected app's slug, like gmail or slack."),
+  tools: z4.union([z4.enum(["all", "read"]), z4.array(z4.string().min(1).max(200)).min(1).max(200)]).optional().describe('Which of its tools: "all" (the default), "read" for the read-only ones, or exact tool names.'),
+  account: z4.string().max(200).nullable().optional().describe("The one account it must use, by its name; null or left out lets it pick.")
 });
 var BotFields = {
-  title: z3.string().max(200).optional().describe("One line: what the bot does."),
-  description: z3.string().max(4e3).optional().describe("Who the bot is; shown in the bot list and given to its agent."),
-  instructions: z3.string().max(24e3).optional().describe("Standing instructions (its Soul). Replaces the current ones."),
-  provider: z3.string().min(1).max(60).optional().describe("Agent provider id from get_setup, like claude or codex."),
-  model: z3.string().max(200).nullable().optional().describe("Model id from get_setup; null for the provider's default."),
-  mode: z3.string().max(100).nullable().optional().describe("Approval mode id from get_setup; null for the provider's default."),
-  thinking: z3.string().max(100).nullable().optional().describe("Thinking option id from get_setup; null for the default."),
-  contact_bots: z3.enum(["ask", "allow", "off"]).optional().describe("Asking other bots for help: after the user approves each request (ask), freely (allow) or never (off)."),
+  title: z4.string().max(200).optional().describe("One line: what the bot does."),
+  description: z4.string().max(4e3).optional().describe("Who the bot is; shown in the bot list and given to its agent."),
+  instructions: z4.string().max(24e3).optional().describe("Standing instructions (its Soul). Replaces the current ones."),
+  provider: z4.string().min(1).max(60).optional().describe("Agent provider id from get_setup, like claude or codex."),
+  model: z4.string().max(200).nullable().optional().describe("Model id from get_setup; null for the provider's default."),
+  mode: z4.string().max(100).nullable().optional().describe("Approval mode id from get_setup; null for the provider's default."),
+  thinking: z4.string().max(100).nullable().optional().describe("Thinking option id from get_setup; null for the default."),
+  contact_bots: z4.enum(["ask", "allow", "off"]).optional().describe("Asking other bots for help: after the user approves each request (ask), freely (allow) or never (off)."),
   avatar: AvatarInput.optional(),
-  working_folder: z3.string().max(1e3).nullable().optional().describe("Absolute path of its working folder; null for its own folder in the Bots project."),
-  pinned: z3.boolean().optional()
+  working_folder: z4.string().max(1e3).nullable().optional().describe("Absolute path of its working folder; null for its own folder in the Bots project."),
+  pinned: z4.boolean().optional()
 };
 var ROLE_IDS = BOT_TEMPLATES.map((template) => template.id);
-var CreateBot = z3.object({
-  type: z3.literal("create_bot"),
-  name: z3.string().min(1).max(100),
-  role: z3.enum(ROLE_IDS).optional().describe(`Start from a role (${BOT_TEMPLATES.map((template) => `${template.id}: ${template.title}`).join(", ")}); the other fields override it.`),
+var CreateBot = z4.object({
+  type: z4.literal("create_bot"),
+  name: z4.string().min(1).max(100),
+  role: z4.enum(ROLE_IDS).optional().describe(`Start from a role (${BOT_TEMPLATES.map((template) => `${template.id}: ${template.title}`).join(", ")}); the other fields override it.`),
   ...BotFields,
   skills: Ids("Library skill ids to turn on.").optional(),
   mcp_servers: Ids("Library MCP servers to turn on, by name.").optional(),
-  apps: z3.array(AppInput).max(50).optional().describe("Connected apps it may use."),
-  playbooks: z3.array(PlaybookInput).max(20).optional()
+  apps: z4.array(AppInput).max(50).optional().describe("Connected apps it may use."),
+  playbooks: z4.array(PlaybookInput).max(20).optional()
 });
-var UpdateBot = z3.object({
-  type: z3.literal("update_bot"),
+var UpdateBot = z4.object({
+  type: z4.literal("update_bot"),
   bot: Ref("The bot"),
-  name: z3.string().min(1).max(100).optional(),
+  name: z4.string().min(1).max(100).optional(),
   ...BotFields,
-  archived: z3.boolean().optional(),
+  archived: z4.boolean().optional(),
   add_skills: Ids("Library skill ids to turn on.").optional(),
   remove_skills: Ids("Skill ids to turn off.").optional(),
   add_mcp_servers: Ids("Library MCP servers to turn on, by name.").optional(),
   remove_mcp_servers: Ids("MCP servers to turn off, by name.").optional(),
-  add_apps: z3.array(AppInput).max(50).optional().describe("Connected apps it may use, or new limits on ones it has."),
+  add_apps: z4.array(AppInput).max(50).optional().describe("Connected apps it may use, or new limits on ones it has."),
   remove_apps: Ids("App slugs it may no longer use.").optional(),
   allow_tools: Ids('MCP tools it may use without asking, as "server/tool".').optional(),
   disallow_tools: Ids('Tools to take off that list, as "server/tool".').optional(),
-  add_playbooks: z3.array(PlaybookInput).max(20).optional().describe("Playbooks to add; one with the name of an existing playbook replaces it."),
+  add_playbooks: z4.array(PlaybookInput).max(20).optional().describe("Playbooks to add; one with the name of an existing playbook replaces it."),
   remove_playbooks: Ids("Playbooks to remove, by name.").optional()
 });
-var DeleteBot = z3.object({ type: z3.literal("delete_bot"), bot: Ref("The bot") });
-var AddRoutine = z3.object({
-  type: z3.literal("add_routine"),
+var DeleteBot = z4.object({ type: z4.literal("delete_bot"), bot: Ref("The bot") });
+var AddRoutine = z4.object({
+  type: z4.literal("add_routine"),
   bot: Ref("The bot that runs it"),
-  name: z3.string().min(1).max(80),
-  instructions: z3.string().min(1).max(2e4).describe("What to do on each run, written so it works without this chat."),
+  name: z4.string().min(1).max(80),
+  instructions: z4.string().min(1).max(2e4).describe("What to do on each run, written so it works without this chat."),
   schedule: ScheduleInput
 });
-var UpdateRoutine = z3.object({
-  type: z3.literal("update_routine"),
+var UpdateRoutine = z4.object({
+  type: z4.literal("update_routine"),
   bot: Ref("The bot"),
   routine: Ref("The routine"),
-  name: z3.string().min(1).max(80).optional(),
-  instructions: z3.string().min(1).max(2e4).optional(),
+  name: z4.string().min(1).max(80).optional(),
+  instructions: z4.string().min(1).max(2e4).optional(),
   schedule: ScheduleInput.optional(),
-  enabled: z3.boolean().optional().describe("false pauses it.")
+  enabled: z4.boolean().optional().describe("false pauses it.")
 });
-var DeleteRoutine = z3.object({ type: z3.literal("delete_routine"), bot: Ref("The bot"), routine: Ref("The routine") });
-var CreateTeam = z3.object({
-  type: z3.literal("create_team"),
-  name: z3.string().min(1).max(60),
+var DeleteRoutine = z4.object({ type: z4.literal("delete_routine"), bot: Ref("The bot"), routine: Ref("The routine") });
+var CreateTeam = z4.object({
+  type: z4.literal("create_team"),
+  name: z4.string().min(1).max(60),
   lead: Ref("Its Chief of Staff, the user's main contact who hands work to the others").optional(),
-  members: z3.array(Ref("A member")).max(50).optional().describe("The team's bots. A bot is on one team at a time; adding it moves it here."),
-  instructions: z3.string().max(2e4).optional().describe("Shared instructions added to every member's prompt."),
+  members: z4.array(Ref("A member")).max(50).optional().describe("The team's bots. A bot is on one team at a time; adding it moves it here."),
+  instructions: z4.string().max(2e4).optional().describe("Shared instructions added to every member's prompt."),
   logo: LogoInput.optional()
 });
-var UpdateTeam = z3.object({
-  type: z3.literal("update_team"),
+var UpdateTeam = z4.object({
+  type: z4.literal("update_team"),
   team: Ref("The team"),
-  name: z3.string().min(1).max(60).optional(),
+  name: z4.string().min(1).max(60).optional(),
   lead: Ref("Its new Chief of Staff").nullable().optional().describe("Its Chief of Staff; null for none."),
-  add_members: z3.array(Ref("A bot")).max(50).optional(),
-  remove_members: z3.array(Ref("A bot")).max(50).optional(),
-  instructions: z3.string().max(2e4).optional().describe("Shared instructions; replaces the current ones."),
+  add_members: z4.array(Ref("A bot")).max(50).optional(),
+  remove_members: z4.array(Ref("A bot")).max(50).optional(),
+  instructions: z4.string().max(2e4).optional().describe("Shared instructions; replaces the current ones."),
   logo: LogoInput.optional()
 });
-var DeleteTeam = z3.object({ type: z3.literal("delete_team"), team: Ref("The team") });
-var SetSkill = z3.object({
-  type: z3.literal("set_skill"),
+var DeleteTeam = z4.object({ type: z4.literal("delete_team"), team: Ref("The team") });
+var SetSkill = z4.object({
+  type: z4.literal("set_skill"),
   skill: Ref("The library skill"),
-  enabled: z3.boolean().describe("Off keeps it in the library but out of every bot's prompt.")
+  enabled: z4.boolean().describe("Off keeps it in the library but out of every bot's prompt.")
 });
-var AddMcpServer = z3.object({
-  type: z3.literal("add_mcp_server"),
-  name: z3.string().regex(MCP_NAME).describe("Letters, digits, - and _; what bots see before its tools."),
-  description: z3.string().max(300).optional(),
-  command: z3.string().min(1).max(1e3).optional().describe("For a local server: the program to run."),
-  args: z3.array(z3.string().max(1e3)).max(50).optional(),
-  env: z3.record(z3.string(), z3.string().max(4e3)).optional(),
-  url: z3.string().url().max(2e3).optional().describe("For a remote server: its URL."),
-  transport: z3.enum(["http", "sse"]).optional().describe("For a remote server; http when left out."),
-  headers: z3.record(z3.string(), z3.string().max(4e3)).optional()
+var AddMcpServer = z4.object({
+  type: z4.literal("add_mcp_server"),
+  name: z4.string().regex(MCP_NAME).describe("Letters, digits, - and _; what bots see before its tools."),
+  description: z4.string().max(300).optional(),
+  command: z4.string().min(1).max(1e3).optional().describe("For a local server: the program to run."),
+  args: z4.array(z4.string().max(1e3)).max(50).optional(),
+  env: z4.record(z4.string(), z4.string().max(4e3)).optional(),
+  url: z4.string().url().max(2e3).optional().describe("For a remote server: its URL."),
+  transport: z4.enum(["http", "sse"]).optional().describe("For a remote server; http when left out."),
+  headers: z4.record(z4.string(), z4.string().max(4e3)).optional()
 });
-var SetMcpServer = z3.object({ type: z3.literal("set_mcp_server"), server: Ref("The library MCP server"), enabled: z3.boolean() });
-var RemoveMcpServer = z3.object({ type: z3.literal("remove_mcp_server"), server: Ref("The library MCP server") });
-var SetDefaults = z3.object({
-  type: z3.literal("set_defaults"),
-  provider: z3.string().max(60).optional().describe("Provider for new bots; empty picks one that's ready."),
+var SetMcpServer = z4.object({ type: z4.literal("set_mcp_server"), server: Ref("The library MCP server"), enabled: z4.boolean() });
+var RemoveMcpServer = z4.object({ type: z4.literal("remove_mcp_server"), server: Ref("The library MCP server") });
+var SetDefaults = z4.object({
+  type: z4.literal("set_defaults"),
+  provider: z4.string().max(60).optional().describe("Provider for new bots; empty picks one that's ready."),
   model: BotFields.model,
   mode: BotFields.mode,
   thinking: BotFields.thinking,
   contact_bots: BotFields.contact_bots
 });
-var SavePreset = z3.object({ type: z3.literal("save_preset"), bot: Ref("The bot to save as a preset") });
-var DeletePreset = z3.object({ type: z3.literal("delete_preset"), preset: Ref("The preset") });
-var ChangeSchema = z3.discriminatedUnion("type", [
+var SavePreset = z4.object({ type: z4.literal("save_preset"), bot: Ref("The bot to save as a preset") });
+var DeletePreset = z4.object({ type: z4.literal("delete_preset"), preset: Ref("The preset") });
+var ChangeSchema = z4.discriminatedUnion("type", [
   CreateBot,
   UpdateBot,
   DeleteBot,
@@ -2683,7 +2707,7 @@ var ChangeSchema = z3.discriminatedUnion("type", [
   SavePreset,
   DeletePreset
 ]);
-var ChangesSchema = z3.array(ChangeSchema).min(1).max(50);
+var ChangesSchema = z4.array(ChangeSchema).min(1).max(50);
 function providerInfo(entries) {
   return entries.filter((entry) => entry.enabled).map((entry) => ({
     id: entry.provider,
@@ -3087,301 +3111,301 @@ ${routine.prompt}`).join("\n\n")),
 }
 
 // shared/proposals.ts
-var ProposalBase = z4.object({
-  id: z4.string(),
-  botId: z4.string(),
+var ProposalBase = z5.object({
+  id: z5.string(),
+  botId: z5.string(),
   /** The chat the proposal came from. */
-  agentId: z4.string(),
-  status: z4.enum(["pending", "accepted", "dismissed"]),
-  createdAt: z4.string(),
-  resolvedAt: z4.string().nullable()
+  agentId: z5.string(),
+  status: z5.enum(["pending", "accepted", "dismissed"]),
+  createdAt: z5.string(),
+  resolvedAt: z5.string().nullable()
 });
-var SkillProposalSchema = z4.object({ name: z4.string(), description: z4.string(), text: z4.string() });
-var RoutineProposalSchema = z4.object({ name: z4.string(), prompt: z4.string(), schedule: RoutineScheduleSchema, resultsChatId: z4.string().nullable() });
-var ChangesProposalSchema = z4.object({ summary: z4.string(), changes: z4.array(ChangeSchema), provider: z4.string().default("") });
-var ProposalSchema = z4.discriminatedUnion("kind", [
-  ProposalBase.extend({ kind: z4.literal("skill"), data: SkillProposalSchema }),
-  ProposalBase.extend({ kind: z4.literal("routine"), data: RoutineProposalSchema }),
-  ProposalBase.extend({ kind: z4.literal("changes"), data: ChangesProposalSchema })
+var SkillProposalSchema = z5.object({ name: z5.string(), description: z5.string(), text: z5.string() });
+var RoutineProposalSchema = z5.object({ name: z5.string(), prompt: z5.string(), schedule: RoutineScheduleSchema, resultsChatId: z5.string().nullable() });
+var ChangesProposalSchema = z5.object({ summary: z5.string(), changes: z5.array(ChangeSchema), provider: z5.string().default("") });
+var ProposalSchema = z5.discriminatedUnion("kind", [
+  ProposalBase.extend({ kind: z5.literal("skill"), data: SkillProposalSchema }),
+  ProposalBase.extend({ kind: z5.literal("routine"), data: RoutineProposalSchema }),
+  ProposalBase.extend({ kind: z5.literal("changes"), data: ChangesProposalSchema })
 ]);
 function proposalReply(id, what) {
   return `Proposal ${id}: the user sees ${what} as a card in this chat and decides whether to save it. Don't save it yourself.`;
 }
 
 // shared/rpc.ts
-var BotId = z5.string().regex(/^[a-z0-9-]+$/);
-var MemoryFileName = z5.string().regex(/^[A-Za-z0-9 ._-]+\.md$/);
-var SkillName = z5.string().regex(/^[A-Za-z0-9._-]+$/);
+var BotId = z6.string().regex(/^[a-z0-9-]+$/);
+var MemoryFileName = z6.string().regex(/^[A-Za-z0-9 ._-]+\.md$/);
+var SkillName = z6.string().regex(/^[A-Za-z0-9._-]+$/);
 var ensureBotHomeRpc = defineRpc({
   name: "bots.ensure-home",
-  input: z5.object({ botId: BotId }),
-  output: z5.object({ root: z5.string(), path: z5.string() })
+  input: z6.object({ botId: BotId }),
+  output: z6.object({ root: z6.string(), path: z6.string() })
 });
 var helloRpc = defineRpc({
   name: "bots.hello",
-  input: z5.object({}),
-  output: z5.object({ scheduler: z5.boolean() })
+  input: z6.object({}),
+  output: z6.object({ scheduler: z6.boolean() })
 });
-var PromptSectionSchema = z5.object({ title: z5.string(), text: z5.string() });
+var PromptSectionSchema = z6.object({ title: z6.string(), text: z6.string() });
 var systemPromptRpc = defineRpc({
   name: "bots.system-prompt",
-  input: z5.object({ bot: BotSchema, local: z5.boolean(), message: z5.string().max(1e5).optional() }),
-  output: z5.object({ systemPrompt: z5.string(), sections: z5.array(PromptSectionSchema) })
+  input: z6.object({ bot: BotSchema, local: z6.boolean(), message: z6.string().max(1e5).optional() }),
+  output: z6.object({ systemPrompt: z6.string(), sections: z6.array(PromptSectionSchema) })
 });
-var MemoryFileSchema = z5.object({ name: MemoryFileName, bytes: z5.number(), lines: z5.number(), topic: z5.boolean() });
+var MemoryFileSchema = z6.object({ name: MemoryFileName, bytes: z6.number(), lines: z6.number(), topic: z6.boolean() });
 var memoryListRpc = defineRpc({
   name: "bots.memory.list",
-  input: z5.object({ botId: BotId }),
-  output: z5.object({ folder: z5.string(), files: z5.array(MemoryFileSchema), injectedLines: z5.number(), injectedBytes: z5.number() })
+  input: z6.object({ botId: BotId }),
+  output: z6.object({ folder: z6.string(), files: z6.array(MemoryFileSchema), injectedLines: z6.number(), injectedBytes: z6.number() })
 });
 var memoryReadRpc = defineRpc({
   name: "bots.memory.read",
-  input: z5.object({ botId: BotId, name: MemoryFileName }),
-  output: z5.object({ text: z5.string() })
+  input: z6.object({ botId: BotId, name: MemoryFileName }),
+  output: z6.object({ text: z6.string() })
 });
 var memoryWriteRpc = defineRpc({
   name: "bots.memory.write",
-  input: z5.object({ botId: BotId, name: MemoryFileName, text: z5.string().max(2e5) }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ botId: BotId, name: MemoryFileName, text: z6.string().max(2e5) }),
+  output: z6.object({ ok: z6.boolean() })
 });
 var memoryDeleteRpc = defineRpc({
   name: "bots.memory.delete",
-  input: z5.object({ botId: BotId, name: MemoryFileName }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ botId: BotId, name: MemoryFileName }),
+  output: z6.object({ ok: z6.boolean() })
 });
-var LogDay = z5.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+var LogDay = z6.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 var memoryLogRpc = defineRpc({
   name: "bots.memory.log",
-  input: z5.object({ botId: BotId, day: LogDay.optional() }),
-  output: z5.object({ days: z5.array(z5.object({ day: z5.string(), lines: z5.number() })), text: z5.string().nullable() })
+  input: z6.object({ botId: BotId, day: LogDay.optional() }),
+  output: z6.object({ days: z6.array(z6.object({ day: z6.string(), lines: z6.number() })), text: z6.string().nullable() })
 });
 var memoryLogDeleteRpc = defineRpc({
   name: "bots.memory.log-delete",
-  input: z5.object({ botId: BotId, day: LogDay }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ botId: BotId, day: LogDay }),
+  output: z6.object({ ok: z6.boolean() })
 });
-var JournalEntrySchema = z5.object({
-  id: z5.string(),
-  at: z5.string(),
-  file: z5.string(),
-  actor: z5.enum(["bot", "you"]),
-  via: z5.enum(["chat", "app", "disk", "undo"]),
-  chat: z5.object({ id: z5.string(), title: z5.string() }).nullable(),
-  kind: z5.enum(["created", "edited", "deleted"]),
-  diff: z5.string(),
-  added: z5.number(),
-  removed: z5.number(),
-  canUndo: z5.boolean()
+var JournalEntrySchema = z6.object({
+  id: z6.string(),
+  at: z6.string(),
+  file: z6.string(),
+  actor: z6.enum(["bot", "you"]),
+  via: z6.enum(["chat", "app", "disk", "undo"]),
+  chat: z6.object({ id: z6.string(), title: z6.string() }).nullable(),
+  kind: z6.enum(["created", "edited", "deleted"]),
+  diff: z6.string(),
+  added: z6.number(),
+  removed: z6.number(),
+  canUndo: z6.boolean()
 });
 var memoryJournalRpc = defineRpc({
   name: "bots.memory.journal",
-  input: z5.object({ botId: BotId }),
-  output: z5.object({ entries: z5.array(JournalEntrySchema) })
+  input: z6.object({ botId: BotId }),
+  output: z6.object({ entries: z6.array(JournalEntrySchema) })
 });
 var memoryUndoRpc = defineRpc({
   name: "bots.memory.undo",
-  input: z5.object({ botId: BotId, id: z5.string().regex(/^j-[a-z0-9]+$/) }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ botId: BotId, id: z6.string().regex(/^j-[a-z0-9]+$/) }),
+  output: z6.object({ ok: z6.boolean() })
 });
-var ImportedSkillSchema = z5.object({ id: SkillName, description: z5.string(), source: z5.string() });
+var ImportedSkillSchema = z6.object({ id: SkillName, description: z6.string(), source: z6.string() });
 var skillImportRpc = defineRpc({
   name: "bots.library.import-skills",
-  input: z5.object({ source: z5.string().min(1).max(500) }),
-  output: z5.object({ skills: z5.array(ImportedSkillSchema) })
+  input: z6.object({ source: z6.string().min(1).max(500) }),
+  output: z6.object({ skills: z6.array(ImportedSkillSchema) })
 });
 var skillReadRpc = defineRpc({
   name: "bots.library.read-skill",
-  input: z5.object({ id: SkillName }),
-  output: z5.object({ text: z5.string(), sha: z5.string().nullable(), missing: z5.boolean(), path: z5.string(), files: z5.array(z5.string()) })
+  input: z6.object({ id: SkillName }),
+  output: z6.object({ text: z6.string(), sha: z6.string().nullable(), missing: z6.boolean(), path: z6.string(), files: z6.array(z6.string()) })
 });
 var skillWriteRpc = defineRpc({
   name: "bots.library.write-skill",
-  input: z5.object({ id: SkillName, text: z5.string().max(256e3) }),
-  output: z5.object({ description: z5.string(), sha: z5.string() })
+  input: z6.object({ id: SkillName, text: z6.string().max(256e3) }),
+  output: z6.object({ description: z6.string(), sha: z6.string() })
 });
 var skillDeleteRpc = defineRpc({
   name: "bots.library.delete-skill",
-  input: z5.object({ id: SkillName }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ id: SkillName }),
+  output: z6.object({ ok: z6.boolean() })
 });
 var mcpProbeRpc = defineRpc({
   name: "bots.library.test-mcp",
-  input: z5.object({ config: McpServerConfigSchema }),
-  output: z5.discriminatedUnion("ok", [z5.object({ ok: z5.literal(true), tools: z5.array(McpToolSchema) }), z5.object({ ok: z5.literal(false), error: z5.string() })])
+  input: z6.object({ config: McpServerConfigSchema }),
+  output: z6.discriminatedUnion("ok", [z6.object({ ok: z6.literal(true), tools: z6.array(McpToolSchema) }), z6.object({ ok: z6.literal(false), error: z6.string() })])
 });
 var mcpSourcesRpc = defineRpc({
   name: "bots.library.mcp-sources",
-  input: z5.object({}),
-  output: z5.object({ sources: z5.array(z5.object({ label: z5.string(), count: z5.number(), json: z5.string() })) })
+  input: z6.object({}),
+  output: z6.object({ sources: z6.array(z6.object({ label: z6.string(), count: z6.number(), json: z6.string() })) })
 });
 var avatarKeyStatusRpc = defineRpc({
   name: "bots.avatar.status",
-  input: z5.object({}),
-  output: z5.object({ configured: z5.boolean(), keyHint: z5.string().nullable() })
+  input: z6.object({}),
+  output: z6.object({ configured: z6.boolean(), keyHint: z6.string().nullable() })
 });
 var avatarSetKeyRpc = defineRpc({
   name: "bots.avatar.set-key",
-  input: z5.object({ key: z5.string().min(1).max(400) }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ key: z6.string().min(1).max(400) }),
+  output: z6.object({ ok: z6.boolean() })
 });
 var avatarRemoveKeyRpc = defineRpc({
   name: "bots.avatar.remove-key",
-  input: z5.object({}),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({}),
+  output: z6.object({ ok: z6.boolean() })
 });
 var avatarGenerateRpc = defineRpc({
   name: "bots.avatar.generate",
-  input: z5.object({ name: z5.string().max(200), title: z5.string().max(400), description: z5.string().max(4e3), direction: z5.string().max(400) }),
-  output: z5.object({ image: z5.string() })
+  input: z6.object({ name: z6.string().max(200), title: z6.string().max(400), description: z6.string().max(4e3), direction: z6.string().max(400) }),
+  output: z6.object({ image: z6.string() })
 });
-var RoutineRunSchema = z5.object({
-  id: z5.string(),
-  trigger: z5.enum(["schedule", "manual", "webhook"]),
+var RoutineRunSchema = z6.object({
+  id: z6.string(),
+  trigger: z6.enum(["schedule", "manual", "webhook"]),
   /** When the run was due; for manual and webhook runs, when it was asked for. */
-  scheduledFor: z5.string(),
-  startedAt: z5.string(),
-  endedAt: z5.string().nullable(),
-  status: z5.enum(["running", "succeeded", "failed", "skipped-busy", "skipped-missed"]),
-  agentId: z5.string().nullable(),
+  scheduledFor: z6.string(),
+  startedAt: z6.string(),
+  endedAt: z6.string().nullable(),
+  status: z6.enum(["running", "succeeded", "failed", "skipped-busy", "skipped-missed"]),
+  agentId: z6.string().nullable(),
   /** The start of the bot's reply once the run finished. */
-  output: z5.string().nullable(),
-  error: z5.string().nullable()
+  output: z6.string().nullable(),
+  error: z6.string().nullable()
 });
-var RoutineRunCardSchema = RoutineRunSchema.pick({ trigger: true, scheduledFor: true, status: true, agentId: true, output: true, error: true }).extend({ routineName: z5.string() });
+var RoutineRunCardSchema = RoutineRunSchema.pick({ trigger: true, scheduledFor: true, status: true, agentId: true, output: true, error: true }).extend({ routineName: z6.string() });
 var ROUTINE_RUN_CARD = { kind: "routine-run", version: 1 };
-var RoutineRecordSchema = z5.object({
+var RoutineRecordSchema = z6.object({
   /** The last time the schedule fired (runs, skips and misses), which the next due time counts from. */
-  lastRunAt: z5.string().nullable(),
+  lastRunAt: z6.string().nullable(),
   /** The latest runs, oldest first. */
-  runs: z5.array(RoutineRunSchema)
+  runs: z6.array(RoutineRunSchema)
 });
 var routineStatusRpc = defineRpc({
   name: "bots.routines.status",
-  input: z5.object({}),
-  output: z5.object({ scheduler: z5.boolean(), routines: z5.record(z5.string(), RoutineRecordSchema) })
+  input: z6.object({}),
+  output: z6.object({ scheduler: z6.boolean(), routines: z6.record(z6.string(), RoutineRecordSchema) })
 });
 var routineRunNowRpc = defineRpc({
   name: "bots.routines.run-now",
-  input: z5.object({ botId: BotId, routineId: z5.string() }),
-  output: z5.object({ run: RoutineRunSchema })
+  input: z6.object({ botId: BotId, routineId: z6.string() }),
+  output: z6.object({ run: RoutineRunSchema })
 });
 var routineWebhookRpc = defineRpc({
   name: "bots.routines.webhook",
-  input: z5.object({ routineId: z5.string().regex(/^[a-z0-9-]+$/), rotate: z5.boolean().optional() }),
-  output: z5.object({ url: z5.string() })
+  input: z6.object({ routineId: z6.string().regex(/^[a-z0-9-]+$/), rotate: z6.boolean().optional() }),
+  output: z6.object({ url: z6.string() })
 });
 var exportBotRpc = defineRpc({
   name: "bots.export",
-  input: z5.object({ bot: BotSchema, includeMemory: z5.boolean() }),
-  output: z5.object({ json: z5.string() })
+  input: z6.object({ bot: BotSchema, includeMemory: z6.boolean() }),
+  output: z6.object({ json: z6.string() })
 });
 var importBotRpc = defineRpc({
   name: "bots.import",
-  input: z5.object({ botId: BotId, json: z5.string().max(5e6) }),
-  output: z5.object({ bot: BotSchema, skills: z5.array(ImportedSkillSchema), mcpServers: z5.array(BotMcpServerSchema) })
+  input: z6.object({ botId: BotId, json: z6.string().max(5e6) }),
+  output: z6.object({ bot: BotSchema, skills: z6.array(ImportedSkillSchema), mcpServers: z6.array(BotMcpServerSchema) })
 });
-var ImportedBotSchema = z5.object({ bot: BotSchema, skills: z5.array(ImportedSkillSchema), mcpServers: z5.array(BotMcpServerSchema) });
+var ImportedBotSchema = z6.object({ bot: BotSchema, skills: z6.array(ImportedSkillSchema), mcpServers: z6.array(BotMcpServerSchema) });
 var exportTeamRpc = defineRpc({
   name: "bots.export-team",
-  input: z5.object({ bots: z5.array(BotSchema).min(1), groups: z5.array(BotGroupSchema).default([]), includeMemory: z5.boolean() }),
-  output: z5.object({ json: z5.string() })
+  input: z6.object({ bots: z6.array(BotSchema).min(1), groups: z6.array(BotGroupSchema).default([]), includeMemory: z6.boolean() }),
+  output: z6.object({ json: z6.string() })
 });
 var importTeamRpc = defineRpc({
   name: "bots.import-team",
-  input: z5.object({ json: z5.string().max(2e7) }),
-  output: z5.object({ bots: z5.array(ImportedBotSchema), teams: z5.array(TeamFileTeamSchema) })
+  input: z6.object({ json: z6.string().max(2e7) }),
+  output: z6.object({ bots: z6.array(ImportedBotSchema), teams: z6.array(TeamFileTeamSchema) })
 });
 var uploadRpc = defineRpc({
   name: "bots.upload",
-  input: z5.object({ botId: BotId, fileName: z5.string().min(1).max(255), dataBase64: z5.string().max(36e6) }),
-  output: z5.object({ path: z5.string(), size: z5.number() })
+  input: z6.object({ botId: BotId, fileName: z6.string().min(1).max(255), dataBase64: z6.string().max(36e6) }),
+  output: z6.object({ path: z6.string(), size: z6.number() })
 });
-var AppCardSchema = z5.object({ slug: z5.string(), name: z5.string(), description: z5.string(), logo: z5.string().nullable(), domain: z5.string().nullable(), noAuth: z5.boolean() });
-var AppAccountSchema = z5.object({ id: z5.string(), slug: z5.string(), status: z5.enum(["connected", "pending", "failed"]), alias: z5.string().nullable(), name: z5.string().nullable(), wordId: z5.string().nullable() });
-var AppSignInSchema = z5.object({ slug: z5.string(), url: z5.string(), wordId: z5.string().nullable(), alias: z5.string().nullable() });
-var Alias = z5.string().max(40).regex(/^[\w .@+-]*$/, "Use letters, numbers, spaces, dots and dashes");
-var AppSlug = z5.string().regex(/^[a-z0-9_-]+$/);
+var AppCardSchema = z6.object({ slug: z6.string(), name: z6.string(), description: z6.string(), logo: z6.string().nullable(), domain: z6.string().nullable(), noAuth: z6.boolean() });
+var AppAccountSchema = z6.object({ id: z6.string(), slug: z6.string(), status: z6.enum(["connected", "pending", "failed"]), alias: z6.string().nullable(), name: z6.string().nullable(), wordId: z6.string().nullable() });
+var AppSignInSchema = z6.object({ slug: z6.string(), url: z6.string(), wordId: z6.string().nullable(), alias: z6.string().nullable() });
+var Alias = z6.string().max(40).regex(/^[\w .@+-]*$/, "Use letters, numbers, spaces, dots and dashes");
+var AppSlug = z6.string().regex(/^[a-z0-9_-]+$/);
 var appsStatusRpc = defineRpc({
   name: "bots.apps.status",
-  input: z5.object({}),
-  output: z5.object({ configured: z5.boolean(), keyHint: z5.string().nullable() })
+  input: z6.object({}),
+  output: z6.object({ configured: z6.boolean(), keyHint: z6.string().nullable() })
 });
 var appsSetKeyRpc = defineRpc({
   name: "bots.apps.set-key",
-  input: z5.object({ key: z5.string().min(1).max(200) }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ key: z6.string().min(1).max(200) }),
+  output: z6.object({ ok: z6.boolean() })
 });
 var appsRemoveKeyRpc = defineRpc({
   name: "bots.apps.remove-key",
-  input: z5.object({}),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({}),
+  output: z6.object({ ok: z6.boolean() })
 });
 var appsCatalogRpc = defineRpc({
   name: "bots.apps.catalog",
-  input: z5.object({}),
-  output: z5.object({ apps: z5.array(AppCardSchema) })
+  input: z6.object({}),
+  output: z6.object({ apps: z6.array(AppCardSchema) })
 });
 var appsAccountsRpc = defineRpc({
   name: "bots.apps.accounts",
-  input: z5.object({ fresh: z5.boolean().optional() }),
-  output: z5.object({ accounts: z5.array(AppAccountSchema) })
+  input: z6.object({ fresh: z6.boolean().optional() }),
+  output: z6.object({ accounts: z6.array(AppAccountSchema) })
 });
 var appsConnectRpc = defineRpc({
   name: "bots.apps.connect",
-  input: z5.object({ slug: AppSlug, alias: Alias.optional() }),
-  output: z5.object({ url: z5.string() })
+  input: z6.object({ slug: AppSlug, alias: Alias.optional() }),
+  output: z6.object({ url: z6.string() })
 });
 var appsRenameRpc = defineRpc({
   name: "bots.apps.rename",
-  input: z5.object({ accountId: z5.string().min(1).max(200), alias: Alias }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ accountId: z6.string().min(1).max(200), alias: Alias }),
+  output: z6.object({ ok: z6.boolean() })
 });
 var appsToolsRpc = defineRpc({
   name: "bots.apps.tools",
-  input: z5.object({ slug: AppSlug }),
-  output: z5.object({ tools: z5.array(z5.object({ slug: z5.string(), name: z5.string(), readOnly: z5.boolean() })) })
+  input: z6.object({ slug: AppSlug }),
+  output: z6.object({ tools: z6.array(z6.object({ slug: z6.string(), name: z6.string(), readOnly: z6.boolean() })) })
 });
 var appsDisconnectRpc = defineRpc({
   name: "bots.apps.disconnect",
-  input: z5.object({ accountId: z5.string().min(1).max(200) }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ accountId: z6.string().min(1).max(200) }),
+  output: z6.object({ ok: z6.boolean() })
 });
 var mountRpc = defineRpc({
   name: "bots.mount",
-  input: z5.object({ botId: BotId, agentId: z5.uuid() }),
-  output: z5.object({ tools: McpServerConfigSchema, apps: McpServerConfigSchema.nullable() })
+  input: z6.object({ botId: BotId, agentId: z6.uuid() }),
+  output: z6.object({ tools: McpServerConfigSchema, apps: McpServerConfigSchema.nullable() })
 });
-var ProposalId = z5.string().regex(/^p-[a-z0-9]+$/);
+var ProposalId = z6.string().regex(/^p-[a-z0-9]+$/);
 var proposalGetRpc = defineRpc({
   name: "bots.proposals.get",
-  input: z5.object({ id: ProposalId }),
-  output: z5.object({ proposal: ProposalSchema.nullable() })
+  input: z6.object({ id: ProposalId }),
+  output: z6.object({ proposal: ProposalSchema.nullable() })
 });
 var proposalAcceptRpc = defineRpc({
   name: "bots.proposals.accept",
-  input: z5.object({ id: ProposalId }),
-  output: z5.object({ proposal: ProposalSchema, skill: z5.object({ id: SkillName, description: z5.string(), sha: z5.string() }).optional() })
+  input: z6.object({ id: ProposalId }),
+  output: z6.object({ proposal: ProposalSchema, skill: z6.object({ id: SkillName, description: z6.string(), sha: z6.string() }).optional() })
 });
 var proposalDismissRpc = defineRpc({
   name: "bots.proposals.dismiss",
-  input: z5.object({ id: ProposalId }),
-  output: z5.object({ proposal: ProposalSchema })
+  input: z6.object({ id: ProposalId }),
+  output: z6.object({ proposal: ProposalSchema })
 });
-var CommandRuleSchema = z5.object({ id: z5.string(), command: z5.string(), cwd: z5.string() });
+var CommandRuleSchema = z6.object({ id: z6.string(), command: z6.string(), cwd: z6.string() });
 var commandListRpc = defineRpc({
   name: "bots.commands.list",
-  input: z5.object({ botId: BotId }),
-  output: z5.object({ rules: z5.array(CommandRuleSchema) })
+  input: z6.object({ botId: BotId }),
+  output: z6.object({ rules: z6.array(CommandRuleSchema) })
 });
 var commandAllowRpc = defineRpc({
   name: "bots.commands.allow",
-  input: z5.object({ botId: BotId, command: z5.string().min(1).max(16384), cwd: z5.string().min(1).max(4096) }),
-  output: z5.object({ rule: CommandRuleSchema })
+  input: z6.object({ botId: BotId, command: z6.string().min(1).max(16384), cwd: z6.string().min(1).max(4096) }),
+  output: z6.object({ rule: CommandRuleSchema })
 });
 var commandRemoveRpc = defineRpc({
   name: "bots.commands.remove",
-  input: z5.object({ botId: BotId, id: z5.string() }),
-  output: z5.object({ ok: z5.boolean() })
+  input: z6.object({ botId: BotId, id: z6.string() }),
+  output: z6.object({ ok: z6.boolean() })
 });
 
 // shared/uuid.ts
@@ -3402,10 +3426,12 @@ async function startChat(host, relay, bot, input) {
   if (bot.hostId) throw new Error(`${bot.name} runs on another host, so its chats can't be started from here.`);
   const library = await host.library();
   const home = await ensureBotHome({ botId: bot.id });
-  const { systemPrompt: system } = await systemPrompt({ bot, local: true, message: input.prompt }, library, paseo, await host.values());
+  const { systemPrompt: system } = await systemPrompt({ bot: botForChat(bot, input.agentSettings), local: true, message: input.prompt }, library, paseo, await host.values());
   const agentId = newUuid();
   return startBotChat(paseo, {
     bot,
+    agentSettings: input.agentSettings,
+    inheritAgentSettings: input.inheritAgentSettings,
     library,
     agentId,
     plugin: { tools: await relay.mountTools(bot.id, agentId), apps: bot.apps.length ? await relay.mountApps(bot.id) : null },
@@ -3422,7 +3448,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 
 // server/tools/mcp.ts
-import { z as z6 } from "zod";
+import { z as z7 } from "zod";
 
 // shared/version.ts
 var PLUGIN_VERSION = "0.2.0";
@@ -3433,7 +3459,7 @@ function defineTool(tool) {
   return tool;
 }
 function inputSchema(schema) {
-  const { $schema: _schema, ...rest } = z6.toJSONSchema(schema);
+  const { $schema: _schema, ...rest } = z7.toJSONSchema(schema);
   return rest;
 }
 function issues(error) {
@@ -3913,9 +3939,9 @@ var RoutineScheduler = class {
 // server/share.ts
 import { lstat as lstat3, mkdir as mkdir8, readdir as readdir5, readFile as readFile7, stat as stat2, writeFile as writeFile7 } from "node:fs/promises";
 import { dirname as dirname3, join as join9, relative as relative2, sep as sep2 } from "node:path";
-import { z as z7 } from "zod";
+import { z as z8 } from "zod";
 var FORMAT = "paseo-bots";
-var FORMATS = z7.enum([FORMAT, "paseo-bot"]);
+var FORMATS = z8.enum([FORMAT, "paseo-bot"]);
 var MAX_FILES = 400;
 var BotFields2 = BotSchema.pick({
   name: true,
@@ -3930,23 +3956,23 @@ var BotFields2 = BotSchema.pick({
   routines: true,
   playbooks: true
 });
-var SharedSkillSchema = z7.object({ id: z7.string(), description: z7.string().default(""), source: z7.string().default("") });
-var ExportV2Schema = z7.object({
+var SharedSkillSchema = z8.object({ id: z8.string(), description: z8.string().default(""), source: z8.string().default("") });
+var ExportV2Schema = z8.object({
   format: FORMATS,
-  version: z7.literal(2),
+  version: z8.literal(2),
   bot: BotFields2,
-  skills: z7.array(SharedSkillSchema).default([]),
-  mcpServers: z7.array(BotMcpServerSchema).default([]),
-  files: z7.record(z7.string(), z7.string())
+  skills: z8.array(SharedSkillSchema).default([]),
+  mcpServers: z8.array(BotMcpServerSchema).default([]),
+  files: z8.record(z8.string(), z8.string())
 });
-var ExportV1Schema = z7.object({
+var ExportV1Schema = z8.object({
   format: FORMATS,
-  version: z7.literal(1),
+  version: z8.literal(1),
   bot: BotFields2.extend({
-    mcpServers: z7.array(BotMcpServerSchema).default([]),
-    skills: z7.array(z7.object({ name: z7.string(), description: z7.string().default(""), source: z7.string().default(""), enabled: z7.boolean().default(true) })).default([])
+    mcpServers: z8.array(BotMcpServerSchema).default([]),
+    skills: z8.array(z8.object({ name: z8.string(), description: z8.string().default(""), source: z8.string().default(""), enabled: z8.boolean().default(true) })).default([])
   }),
-  files: z7.record(z7.string(), z7.string())
+  files: z8.record(z8.string(), z8.string())
 });
 function redact(servers) {
   const blank = (record) => Object.fromEntries(Object.keys(record).map((key) => [key, "<redacted>"]));
@@ -4076,7 +4102,7 @@ async function importBot({ botId, json: json2 }) {
   return { bot, skills, mcpServers: parsed.mcpServers };
 }
 var TEAM_FORMAT = "paseo-bots-team";
-var TeamSchema = z7.object({ format: z7.literal(TEAM_FORMAT), version: z7.literal(1), bots: z7.array(z7.unknown()).min(1), teams: z7.array(TeamFileTeamSchema).default([]) });
+var TeamSchema = z8.object({ format: z8.literal(TEAM_FORMAT), version: z8.literal(1), bots: z8.array(z8.unknown()).min(1), teams: z8.array(TeamFileTeamSchema).default([]) });
 function isTeamFile(json2) {
   try {
     return JSON.parse(json2).format === TEAM_FORMAT;
@@ -4570,11 +4596,11 @@ async function acceptProposal(id) {
 }
 
 // server/tools/bots.ts
-import { z as z8 } from "zod";
+import { z as z9 } from "zod";
 var listBots = defineTool({
   name: "list_bots",
   description: "List the other bots on this Paseo host: id, name, what each does. Use it before asking another bot for help.",
-  input: z8.object({}),
+  input: z9.object({}),
   async run(_args, { bot, host }) {
     const others = (await host.bots()).filter((entry) => entry.id !== bot.id && !entry.archived);
     if (others.length === 0) return "There are no other bots.";
@@ -4627,20 +4653,21 @@ async function mayAsk({ bot, agentId, host }) {
   return !chat?.labels[ASKED_BY_LABEL];
 }
 var normalize3 = (path) => path.replace(/\/+$/, "");
-async function askedPlacement({ bot, agentId, host }) {
-  const agent = (await host.requirePaseo().agents.ref(agentId).refresh().catch(() => null))?.agent;
-  if (!agent?.cwd || !agent.workspaceId) return null;
-  if (normalize3(agent.cwd) === normalize3(bot.cwd ?? botDataPath(bot.id))) return null;
+async function askedContext({ bot, agentId, host }) {
+  const agent = (await host.requirePaseo().agents.ref(agentId).refresh())?.agent;
+  if (!agent) throw new Error("Couldn't read the asking conversation before delegating. Try again.");
+  const agentSettings = delegatedAgentSettings(agent.labels);
+  const placement = agent.cwd && agent.workspaceId && normalize3(agent.cwd) !== normalize3(bot.cwd ?? botDataPath(bot.id)) ? { path: agent.cwd, projectRoot: null, workspaceId: agent.workspaceId } : void 0;
   const context = agent.labels?.[CHAT_CONTEXT_LABEL];
-  return { placement: { path: agent.cwd, projectRoot: null, workspaceId: agent.workspaceId }, labels: context ? { [CHAT_CONTEXT_LABEL]: context } : {} };
+  return { placement, agentSettings, labels: placement && context ? { [CHAT_CONTEXT_LABEL]: context } : {} };
 }
 var askBot = defineTool({
   name: "ask_bot",
-  description: "Ask another bot on this Paseo for help. It gets your message in a new chat of its own, works with its own tools and settings, and its answer comes back here. Use list_bots to see who does what.",
-  input: z8.object({
-    bot: z8.string().min(1).max(100).describe("The other bot's name or id."),
-    message: z8.string().min(1).max(2e4).describe("What you need, written so the other bot can act on it without this chat."),
-    wait: z8.boolean().optional().describe("Wait up to about 50 seconds for the answer (the default). With false, return at once and use check_chat later.")
+  description: "Ask another bot on this Paseo for help. It gets your message in a new chat, keeps its own instructions and tools, and uses this conversation's explicit starting provider and model choice when present, otherwise its saved settings. Its answer comes back here. Use list_bots to see who does what.",
+  input: z9.object({
+    bot: z9.string().min(1).max(100).describe("The other bot's name or id."),
+    message: z9.string().min(1).max(2e4).describe("What you need, written so the other bot can act on it without this chat."),
+    wait: z9.boolean().optional().describe("Wait up to about 50 seconds for the answer (the default). With false, return at once and use check_chat later.")
   }),
   available: mayAsk,
   async run({ bot: wanted, message, wait = true }, caller) {
@@ -4649,12 +4676,13 @@ var askBot = defineTool({
     const key = wanted.trim().toLowerCase();
     const target = others.find((entry) => entry.id === wanted.trim()) ?? others.find((entry) => entry.name.trim().toLowerCase() === key);
     if (!target) throw new Error(others.length ? `There's no other bot called "${wanted}". Ask one of: ${others.map((entry) => entry.name).join(", ")}.` : "There are no other bots to ask.");
-    const workspace = await askedPlacement(caller);
+    const context = await askedContext(caller);
     const chatId = await startChat(host, relay, target, {
       prompt: askPrompt(bot.name, message),
       title: `${bot.name}: ${foldText(message, 60)}`,
-      labels: { ...workspace?.labels, [ASKED_BY_LABEL]: bot.id },
-      ...workspace ? { placement: workspace.placement } : {}
+      labels: { ...context.labels, [ASKED_BY_LABEL]: bot.id },
+      ...context.placement ? { placement: context.placement } : {},
+      ...context.agentSettings ? { agentSettings: context.agentSettings, inheritAgentSettings: true } : {}
     });
     if (!wait) return `Asked ${target.name} in chat ${chatId}. Use check_chat with that id for the answer.`;
     const paseo = host.requirePaseo();
@@ -4665,9 +4693,9 @@ var askBot = defineTool({
 var checkChat = defineTool({
   name: "check_chat",
   description: "Check a chat you started with ask_bot (or one of your own chats): whether it's still working, and its latest answer.",
-  input: z8.object({
-    chat_id: z8.string().min(1).max(100).describe("The chat id ask_bot or search_chats gave you."),
-    wait: z8.boolean().optional().describe("If it's still working, wait up to about 50 seconds for it to finish.")
+  input: z9.object({
+    chat_id: z9.string().min(1).max(100).describe("The chat id ask_bot or search_chats gave you."),
+    wait: z9.boolean().optional().describe("If it's still working, wait up to about 50 seconds for it to finish.")
   }),
   async run({ chat_id: chatId, wait = false }, { bot, host }) {
     const paseo = host.requirePaseo();
@@ -4684,16 +4712,16 @@ var checkChat = defineTool({
 });
 
 // server/tools/chats.ts
-import { z as z9 } from "zod";
+import { z as z10 } from "zod";
 var MAX_CHATS = 40;
 var PAGE = 400;
 var searchChats = defineTool({
   name: "search_chats",
   description: "Search your own past chats and memory files, the daily log included. Give two to five content words, a time range, or both. Returns snippets with the chat each came from.",
-  input: z9.object({
-    query: z9.string().max(200).optional().describe("Two to five content words; every word must match."),
-    since: z9.string().max(20).optional().describe('How far back: "24h", "3d", "2w", "today", "yesterday" or a date like 2026-09-01.'),
-    limit: z9.number().int().min(1).max(25).optional().describe("How many results at most (default 12).")
+  input: z10.object({
+    query: z10.string().max(200).optional().describe("Two to five content words; every word must match."),
+    since: z10.string().max(20).optional().describe('How far back: "24h", "3d", "2w", "today", "yesterday" or a date like 2026-09-01.'),
+    limit: z10.number().int().min(1).max(25).optional().describe("How many results at most (default 12).")
   }),
   async run({ query, since, limit = 12 }, { bot, agentId, host }) {
     const now = /* @__PURE__ */ new Date();
@@ -4743,13 +4771,13 @@ ${hits.sort((a, b) => b.at - a.at).map((hit) => hit.line).join("\n")}`);
 });
 
 // server/tools/routines.ts
-import { z as z10 } from "zod";
+import { z as z11 } from "zod";
 var proposeRoutine = defineTool({
   name: "propose_routine",
   description: "Propose a routine: instructions you'll carry out on a schedule (or when a webhook is called), each run in its own new chat. The user confirms it on a card in this chat, and each run's result is posted back here. Times are in this computer's local time.",
-  input: z10.object({
-    name: z10.string().min(1).max(80).describe('A short name, like "Morning inbox check".'),
-    instructions: z10.string().min(1).max(2e4).describe("What to do on each run, written so it works without this chat."),
+  input: z11.object({
+    name: z11.string().min(1).max(80).describe('A short name, like "Morning inbox check".'),
+    instructions: z11.string().min(1).max(2e4).describe("What to do on each run, written so it works without this chat."),
     schedule: ScheduleInput
   }),
   async run({ name, instructions, schedule }, { bot, agentId }) {
@@ -4763,7 +4791,7 @@ var proposeRoutine = defineTool({
 });
 
 // server/tools/setup.ts
-import { z as z11 } from "zod";
+import { z as z12 } from "zod";
 async function hostContext(host) {
   const snapshot2 = await host.paseo?.providers.snapshot().catch(() => null);
   let apps = null;
@@ -4781,7 +4809,7 @@ async function readValues(host) {
 var getSetup = defineTool({
   name: "get_setup",
   description: "Read the bot setup on this Paseo: the bots, teams, the library of skills and MCP servers, connected apps, what new bots start with, presets, and the providers with their models and approval modes. Name a bot to get everything about it, including its instructions, playbooks and routines. Read it before propose_changes.",
-  input: z11.object({ bot: z11.string().max(100).optional().describe("A bot's name or id, for its full details.") }),
+  input: z12.object({ bot: z12.string().max(100).optional().describe("A bot's name or id, for its full details.") }),
   async run({ bot }, { host }) {
     const values = await readValues(host);
     if (bot) return botDetails(values, bot);
@@ -4792,8 +4820,8 @@ var getSetup = defineTool({
 var proposeChanges = defineTool({
   name: "propose_changes",
   description: "Propose changes to the bot setup: create, edit or delete bots (name, instructions, model, approval mode, avatar, skills, MCP servers, connected apps, tool grants, playbooks, routines), teams (members, Chief of Staff, shared instructions, logo), library skills and MCP servers, what new bots start with, and presets. Put every change for one request in one call, in order; later changes can refer to bots and teams created earlier by name. The user reviews them together on a card in this chat and applies or dismisses them. Read get_setup first for the current setup and valid ids.",
-  input: z11.object({
-    summary: z11.string().min(1).max(300).describe("One line saying what the changes do, shown on the card."),
+  input: z12.object({
+    summary: z12.string().min(1).max(300).describe("One line saying what the changes do, shown on the card."),
     changes: ChangesSchema
   }),
   async run({ summary, changes }, { bot, agentId, host }) {
@@ -4807,14 +4835,14 @@ var proposeChanges = defineTool({
 });
 
 // server/tools/skills.ts
-import { z as z12 } from "zod";
+import { z as z13 } from "zod";
 var proposeSkill = defineTool({
   name: "propose_skill",
   description: "Propose a reusable skill from work you just did, for the user to review and save to your skills. Use it when the user asks you to learn or remember how to do something. Proposing a name you already use updates that skill.",
-  input: z12.object({
-    name: z12.string().min(1).max(64).describe('Short, lowercase and dashed, like "weekly-report".'),
-    description: z12.string().min(1).max(300).describe("One line saying when to use the skill. Bots decide from this line."),
-    instructions: z12.string().min(1).max(5e4).describe("Markdown: the steps, what to check, and what the result looks like. Write it so it works next time without this chat.")
+  input: z13.object({
+    name: z13.string().min(1).max(64).describe('Short, lowercase and dashed, like "weekly-report".'),
+    description: z13.string().min(1).max(300).describe("One line saying when to use the skill. Bots decide from this line."),
+    instructions: z13.string().min(1).max(5e4).describe("Markdown: the steps, what to check, and what the result looks like. Write it so it works next time without this chat.")
   }),
   async run({ name, description, instructions }, { bot, agentId }) {
     const id = sanitizeSkillName(name);

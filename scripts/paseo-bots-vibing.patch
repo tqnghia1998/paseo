@@ -445,7 +445,7 @@ index 7533cb6..77f0b76 100644
    if (bucket === "running") {
      const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..ec04829 100644
+index ebc4ed2..0c79b57 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
 @@ -1,32 +1,34 @@
@@ -853,7 +853,7 @@ index ebc4ed2..ec04829 100644
    const ensureHome = useRpc(ensureBotHomeRpc);
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
-@@ -754,15 +852,19 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -754,15 +852,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
  
    const start = async (message: OutgoingMessage) => {
      if (!host.api) throw new Error(`${host.label} is offline.`);
@@ -871,11 +871,12 @@ index ebc4ed2..ec04829 100644
      const id = await startBotChat(host.api, {
        bot,
 +      agentSettings: message.agentSettings,
++      inheritAgentSettings: message.inheritAgentSettings,
 +      labels: botWorkspace?.chatContext ? { [CHAT_CONTEXT_LABEL]: botWorkspace.chatContext } : {},
        library,
        ...(host.isLocal ? { agentId } : {}),
        plugin,
-@@ -773,13 +875,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -773,13 +876,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        attachments: message.attachments,
        clientMessageId: message.messageId,
      });
@@ -899,7 +900,7 @@ index ebc4ed2..ec04829 100644
      const api = host.api;
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
-@@ -799,8 +909,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -799,8 +910,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
      // Runs once for the selection that carries the prompt.
    }, [host.api]);
  
@@ -917,7 +918,7 @@ index ebc4ed2..ec04829 100644
        colors={colors}
        bot={bot}
        host={host}
-@@ -815,6 +934,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -815,6 +935,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        onTogglePanel={onTogglePanel}
        onStart={start}
        onOpenChat={onStarted}
@@ -926,7 +927,7 @@ index ebc4ed2..ec04829 100644
    );
  }
 diff --git a/client/ChatPane.tsx b/client/ChatPane.tsx
-index 7d1bf84..bfa0f9d 100644
+index 7d1bf84..c6e4f82 100644
 --- a/client/ChatPane.tsx
 +++ b/client/ChatPane.tsx
 @@ -3,8 +3,8 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
@@ -955,7 +956,7 @@ index 7d1bf84..bfa0f9d 100644
    colors: Colors;
    bot: Bot;
    host: BotHost;
-@@ -34,23 +38,27 @@ export interface ChatPaneProps {
+@@ -34,23 +38,28 @@ export interface ChatPaneProps {
    onBotMenu(anchor: LayoutRectangle | null): void;
    onTogglePanel(): void;
    /** Creates the chat with its first message. */
@@ -969,6 +970,7 @@ index 7d1bf84..bfa0f9d 100644
  
  export interface OutgoingMessage {
 +  agentSettings?: ChatAgentSettings;
++  inheritAgentSettings?: boolean;
    text: string;
    messageId: string;
    images: { data: string; mimeType: string }[];
@@ -986,7 +988,7 @@ index 7d1bf84..bfa0f9d 100644
    const [findOpen, setFindOpen] = useState(false);
    useEffect(() => setFindOpen(false), [chatId]);
    // ⌘F / Ctrl+F finds in the open chat on the desktop.
-@@ -70,7 +78,10 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
+@@ -70,7 +79,10 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
          onTogglePanel={onTogglePanel}
          onFind={canFind ? () => setFindOpen((open) => !open) : undefined}
        />
@@ -998,7 +1000,7 @@ index 7d1bf84..bfa0f9d 100644
          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }}>
            <Avatar avatar={bot.avatar} size={56} />
            <Text style={{ color: colors.foreground, fontSize: ui(18), fontWeight: "500" }}>{bot.name}</Text>
-@@ -81,7 +92,7 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
+@@ -81,7 +93,7 @@ export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, k
        ) : (
          <ChatStream key={chatId} colors={colors} chat={chat} api={host.api} agentId={chatId} compact={layout.compact} platform={layout.platform} typeVersion={typeVersion} onOpenChat={onOpenChat} voice={bot.voice} findOpen={findOpen} onCloseFind={() => setFindOpen(false)} {...(host.isLocal ? { botId: bot.id } : {})} />
        )}
@@ -1457,17 +1459,17 @@ index 8d9b7c5..0748a12 100644
    return new Promise((resolve, reject) => {
      const reader = new FileReader();
 diff --git a/server/chats.ts b/server/chats.ts
-index eb3af25..a4a02c3 100644
+index eb3af25..b38c890 100644
 --- a/server/chats.ts
 +++ b/server/chats.ts
 @@ -1,5 +1,5 @@
  import type { Bot } from "../shared/bot";
 -import { startBotChat } from "../shared/chat";
-+import { startBotChat, type BotPlacement } from "../shared/chat";
++import { botForChat, startBotChat, type BotPlacement, type ChatAgentSettings } from "../shared/chat";
  import { newUuid } from "../shared/uuid";
  import { ensureBotHome } from "./bot-home";
  import type { BotsHost } from "./host";
-@@ -8,10 +8,10 @@ import type { Relay } from "./relay";
+@@ -8,22 +8,24 @@ import type { Relay } from "./relay";
  
  /**
   * Starts a chat for a bot on this host, the way the app does: its system
@@ -1477,11 +1479,18 @@ index eb3af25..a4a02c3 100644
 + * connected apps. Routines and requests from other bots start chats with it.
   */
 -export async function startChat(host: BotsHost, relay: Relay, bot: Bot, input: { prompt: string; title: string; labels: Record<string, string> }): Promise<string> {
-+export async function startChat(host: BotsHost, relay: Relay, bot: Bot, input: { prompt: string; title: string; labels: Record<string, string>; placement?: BotPlacement }): Promise<string> {
++export async function startChat(host: BotsHost, relay: Relay, bot: Bot, input: { prompt: string; title: string; labels: Record<string, string>; placement?: BotPlacement; agentSettings?: ChatAgentSettings; inheritAgentSettings?: boolean }): Promise<string> {
    const paseo = host.requirePaseo();
    if (bot.hostId) throw new Error(`${bot.name} runs on another host, so its chats can't be started from here.`);
    const library = await host.library();
-@@ -23,7 +23,7 @@ export async function startChat(host: BotsHost, relay: Relay, bot: Bot, input: {
+   const home = await ensureBotHome({ botId: bot.id });
+-  const { systemPrompt: system } = await systemPrompt({ bot, local: true, message: input.prompt }, library, paseo, await host.values());
++  const { systemPrompt: system } = await systemPrompt({ bot: botForChat(bot, input.agentSettings), local: true, message: input.prompt }, library, paseo, await host.values());
+   const agentId = newUuid();
+   return startBotChat(paseo, {
+     bot,
++    agentSettings: input.agentSettings,
++    inheritAgentSettings: input.inheritAgentSettings,
      library,
      agentId,
      plugin: { tools: await relay.mountTools(bot.id, agentId), apps: bot.apps.length ? await relay.mountApps(bot.id) : null },
@@ -1519,19 +1528,19 @@ index 18d355d..c41deba 100644
  
  /** Imports every bot of a team file (or a single bot file) as new bots, with its teams. */
 diff --git a/server/tools/bots.ts b/server/tools/bots.ts
-index 3c95809..afad0df 100644
+index 3c95809..1292bd9 100644
 --- a/server/tools/bots.ts
 +++ b/server/tools/bots.ts
 @@ -2,6 +2,8 @@ import type { PaseoApi } from "../paseo";
  import { z } from "zod";
  import { foldText, lastTurn } from "../../shared/activity";
  import { BOT_LABEL } from "../../shared/bot";
-+import { CHAT_CONTEXT_LABEL, type BotPlacement } from "../../shared/chat";
++import { CHAT_CONTEXT_LABEL, delegatedAgentSettings, type BotPlacement, type ChatAgentSettings } from "../../shared/chat";
 +import { botDataPath } from "../bot-home";
  import { startChat } from "../chats";
  import { defineTool, type ToolCaller } from "./mcp";
  
-@@ -76,6 +78,21 @@ async function mayAsk({ bot, agentId, host }: ToolCaller): Promise<boolean> {
+@@ -76,10 +78,29 @@ async function mayAsk({ bot, agentId, host }: ToolCaller): Promise<boolean> {
    return !chat?.labels[ASKED_BY_LABEL];
  }
  
@@ -1542,28 +1551,38 @@ index 3c95809..afad0df 100644
 + * Bots surface binds one worktree) asks there too, in the same chat context, so
 + * the other bot's chat is listed beside it and its permission prompts can be answered.
 + */
-+async function askedPlacement({ bot, agentId, host }: ToolCaller): Promise<{ placement: BotPlacement; labels: Record<string, string> } | null> {
-+  const agent = (await host.requirePaseo().agents.ref(agentId).refresh().catch(() => null))?.agent;
-+  if (!agent?.cwd || !agent.workspaceId) return null;
-+  if (normalize(agent.cwd) === normalize(bot.cwd ?? botDataPath(bot.id))) return null;
++async function askedContext({ bot, agentId, host }: ToolCaller): Promise<{ placement?: BotPlacement; agentSettings?: ChatAgentSettings; labels: Record<string, string> }> {
++  // An observation failure cannot safely mean "use saved defaults".
++  const agent = (await host.requirePaseo().agents.ref(agentId).refresh())?.agent;
++  if (!agent) throw new Error("Couldn't read the asking conversation before delegating. Try again.");
++  const agentSettings = delegatedAgentSettings(agent.labels);
++  const placement = agent.cwd && agent.workspaceId && normalize(agent.cwd) !== normalize(bot.cwd ?? botDataPath(bot.id))
++    ? { path: agent.cwd, projectRoot: null, workspaceId: agent.workspaceId }
++    : undefined;
 +  const context = agent.labels?.[CHAT_CONTEXT_LABEL];
-+  return { placement: { path: agent.cwd, projectRoot: null, workspaceId: agent.workspaceId }, labels: context ? { [CHAT_CONTEXT_LABEL]: context } : {} };
++  return { placement, agentSettings, labels: placement && context ? { [CHAT_CONTEXT_LABEL]: context } : {} };
 +}
 +
  export const askBot = defineTool({
    name: "ask_bot",
    description:
-@@ -92,7 +109,13 @@ export const askBot = defineTool({
+-    "Ask another bot on this Paseo for help. It gets your message in a new chat of its own, works with its own tools and settings, and its answer comes back here. Use list_bots to see who does what.",
++    "Ask another bot on this Paseo for help. It gets your message in a new chat, keeps its own instructions and tools, and uses this conversation's explicit starting provider and model choice when present, otherwise its saved settings. Its answer comes back here. Use list_bots to see who does what.",
+   input: z.object({
+     bot: z.string().min(1).max(100).describe("The other bot's name or id."),
+     message: z.string().min(1).max(20_000).describe("What you need, written so the other bot can act on it without this chat."),
+@@ -92,7 +113,14 @@ export const askBot = defineTool({
      const key = wanted.trim().toLowerCase();
      const target = others.find((entry) => entry.id === wanted.trim()) ?? others.find((entry) => entry.name.trim().toLowerCase() === key);
      if (!target) throw new Error(others.length ? `There's no other bot called "${wanted}". Ask one of: ${others.map((entry) => entry.name).join(", ")}.` : "There are no other bots to ask.");
 -    const chatId = await startChat(host, relay, target, { prompt: askPrompt(bot.name, message), title: `${bot.name}: ${foldText(message, 60)}`, labels: { [ASKED_BY_LABEL]: bot.id } });
-+    const workspace = await askedPlacement(caller);
++    const context = await askedContext(caller);
 +    const chatId = await startChat(host, relay, target, {
 +      prompt: askPrompt(bot.name, message),
 +      title: `${bot.name}: ${foldText(message, 60)}`,
-+      labels: { ...workspace?.labels, [ASKED_BY_LABEL]: bot.id },
-+      ...(workspace ? { placement: workspace.placement } : {}),
++      labels: { ...context.labels, [ASKED_BY_LABEL]: bot.id },
++      ...(context.placement ? { placement: context.placement } : {}),
++      ...(context.agentSettings ? { agentSettings: context.agentSettings, inheritAgentSettings: true } : {}),
 +    });
      if (!wait) return `Asked ${target.name} in chat ${chatId}. Use check_chat with that id for the answer.`;
      const paseo = host.requirePaseo();
@@ -1591,19 +1610,24 @@ index 8c4ecdd..7082cfd 100644
  });
  export type TeamFileTeam = z.infer<typeof TeamFileTeamSchema>;
 diff --git a/shared/chat.ts b/shared/chat.ts
-index cd27e0d..7246abc 100644
+index cd27e0d..8d6e732 100644
 --- a/shared/chat.ts
 +++ b/shared/chat.ts
-@@ -3,6 +3,8 @@ import { BOT_LABEL, buildAgentConfig, defaultModelId, type Bot, type Library, ty
+@@ -1,8 +1,13 @@
+ import type { WireAttachment } from "./attachments";
++import { z } from "zod";
+ import { BOT_LABEL, buildAgentConfig, defaultModelId, type Bot, type Library, type PluginServers } from "./bot";
  
  /** Label on chats started by a routine, carrying the routine id. */
  export const ROUTINE_LABEL = "paseo-bots.routine";
 +/** Separate entry surfaces share bot configuration, but not conversation lists. */
 +export const CHAT_CONTEXT_LABEL = "paseo-bots.context";
++/** Frozen, explicit starting choice for this conversation and its delegated chats. */
++export const CHAT_RUNTIME_LABEL = "paseo-bots.runtime";
  /** Longest title Paseo accepts (protocol/agent-title-limits.ts). */
  const MAX_TITLE_CHARS = 200;
  
-@@ -13,6 +15,7 @@ export function displayTitle(title: string | null | undefined): string {
+@@ -13,6 +18,7 @@ export function displayTitle(title: string | null | undefined): string {
  
  /** Where a bot's chats live. */
  export interface BotPlacement {
@@ -1611,7 +1635,7 @@ index cd27e0d..7246abc 100644
    /** The bot's own folder: its workspace's working folder. */
    path: string;
    /** Folder of the shared Bots project, or null when the bot has its own working folder. */
-@@ -21,6 +24,13 @@ export interface BotPlacement {
+@@ -21,6 +27,13 @@ export interface BotPlacement {
  
  const normalize = (path: string | null | undefined) => (path ?? "").replace(/\/+$/, "");
  
@@ -1625,12 +1649,30 @@ index cd27e0d..7246abc 100644
  // The part of Paseo's API these helpers use. Shared code may only import the plugin SDK's
  // root, so the app and the server pass their Paseo API in, and it's checked against this.
  
-@@ -107,8 +117,20 @@ export async function syncBotWorkspaceTitle(api: ChatApi, bot: Bot, placement: B
+@@ -107,8 +120,40 @@ export async function syncBotWorkspaceTitle(api: ChatApi, bot: Bot, placement: B
    if (mine && mine.title !== bot.name) await api.workspaces.ref(mine).setTitle(bot.name);
  }
 
 +export interface ChatAgentSettings extends Pick<Bot, "provider" | "model" | "modeId" | "thinkingOptionId"> {
 +  featureValues?: Record<string, unknown>;
++}
++
++const DelegatedRuntimeSchema = z.object({
++  provider: z.string().min(1),
++  model: z.string().min(1),
++  modeId: z.string().nullable(),
++  thinkingOptionId: z.string().nullable(),
++  featureValues: z.record(z.string(), z.unknown()).optional(),
++});
++
++export function delegatedAgentSettings(labels?: Record<string, string>): ChatAgentSettings | undefined {
++  const value = labels?.[CHAT_RUNTIME_LABEL];
++  if (value === undefined) return undefined;
++  try {
++    return DelegatedRuntimeSchema.parse(JSON.parse(value));
++  } catch {
++    throw new Error("This conversation's runtime choice is invalid. Start a new chat before delegating.");
++  }
 +}
 +
 +/** A conversation's runtime choice must not rewrite shared bot defaults. */
@@ -1643,10 +1685,12 @@ index cd27e0d..7246abc 100644
  export interface StartChatInput {
    bot: Bot;
 +  agentSettings?: ChatAgentSettings;
++  /** Only an explicit starting choice overrides the delegated bots' saved defaults. */
++  inheritAgentSettings?: boolean;
    /** Resolves the bot's MCP servers. */
    library: Library;
    /** The chat's agent id, picked in advance so its tools URL can name it. */
-@@ -131,12 +153,15 @@ export interface StartChatInput {
+@@ -131,13 +176,22 @@ export interface StartChatInput {
   * and sends the first message. Used by the app and by the routine scheduler.
   */
  export async function startBotChat(api: ChatApi, input: StartChatInput): Promise<string> {
@@ -1658,13 +1702,21 @@ index cd27e0d..7246abc 100644
    const agent = await workspace.agents.create({
      ...(input.agentId ? { agentId: input.agentId } : {}),
 -    config: buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
+-    labels: { [BOT_LABEL]: bot.id, ...input.labels },
 +    config: {
 +      ...buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
 +      ...(input.agentSettings?.featureValues ? { featureValues: input.agentSettings.featureValues } : {}),
 +    },
-     labels: { [BOT_LABEL]: bot.id, ...input.labels },
++    labels: {
++      [BOT_LABEL]: bot.id,
++      ...input.labels,
++      ...(input.inheritAgentSettings && input.agentSettings ? {
++        [CHAT_RUNTIME_LABEL]: JSON.stringify({ ...input.agentSettings, model }),
++      } : {}),
++    },
      prompt: input.prompt,
      ...(input.title ? { title: input.title.slice(0, MAX_TITLE_CHARS) } : {}),
+     ...(input.images?.length ? { images: input.images } : {}),
 diff --git a/shared/groups.ts b/shared/groups.ts
 index 174863a..a8e4aad 100644
 --- a/shared/groups.ts
@@ -1783,7 +1835,7 @@ index 0ffd98e..420e450 100644
 +  return rest[Math.min(Math.max(index, 0), rest.length - 1)] ?? null;
 +}
 diff --git a/tests/bots.test.ts b/tests/bots.test.ts
-index 9e592cd..e96b19c 100644
+index 9e592cd..0e319ca 100644
 --- a/tests/bots.test.ts
 +++ b/tests/bots.test.ts
 @@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
@@ -1791,7 +1843,7 @@ index 9e592cd..e96b19c 100644
  import { fakeHost, makeBot } from "./helpers";
  
 -const started: { botId: string; prompt: string; title: string; labels: Record<string, string> }[] = [];
-+const started: { botId: string; prompt: string; title: string; labels: Record<string, string>; placement?: unknown }[] = [];
++const started: { botId: string; prompt: string; title: string; labels: Record<string, string>; placement?: unknown; agentSettings?: unknown; inheritAgentSettings?: boolean }[] = [];
  vi.mock("../server/chats", () => ({
 -  startChat: vi.fn(async (_host: unknown, _relay: unknown, bot: { id: string }, input: { prompt: string; title: string; labels: Record<string, string> }) => {
 +  startChat: vi.fn(async (_host: unknown, _relay: unknown, bot: { id: string }, input: { prompt: string; title: string; labels: Record<string, string>; placement?: unknown }) => {
@@ -1856,13 +1908,76 @@ index 9e592cd..e96b19c 100644
    it("checks only the bot's own chats and the ones it asked", async () => {
      const { checkChat } = await import("../server/tools/bots");
      const scout = makeBot({ id: "bot-scout", name: "Scout" });
-@@ -102,3 +130,63 @@ describe("asking other bots", () => {
+@@ -94,6 +122,43 @@ describe("asking other bots", () => {
+     await expect(checkChat.run({ chat_id: "nope" }, caller)).rejects.toThrow("no chat with that id");
+   });
+
++  it("inherits an explicit conversation runtime in both worktrees and the lead's own folder", async () => {
++    const { askBot } = await import("../server/tools/bots");
++    const runtime = { provider: "codex", model: "gpt-fixed", modeId: "full-access", thinkingOptionId: "high", featureValues: { planMode: true } };
++    const scout = makeBot({ id: "bot-scout", cwd: "/bots/scout" });
++    const member = Object.freeze(makeBot({ id: "bot-inbox", name: "Inbox", provider: "claude", model: "opus" }));
++    const host = fakeHost([scout, member]);
++    const chats: Record<string, FakeChat> = { "caller-chat": { status: "running", cwd: "/repo/feature", workspaceId: "feature", labels: { "paseo-bots.runtime": JSON.stringify(runtime) } } };
++    host.attach(fakePaseo(chats));
++    const caller = { bot: scout, agentId: "caller-chat", host, relay: null as never };
++    await askBot.run({ bot: "Inbox", message: "Review", wait: false }, caller);
++    expect(started.at(-1)).toMatchObject({ agentSettings: runtime, inheritAgentSettings: true, placement: { path: "/repo/feature", workspaceId: "feature" } });
++    chats["caller-chat"]!.cwd = "/bots/scout";
++    await askBot.run({ bot: "Inbox", message: "Review again", wait: false }, caller);
++    expect(started.at(-1)).toMatchObject({ agentSettings: runtime, inheritAgentSettings: true });
++    expect(started.at(-1)!.placement).toBeUndefined();
++    expect(member.provider).toBe("claude");
++    expect(member.model).toBe("opus");
++    delete chats["caller-chat"]!.labels["paseo-bots.runtime"];
++    await askBot.run({ bot: "Inbox", message: "Use saved defaults", wait: false }, caller);
++    expect(started.at(-1)!.agentSettings).toBeUndefined();
++    expect(started.at(-1)!.inheritAgentSettings).not.toBe(true);
++  });
++
++  it("does not silently use member defaults when the parent's runtime cannot be read", async () => {
++    const { askBot } = await import("../server/tools/bots");
++    const scout = makeBot({ id: "bot-scout" });
++    const host = fakeHost([scout, makeBot({ id: "bot-inbox", name: "Inbox" })]);
++    const chats: Record<string, FakeChat> = { "caller-chat": { status: "running", labels: { "paseo-bots.runtime": "broken" } } };
++    host.attach(fakePaseo(chats));
++    const caller = { bot: scout, agentId: "caller-chat", host, relay: null as never };
++    const before = started.length;
++    await expect(askBot.run({ bot: "Inbox", message: "Review", wait: false }, caller)).rejects.toThrow(/runtime/i);
++    delete chats["caller-chat"];
++    await expect(askBot.run({ bot: "Inbox", message: "Review", wait: false }, caller)).rejects.toThrow();
++    expect(started).toHaveLength(before);
++  });
++
+   it("pre-approves asking only when the user allowed it", () => {
+     const tools = { type: "http" as const, url: "http://127.0.0.1:1/bots/b/a", headers: {} };
+     const granted = (contactBots: "ask" | "allow" | "off") => buildAgentConfig(makeBot({ contactBots }), EMPTY_LIBRARY, "m", "", { tools }).toolPolicy?.preapproved.map((grant) => grant.tool) ?? [];
+@@ -102,3 +167,82 @@ describe("asking other bots", () => {
      expect(granted("ask")).toContain("check_chat");
    });
  });
 +
 +
 +describe("Vibing workspace conversations", () => {
++  it("persists the resolved model once for delegation, only for an explicit choice", async () => {
++    const { startBotChat } = await import("../shared/chat");
++    const created: { config: { provider: string }; labels: Record<string, string> }[] = [];
++    let defaultModel = "gpt-default-at-start";
++    const api = {
++      workspaces: { ref: () => ({ agents: { create: async (input: typeof created[number]) => { created.push(input); return { id: "lead-chat" }; } } }) },
++      providers: { snapshot: async () => ({ entries: [{ provider: "codex", models: [{ id: defaultModel, isDefault: true }] }] }) },
++    } as unknown as Parameters<typeof startBotChat>[0];
++    const input = { bot: makeBot(), agentSettings: { provider: "codex", model: null, modeId: null, thinkingOptionId: "high" }, library: EMPTY_LIBRARY, placement: { path: "/feature", projectRoot: null, workspaceId: "feature" }, systemPrompt: "Lead instructions", prompt: "Review" };
++    await startBotChat(api, { ...input, inheritAgentSettings: true });
++    defaultModel = "new-default-after-start";
++    const runtime = JSON.parse(created[0]!.labels["paseo-bots.runtime"]!);
++    expect(runtime).toEqual({ ...input.agentSettings, model: "gpt-default-at-start" });
++    expect(created[0]!.config.provider).toBe("codex/gpt-default-at-start");
++    await startBotChat(api, { ...input, agentSettings: runtime, inheritAgentSettings: true });
++    expect(created[1]!.config.provider).toBe("codex/gpt-default-at-start");
++    await startBotChat(api, input);
++    expect(created[2]!.labels["paseo-bots.runtime"]).toBeUndefined();
++  });
 +  it("overrides a chat runtime while retaining the bot identity, tools and saved defaults", async () => {
 +    const { startBotChat, botForChat } = await import("../shared/chat");
 +    const bot = Object.freeze(makeBot({ id: "review", provider: "claude", model: "opus", modeId: "bypassPermissions", thinkingOptionId: "high" }));
@@ -2024,6 +2139,65 @@ index f049d61..69e4da6 100644
 +    expect(saved.groups![0]!.leadId).toBe(imported.bots[50]!.bot.id);
 +  });
  });
+diff --git a/tests/scheduler.test.ts b/tests/scheduler.test.ts
+index 86b113a..eccaeea 100644
+--- a/tests/scheduler.test.ts
++++ b/tests/scheduler.test.ts
+@@ -56,6 +56,54 @@ describe("the routine scheduler", () => {
+     await rm(home, { recursive: true, force: true });
+   });
+
++  it("runs all delegated members on the frozen lead model and leaves later routine defaults alone", async () => {
++    const { askBot } = await import("../server/tools/bots");
++    const { startBotChat, CHAT_RUNTIME_LABEL } = await import("../shared/chat");
++    const { startChat } = await import("../server/chats");
++    const { Relay } = await import("../server/relay");
++    const { EMPTY_LIBRARY } = await import("../shared/bot");
++    const lead = Object.freeze(makeBot({ id: "review-lead", name: "Review Lead", provider: "claude", model: "opus" }));
++    const members = ["overall", "regression", "duplicates"].map(id => Object.freeze(makeBot({ id, name: id, provider: "claude", model: "member-saved", soul: `Instructions for ${id}` })));
++    const host = fakeHost([lead, ...members]);
++    type Created = Parameters<Parameters<typeof startBotChat>[0]["workspaces"]["ref"]>[0];
++    type Options = { agentId?: string; config: ReturnType<typeof import("../shared/bot").buildAgentConfig>; labels: Record<string, string> };
++    const created = new Map<string, Options>();
++    let defaultModel = "gpt-frozen";
++    const api = {
++      agents: { ref: (id: string) => ({ refresh: async () => ({ agent: { id, cwd: "/feature", workspaceId: "feature", labels: created.get(id)?.labels ?? {} } }) }) },
++      providers: { snapshot: async () => ({ entries: [{ provider: "codex", models: [{ id: defaultModel, isDefault: true }] }] }) },
++      config: { get: async () => ({ config: { providers: { codex: { paseoTools: { enabled: false } } } } }) },
++      workspaces: { ref: (_workspace: Created) => ({ agents: { create: async (options: Options) => {
++        const id = options.agentId ?? `chat-${created.size}`;
++        created.set(id, options);
++        return { id };
++      } } }) },
++    };
++    host.attach(api as never);
++    const relay = new Relay(host, []);
++    const placement = { path: "/feature", projectRoot: null, workspaceId: "feature" };
++    try {
++      const leadId = await startBotChat(api as never, { bot: lead, library: EMPTY_LIBRARY, placement, systemPrompt: "Lead", prompt: "Review", agentSettings: { provider: "codex", model: null, modeId: "full-access", thinkingOptionId: "high" }, inheritAgentSettings: true });
++      defaultModel = "later-default";
++      for (const member of members) {
++        await askBot.run({ bot: member.id, message: "Review", wait: false }, { bot: lead, agentId: leadId, host, relay });
++        const [id, child] = [...created.entries()].at(-1)!;
++        expect(child.config).toMatchObject({ provider: "codex/gpt-frozen", thinkingOptionId: "high", modeId: "full-access" });
++        expect(child.config.systemPrompt).toContain(member.soul);
++        expect(child.config.systemPrompt).not.toContain("Paseo's own tools are available");
++        expect(child.config.mcpServers?.bots).toMatchObject({ url: expect.stringContaining(`/bots/${member.id}/${id}`) });
++        expect(child.labels).toMatchObject({ "paseo-bots.bot": member.id, "paseo-bots.asked-by": lead.id, [CHAT_RUNTIME_LABEL]: created.get(leadId)!.labels[CHAT_RUNTIME_LABEL] });
++        expect(member).toMatchObject({ provider: "claude", model: "member-saved" });
++      }
++      await startChat(host, relay, members[0]!, { prompt: "Routine", title: "Routine", labels: { "paseo-bots.routine": "scheduled" }, placement });
++      const routineChat = [...created.values()].at(-1)!;
++      expect(routineChat.config.provider).toBe("claude/member-saved");
++      expect(routineChat.labels[CHAT_RUNTIME_LABEL]).toBeUndefined();
++    } finally {
++      relay.stop();
++    }
++  });
++
+   it("records runs, posts cards to the results chat, and finishes them when the chat's turn ends", async () => {
+     const { Relay } = await import("../server/relay");
+     const { RoutineScheduler } = await import("../server/scheduler");
 diff --git a/tests/sharing-dialogs.test.tsx b/tests/sharing-dialogs.test.tsx
 new file mode 100644
 index 0000000..b539707
