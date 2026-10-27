@@ -6784,3 +6784,23 @@ test("deduplicates repeated command names in list_commands_response for live age
     },
   });
 });
+
+test.each([true, false])(
+  "Bots recovery preserves explicit Stop intent (preventAutoResume: %s)",
+  async (preventAutoResume) => {
+    const agentId = "11111111-1111-4111-8111-111111111111";
+    const preventBotAutoResume = vi.fn();
+    const cancelAgentRun = vi.fn(async () => ({ status: "settled" as const }));
+    const session = createSessionForTest({
+      agentManager: {
+        getAgent: vi.fn(() => ({ id: agentId, provider: "codex", lifecycle: "running" })),
+        hasInFlightRun: vi.fn(() => true),
+        cancelAgentRun,
+        preventBotAutoResume,
+      },
+    });
+    await session.handleMessage({ type: "cancel_agent_request", agentId, preventAutoResume });
+    expect(preventBotAutoResume).toHaveBeenCalledTimes(preventAutoResume ? 1 : 0);
+    expect(cancelAgentRun).toHaveBeenCalledWith(agentId, { allowAutoResume: !preventAutoResume });
+  },
+);
