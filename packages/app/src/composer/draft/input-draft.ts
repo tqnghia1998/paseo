@@ -37,6 +37,7 @@ interface AgentInputDraftComposerOptions {
   initialValues?: CreateAgentInitialValues;
   initialFeatureValues?: Record<string, unknown>;
   isVisible?: boolean;
+  retainSelectionWhenHidden?: boolean;
   lockedWorkingDir?: string;
 }
 
@@ -77,6 +78,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     initialValues: composerOptions?.initialValues,
     isVisible: composerOptions?.isVisible ?? false,
     isCreateFlow: true,
+    retainSelectionWhenHidden: composerOptions?.retainSelectionWhenHidden,
   });
   const draftKey = useMemo(
     () =>

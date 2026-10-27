@@ -1269,3 +1269,46 @@ it("owns input readiness, reopening and user edits in the reducer", () => {
   state = resolveAgentForm(state, { ...inputs, isPreferencesLoading: false, hasSnapshot: true });
   expect(state.form).toMatchObject({ provider: "codex", model: "astra" });
 });
+
+it("retains an explicit Bots runtime and its delegation intent while the draft is hidden", () => {
+  const inputs = {
+    type: "INPUTS_CHANGED" as const,
+    serverId: "host",
+    isVisible: true,
+    isCreateFlow: true,
+    retainSelectionWhenHidden: true,
+    isPreferencesLoading: false,
+    hasSnapshot: true,
+    initialValues: { provider: "claude", model: "opus", modeId: "bypassPermissions" },
+    preferences: null,
+    allowedProviderMap: bothProviderMap,
+    providerModelsByProvider: new Map([
+      ["codex", CODEX_MODELS],
+      ["claude", [{ provider: "claude", id: "opus", label: "Opus", isDefault: true }]],
+    ]),
+  };
+  let state = resolveAgentForm(makeState(), inputs);
+  state = resolveAgentForm(state, {
+    type: "SET_PROVIDER_AND_MODEL_FROM_USER",
+    provider: "codex",
+    modelId: "",
+    providerDef: TEST_CODEX_DEFINITION,
+    providerModels: CODEX_MODELS,
+  });
+  state = resolveAgentForm(state, { type: "SET_MODE_FROM_USER", modeId: "full-access" });
+  state = resolveAgentForm(state, {
+    type: "SET_THINKING_OPTION_FROM_USER",
+    thinkingOptionId: "low",
+  });
+  const chosen = state.form;
+  const intent = state.userModified;
+  state = resolveAgentForm(state, { ...inputs, isVisible: false });
+  state = resolveAgentForm(state, inputs);
+  expect(state.form).toEqual(chosen);
+  expect(state.userModified).toEqual(intent);
+  expect(Object.values(state.userModified).some(Boolean)).toBe(true);
+  // Changed bot defaults or host bindings still own a fresh resolution.
+  state = resolveAgentForm(state, { ...inputs, serverId: "other-host" });
+  expect(state.form.provider).toBe("claude");
+  expect(state.userModified).toEqual(INITIAL_USER_MODIFIED);
+});
