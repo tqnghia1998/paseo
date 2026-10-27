@@ -1427,13 +1427,21 @@ async function syncBotWorkspaceTitle(api, bot, placement) {
   const mine = entries.find((workspace) => normalize(workspace.workspaceDirectory ?? workspace.projectRootPath) === normalize(placement.path));
   if (mine && mine.title !== bot.name) await api.workspaces.ref(mine).setTitle(bot.name);
 }
+function botForChat(bot, settings) {
+  if (!settings) return bot;
+  const { provider, model, modeId, thinkingOptionId } = settings;
+  return { ...bot, provider, model, modeId, thinkingOptionId };
+}
 async function startBotChat(api, input) {
-  const { bot } = input;
+  const bot = botForChat(input.bot, input.agentSettings);
   const model = bot.model ?? await resolveDefaultModel(api, bot.provider);
   const workspace = input.placement.workspaceId ? api.workspaces.ref(input.placement.workspaceId) : await ensureBotWorkspace(api, bot, input.placement);
   const agent = await workspace.agents.create({
     ...input.agentId ? { agentId: input.agentId } : {},
-    config: buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
+    config: {
+      ...buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
+      ...input.agentSettings?.featureValues ? { featureValues: input.agentSettings.featureValues } : {}
+    },
     labels: { [BOT_LABEL]: bot.id, ...input.labels },
     prompt: input.prompt,
     ...input.title ? { title: input.title.slice(0, MAX_TITLE_CHARS) } : {},
@@ -14593,11 +14601,13 @@ function SelectedChat({ colors: colors2, bot, library, selection, localHost, pan
     if (botWorkspace && !host2.isLocal) throw new Error("Choose a local host for this worktree.");
     const home = await ensureHome({ botId: bot.id });
     const placement = botWorkspace && host2.isLocal ? { path: botWorkspace.directory, projectRoot: null, workspaceId: botWorkspace.id } : bot.cwd ? { path: bot.cwd, projectRoot: null } : { path: home.path, projectRoot: home.root };
-    const { systemPrompt } = await compose({ bot, local: host2.isLocal, message: message2.text });
+    const chatBot = botForChat(bot, message2.agentSettings);
+    const { systemPrompt } = await compose({ bot: chatBot, local: host2.isLocal, message: message2.text });
     const agentId = newUuid();
     const plugin = host2.isLocal ? await mountServers({ botId: bot.id, agentId }) : {};
     const id = await startBotChat(host2.api, {
       bot,
+      agentSettings: message2.agentSettings,
       labels: botWorkspace?.chatContext ? { [CHAT_CONTEXT_LABEL]: botWorkspace.chatContext } : {},
       library,
       ...host2.isLocal ? { agentId } : {},

@@ -137,6 +137,12 @@ workspace draft; focus pauses while the first message is being created. Native
 Bots drafts use `useDraftAgentCreateFlow` for submission state, first-message
 identity, pending-create protection and optimistic handoff; the Bots adapter owns
 image encoding and bot creation. Each new draft has its own keyed lifecycle.
+The native model picker can override provider, model, approval mode and thinking for
+that conversation. Bot settings seed the picker and remain the defaults for later
+chats and routines; a conversation override does not change teammates’ settings.
+Prompt composition and agent creation use the same runtime choice. Draft preference
+services are local to the mounted conversation so global composer preferences cannot
+replace bot/provider defaults or receive these overrides.
 The fork menu omits its new-workspace destination inside Bots chats.
 General is created automatically and includes legacy unlabeled chats from the same
 directory without mutating their records. Embedded conversation lists, pins, usage and routine chat links are strictly
