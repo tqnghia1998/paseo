@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import React, { type ReactNode, type ComponentProps } from "react";
+import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 import type { Composer } from "@/composer";
 import type { MessagePayload } from "@/composer/types";
 import type { ImportSessionSheet } from "@/components/import-session-sheet";
 import { act, fireEvent, render, screen, cleanup, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { NativeBotChatDraft } from "./bot-chat-draft";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import {
@@ -13,6 +14,17 @@ import {
 } from "@/attachments/workspace-attachments-store";
 
 const mocks = vi.hoisted(() => ({
+  selection: {
+    selectedProvider: "codex" as AgentProvider | null,
+    effectiveModelId: "model",
+    effectiveModeId: "full-access",
+    effectiveThinkingOptionId: "high",
+    isModelLoading: false,
+    modelError: null as string | null,
+    featureValues: { planMode: true },
+    agentControls: {},
+    commandDraft: {},
+  },
   composer: null as ComponentProps<typeof Composer> | null,
   submit: undefined as ((payload: MessagePayload) => Promise<void>) | undefined,
   encodeImages: vi.fn(),
@@ -58,7 +70,7 @@ vi.mock("@/components/file-drop/file-drop-zone", () => ({
 }));
 vi.mock("@/composer/draft/input-draft", () => ({
   useAgentInputDraft: () => ({
-    composerState: { agentControls: {}, commandDraft: {} },
+    composerState: mocks.selection,
     textSource: {},
     editText: vi.fn(),
     textReplacement: {},
@@ -90,6 +102,15 @@ vi.mock("@/stores/session-store", () => ({
     getState: () => ({ sessions: {} }),
   }),
 }));
+
+beforeEach(() => {
+  mocks.selection.selectedProvider = "codex";
+  mocks.selection.effectiveModelId = "model";
+  mocks.selection.effectiveModeId = "full-access";
+  mocks.selection.effectiveThinkingOptionId = "high";
+  mocks.selection.isModelLoading = false;
+  mocks.selection.modelError = null;
+});
 
 afterEach(() => {
   cleanup();
@@ -362,5 +383,102 @@ it("keeps one creation in flight across draft remounts and retries a failed requ
     "host",
     "retried-chat",
     expect.objectContaining({ text: "Review again" }),
+  );
+});
+
+it("starts with the draft's selected runtime instead of the bot defaults", async () => {
+  mocks.selection.selectedProvider = "claude";
+  mocks.selection.effectiveModelId = "opus";
+  mocks.selection.effectiveModeId = "default";
+  mocks.selection.effectiveThinkingOptionId = "medium";
+  mocks.encodeImages.mockResolvedValue([]);
+  const start = vi.fn().mockResolvedValue("claude-chat");
+  render(
+    <NativeBotChatDraft
+      serverId="host"
+      botId="review-lead"
+      cwd="/worktree"
+      provider="codex"
+      model="codex-default"
+      active
+      onStart={start}
+    />,
+  );
+  expect(mocks.composer!.agentControls!.disabled).toBe(false);
+  await act(async () => mocks.submit!({ text: "Review", cwd: "/worktree", attachments: [] }));
+  expect(start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      agentSettings: {
+        provider: "claude",
+        model: "opus",
+        modeId: "default",
+        thinkingOptionId: "medium",
+        featureValues: { planMode: true },
+      },
+    }),
+  );
+});
+
+it.each(["loading", "missing provider", "missing model", "catalog error"])(
+  "does not silently start with bot defaults when the selection is %s",
+  async (state) => {
+    if (state === "loading") mocks.selection.isModelLoading = true;
+    if (state === "missing provider") mocks.selection.selectedProvider = null;
+    if (state === "missing model") mocks.selection.effectiveModelId = "";
+    if (state === "catalog error") mocks.selection.modelError = "Could not load models";
+    const start = vi.fn();
+    render(
+      <NativeBotChatDraft
+        serverId="host"
+        botId="bot"
+        cwd="/worktree"
+        provider="codex"
+        active
+        onStart={start}
+      />,
+    );
+    await act(async () => {
+      await expect(
+        mocks.submit!({ text: "Review", cwd: "/worktree", attachments: [] }),
+      ).rejects.toThrow();
+    });
+    expect(start).not.toHaveBeenCalled();
+  },
+);
+
+it("locks controls during creation and snapshots the selected runtime before image encoding", async () => {
+  let finishEncoding: (images: { data: string; mimeType: string }[]) => void = () => {};
+  mocks.encodeImages.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishEncoding = resolve;
+      }),
+  );
+  const start = vi.fn().mockResolvedValue("chat");
+  render(
+    <NativeBotChatDraft
+      serverId="host"
+      botId="bot"
+      cwd="/worktree"
+      provider="codex"
+      active
+      onStart={start}
+    />,
+  );
+  let sent: Promise<void> = Promise.resolve();
+  act(() => {
+    sent = mocks.submit!({ text: "Review", cwd: "/worktree", attachments: [] });
+  });
+  await waitFor(() => expect(mocks.composer!.agentControls!.disabled).toBe(true));
+  mocks.selection.selectedProvider = "claude";
+  mocks.selection.effectiveModelId = "opus";
+  await act(async () => {
+    finishEncoding([]);
+    await sent;
+  });
+  expect(start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      agentSettings: expect.objectContaining({ provider: "codex", model: "model" }),
+    }),
   );
 });
