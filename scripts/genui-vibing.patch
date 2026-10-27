@@ -1,0 +1,126 @@
+diff --git a/client/components/content.tsx b/client/components/content.tsx
+index be7eead..0a0320e 100644
+--- a/client/components/content.tsx
++++ b/client/components/content.tsx
+@@ -275,12 +275,11 @@ export function File({ props }: { props: Props }) {
+   const line = finiteNumber(props.line);
+   const label = line !== null ? `${filePath}:${Math.round(line)}` : filePath;
+ 
+-  const onWeb = Platform.OS === "web";
+-  const chip = (
++  return (
+     <Pressable
+       accessibilityRole="button"
+       onPress={() => {
+-        if (!onWeb && openFile) void openFile(filePath, line ?? undefined);
++        if (openFile) void openFile(filePath, line ?? undefined);
+       }}
+       style={{
+         alignSelf: "flex-start",
+@@ -301,23 +300,6 @@ export function File({ props }: { props: Props }) {
+       </RNText>
+     </Pressable>
+   );
+-  if (!onWeb) return chip;
+-
+-  // Paseo renders chat file links as `<a style="display: contents">`. Plugins such as
+-  // wiki-viewer catch clicks on those and replay the click when they decline, so the
+-  // anchor's own handler is the fallback that opens a Paseo file tab.
+-  return React.createElement(
+-    "a",
+-    {
+-      href: label,
+-      style: { display: "contents" },
+-      onClick: (event: { preventDefault(): void }) => {
+-        event.preventDefault();
+-        if (openFile) void openFile(filePath, line ?? undefined);
+-      },
+-    },
+-    chip,
+-  );
+ }
+ 
+ export function Entity({ props }: { props: Props }) {
+diff --git a/client/live-ui.tsx b/client/live-ui.tsx
+index 1f1423c..1c5fb27 100644
+--- a/client/live-ui.tsx
++++ b/client/live-ui.tsx
+@@ -1,5 +1,5 @@
+ import type { PluginTheme } from "@getpaseo/plugin";
+-import { openExternalUrl, usePaseo, type PluginTimelineItemProps } from "@getpaseo/plugin/client";
++import { openExternalUrl, useAgent, usePaseo, type PluginTimelineItemProps } from "@getpaseo/plugin/client";
+ import { Icon, copyText, useRevealedText, useToast } from "@getpaseo/plugin/client/react-native";
+ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { Pressable, StyleSheet, Text, View } from "react-native";
+@@ -485,6 +485,11 @@ export function TimelineBlockItem({
+   playAudio: UiRuntime["playAudio"];
+ }) {
+   const paseo = usePaseo();
++  const workspaceRoot = useAgent(agentId, (agent) => agent.cwd);
++  const openFile = useCallback(
++    (path: string, line?: number) => openWorkspaceFile(path, line, workspaceRoot ?? undefined),
++    [workspaceRoot],
++  );
+   const { language, code, complete, fenceIndex, messageId } = item.data;
+   const stateKey = `paseo.genui:${agentId}:${messageId ?? timestamp.getTime()}:${fenceIndex}`;
+ 
+@@ -506,7 +511,7 @@ export function TimelineBlockItem({
+       stateKey={stateKey}
+       scope={{ agentId }}
+       send={send}
+-      openFile={layout.platform === "web" ? openWorkspaceFile : null}
++      openFile={layout.platform === "web" ? openFile : null}
+       playAudio={playAudio}
+       theme={theme}
+       compact={layout.compact}
+diff --git a/client/web.ts b/client/web.ts
+index 9118c79..fc52035 100644
+--- a/client/web.ts
++++ b/client/web.ts
+@@ -36,9 +36,13 @@ interface WebMessageEvent {
+ interface WebGlobal {
+   readonly localStorage?: WebStorage;
+   readonly document?: {
++    readonly referrer?: string;
+     createElement(tag: "iframe"): WebIframeElement;
+   };
+   readonly window?: {
++    postMessage(message: unknown, targetOrigin: string): void;
++    readonly name?: string;
++    readonly parent?: { postMessage(message: unknown, targetOrigin: string): void };
+     addEventListener(type: "message", listener: (event: WebMessageEvent) => void): void;
+     removeEventListener(type: "message", listener: (event: WebMessageEvent) => void): void;
+     readonly location?: { readonly pathname: string };
+@@ -192,11 +196,30 @@ export function mountSandboxedAppIframe(
+ /**
+  * Opens an absolute file path in a file tab of the workspace on screen, the way the
+  * host does for file links in chat. The plugin SDK has no call for it, so this goes
+- * through the host's `?open=file:<base64url path>` route. Web and desktop only.
++ * through the embedding IDE bridge or the standalone workspace route. Web and desktop only.
+  */
+-export function openWorkspaceFile(path: string): boolean {
++export function openWorkspaceFile(path: string, line?: number, workspaceRoot?: string): boolean {
+   const web = getWeb();
+   const win = web?.window;
++  if (win?.name?.startsWith("paseo-workspace:") && win.parent && win.parent !== win) {
++    const root = workspaceRoot?.replace(/\/+$/, "");
++    if (!root || !path || /^[\\]|^[a-zA-Z]:/.test(path) || path.split(/[/\\]/).includes("..")) return false;
++    const relative = path.startsWith("/")
++      ? path.startsWith(`${root}/`) ? path.slice(root.length + 1) : null
++      : path;
++    const targetLine = line === undefined ? 1 : line;
++    if (!relative || !Number.isInteger(targetLine) || targetLine < 1) return false;
++    let origin: string;
++    try {
++      const referrer = new URL(web?.document?.referrer ?? "");
++      if (referrer.protocol !== "http:" && referrer.protocol !== "https:") return false;
++      origin = referrer.origin;
++    } catch {
++      return false;
++    }
++    win.parent.postMessage({ type: "paseo:open-file", path: relative, line: targetLine }, origin);
++    return true;
++  }
+   if (!win?.location || !win.history || !win.dispatchEvent || !web?.PopStateEvent) return false;
+   if (!path.startsWith("/")) return false;
+   const match = /^\/h\/[^/]+\/workspace\/[^/]+/.exec(win.location.pathname);
