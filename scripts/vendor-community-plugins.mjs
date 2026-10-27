@@ -52,6 +52,7 @@ const plugins = [
   {
     id: "genui",
     repository: "anh-chu/paseo-plugin-genui",
+    patch: "genui-vibing.patch",
     revision: "e945ca9ab53a3f0d7c9ef41d803f133849050702",
   },
 ];

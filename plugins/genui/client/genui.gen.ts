@@ -10253,7 +10253,7 @@ function searchComponents(query, variants = /* @__PURE__ */ new Map()) {
 }
 
 // client/live-ui.tsx
-import { openExternalUrl, usePaseo } from "@getpaseo/plugin/client";
+import { openExternalUrl, useAgent, usePaseo } from "@getpaseo/plugin/client";
 import { Icon as Icon8, copyText as copyText3, useRevealedText, useToast as useToast3 } from "@getpaseo/plugin/client/react-native";
 import { useCallback as useCallback3, useEffect as useEffect7, useMemo as useMemo9, useRef as useRef2, useState as useState13 } from "react";
 import { Pressable as Pressable11, StyleSheet as StyleSheet13, Text as Text13, View as View13 } from "react-native";
@@ -11734,9 +11734,28 @@ function mountSandboxedAppIframe(hostRef, options) {
     iframe.remove();
   };
 }
-function openWorkspaceFile(path) {
+function openWorkspaceFile(path, line, workspaceRoot) {
   const web = getWeb();
   const win = web?.window;
+  if (win?.name?.startsWith("paseo-workspace:") && win.parent && win.parent !== win) {
+    const root = workspaceRoot?.replace(/\/+$/, "");
+    if (!root || !path || /^[\\]|^[a-zA-Z]:/.test(path) || path.split(/[/\\]/).includes("..")) return false;
+    const relative = path.startsWith("/")
+      ? path.startsWith(`${root}/`) ? path.slice(root.length + 1) : null
+      : path;
+    const targetLine = line === undefined ? 1 : line;
+    if (!relative || !Number.isInteger(targetLine) || targetLine < 1) return false;
+    let origin;
+    try {
+      const referrer = new URL(web?.document?.referrer ?? "");
+      if (referrer.protocol !== "http:" && referrer.protocol !== "https:") return false;
+      origin = referrer.origin;
+    } catch {
+      return false;
+    }
+    win.parent.postMessage({ type: "paseo:open-file", path: relative, line: targetLine }, origin);
+    return true;
+  }
   if (!win?.location || !win.history || !win.dispatchEvent || !web?.PopStateEvent) return false;
   if (!path.startsWith("/")) return false;
   const match = /^\/h\/[^/]+\/workspace\/[^/]+/.exec(win.location.pathname);
@@ -12153,13 +12172,12 @@ function File({ props }) {
   const filePath2 = text(props.path);
   const line = finiteNumber(props.line);
   const label5 = line !== null ? `${filePath2}:${Math.round(line)}` : filePath2;
-  const onWeb = Platform3.OS === "web";
-  const chip = /* @__PURE__ */ jsxs3(
+  return /* @__PURE__ */ jsxs3(
     Pressable2,
     {
       accessibilityRole: "button",
       onPress: () => {
-        if (!onWeb && openFile) void openFile(filePath2, line ?? void 0);
+        if (openFile) void openFile(filePath2, line ?? void 0);
       },
       style: {
         alignSelf: "flex-start",
@@ -12179,20 +12197,8 @@ function File({ props }) {
       ]
     }
   );
-  if (!onWeb) return chip;
-  return React4.createElement(
-    "a",
-    {
-      href: label5,
-      style: { display: "contents" },
-      onClick: (event) => {
-        event.preventDefault();
-        if (openFile) void openFile(filePath2, line ?? void 0);
-      }
-    },
-    chip
-  );
 }
+
 function Entity({ props }) {
   const { theme } = useUiRuntime();
   const [open, setOpen] = useState4(false);
@@ -18666,6 +18672,11 @@ function TimelineBlockItem({
   playAudio
 }) {
   const paseo = usePaseo();
+  const workspaceRoot = useAgent(agentId, (agent) => agent.cwd);
+  const openFile = useCallback3(
+    (path, line) => openWorkspaceFile(path, line, workspaceRoot ?? void 0),
+    [workspaceRoot]
+  );
   const { language, code, complete, fenceIndex, messageId } = item.data;
   const stateKey = `paseo.genui:${agentId}:${messageId ?? timestamp2.getTime()}:${fenceIndex}`;
   const send = useCallback3(
@@ -18685,7 +18696,7 @@ function TimelineBlockItem({
       stateKey,
       scope: { agentId },
       send,
-      openFile: layout.platform === "web" ? openWorkspaceFile : null,
+      openFile: layout.platform === "web" ? openFile : null,
       playAudio,
       theme,
       compact: layout.compact,
