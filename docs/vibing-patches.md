@@ -69,6 +69,11 @@ the `claude`, `codex` or `opencode` CLIs on the daemon's `PATH`;
 alias, which honors `ANTHROPIC_DEFAULT_HAIKU_MODEL`, because the company gateway maps
 the newest Haiku to an older model that rejects its reasoning-effort setting.
 
+Generative UI file cards use a single press target. In embedded workspace and Live Design chats,
+`genui-vibing.patch` sends worktree-relative paths and line numbers through the existing
+origin-checked `paseo:open-file` bridge; standalone workspace routing remains available.
+The root comes from the timeline agent snapshot. Regressions: `node --test scripts/genui-file-links.test.mjs`.
+
 Bots and the palette remain built-ins because embedded navigation depends on them.
 Above the Bots sidebar footer, the app's `sidebarFooter` slot shows the Codex budget
 (the spending allowance, else Codex's first limit): percent and whole dollars left.
