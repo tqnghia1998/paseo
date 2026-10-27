@@ -47,9 +47,13 @@ export interface UseAgentFormStateOptions {
   initialValues?: FormInitialValues;
   isVisible?: boolean;
   isCreateFlow?: boolean;
+  /** Retained conversation drafts pause observation without discarding their explicit choices. */
+  retainSelectionWhenHidden?: boolean;
 }
 
 export interface UseAgentFormStateResult {
+  /** Defaults and catalog resolution do not count as an explicit starting choice. */
+  hasUserModifiedAgentSettings: boolean;
   selectedServerId: string | null;
   selectedProvider: AgentProvider | null;
   selectedMode: string;
@@ -146,7 +150,14 @@ async function persistProviderPreferences(input: {
 }
 
 export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFormStateResult {
-  const { serverId, initialValues, workingDir, isVisible = true, isCreateFlow = true } = options;
+  const {
+    serverId,
+    initialValues,
+    workingDir,
+    isVisible = true,
+    isCreateFlow = true,
+    retainSelectionWhenHidden,
+  } = options;
 
   const { preferences, isLoading: isPreferencesLoading, updatePreferences } = useFormPreferences();
   const preferenceOverlayRef = useRef(new OptimisticFormPreferences(preferences));
@@ -260,6 +271,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
       serverId,
       isVisible,
       isCreateFlow,
+      retainSelectionWhenHidden,
       isPreferencesLoading,
       hasSnapshot: snapshotEntries !== undefined,
       initialValues,
@@ -271,6 +283,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
     serverId,
     isVisible,
     isCreateFlow,
+    retainSelectionWhenHidden,
     isPreferencesLoading,
     snapshotEntries,
     initialValues,
@@ -477,6 +490,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
 
   return useMemo(
     () => ({
+      hasUserModifiedAgentSettings: Object.values(userModified).some(Boolean),
       selectedServerId: serverId,
       selectedProvider: formState.provider,
       selectedMode: formState.modeId,
@@ -508,6 +522,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
       persistFormPreferences,
     }),
     [
+      userModified,
       serverId,
       formState.provider,
       formState.modeId,
