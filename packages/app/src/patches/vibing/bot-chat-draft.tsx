@@ -1,5 +1,5 @@
 import React, { useId, useRef, useState, useMemo, useCallback, type ReactNode } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Composer } from "@/composer";
 import { ComposerDock } from "@/composer/dock";
@@ -22,6 +22,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { botChatDraftId } from "./bot-chat-scope";
 import { FormPreferencesScopeContext } from "@/hooks/use-form-preferences";
 import { CreateAgentPreferencesService } from "@/create-agent-preferences/service";
+import { botChatStartSettings } from "./bot-chat-runtime";
 
 export function NativeBotChatDraft(props: Omit<NativeBotChatProps, "agentId" | "onSelectChat">) {
   const draftId = props.draftId ?? botChatDraftId(props.botId, props.workspaceId ?? props.cwd);
@@ -68,6 +69,7 @@ function BotChatDraft(
       },
       lockedWorkingDir: cwd,
       isVisible: props.active,
+      retainSelectionWhenHidden: true,
     },
   });
   const editingSession = useComposerEditingSession("chat");
@@ -77,17 +79,7 @@ function BotChatDraft(
     getPendingServerId: () => serverId,
     buildDraftAgent: () => null,
     createRequest: async ({ attempt, text, images = [], attachments = [] }) => {
-      const selection = input.composerState;
-      if (!selection?.selectedProvider || selection.isModelLoading || !selection.effectiveModelId)
-        throw new Error("Choose an available provider and model before starting this chat.");
-      if (selection.modelError) throw new Error(selection.modelError);
-      const agentSettings = {
-        provider: selection.selectedProvider,
-        model: selection.effectiveModelId,
-        modeId: selection.effectiveModeId || null,
-        thinkingOptionId: selection.effectiveThinkingOptionId || null,
-        featureValues: selection.featureValues,
-      };
+      const runtimeChoice = botChatStartSettings(input.composerState);
       const encoded = await encodeImages(images);
       if (images.length && encoded?.length !== images.length)
         throw new Error("Could not encode every image attachment");
@@ -96,7 +88,7 @@ function BotChatDraft(
         messageId: attempt.clientMessageId,
         images: encoded ?? [],
         attachments,
-        agentSettings,
+        ...runtimeChoice,
       });
       createdAgentId.current = agentId;
       return { agentId, result: undefined };
@@ -132,6 +124,9 @@ function BotChatDraft(
       <ComposerDock fullscreen={fullscreen}>
         <View style={styles.container} />
         <View style={styles.inputArea}>
+          {input.composerState?.hasUserModifiedAgentSettings ? (
+            <Text style={styles.runtimeHint}>Applies to this chat and delegated team members.</Text>
+          ) : null}
           {(canImport || hasPluginPills) && !submitting && !fullscreen ? (
             <View style={styles.importPillRow}>
               <DraftPillContent>
@@ -211,6 +206,13 @@ const styles = StyleSheet.create((theme) => ({
   container: { flex: 1 },
   // Composer pads itself; extra inset here would shift it when the draft becomes a chat.
   inputArea: { width: "100%" },
+  runtimeHint: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    textAlign: "center",
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[2],
+  },
   importPillRow: {
     width: "100%",
     alignItems: "center",
