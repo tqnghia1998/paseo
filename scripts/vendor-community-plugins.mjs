@@ -33,7 +33,7 @@ const plugins = [
     id: "shell-yeah",
     repository: "stevecastaneda/paseo-plugins",
     directory: "shell-yeah",
-    revision: "d58b575f18a29d1eb3fe408db985c7cf0c612bff",
+    revision: "0cbe39cc953f67415407c602c7f865eedcd76461",
   },
   {
     id: "paseo-recap",
@@ -46,14 +46,14 @@ const plugins = [
     id: "paseo-quick-prompts",
     repository: "kingsleydon/paseo-plugins",
     directory: "plugins/quick-prompts",
-    revision: "7c139a6532691e8598601c9bb401f536993fff6a",
+    revision: "ae8d919cd32d4be0ec30a3f58548398d6479a69b",
     patch: "paseo-quick-prompts-vibing.patch",
   },
   {
     id: "genui",
     repository: "anh-chu/paseo-plugin-genui",
     patch: "genui-vibing.patch",
-    revision: "e945ca9ab53a3f0d7c9ef41d803f133849050702",
+    revision: "e08bd3b9255c57ad39447ff6ab8725e9ca5a7499",
   },
 ];
 
