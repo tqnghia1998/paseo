@@ -545,6 +545,7 @@ describe("stopRealtimeVoice", () => {
     ).rejects.toBe(cancellationError);
 
     expect(stopVoice).not.toHaveBeenCalled();
+    expect(cancelAgent).toHaveBeenCalledWith("agent-1", { preventAutoResume: true });
   });
 
   it("stops voice mode after the running agent acknowledges cancellation", async () => {
