@@ -82,6 +82,10 @@ the `claude`, `codex` or `opencode` CLIs on the daemon's `PATH`;
 alias, which honors `ANTHROPIC_DEFAULT_HAIKU_MODEL`, because the company gateway maps
 the newest Haiku to an older model that rejects its reasoning-effort setting.
 
+Quick Prompts uses one menu by default, opens on desktop hover, sends from the row,
+and inserts from its sole trailing action. `paseo-quick-prompts-vibing.patch` owns these
+choices and the draft-agent integration, so regenerating the addon keeps them.
+
 Generative UI file cards use a single press target. In embedded workspace and Live Design chats,
 `genui-vibing.patch` sends worktree-relative paths and line numbers through the existing
 origin-checked `paseo:open-file` bridge; standalone workspace routing remains available.
