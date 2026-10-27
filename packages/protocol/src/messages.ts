@@ -1901,6 +1901,7 @@ export const CancelAgentRequestMessageSchema = z.object({
   type: z.literal("cancel_agent_request"),
   agentId: z.string(),
   requestId: z.string().optional(),
+  preventAutoResume: z.boolean().optional(),
 });
 
 export const RestartServerRequestMessageSchema = z.object({

@@ -13,7 +13,10 @@ export type LifecycleAgentSnapshot = Pick<ManagedAgent, "id" | "cwd" | "lifecycl
 export interface LifecycleAgentManager {
   getAgent(agentId: string): LifecycleAgentSnapshot | null;
   hasInFlightRun(agentId: string): boolean;
-  cancelAgentRun(agentId: string): Promise<AgentRunCancellationResult>;
+  cancelAgentRun(
+    agentId: string,
+    options?: { allowAutoResume?: boolean },
+  ): Promise<AgentRunCancellationResult>;
   clearAgentAttention(agentId: string): Promise<void>;
   archiveAgent(agentId: string): Promise<{ archivedAt: string }>;
   archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord>;
@@ -58,6 +61,7 @@ interface RequestedAgentRunCancellation extends CancelAgentRunResult {
 async function requestAgentRunCancellation(
   dependencies: Pick<AgentLifecycleCommandDependencies, "agentManager" | "logger">,
   agentId: string,
+  options?: { allowAutoResume?: boolean },
 ): Promise<RequestedAgentRunCancellation> {
   const { agentManager, logger } = dependencies;
   const agent = agentManager.getAgent(agentId);
@@ -80,7 +84,7 @@ async function requestAgentRunCancellation(
     "cancelAgentRunCommand: interrupting",
   );
   const startedAt = Date.now();
-  const cancellation = await agentManager.cancelAgentRun(agentId);
+  const cancellation = await agentManager.cancelAgentRun(agentId, options);
   logger.debug(
     { agentId, cancellation: cancellation.status, durationMs: Date.now() - startedAt },
     "cancelAgentRunCommand: cancelAgentRun completed",
@@ -96,8 +100,9 @@ async function requestAgentRunCancellation(
 export async function cancelAgentRunCommand(
   dependencies: Pick<AgentLifecycleCommandDependencies, "agentManager" | "logger">,
   agentId: string,
+  options?: { allowAutoResume?: boolean },
 ): Promise<CancelAgentRunResult> {
-  const result = await requestAgentRunCancellation(dependencies, agentId);
+  const result = await requestAgentRunCancellation(dependencies, agentId, options);
   if (result.cancellation.status === "refused") {
     dependencies.logger.warn(
       { agentId },

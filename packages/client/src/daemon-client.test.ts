@@ -8471,3 +8471,44 @@ test("closes before admission when a protected-capable daemon is reached in lega
   expect(daemonReceived).toHaveLength(1);
   expect(JSON.parse(daemonReceived[0] as string)).toMatchObject({ type: "hello" });
 });
+
+test.each([true, false])(
+  "Bots recovery carries explicit Stop intent (intentional: %s)",
+  async (intentional) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "bot_stop_test",
+      transportFactory: () => mock.transport,
+      reconnect: { enabled: false },
+    });
+    clients.push(client);
+    const connect = client.connect();
+    mock.triggerOpen();
+    await connect;
+    const stopped = client.cancelAgent(
+      "bot-agent",
+      intentional ? { preventAutoResume: true } : undefined,
+    );
+    await vi.waitFor(() =>
+      expect(
+        mock.sent.some(
+          (frame) => typeof frame === "string" && frame.includes('"cancel_agent_request"'),
+        ),
+      ).toBe(true),
+    );
+    const cancelFrame = mock.sent.find(
+      (frame) => typeof frame === "string" && frame.includes('"cancel_agent_request"'),
+    );
+    const request = parseSentFrame(cancelFrame);
+    expect(request.agentId).toBe("bot-agent");
+    expect(request.preventAutoResume).toBe(intentional ? true : undefined);
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "cancel_agent_response",
+        payload: { requestId: request.requestId, agentId: "bot-agent", agent: null, error: null },
+      }),
+    );
+    await stopped;
+  },
+);

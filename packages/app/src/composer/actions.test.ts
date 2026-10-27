@@ -317,10 +317,12 @@ describe("cancelComposerAgent", () => {
 
   it("returns the cancel request when the agent is running, connected, and not already canceling", async () => {
     const input = baseInput();
+    const cancel = vi.spyOn(input.client, "cancelAgent");
     const result = cancelComposerAgent(input);
     expect(result).not.toBeNull();
     await result;
     expect(input.client.canceledIds).toEqual(["agent"]);
+    expect(cancel).toHaveBeenCalledWith("agent", { preventAutoResume: true });
   });
 
   it("returns a rejected cancel request to the composer", async () => {

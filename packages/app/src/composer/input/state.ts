@@ -43,7 +43,9 @@ interface StopRealtimeVoiceContext {
   voice: { stopVoice: () => Promise<unknown> } | null | undefined;
   isRealtimeVoiceForCurrentAgent: boolean;
   isAgentRunning: boolean;
-  client: { cancelAgent: (agentId: string) => Promise<unknown> } | null;
+  client: {
+    cancelAgent: (agentId: string, options?: { preventAutoResume?: boolean }) => Promise<unknown>;
+  } | null;
   voiceAgentId: string | undefined;
 }
 
@@ -227,7 +229,7 @@ export async function stopRealtimeVoice(ctx: StopRealtimeVoiceContext): Promise<
     if (!ctx.client || !ctx.voiceAgentId) {
       throw new Error("Cannot stop the running voice agent while the host is unavailable");
     }
-    await ctx.client.cancelAgent(ctx.voiceAgentId);
+    await ctx.client.cancelAgent(ctx.voiceAgentId, { preventAutoResume: true });
   }
 
   await ctx.voice.stopVoice();

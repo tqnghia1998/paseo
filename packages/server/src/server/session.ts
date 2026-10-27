@@ -2937,7 +2937,7 @@ export class Session {
       case "refresh_agent_request":
         return this.handleRefreshAgentRequest(msg);
       case "cancel_agent_request":
-        return this.handleCancelAgentRequest(msg.agentId, msg.requestId);
+        return this.handleCancelAgentRequest(msg.agentId, msg.requestId, msg.preventAutoResume);
       case "agent_permission_response":
         return this.handleAgentPermissionResponse(msg.agentId, msg.requestId, msg.response);
       case "clear_agent_attention":
@@ -4841,13 +4841,19 @@ export class Session {
     }
   }
 
-  private async handleCancelAgentRequest(agentId: string, requestId?: string): Promise<void> {
+  private async handleCancelAgentRequest(
+    agentId: string,
+    requestId?: string,
+    preventAutoResume?: boolean,
+  ): Promise<void> {
     this.sessionLogger.info({ agentId }, `Cancel request received for agent ${agentId}`);
 
     try {
+      if (preventAutoResume) this.agentManager.preventBotAutoResume(agentId);
       await cancelAgentRunCommand(
         { agentManager: this.agentManager, logger: this.sessionLogger },
         agentId,
+        { allowAutoResume: !preventAutoResume },
       );
       if (requestId) {
         const agent = this.agentManager.getAgent(agentId);

@@ -1,4 +1,5 @@
 import { createIdleRuntimeCleanup } from "./idle-runtime-cleanup/index.js";
+import { createBotAutoResume } from "../../patches/vibing/bot-auto-resume.js";
 import {
   prepareAgentMessage,
   formatAgentMessage,
@@ -12666,4 +12667,235 @@ test("an out-of-band command racing idle cleanup waits for the resumed runtime",
   expect(await command).toEqual({ disposition: "out_of_band" });
   expect(h.commands).toEqual(["/maintenance"]);
   expect(h.prompts).toEqual([]);
+});
+
+function botRecoveryHarness() {
+  vi.useFakeTimers();
+  const agent = {
+    id: "bot-chat",
+    labels: { "paseo-bots.bot": "bot" } as Record<string, string>,
+    internal: false,
+    lifecycle: "idle",
+    pendingPermissions: new Map<string, unknown>(),
+  };
+  const resumes: string[] = [];
+  let exists = true;
+  let fail = false;
+  const recovery = createBotAutoResume({
+    getAgent: () => (exists ? agent : null),
+    resume: (_id: string, messageId: string) => {
+      resumes.push(messageId);
+      recovery.prompt(agent.id, messageId);
+      recovery.observe(agent.id, { type: "turn_started", provider: "codex", turnId: messageId });
+      if (fail) {
+        recovery.observe(agent.id, {
+          type: "turn_failed",
+          provider: "codex",
+          turnId: messageId,
+          error: "offline",
+        });
+        return Promise.reject(new Error("offline"));
+      }
+      agent.lifecycle = "running";
+      return new Promise<void>(() => {});
+    },
+    logger,
+  });
+  onTestFinished(() => {
+    recovery.close();
+    vi.useRealTimers();
+  });
+  const start = () => {
+    recovery.prompt(agent.id);
+    recovery.observe(agent.id, { type: "turn_started", provider: "codex", turnId: "original" });
+  };
+  const interrupt = (turnId = "original") =>
+    recovery.observe(agent.id, {
+      type: "turn_canceled",
+      provider: "codex",
+      turnId,
+      reason: "interrupted",
+    });
+  return {
+    agent,
+    resumes,
+    recovery,
+    start,
+    interrupt,
+    remove: () => {
+      exists = false;
+    },
+    fail: () => {
+      fail = true;
+    },
+  };
+}
+
+test("Bots auto-recovery resumes an interrupted background chat after 30 seconds", async () => {
+  const h = botRecoveryHarness();
+  h.start();
+  h.interrupt();
+  await vi.advanceTimersByTimeAsync(29_999);
+  expect(h.resumes).toHaveLength(0);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(h.resumes).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(h.resumes).toHaveLength(1);
+});
+
+test("Bots auto-recovery shares one five-minute deadline across failed retries", async () => {
+  const h = botRecoveryHarness();
+  h.fail();
+  h.start();
+  h.interrupt();
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(h.resumes).toHaveLength(10);
+  await vi.advanceTimersByTimeAsync(600_000);
+  expect(h.resumes).toHaveLength(10);
+});
+
+test.each(["stop", "prompt", "permission", "close", "remove", "shutdown"])(
+  "Bots auto-recovery cancels pending recovery on %s",
+  async (action) => {
+    const h = botRecoveryHarness();
+    h.start();
+    h.interrupt();
+    if (action === "stop") h.recovery.stop(h.agent.id);
+    if (action === "prompt") h.recovery.prompt(h.agent.id);
+    if (action === "permission") h.agent.pendingPermissions.set("approval", {});
+    if (action === "close") h.agent.lifecycle = "closed";
+    if (action === "remove") h.remove();
+    if (action === "shutdown") h.recovery.close();
+    await vi.advanceTimersByTimeAsync(360_000);
+    expect(h.resumes).toHaveLength(0);
+  },
+);
+
+test("Bots auto-recovery does not retry a successful turn or an unobserved old interruption", async () => {
+  const h = botRecoveryHarness();
+  h.interrupt();
+  await vi.advanceTimersByTimeAsync(30_000);
+  h.start();
+  h.recovery.observe(h.agent.id, { type: "turn_completed", provider: "codex", turnId: "original" });
+  h.interrupt();
+  await vi.advanceTimersByTimeAsync(360_000);
+  expect(h.resumes).toHaveLength(0);
+});
+
+test("Bots auto-recovery ignores stale terminal events after a new user turn", async () => {
+  const h = botRecoveryHarness();
+  h.start();
+  h.interrupt();
+  h.recovery.prompt(h.agent.id);
+  h.recovery.observe(h.agent.id, {
+    type: "turn_started",
+    provider: "codex",
+    turnId: "new-user-turn",
+  });
+  h.interrupt();
+  await vi.advanceTimersByTimeAsync(360_000);
+  expect(h.resumes).toHaveLength(0);
+});
+
+test.each([
+  {},
+  { "paseo-bots.bot": "bot", "paseo-bots.context": "live-design" },
+  { "paseo-bots.bot": "bot", [PARENT_AGENT_ID_LABEL]: "parent" },
+  { "paseo-bots.bot": "bot", "paseo-bots.asked-by": "other" },
+])("Bots auto-recovery excludes ordinary, Live Design and child agents: %j", async (labels) => {
+  const h = botRecoveryHarness();
+  h.agent.labels = labels;
+  h.start();
+  h.interrupt();
+  await vi.advanceTimersByTimeAsync(360_000);
+  expect(h.resumes).toHaveLength(0);
+});
+
+test.each([true, false])(
+  "Bots auto-recovery integrates runtime admission (anonymous cancellation: %s)",
+  async (allowAutoResume) => {
+    const session = new SteeringTestSession({ provider: "codex", cwd: process.cwd() });
+    const manager = new AgentManager({
+      clients: {
+        codex: new (class extends TestAgentClient {
+          override async createSession(): Promise<AgentSession> {
+            return session;
+          }
+        })(),
+      },
+      logger,
+    });
+    const agent = await manager.createAgent({ provider: "codex", cwd: process.cwd() }, undefined, {
+      workspaceId: undefined,
+      labels: { "paseo-bots.bot": "test-bot" },
+    });
+    vi.useFakeTimers();
+    try {
+      const run = manager.runAgent(agent.id, "finish this task");
+      await vi.advanceTimersByTimeAsync(0);
+      await manager.cancelAgentRun(agent.id, { allowAutoResume });
+      await run;
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(session.startPrompts).toHaveLength(allowAutoResume ? 2 : 1);
+      if (allowAutoResume) {
+        expect(session.startPrompts[1]).toContain("previous turn was interrupted");
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(session.startPrompts).toHaveLength(2);
+      }
+    } finally {
+      manager.prepareForShutdown();
+      await manager.closeAgent(agent.id);
+      vi.useRealTimers();
+    }
+  },
+);
+
+test("Bots auto-recovery keeps explicit Stop suppressed through late provider start events", async () => {
+  const h = botRecoveryHarness();
+  h.start();
+  h.recovery.stop(h.agent.id);
+  h.recovery.observe(h.agent.id, { type: "turn_started", provider: "codex", turnId: "late-start" });
+  h.interrupt("late-start");
+  await vi.advanceTimersByTimeAsync(360_000);
+  expect(h.resumes).toHaveLength(0);
+  h.start();
+  h.interrupt();
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(h.resumes).toHaveLength(1);
+});
+
+test("Bots auto-recovery waits for queued messages instead of adding a concurrent continuation", async () => {
+  const session = new SteeringTestSession({ provider: "codex", cwd: process.cwd() });
+  let protectedByQueue = true;
+  const manager = new AgentManager({
+    clients: {
+      codex: new (class extends TestAgentClient {
+        override async createSession(): Promise<AgentSession> {
+          return session;
+        }
+      })(),
+    },
+    isBotAutoResumeProtected: () => protectedByQueue,
+    logger,
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: process.cwd() }, undefined, {
+    workspaceId: undefined,
+    labels: { "paseo-bots.bot": "test-bot" },
+  });
+  vi.useFakeTimers();
+  try {
+    const run = manager.runAgent(agent.id, "finish this task");
+    await vi.advanceTimersByTimeAsync(0);
+    await manager.cancelAgentRun(agent.id, { allowAutoResume: true });
+    await run;
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(session.startPrompts).toHaveLength(1);
+    protectedByQueue = false;
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(session.startPrompts).toHaveLength(2);
+  } finally {
+    manager.prepareForShutdown();
+    await manager.closeAgent(agent.id);
+    vi.useRealTimers();
+  }
 });

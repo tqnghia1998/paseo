@@ -1,6 +1,10 @@
 import type { AttachedAgentTool, PluginAgentToolsRuntime } from "../plugins/agent-tools.js";
 import type { AgentToolResult } from "@getpaseo/plugin/server";
 import type { RuntimeCleanupCandidate } from "./idle-runtime-cleanup/index.js";
+import {
+  createBotAutoResume,
+  BOT_AUTO_RESUME_PROMPT,
+} from "../../patches/vibing/bot-auto-resume.js";
 import { ensureAgentLoaded } from "./agent-loading.js";
 import { projectTimelineRows } from "./timeline-projection.js";
 import type { PluginLifecycle } from "../plugins/lifecycle/index.js";
@@ -331,6 +335,7 @@ export interface CreateAgentOptions {
 }
 
 export interface AgentManagerOptions {
+  isBotAutoResumeProtected?: (agentId: string) => boolean;
   pluginLifecycle?: PluginLifecycle;
   /** An internal workspace makes every agent created inside it internal. */
   clients?: ProviderClientMap;
@@ -781,6 +786,7 @@ export class AgentManager {
   private readonly reloadedSessionCloses = new WeakMap<AgentSession, Promise<void>>();
   private readonly runtimeCleanupIdentities = new WeakMap<AgentSession, object>();
   private readonly collectingRuntimes = new Set<string>();
+  private readonly botAutoResume: ReturnType<typeof createBotAutoResume>;
   private readonly lifecycleMutationTails = new Map<string, Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private mcpBaseUrl: string | null;
@@ -837,6 +843,32 @@ export class AgentManager {
     this.updateProviderRegistry({
       providerDefinitions: options.providerDefinitions ?? {},
       clients: options.clients ?? {},
+    });
+    this.botAutoResume = createBotAutoResume({
+      getAgent: (id) => this.agents.get(id) ?? null,
+      resume: (id, messageId) => {
+        const agent = this.agents.get(id);
+        if (
+          !this.acceptingAgentRegistrations ||
+          !agent ||
+          (agent.lifecycle !== "idle" && agent.lifecycle !== "error") ||
+          this.hasInFlightRun(id) ||
+          agent.activeTurnId ||
+          agent.pendingReplacement ||
+          agent.pendingPermissions.size ||
+          agent.inFlightPermissionResponses.size ||
+          this.lifecycleMutationTails.has(id) ||
+          this.foregroundMutationTails.has(id) ||
+          this.sessionEventTails.has(id) ||
+          options.isBotAutoResumeProtected?.(id)
+        )
+          return null;
+        // streamAgent reserves the run synchronously, before provider admission awaits.
+        return this.runAgent(id, BOT_AUTO_RESUME_PROMPT, { clientMessageId: messageId }).then(
+          () => undefined,
+        );
+      },
+      logger: this.logger,
     });
   }
 
@@ -901,6 +933,11 @@ export class AgentManager {
 
   prepareForShutdown(): void {
     this.acceptingAgentRegistrations = false;
+    this.botAutoResume.close();
+  }
+
+  preventBotAutoResume(agentId: string): void {
+    this.botAutoResume.stop(agentId);
   }
 
   setPaseoToolsEnabled(enabled: boolean): void {
@@ -1951,6 +1988,7 @@ export class AgentManager {
     );
     await this.drainSessionEvents(agentId);
     if (canClose && !canClose()) return false;
+    this.botAutoResume.stop(agentId);
     // Retain ownership until shutdown succeeds. A failed close may still own a
     // native writer, so publishing a resumable closed snapshot would orphan it.
     await agent.session.close();
@@ -2824,6 +2862,7 @@ export class AgentManager {
     }
 
     const agent = existingAgent;
+    this.botAutoResume.prompt(agentId, options?.clientMessageId);
     const isReplacement = agent.pendingReplacement;
     agent.lastError = undefined;
 
@@ -3337,7 +3376,11 @@ export class AgentManager {
     }
   }
 
-  async cancelAgentRun(agentId: string): Promise<AgentRunCancellationResult> {
+  async cancelAgentRun(
+    agentId: string,
+    options?: { allowAutoResume?: boolean },
+  ): Promise<AgentRunCancellationResult> {
+    if (!options?.allowAutoResume) this.botAutoResume.stop(agentId);
     return this.runForegroundMutation(agentId, () => this.cancelAgentRunNow(agentId));
   }
 
@@ -5358,6 +5401,7 @@ export class AgentManager {
       timestamp?: string;
     },
   ): void {
+    this.botAutoResume.observe(agentId, event);
     if (event.type === "timeline") {
       event = {
         ...event,

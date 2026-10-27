@@ -3923,12 +3923,13 @@ export class DaemonClient {
     return payload;
   }
 
-  async cancelAgent(agentId: string): Promise<void> {
+  async cancelAgent(agentId: string, options?: { preventAutoResume?: boolean }): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
       type: "cancel_agent_request",
       agentId,
       requestId,
+      preventAutoResume: options?.preventAutoResume,
     });
     const payload = await this.sendRequest({
       requestId,
