@@ -24,6 +24,8 @@ export interface NativeBotChatProps {
     messageId: string;
     images: { data: string; mimeType: string }[];
     attachments: AgentAttachment[];
+    /** An explicit starting choice also applies to chats delegated through ask_bot. */
+    inheritAgentSettings?: boolean;
     agentSettings?: {
       provider: AgentProvider;
       model: string | null;

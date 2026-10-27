@@ -41,6 +41,7 @@ interface AgentInputDraftComposerOptions {
   /** Which composer a plugin's `useComposer()` reports. */
   context?: "draft" | "new-workspace";
   isVisible?: boolean;
+  retainSelectionWhenHidden?: boolean;
   lockedWorkingDir?: string;
 }
 
@@ -83,6 +84,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     initialValues: composerOptions?.initialValues,
     isVisible: composerOptions?.isVisible ?? false,
     isCreateFlow: true,
+    retainSelectionWhenHidden: composerOptions?.retainSelectionWhenHidden,
   });
   const draftKey = useMemo(
     () =>

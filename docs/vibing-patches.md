@@ -136,10 +136,17 @@ Opening a new chat focuses its composer while the pane is active, matching the n
 workspace draft; focus pauses while the first message is being created. Native
 Bots drafts use `useDraftAgentCreateFlow` for submission state, first-message
 identity, pending-create protection and optimistic handoff; the Bots adapter owns
-image encoding and bot creation. Each new draft has its own keyed lifecycle.
+image encoding and bot creation. Each new draft has its own keyed lifecycle;
+hiding a retained draft keeps its explicit runtime choice and delegation intent.
 The native model picker can override provider, model, approval mode and thinking for
-that conversation. Bot settings seed the picker and remain the defaults for later
-chats and routines; a conversation override does not change teammates’ settings.
+that conversation and its delegated chats. Bot settings seed the picker. Automatic
+default resolution does not count as a choice: until you select a model, provider,
+mode or thinking level, delegated bots use their own saved settings. An explicit
+choice freezes the resolved model in the conversation's `paseo-bots.runtime` label,
+so `ask_bot` reuses it even after reloads or provider-default changes. Members keep
+their own instructions, skills and tools. Saved bot settings remain the defaults
+for later chats and routines. The picker already displays the concrete model;
+an explicit choice adds a note that it applies to delegated team members.
 Prompt composition and agent creation use the same runtime choice. Draft preference
 services are local to the mounted conversation so global composer preferences cannot
 replace bot/provider defaults or receive these overrides.

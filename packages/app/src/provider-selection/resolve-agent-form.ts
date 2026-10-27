@@ -70,6 +70,7 @@ interface AgentFormInputs {
   serverId: string | null;
   isVisible: boolean;
   isCreateFlow: boolean;
+  retainSelectionWhenHidden?: boolean;
   isPreferencesLoading: boolean;
   hasSnapshot: boolean;
   initialValues: FormInitialValues | undefined;
@@ -592,14 +593,17 @@ function receiveInputs(
   const active = action.isVisible && action.isCreateFlow;
   const previous = state.inputs;
   const initial = action.initialValues;
-  const changed =
-    previous?.active !== active ||
+  const bindingChanged =
+    !previous ||
     previous.serverId !== action.serverId ||
     !sameInitialValues(previous.initialValues, initial);
+  const changed = bindingChanged || previous?.active !== active;
   let next = state;
   if (changed) {
     next = {
-      ...resolveAgentForm(state, { type: action.isVisible ? "REQUEST_RESOLUTION" : "RESET" }),
+      ...(bindingChanged || !action.retainSelectionWhenHidden
+        ? resolveAgentForm(state, { type: action.isVisible ? "REQUEST_RESOLUTION" : "RESET" })
+        : state),
       inputs: { serverId: action.serverId, initialValues: initial, active },
     };
   }
