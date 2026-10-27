@@ -231,7 +231,9 @@ Do not label these patches as installed plugins merely to make them discoverable
   policy, not a sandbox for agents or plugins. Standalone builds keep upstream
   navigation, sidebar preferences and multi-tool workspace layouts.
 - Live Design shares the workspace Bots runtime, bot definitions and memory. Its `paseo-bots.context=live-design` label scopes chat lists and imports; native draft/selection keys and command-center results also stay separate by surface and worktree. Readiness activates the selected
-  local bot or General; fresh requests create unique bot drafts. Pending completion
+  local bot or General; fresh requests create unique bot drafts. Embedded activity
+  indicators use the same conversation context, so a running workspace chat cannot
+  keep Live Design's dot flashing (or the reverse). Pending completion
   observation returns to the owning conversation in the bound directory.
 - Host prompts append to the active editable composer without submitting. Parent
   source/origin checks, composer/request IDs, acknowledgements and delivery
