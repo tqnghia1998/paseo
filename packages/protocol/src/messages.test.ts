@@ -629,5 +629,15 @@ describe("terminal collection protocol compatibility", () => {
         },
       }),
     ).toMatchObject({ payload: { terminals: [{ isScript: true, createdAt: null }] } });
+
+  });
+});
+
+test("Bots recovery accepts both anonymous and explicit Stop cancellation requests", () => {
+  const base = { type: "cancel_agent_request", agentId: "agent" };
+  expect(SessionInboundMessageSchema.parse(base)).toEqual(base);
+  expect(SessionInboundMessageSchema.parse({ ...base, preventAutoResume: true })).toEqual({
+    ...base,
+    preventAutoResume: true,
   });
 });
