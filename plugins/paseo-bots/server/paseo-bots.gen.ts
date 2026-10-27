@@ -1769,13 +1769,21 @@ async function ensureBotWorkspace(api, bot, placement) {
     source: { kind: "directory", path: placement.path, ...projectId ? { projectId } : {} }
   });
 }
+function botForChat(bot, settings) {
+  if (!settings) return bot;
+  const { provider, model, modeId, thinkingOptionId } = settings;
+  return { ...bot, provider, model, modeId, thinkingOptionId };
+}
 async function startBotChat(api, input) {
-  const { bot } = input;
+  const bot = botForChat(input.bot, input.agentSettings);
   const model = bot.model ?? await resolveDefaultModel(api, bot.provider);
   const workspace = input.placement.workspaceId ? api.workspaces.ref(input.placement.workspaceId) : await ensureBotWorkspace(api, bot, input.placement);
   const agent = await workspace.agents.create({
     ...input.agentId ? { agentId: input.agentId } : {},
-    config: buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
+    config: {
+      ...buildAgentConfig(bot, input.library, model, input.systemPrompt, input.plugin),
+      ...input.agentSettings?.featureValues ? { featureValues: input.agentSettings.featureValues } : {}
+    },
     labels: { [BOT_LABEL]: bot.id, ...input.labels },
     prompt: input.prompt,
     ...input.title ? { title: input.title.slice(0, MAX_TITLE_CHARS) } : {},

@@ -1,6 +1,18 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { createElement, type ReactNode } from "react";
+import { renderHook, act, waitFor, cleanup } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import {
+  CreateAgentPreferencesService,
+  createAgentPreferencesService,
+} from "@/create-agent-preferences/service";
 
-import { mergeProviderPreferences } from "./use-form-preferences";
+import {
+  mergeProviderPreferences,
+  useFormPreferences,
+  FormPreferencesScopeContext,
+} from "./use-form-preferences";
 
 describe("mergeProviderPreferences", () => {
   it("stores the selected model for a provider", () => {
@@ -89,4 +101,67 @@ describe("mergeProviderPreferences", () => {
       },
     });
   });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+it("keeps a bot draft's preferences separate from global defaults and other drafts", async () => {
+  const global = {
+    provider: "claude",
+    providerPreferences: { claude: { model: "remembered", mode: "bypassPermissions" } },
+  };
+  const loadGlobal = vi.spyOn(createAgentPreferencesService, "load").mockResolvedValue(global);
+  const updateGlobal = vi.spyOn(createAgentPreferencesService, "update");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["form-preferences"], global);
+  const write = vi.fn(async () => {});
+  const service = new CreateAgentPreferencesService({ read: async () => null, write });
+  const scope = { id: "bot-draft-one", service };
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(FormPreferencesScopeContext.Provider, { value: scope }, children),
+    );
+  const first = renderHook(() => useFormPreferences(), { wrapper });
+  await waitFor(() => expect(first.result.current.isLoading).toBe(false));
+  expect(first.result.current.preferences).toEqual({});
+  await act(async () => {
+    await first.result.current.updatePreferences({
+      provider: "codex",
+      providerPreferences: { codex: { model: "chosen" } },
+    });
+  });
+  await waitFor(() =>
+    expect(first.result.current.preferences).toEqual({
+      provider: "codex",
+      providerPreferences: { codex: { model: "chosen" } },
+    }),
+  );
+  expect(loadGlobal).not.toHaveBeenCalled();
+  expect(updateGlobal).not.toHaveBeenCalled();
+  expect(client.getQueryData(["form-preferences"])).toEqual(global);
+  first.unmount();
+  const secondScope = {
+    id: "bot-draft-two",
+    service: new CreateAgentPreferencesService({ read: async () => null, write: async () => {} }),
+  };
+  const second = renderHook(() => useFormPreferences(), {
+    wrapper: ({ children }) =>
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(FormPreferencesScopeContext.Provider, { value: secondScope }, children),
+      ),
+  });
+  await waitFor(() => expect(second.result.current.isLoading).toBe(false));
+  expect(second.result.current.preferences).toEqual({});
+  const ordinary = renderHook(() => useFormPreferences(), {
+    wrapper: ({ children }) => createElement(QueryClientProvider, { client }, children),
+  });
+  expect(ordinary.result.current.preferences).toEqual(global);
+  client.clear();
 });
