@@ -133,7 +133,9 @@ chat. The new-chat draft shows the native Import session pill: the sheet is lock
 to the bound worktree (no "Show all") and labels the imported or restored agent with
 the bot, so it lists and opens under that bot.
 Opening a new chat focuses its composer while the pane is active, matching the native
-workspace draft; focus pauses while the first message is being created. Native
+workspace draft; focus pauses while the first message is being created. Embedded native chats also supply `SheetPaneHostProvider`, using the shared pane-content builder, because upstream subagent tracks require a workspace sheet host even when the embedded app has no workspace screen. Keep the real-context regression in `bot-chat.test.tsx`; a fresh draft alone does not exercise this path.
+
+Native
 Bots drafts use `useDraftAgentCreateFlow` for submission state, first-message
 identity, pending-create protection and optimistic handoff; the Bots adapter owns
 image encoding and bot creation. Each new draft has its own keyed lifecycle;
