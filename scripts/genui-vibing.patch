@@ -1,8 +1,8 @@
 diff --git a/client/components/content.tsx b/client/components/content.tsx
-index be7eead..0a0320e 100644
+index 8c0371b..464fad1 100644
 --- a/client/components/content.tsx
 +++ b/client/components/content.tsx
-@@ -275,12 +275,11 @@ export function File({ props }: { props: Props }) {
+@@ -334,12 +334,11 @@ export function File({ props }: { props: Props }) {
    const line = finiteNumber(props.line);
    const label = line !== null ? `${filePath}:${Math.round(line)}` : filePath;
  
@@ -17,7 +17,7 @@ index be7eead..0a0320e 100644
        }}
        style={{
          alignSelf: "flex-start",
-@@ -301,23 +300,6 @@ export function File({ props }: { props: Props }) {
+@@ -360,23 +359,6 @@ export function File({ props }: { props: Props }) {
        </RNText>
      </Pressable>
    );
@@ -42,7 +42,7 @@ index be7eead..0a0320e 100644
  
  export function Entity({ props }: { props: Props }) {
 diff --git a/client/live-ui.tsx b/client/live-ui.tsx
-index 1f1423c..1c5fb27 100644
+index 93098a2..a84d913 100644
 --- a/client/live-ui.tsx
 +++ b/client/live-ui.tsx
 @@ -1,5 +1,5 @@
@@ -50,8 +50,8 @@ index 1f1423c..1c5fb27 100644
 -import { openExternalUrl, usePaseo, type PluginTimelineItemProps } from "@getpaseo/plugin/client";
 +import { openExternalUrl, useAgent, usePaseo, type PluginTimelineItemProps } from "@getpaseo/plugin/client";
  import { Icon, copyText, useRevealedText, useToast } from "@getpaseo/plugin/client/react-native";
+ import { Markdown } from "@getpaseo/plugin/client/ui";
  import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
- import { Pressable, StyleSheet, Text, View } from "react-native";
 @@ -485,6 +485,11 @@ export function TimelineBlockItem({
    playAudio: UiRuntime["playAudio"];
  }) {

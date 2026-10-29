@@ -1,7 +1,7 @@
 # paseo-recap
 
-Bundled from [kingsleydon/paseo-plugins/plugins/recap](https://github.com/kingsleydon/paseo-plugins/tree/7c139a6532691e8598601c9bb401f536993fff6a/plugins/recap) at
-`7c139a6532691e8598601c9bb401f536993fff6a` (version 0.2.4, MIT).
+Bundled from [kingsleydon/paseo-plugins/plugins/recap](https://github.com/kingsleydon/paseo-plugins/tree/ae8d919cd32d4be0ec30a3f58548398d6479a69b/plugins/recap) at
+`ae8d919cd32d4be0ec30a3f58548398d6479a69b` (version 0.2.5, MIT).
 
 Regenerate with `node scripts/vendor-community-plugins.mjs paseo-recap` in the Paseo fork.
 Generated code uses the host SDK, React, React Native, React Query and Zod.
