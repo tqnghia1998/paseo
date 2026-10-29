@@ -10,7 +10,7 @@ Paseo Web is packaged as a standalone server that embeds:
 
 1. **Paseo Daemon (`server.mjs`)**: Node.js backend daemon with WebSocket RPCs, agent lifecycle management, and session state.
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
-3. **PTY Terminal Worker (`terminal-worker-process.js`)**: Isolated worker for terminal sessions, with `shell-integration/` beside the bundled modules.
+3. **PTY Terminal Worker (`terminal-worker/terminal-worker.mjs`)**: Upstream's self-contained worker and shell integration, copied into the runtime home before launch. The standalone server resolves this directory beside `server.mjs`, not one directory above it.
 4. **Local Speech Worker (`worker-process.js`)**: Isolated worker for embedded dictation and voice mode.
 5. **Built-in plugins (`builtin-plugins/`)**: The Claude, Codex and AIS Switch usage sources, native Space App Vibing theme and Bots, with runtime compilers included in the dependency archive.
 6. **Embedded workspace**: The Bots surface bound to the selected worktree, with host-owned global navigation. See the [patch contracts](docs/vibing-patches.md#contracts-to-preserve) for navigation and Live Design.
@@ -44,6 +44,8 @@ rebuilding or replacing its backend, native archive, or UI:
 PASEO_WEB_DEST_DIR=/absolute/consumer/worktree/scripts/paseo-web npm run build:web -- --runner-only
 ```
 
+For a server packaging repair with current `packages/server/dist` artifacts and an existing consumer bundle, use `node scripts/bundle-paseo-web.mjs --server-only` with the same destination. This regenerates `server.mjs` and copies the upstream terminal-worker directory without rebuilding or replacing the UI; it does not compile changed TypeScript sources.
+
 The runner consumes `PASEO_WORKTREE_CLEANUP_TOKEN` before importing the daemon or
 launching extraction tools. It retains the capability only in daemon configuration,
 not in the environment inherited by providers, external commands, or terminals.
@@ -56,7 +58,7 @@ not in the environment inherited by providers, external commands, or terminals.
 - `plugin-process.js` — Bundled worker for isolated built-ins and installed plugins
 - `package.json` — Packaged daemon name/version and ESM metadata
 - `server.mjs` — Standalone bundled daemon
-- `terminal-worker-process.js` — PTY process worker
+- `terminal-worker/` — Upstream's self-contained `terminal-worker.mjs` and `shell-integration/`
 - `worker-process.js` — Local speech worker
 - `web-ui/` — Static web client bundle
 - `runtime-node-modules.tgz` — PTY and speech dependencies, TypeScript, esbuild, and the build host's esbuild binary
