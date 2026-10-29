@@ -9,7 +9,6 @@ export const builtinPlugins = [
   "codex-usage-source",
   "ais-switch-usage-source",
   "paseo-bots",
-  "worktree-include",
   "space-app-vibing-theme",
 ] as const;
 
