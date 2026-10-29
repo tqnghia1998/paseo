@@ -118,14 +118,10 @@ fs.cpSync(path.join(ROOT_DIR, "packages/server/dist/server/terminal-worker"), te
   recursive: true,
 });
 fs.rmSync(path.join(DEST_DIR, "terminal-worker-process.js"), { force: true });
-if (serverOnly) {
-  console.log("Updated standalone server and terminal worker in", DEST_DIR);
-  process.exit(0);
-}
-
-// Also bundle the isolated plugin worker that resolves relative to server.mjs.
+// Plugin runtime and compiler workers both resolve beside the flattened server.
 for (const [entry, output] of [
   ["packages/server/dist/server/server/plugins/plugin-process.js", "plugin-process.js"],
+  ["packages/server/dist/server/server/plugins/compiler-worker.js", "compiler-worker.js"],
 ]) {
   await esbuild.build({
     entryPoints: [entry],
@@ -153,6 +149,11 @@ const __dirname = __dirnameFn(__filename);
       "sherpa-onnx-node",
     ],
   });
+}
+
+if (serverOnly) {
+  console.log("Updated standalone server and its terminal/plugin workers in", DEST_DIR);
+  process.exit(0);
 }
 
 await esbuild.build({
