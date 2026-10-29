@@ -26,15 +26,19 @@ if (process.argv.includes("--runner-only")) {
   process.exit(0);
 }
 
-console.log("1. Building frontend web UI...");
-execSync("node scripts/build-daemon-web-ui.mjs", {
-  cwd: ROOT_DIR,
-  stdio: "inherit",
-  env: { ...process.env, EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS: "true" },
-});
+// Packaging-only repairs can reuse the already-compiled server without rebuilding the UI.
+const serverOnly = process.argv.includes("--server-only");
+if (!serverOnly) {
+  console.log("1. Building frontend web UI...");
+  execSync("node scripts/build-daemon-web-ui.mjs", {
+    cwd: ROOT_DIR,
+    stdio: "inherit",
+    env: { ...process.env, EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS: "true" },
+  });
 
-console.log("2. Building server TypeScript...");
-execSync("npm run build:server", { cwd: ROOT_DIR, stdio: "inherit" });
+  console.log("2. Building server TypeScript...");
+  execSync("npm run build:server", { cwd: ROOT_DIR, stdio: "inherit" });
+}
 
 console.log("3. Bundling server backend with esbuild...");
 fs.mkdirSync(DEST_DIR, { recursive: true });
@@ -69,6 +73,24 @@ await esbuild.build({
   target: "node20",
   format: "esm",
   outfile: path.join(DEST_DIR, "server.mjs"),
+  plugins: [
+    {
+      name: "standalone-terminal-worker-location",
+      setup(build) {
+        build.onLoad({ filter: /[/\\]terminal-worker-runtime\.js$/ }, ({ path: modulePath }) => {
+          const source = fs.readFileSync(modulePath, "utf8");
+          const original = 'new URL("../terminal-worker/", import.meta.url)';
+          if (!source.includes(original)) {
+            throw new Error("Terminal worker location changed; update standalone packaging");
+          }
+          return {
+            contents: source.replace(original, 'new URL("./terminal-worker/", import.meta.url)'),
+            loader: "js",
+          };
+        });
+      },
+    },
+  ],
   banner: {
     js: `
 import { createRequire as __createRequire } from 'node:module';
@@ -89,9 +111,20 @@ const __dirname = __dirnameFn(__filename);
   ],
 });
 
-// Also bundle the isolated workers that resolve relative to server.mjs.
+// The upstream worker is self-contained and is copied into each home's private runtime.
+const terminalWorkerDest = path.join(DEST_DIR, "terminal-worker");
+fs.rmSync(terminalWorkerDest, { recursive: true, force: true });
+fs.cpSync(path.join(ROOT_DIR, "packages/server/dist/server/terminal-worker"), terminalWorkerDest, {
+  recursive: true,
+});
+fs.rmSync(path.join(DEST_DIR, "terminal-worker-process.js"), { force: true });
+if (serverOnly) {
+  console.log("Updated standalone server and terminal worker in", DEST_DIR);
+  process.exit(0);
+}
+
+// Also bundle the isolated plugin worker that resolves relative to server.mjs.
 for (const [entry, output] of [
-  ["packages/server/dist/server/terminal/terminal-worker-process.js", "terminal-worker-process.js"],
   ["packages/server/dist/server/server/plugins/plugin-process.js", "plugin-process.js"],
 ]) {
   await esbuild.build({
