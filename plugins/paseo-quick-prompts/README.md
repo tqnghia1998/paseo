@@ -1,7 +1,7 @@
 # paseo-quick-prompts
 
-Bundled from [kingsleydon/paseo-plugins/plugins/quick-prompts](https://github.com/kingsleydon/paseo-plugins/tree/ae8d919cd32d4be0ec30a3f58548398d6479a69b/plugins/quick-prompts) at
-`ae8d919cd32d4be0ec30a3f58548398d6479a69b` (version 0.1.2, MIT).
+Bundled from [kingsleydon/paseo-plugins/plugins/quick-prompts](https://github.com/kingsleydon/paseo-plugins/tree/ceb91bef9d9a978d083cbc373bb192f98b794581/plugins/quick-prompts) at
+`ceb91bef9d9a978d083cbc373bb192f98b794581` (version 0.2.0, MIT).
 
 Regenerate with `node scripts/vendor-community-plugins.mjs paseo-quick-prompts` in the Paseo fork.
 Generated code uses the host SDK, React, React Native, React Query and Zod.
