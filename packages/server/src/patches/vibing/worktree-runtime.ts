@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import path from "node:path";
 import { isRealpathInsideRoot } from "../../utils/path.js";
 import type express from "express";
@@ -15,12 +15,21 @@ interface WorktreeServices {
   archiveWorkspace: (workspaceId: string, requestId: string) => Promise<unknown>;
 }
 
+async function isMissingPath(target: string): Promise<boolean> {
+  try {
+    await access(target);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 export async function pruneMissingWorktreeAgents(
   agentStorage: Pick<AgentStorage, "list" | "remove">,
 ): Promise<number> {
-  const missingAgentIds = (await agentStorage.list())
-    .filter((agent) => !existsSync(agent.cwd))
-    .map((agent) => agent.id);
+  const agents = await agentStorage.list();
+  const missing = await Promise.all(agents.map((agent) => isMissingPath(agent.cwd)));
+  const missingAgentIds = agents.filter((_, index) => missing[index]).map((agent) => agent.id);
   await Promise.all(missingAgentIds.map((agentId) => agentStorage.remove(agentId)));
   return missingAgentIds.length;
 }
@@ -28,10 +37,12 @@ export async function pruneMissingWorktreeAgents(
 export async function archiveMissingWorkspaces(
   workspaceRegistry: Pick<WorkspaceRegistry, "list" | "archive">,
 ): Promise<void> {
-  const missingWorkspaceIds = (await workspaceRegistry.list())
-    .filter(
-      (workspace) => !workspace.archivedAt && !existsSync(workspace.worktreeRoot ?? workspace.cwd),
-    )
+  const workspaces = (await workspaceRegistry.list()).filter((workspace) => !workspace.archivedAt);
+  const missing = await Promise.all(
+    workspaces.map((workspace) => isMissingPath(workspace.worktreeRoot ?? workspace.cwd)),
+  );
+  const missingWorkspaceIds = workspaces
+    .filter((_, index) => missing[index])
     .map((workspace) => workspace.workspaceId);
   await Promise.all(
     missingWorkspaceIds.map((workspaceId) =>

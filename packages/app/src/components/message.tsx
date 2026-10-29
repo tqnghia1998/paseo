@@ -394,27 +394,12 @@ function UserMessageImagePill({ image, onOpen, accessibilityLabel }: UserMessage
 
 const MESSAGE_TEXT_DATASET = { messageText: "true" };
 
-export const UserMessage = memo(function UserMessage({
-  sender,
-  serverId,
-  agentId,
-  messageId,
-  message,
-  images = [],
-  attachments = [],
-  renderFullContent = false,
-  timestamp,
-  capabilities,
-  client,
-  isFirstInGroup = true,
-  isLastInGroup = true,
-  isPending = false,
-  disableOuterSpacing,
-}: UserMessageProps) {
-  const isCompact = useIsCompactFormFactor();
+// Vibing: sent Live Design context opens read-only and expands inline for chat find.
+function useLiveDesignContextAttachments(
+  attachments: AgentAttachment[],
+  renderFullContent: boolean,
+) {
   const { t } = useTranslation();
-  const [isHovered, setIsHovered] = useState(false);
-  const [lightboxMetadata, setLightboxMetadata] = useState<UserMessageImageAttachment | null>(null);
   const [liveDesignContext, setLiveDesignContext] = useState<string | null>(null);
   const closeLiveDesignContext = useCallback(() => setLiveDesignContext(null), []);
   const getLiveDesignContext = useCallback(() => liveDesignContext ?? "", [liveDesignContext]);
@@ -439,15 +424,6 @@ export const UserMessage = memo(function UserMessage({
       ),
     [attachments],
   );
-  const handleLightboxClose = useCallback(() => setLightboxMetadata(null), []);
-  const lightboxSource = useMemo<ImageLightboxSource | null>(
-    () => (lightboxMetadata ? { type: "attachment", metadata: lightboxMetadata } : null),
-    [lightboxMetadata],
-  );
-  const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
-  const hasText = message.trim().length > 0;
-  const hasImages = images.length > 0;
-  const hasAttachments = attachments.length > 0;
   const expandedContext = useMemo(
     () =>
       renderFullContent
@@ -461,6 +437,62 @@ export const UserMessage = memo(function UserMessage({
         : "",
     [attachments, renderFullContent],
   );
+  return {
+    attachmentOpenHandlers,
+    expandedLiveDesignContext: expandedContext ? (
+      <Text selectable style={liveDesignContextStyles.text} dataSet={MESSAGE_TEXT_DATASET}>
+        {expandedContext}
+      </Text>
+    ) : null,
+    liveDesignContextViewer:
+      liveDesignContext !== null ? (
+        <AdaptiveModalSheet
+          visible
+          onClose={closeLiveDesignContext}
+          desktopMaxWidth={800}
+          testID="live-design-context-viewer"
+          header={liveDesignHeader}
+        >
+          <Text selectable style={liveDesignContextStyles.text}>
+            {liveDesignContext}
+          </Text>
+        </AdaptiveModalSheet>
+      ) : null,
+  };
+}
+
+export const UserMessage = memo(function UserMessage({
+  sender,
+  serverId,
+  agentId,
+  messageId,
+  message,
+  images = [],
+  attachments = [],
+  renderFullContent = false,
+  timestamp,
+  capabilities,
+  client,
+  isFirstInGroup = true,
+  isLastInGroup = true,
+  isPending = false,
+  disableOuterSpacing,
+}: UserMessageProps) {
+  const isCompact = useIsCompactFormFactor();
+  const { t } = useTranslation();
+  const [isHovered, setIsHovered] = useState(false);
+  const [lightboxMetadata, setLightboxMetadata] = useState<UserMessageImageAttachment | null>(null);
+  const { attachmentOpenHandlers, expandedLiveDesignContext, liveDesignContextViewer } =
+    useLiveDesignContextAttachments(attachments, renderFullContent);
+  const handleLightboxClose = useCallback(() => setLightboxMetadata(null), []);
+  const lightboxSource = useMemo<ImageLightboxSource | null>(
+    () => (lightboxMetadata ? { type: "attachment", metadata: lightboxMetadata } : null),
+    [lightboxMetadata],
+  );
+  const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
+  const hasText = message.trim().length > 0;
+  const hasImages = images.length > 0;
+  const hasAttachments = attachments.length > 0;
   const showTrailingRow = !isPending && hasText && (isCompact || isNative || isHovered);
   const formattedTimestamp = useMemo(
     () => formatMessageTimestamp(new Date(timestamp)),
@@ -561,11 +593,7 @@ export const UserMessage = memo(function UserMessage({
               </Text>
             ) : null}
           </MessagePreview>
-          {expandedContext ? (
-            <Text selectable style={liveDesignContextStyles.text} dataSet={MESSAGE_TEXT_DATASET}>
-              {expandedContext}
-            </Text>
-          ) : null}
+          {expandedLiveDesignContext}
         </View>
         {hasText ? (
           <View
@@ -593,19 +621,7 @@ export const UserMessage = memo(function UserMessage({
         ) : null}
       </View>
       <AttachmentLightbox source={lightboxSource} onClose={handleLightboxClose} />
-      {liveDesignContext !== null ? (
-        <AdaptiveModalSheet
-          visible
-          onClose={closeLiveDesignContext}
-          desktopMaxWidth={800}
-          testID="live-design-context-viewer"
-          header={liveDesignHeader}
-        >
-          <Text selectable style={liveDesignContextStyles.text}>
-            {liveDesignContext}
-          </Text>
-        </AdaptiveModalSheet>
-      ) : null}
+      {liveDesignContextViewer}
     </View>
   );
 });
