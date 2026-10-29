@@ -39,6 +39,10 @@ import { openFileInHost } from "./host-file-open";
 import { BotUsageCard } from "./bot-usage-card";
 import type { NativeBotChatProps } from "./bot-chat-types";
 import { botChatDraftId } from "./bot-chat-scope";
+import { SheetPaneHostProvider, type SheetPaneHost } from "@/screens/workspace/sheet-pane/host";
+import { buildWorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 
 const spinnerColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
@@ -66,6 +70,33 @@ export function NativeBotChat(props: NativeBotChatProps) {
     <QueryClientProvider client={queryClient}>
       <NativeBotChatContent {...props} />
     </QueryClientProvider>
+  );
+}
+
+function BotChatPaneEnvironment({
+  pane,
+  active,
+  panelOpen,
+  children,
+}: {
+  pane: PaneContextValue;
+  active: boolean;
+  panelOpen: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <DiffDocumentWorkspaceCacheProvider>
+      <PaneProvider value={pane}>
+        <PaneFocusProvider
+          value={createPaneFocusContextValue({
+            isWorkspaceFocused: active,
+            isPaneFocused: active && !panelOpen,
+          })}
+        >
+          {children}
+        </PaneFocusProvider>
+      </PaneProvider>
+    </DiffDocumentWorkspaceCacheProvider>
   );
 }
 
@@ -197,6 +228,32 @@ function NativeBotChatContent(props: NativeBotChatProps) {
     setEntryState,
     workspaceId,
   ]);
+  const sheetPaneHost = useMemo<SheetPaneHost | null>(() => {
+    const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+    if (!workspaceKey) return null;
+    return {
+      workspaceKey,
+      serverId,
+      workspaceId,
+      isWorkspaceFocused: active,
+      buildContent: (tab, closeCurrentTab) =>
+        buildWorkspacePaneContentModel({
+          tab,
+          normalizedServerId: serverId,
+          normalizedWorkspaceId: workspaceId,
+          host: "sheet",
+          onOpenTab: pane.openTab,
+          onOpenPreferredTarget: pane.openPreferredTarget,
+          onOpenTargetToSide: pane.openTargetToSide,
+          onCloseCurrentTab: closeCurrentTab,
+          onRetargetCurrentTab: pane.openTab,
+          onSetCurrentTabState: (state) =>
+            useWorkspaceLayoutStore.getState().setTabState(workspaceKey, tab.tabId, state),
+          onOpenWorkspaceFile: pane.openFileInWorkspace,
+          onOpenImportSheet: pane.openImportSheet,
+        }),
+    };
+  }, [active, pane, serverId, workspaceId]);
   const openForkDraft = useCallback(
     (draftId: string) => {
       pane.openTab({ kind: "draft", draftId });
@@ -213,16 +270,23 @@ function NativeBotChatContent(props: NativeBotChatProps) {
     [pane],
   );
   const content = (
-    <BotChatPanelLayer
-      panes={panelPanes}
-      active={active}
-      onBack={closePanel}
-      testID="bots-native-chat"
+    <BotChatForkProvider
+      openDraft={openForkDraft}
+      draftIdPrefix={botChatDraftId(botId, workspaceId)}
     >
-      {!agentId && <NativeBotChatDraft {...props} active={active && !panel} />}
-      {agentId && workspaceId && <AgentConversationPanel />}
-      {agentId && !workspaceId && <ThemedLoadingSpinner uniProps={spinnerColor} />}
-    </BotChatPanelLayer>
+      <SheetPaneHostProvider value={sheetPaneHost}>
+        <BotChatPanelLayer
+          panes={panelPanes}
+          active={active}
+          onBack={closePanel}
+          testID="bots-native-chat"
+        >
+          {!agentId && <NativeBotChatDraft {...props} active={active && !panel} />}
+          {agentId && workspaceId && <AgentConversationPanel />}
+          {agentId && !workspaceId && <ThemedLoadingSpinner uniProps={spinnerColor} />}
+        </BotChatPanelLayer>
+      </SheetPaneHostProvider>
+    </BotChatForkProvider>
   );
   return (
     <AssistantFileLinkResolverProvider
@@ -233,23 +297,9 @@ function NativeBotChatContent(props: NativeBotChatProps) {
     >
       <RetainedPanelActivity active={active}>
         <WorkspaceFocusProvider workspaceKey={null}>
-          <DiffDocumentWorkspaceCacheProvider>
-            <PaneProvider value={pane}>
-              <PaneFocusProvider
-                value={createPaneFocusContextValue({
-                  isWorkspaceFocused: active,
-                  isPaneFocused: active && !panel,
-                })}
-              >
-                <BotChatForkProvider
-                  openDraft={openForkDraft}
-                  draftIdPrefix={botChatDraftId(botId, workspaceId)}
-                >
-                  {content}
-                </BotChatForkProvider>
-              </PaneFocusProvider>
-            </PaneProvider>
-          </DiffDocumentWorkspaceCacheProvider>
+          <BotChatPaneEnvironment pane={pane} active={active} panelOpen={!!panel}>
+            {content}
+          </BotChatPaneEnvironment>
         </WorkspaceFocusProvider>
       </RetainedPanelActivity>
     </AssistantFileLinkResolverProvider>
