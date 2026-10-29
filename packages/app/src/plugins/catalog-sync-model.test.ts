@@ -158,6 +158,8 @@ function harness() {
         subscribe: () => {
           throw new Error("Subscriptions are not used here");
         },
+        insertComposerText: () => {},
+        observeComposerDrafts: () => () => {},
       };
     },
   });
