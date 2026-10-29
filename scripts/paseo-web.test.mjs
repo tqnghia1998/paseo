@@ -133,6 +133,8 @@ test("server-only packaging relocates the upstream terminal worker without repla
       /new URL\("\.\/terminal-worker\/", import\.meta\.url\)/,
     );
     assert.ok(existsSync(path.join(directory, "terminal-worker", "terminal-worker.mjs")));
+    assert.ok(existsSync(path.join(directory, "plugin-process.js")));
+    assert.ok(existsSync(path.join(directory, "compiler-worker.js")));
     assert.ok(
       existsSync(path.join(directory, "terminal-worker", "shell-integration", "zsh", ".zshenv")),
     );

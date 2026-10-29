@@ -44,7 +44,7 @@ rebuilding or replacing its backend, native archive, or UI:
 PASEO_WEB_DEST_DIR=/absolute/consumer/worktree/scripts/paseo-web npm run build:web -- --runner-only
 ```
 
-For a server packaging repair with current `packages/server/dist` artifacts and an existing consumer bundle, use `node scripts/bundle-paseo-web.mjs --server-only` with the same destination. This regenerates `server.mjs` and copies the upstream terminal-worker directory without rebuilding or replacing the UI; it does not compile changed TypeScript sources.
+For a server packaging repair with current `packages/server/dist` artifacts and an existing consumer bundle, use `node scripts/bundle-paseo-web.mjs --server-only` with the same destination. This regenerates `server.mjs`, the plugin runtime/compiler workers, and the upstream terminal-worker directory without rebuilding or replacing the UI; it does not compile changed TypeScript sources.
 
 The runner consumes `PASEO_WORKTREE_CLEANUP_TOKEN` before importing the daemon or
 launching extraction tools. It retains the capability only in daemon configuration,
@@ -56,6 +56,7 @@ not in the environment inherited by providers, external commands, or terminals.
 - `paseo-web-plugins.mjs` — One-time ordinary directory installation of each community addon in `communityPluginIds`
 - `community-plugins/` — Prebundled offline addon sources (Beautiful Chat, Annotations, PDF and Office viewer, Shell Yeah, Recap, Quick prompts, Generative UI), each copied into a runtime home the first time a bundle containing it starts there
 - `plugin-process.js` — Bundled worker for isolated built-ins and installed plugins
+- `compiler-worker.js` — Plugin compilation isolate used by daemon and plugin workers
 - `package.json` — Packaged daemon name/version and ESM metadata
 - `server.mjs` — Standalone bundled daemon
 - `terminal-worker/` — Upstream's self-contained `terminal-worker.mjs` and `shell-integration/`
