@@ -117,6 +117,32 @@ test("runner-only bundling preserves existing backend and UI artifacts", () => {
   }
 });
 
+test("server-only packaging relocates the upstream terminal worker without replacing the UI", () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "paseo-server-package-"));
+  try {
+    writeFileSync(path.join(directory, "server.mjs"), "old backend");
+    writeFileSync(path.join(directory, "terminal-worker-process.js"), "obsolete worker");
+    writeFileSync(path.join(directory, "ui-canary"), "existing UI");
+    execFileSync(process.execPath, ["scripts/bundle-paseo-web.mjs", "--server-only"], {
+      cwd: path.join(import.meta.dirname, ".."),
+      env: { ...process.env, PASEO_WEB_DEST_DIR: directory },
+      timeout: 30_000,
+    });
+    assert.match(
+      readFileSync(path.join(directory, "server.mjs"), "utf8"),
+      /new URL\("\.\/terminal-worker\/", import\.meta\.url\)/,
+    );
+    assert.ok(existsSync(path.join(directory, "terminal-worker", "terminal-worker.mjs")));
+    assert.ok(
+      existsSync(path.join(directory, "terminal-worker", "shell-integration", "zsh", ".zshenv")),
+    );
+    assert.ok(!existsSync(path.join(directory, "terminal-worker-process.js")));
+    assert.equal(readFileSync(path.join(directory, "ui-canary"), "utf8"), "existing UI");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("community plugins install once as ordinary directory sources and respect removal and disablement", async () => {
   const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
   const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
