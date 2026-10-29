@@ -101,6 +101,13 @@
               "executable-resolution/executable-resolution.ts": ["existsSync"],
               // TODO: winget enumeration shares synchronous existence predicates with literal lookup; convert the executable-resolution boundary together.
               "executable-resolution/windows.ts": ["readdirSync"],
+              // Vibing: a finished background shell's output tail is read by the same synchronous event mapper as workflow output.
+              "patches/vibing/claude/background-shells.ts": [
+                "closeSync",
+                "fstatSync",
+                "openSync",
+                "readSync"
+              ],
               // TODO: live file-change classification is a synchronous event mapper; move the probe to async event ingestion.
               "server/agent/providers/claude/agent.ts": ["existsSync"],
               // TODO: new-session construction still resolves its project directory synchronously; move preparation before construction.

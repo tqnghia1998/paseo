@@ -1900,6 +1900,7 @@ describe("Codex app-server provider", () => {
         processId: "4242",
         text: "s\ny\nn\ny\nd\n",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       const completed = waitForTimelineToolCall(session, "interactive-shell");
       appServer.completesCommand({
         threadId: "thread-1",
@@ -2058,6 +2059,7 @@ describe("Codex app-server provider", () => {
           },
         });
       }
+      await new Promise<void>((resolve) => setImmediate(resolve));
       const completed = waitForTimelineToolCall(session, "interactive-shell");
       appServer.completesCommand({
         threadId: "thread-1",
@@ -2196,6 +2198,7 @@ describe("Codex app-server provider", () => {
         command: "git add -p",
         output: "Process running with session id 4242",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       const inputUpdate = waitForTimelineToolCall(session, "interactive-shell");
       appServer.typesIntoTerminal({
         threadId: "thread-1",
@@ -8157,20 +8160,20 @@ describe("Codex background terminals", () => {
     return events.flatMap((event) => (event.type === "provider_subagent" ? [event.event] : []));
   }
 
-  test("declares a command still running at turn completion and finishes it later", () => {
+  test("declares a command still running at turn completion and finishes it later", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
     const internals = asInternals(session);
 
-    internals.handleNotification("item/started", {
+    await internals.handleNotification("item/started", {
       threadId: "test-thread",
       turnId: "turn-1",
       item: commandItem("inProgress", null),
     });
     expect(providerEvents(events)).toEqual([]);
 
-    internals.handleNotification("turn/completed", {
+    await internals.handleNotification("turn/completed", {
       threadId: "test-thread",
       turn: { id: "turn-1", status: "completed" },
     });
@@ -8194,7 +8197,7 @@ describe("Codex background terminals", () => {
     ]);
 
     events.length = 0;
-    internals.handleNotification("item/completed", {
+    await internals.handleNotification("item/completed", {
       threadId: "test-thread",
       turnId: "turn-1",
       item: commandItem("completed", "PROBE_DONE\n"),
@@ -8224,23 +8227,23 @@ describe("Codex background terminals", () => {
     ]);
   });
 
-  test("ignores commands the turn waited for", () => {
+  test("ignores commands the turn waited for", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
     const internals = asInternals(session);
 
-    internals.handleNotification("item/started", {
+    await internals.handleNotification("item/started", {
       threadId: "test-thread",
       turnId: "turn-1",
       item: commandItem("inProgress", null),
     });
-    internals.handleNotification("item/completed", {
+    await internals.handleNotification("item/completed", {
       threadId: "test-thread",
       turnId: "turn-1",
       item: commandItem("completed", "PROBE_DONE\n"),
     });
-    internals.handleNotification("turn/completed", {
+    await internals.handleNotification("turn/completed", {
       threadId: "test-thread",
       turn: { id: "turn-1", status: "completed" },
     });
@@ -8248,18 +8251,18 @@ describe("Codex background terminals", () => {
     expect(providerEvents(events)).toEqual([]);
   });
 
-  test("does not declare commands from an interrupted turn", () => {
+  test("does not declare commands from an interrupted turn", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
     const internals = asInternals(session);
 
-    internals.handleNotification("item/started", {
+    await internals.handleNotification("item/started", {
       threadId: "test-thread",
       turnId: "turn-1",
       item: commandItem("inProgress", null),
     });
-    internals.handleNotification("turn/completed", {
+    await internals.handleNotification("turn/completed", {
       threadId: "test-thread",
       turn: { id: "turn-1", status: "interrupted" },
     });
@@ -8267,22 +8270,22 @@ describe("Codex background terminals", () => {
     expect(providerEvents(events)).toEqual([]);
   });
 
-  test("files the late completion under the turn that started the command", () => {
+  test("files the late completion under the turn that started the command", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
     const internals = asInternals(session);
 
-    internals.handleNotification("item/started", {
+    await internals.handleNotification("item/started", {
       threadId: "test-thread",
       turnId: "turn-1",
       item: commandItem("inProgress", null),
     });
-    internals.handleNotification("turn/completed", {
+    await internals.handleNotification("turn/completed", {
       threadId: "test-thread",
       turn: { id: "turn-1", status: "completed" },
     });
-    internals.handleNotification("item/completed", {
+    await internals.handleNotification("item/completed", {
       threadId: "test-thread",
       turnId: "turn-1",
       item: commandItem("completed", "PROBE_DONE\n"),

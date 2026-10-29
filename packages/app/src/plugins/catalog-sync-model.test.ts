@@ -153,6 +153,8 @@ function harness() {
         openPanel() {},
         addComposerPill: () => ({ update() {}, remove() {} }),
         addHeaderButton: () => ({ update() {}, remove() {} }),
+        insertComposerText: () => {},
+        observeComposerDrafts: () => () => {},
       };
     },
   });

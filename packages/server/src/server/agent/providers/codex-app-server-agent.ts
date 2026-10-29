@@ -5427,7 +5427,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       const turnId = this.terminalInteractions.turnId(item.callId);
       event = { ...event, item, ...(turnId ? { turnId } : {}) };
       this.notifySubscribers(event);
-      if (!this.loadingPersistedHistory) {
+      if (!this.historySubagentEvents) {
         for (const shellEvent of this.backgroundTerminals.observe(item)) {
           this.notifySubscribers(shellEvent);
         }
