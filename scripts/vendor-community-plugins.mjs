@@ -25,7 +25,7 @@ const plugins = [
   {
     id: "paseo-doc-viewer",
     repository: "nkwib/paseo-doc-viewer",
-    revision: "d7434f85b556e949d491bf5574a55bd935b4f55f",
+    revision: "163b524b649d163dd493f702e3dc3b584389b2f5",
     bundleDependencies: true,
     assets: ["NOTICE"],
   },
@@ -39,21 +39,21 @@ const plugins = [
     id: "paseo-recap",
     repository: "kingsleydon/paseo-plugins",
     directory: "plugins/recap",
-    revision: "7c139a6532691e8598601c9bb401f536993fff6a",
+    revision: "ae8d919cd32d4be0ec30a3f58548398d6479a69b",
     patch: "paseo-recap-vibing.patch",
   },
   {
     id: "paseo-quick-prompts",
     repository: "kingsleydon/paseo-plugins",
     directory: "plugins/quick-prompts",
-    revision: "ae8d919cd32d4be0ec30a3f58548398d6479a69b",
+    revision: "ceb91bef9d9a978d083cbc373bb192f98b794581",
     patch: "paseo-quick-prompts-vibing.patch",
   },
   {
     id: "genui",
     repository: "anh-chu/paseo-plugin-genui",
     patch: "genui-vibing.patch",
-    revision: "e08bd3b9255c57ad39447ff6ab8725e9ca5a7499",
+    revision: "f2ebfcf2147b36b676b778794b5b29e2f72e179f",
   },
 ];
 
