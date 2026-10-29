@@ -7,6 +7,8 @@ import type { NativeBotChatProps } from "./bot-chat-types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/data/query-client";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
+import { useSheetPaneHost } from "@/screens/workspace/sheet-pane/host";
+import { buildWorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";
 import {
   buildDraftWorkspaceAttachmentScopeKey,
   useWorkspaceAttachmentsStore,
@@ -17,6 +19,7 @@ const fake = vi.hoisted(() => ({
   prepare: vi.fn().mockResolvedValue(undefined),
   focused: true,
   cache: null as unknown,
+  sheetHost: null as ReturnType<typeof useSheetPaneHost> | null,
   fork: undefined as (() => Promise<void>) | undefined,
   buildForkContext: vi.fn().mockResolvedValue({
     attachment: {
@@ -31,6 +34,10 @@ const fake = vi.hoisted(() => ({
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
 });
+vi.mock(
+  "expo-router/react-navigation",
+  async () => await vi.importActual("expo-router/build/react-navigation/core"),
+);
 vi.mock("@react-navigation/native", async () => ({
   ...(await vi.importActual("@react-navigation/core")),
 }));
@@ -39,6 +46,15 @@ vi.mock("expo-router", async () => ({
   ...(await vi.importActual("expo-router/build/react-navigation/core/useIsFocused")),
 }));
 vi.mock("./bot-usage-card", () => ({ BotUsageCard: () => null }));
+vi.mock("@/composer/editing-session", () => ({
+  useComposerEditingEnvironmentBridge: () => (node: ReactNode) => node,
+}));
+vi.mock("@/screens/workspace/workspace-pane-content", () => ({
+  buildWorkspacePaneContentModel: vi.fn(),
+}));
+vi.mock("@/stores/workspace-layout-store", () => ({
+  useWorkspaceLayoutStore: { getState: () => ({ setTabState: vi.fn() }) },
+}));
 // Subagent panels register every workspace panel; these tests only open the chat itself.
 vi.mock("@/panels/register-panels", () => ({ ensurePanelsRegistered: () => {} }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -54,6 +70,7 @@ vi.mock("@/panels/agent-panel", async () => {
   return {
     AgentConversationPanel: () => {
       fake.cache = useQueryClient();
+      fake.sheetHost = useSheetPaneHost();
       const fork = useForkAgent({ serverId: "host" });
       fake.fork = () =>
         fork({
@@ -159,6 +176,33 @@ it("hands a newly created bot chat to the native panel and releases visibility w
   expect(fake.visible).toHaveBeenLastCalledWith(expect.any(String), []);
   view.unmount();
   expect(fake.visible).toHaveBeenLastCalledWith(expect.any(String), []);
+});
+
+it("provides the workspace sheet host required by existing chats and subagent tracks", () => {
+  render(<NativeBotChat {...props} agentId="chat" />);
+  expect(fake.sheetHost).toMatchObject({
+    serverId: "host",
+    workspaceId: "workspace",
+    isWorkspaceFocused: true,
+    buildContent: expect.any(Function),
+  });
+  const close = vi.fn();
+  const tab = {
+    key: "child",
+    tabId: "child",
+    kind: "agent" as const,
+    target: { kind: "agent" as const, agentId: "child" },
+  };
+  fake.sheetHost!.buildContent(tab, close);
+  expect(buildWorkspacePaneContentModel).toHaveBeenCalledWith(
+    expect.objectContaining({
+      tab,
+      host: "sheet",
+      normalizedServerId: "host",
+      normalizedWorkspaceId: "workspace",
+      onCloseCurrentTab: close,
+    }),
+  );
 });
 
 it("only supplies the native chat and sidebar usage slots to Bots", () => {
