@@ -18,6 +18,19 @@ const fake = vi.hoisted(() => ({
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
 });
+vi.mock(
+  "expo-router/react-navigation",
+  async () => await vi.importActual("expo-router/build/react-navigation/core"),
+);
+vi.mock("@/composer/editing-session", () => ({
+  useComposerEditingEnvironmentBridge: () => (node: ReactNode) => node,
+}));
+vi.mock("@/screens/workspace/workspace-pane-content", () => ({
+  buildWorkspacePaneContentModel: vi.fn(),
+}));
+vi.mock("@/stores/workspace-layout-store", () => ({
+  useWorkspaceLayoutStore: { getState: () => ({ setTabState: vi.fn() }) },
+}));
 vi.mock("@react-navigation/native", async () => ({
   ...(await vi.importActual("@react-navigation/core")),
 }));
