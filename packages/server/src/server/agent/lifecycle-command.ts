@@ -84,7 +84,10 @@ async function requestAgentRunCancellation(
     "cancelAgentRunCommand: interrupting",
   );
   const startedAt = Date.now();
-  const cancellation = await agentManager.cancelAgentRun(agentId, options);
+  // Vibing: Stop intent is optional, so plain cancellations keep upstream's call shape.
+  const cancellation = await (options
+    ? agentManager.cancelAgentRun(agentId, options)
+    : agentManager.cancelAgentRun(agentId));
   logger.debug(
     { agentId, cancellation: cancellation.status, durationMs: Date.now() - startedAt },
     "cancelAgentRunCommand: cancelAgentRun completed",
