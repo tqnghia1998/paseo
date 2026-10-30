@@ -3,6 +3,9 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import {
   copyFileSync,
+  cpSync,
+  readdirSync,
+  renameSync,
   lstatSync,
   statSync,
   symlinkSync,
@@ -371,3 +374,129 @@ for (const kind of ["bom", "permissions", "symlink"]) {
     },
   );
 }
+
+function writeBundle(sourceRoot, id, code) {
+  const directory = path.join(sourceRoot, id);
+  mkdirSync(path.join(directory, "client"), { recursive: true });
+  writeFileSync(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id }));
+  writeFileSync(
+    path.join(directory, "README.md"),
+    `# ${id}\n\nRegenerate with \`node scripts/vendor-community-plugins.mjs ${id}\` in the Paseo fork.\n`,
+  );
+  writeFileSync(path.join(directory, "client", `${id}.gen.ts`), code);
+}
+
+function installedCode(home, id) {
+  return readFileSync(path.join(home, "installed-plugins", id, "client", `${id}.gen.ts`), "utf8");
+}
+
+test("Vibing-installed community plugins follow the bundle, keeping their state", async () => {
+  const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+  try {
+    const { home, sourceRoot, configPath } = communityHome(root, []);
+    writeBundle(sourceRoot, "genui", "v1");
+    writeBundle(sourceRoot, "annotations", "v1");
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    const config = JSON.parse(readFileSync(configPath, "utf8"));
+    config.plugins.genui.enabled = false;
+    writeFileSync(configPath, JSON.stringify(config));
+
+    writeBundle(sourceRoot, "genui", "v2");
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    assert.equal(installedCode(home, "genui"), "v2");
+    assert.equal(installedCode(home, "annotations"), "v1");
+    assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), config);
+    assert.deepEqual(readdirSync(path.join(home, "installed-plugins")).sort(), [
+      "annotations",
+      "genui",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("community plugins that were edited, removed or installed elsewhere are not updated", async () => {
+  const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+  try {
+    const { home, sourceRoot, configPath } = communityHome(root, []);
+    for (const id of ["genui", "annotations", "shell-yeah"]) writeBundle(sourceRoot, id, "v1");
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    const genui = path.join(home, "installed-plugins", "genui", "client", "genui.gen.ts");
+    writeFileSync(genui, "edited");
+    const config = JSON.parse(readFileSync(configPath, "utf8"));
+    delete config.plugins.annotations;
+    config.plugins["shell-yeah"].path = path.join(root, "elsewhere");
+    writeFileSync(configPath, JSON.stringify(config));
+
+    for (const id of ["genui", "annotations", "shell-yeah"]) writeBundle(sourceRoot, id, "v2");
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    assert.equal(readFileSync(genui, "utf8"), "edited");
+    assert.equal(installedCode(home, "annotations"), "v1");
+    assert.equal(installedCode(home, "shell-yeah"), "v1");
+    assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), config);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("copies installed before fingerprints update once; clones are left alone", async () => {
+  const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+  try {
+    const { home, sourceRoot, configPath } = communityHome(root, []);
+    writeBundle(sourceRoot, "genui", "old");
+    writeBundle(sourceRoot, "paseo-chat-polish", "old");
+    const installed = path.join(home, "installed-plugins");
+    mkdirSync(installed);
+    for (const id of ["genui", "paseo-chat-polish"]) {
+      cpSync(path.join(sourceRoot, id), path.join(installed, id), { recursive: true });
+    }
+    mkdirSync(path.join(installed, "paseo-chat-polish", ".git"));
+    const plugins = Object.fromEntries(
+      ["genui", "paseo-chat-polish"].map((id) => [
+        id,
+        { source: "directory", path: path.join(installed, id), enabled: true },
+      ]),
+    );
+    writeFileSync(configPath, JSON.stringify({ version: 1, plugins }));
+    writeFileSync(
+      path.join(home, ".vibing-community-plugins.json"),
+      JSON.stringify(["genui", "paseo-chat-polish"]),
+    );
+
+    writeBundle(sourceRoot, "genui", "new");
+    writeBundle(sourceRoot, "paseo-chat-polish", "new");
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    assert.equal(installedCode(home, "genui"), "new");
+    assert.equal(installedCode(home, "paseo-chat-polish"), "old");
+
+    // Now fingerprinted, a later edit protects it like any other copy.
+    writeFileSync(path.join(installed, "genui", "client", "genui.gen.ts"), "edited");
+    writeBundle(sourceRoot, "genui", "newer");
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    assert.equal(installedCode(home, "genui"), "edited");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an update interrupted mid-swap restores the previous copy", async () => {
+  const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+  try {
+    const { home, sourceRoot } = communityHome(root, []);
+    writeBundle(sourceRoot, "genui", "v1");
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    const directory = path.join(home, "installed-plugins", "genui");
+    // A crash between moving the old copy aside and moving the new one in.
+    renameSync(directory, `${directory}.vibing-previous`);
+    mkdirSync(`${directory}.vibing-update`);
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    assert.equal(installedCode(home, "genui"), "v1");
+    assert.deepEqual(readdirSync(path.join(home, "installed-plugins")), ["genui"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

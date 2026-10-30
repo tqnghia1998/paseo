@@ -5,6 +5,8 @@ lives in ordinary source modules under `packages/app/src/patches/vibing/` and
 `packages/server/src/patches/vibing/`. Upstream files call those modules explicitly.
 Tests sit beside the patch they cover; integration tests stay with the upstream
 surface they exercise.
+Shipped plugins, their pins, what the fork changes in each and how to upgrade them are in
+[vibing-plugins.md](./vibing-plugins.md).
 
 Keep each patch tied to one product requirement. Prefer an upstream setting or
 extension point when it preserves the same behavior. Keep rendering and provider
@@ -60,7 +62,9 @@ the owning home's `installed-plugins/` and adds an ordinary directory entry to
 `config.json` once through native config read/save APIs, preserving BOM support, symlinks and private file permissions. The
 home's `.vibing-community-plugins.json` marker records each addon already offered, so
 later launches never reinstall removed plugins or reset disabled ones, while newly
-bundled addons still reach existing homes. Homes with the legacy
+bundled addons still reach existing homes. Untouched installed copies follow the bundle: each
+records its bundle fingerprint, and a start replaces it when the bundle changed (see
+[vibing-plugins.md](./vibing-plugins.md#what-ships)). Homes with the legacy
 `.vibing-community-plugins-v1` marker count Beautiful Chat and Annotations as offered.
 Chat Polish replaced Beautiful Chat, which is removed from the fork. On its next start, a home
 whose Beautiful Chat entry points at the copy Vibing installed drops that entry and folder and
