@@ -1,0 +1,119 @@
+diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
+index a186d56..3976ff4 100644
+--- a/client/web/restyle-css.ts
++++ b/client/web/restyle-css.ts
+@@ -82,10 +82,11 @@ ${LOADERS}
+ [data-cp-part="queued"] > div:last-child > * * { background-color: transparent !important; }
+ [data-cp-part="queued"] > div:last-child > *:hover { background-color: var(--cp-control) !important; }
+ [data-cp-part="queued"] > div:last-child svg { width: 14px !important; height: 14px !important; }
+-/* The icons carry their stroke as an attribute (dark, for Paseo's filled buttons); CSS stroke overrides it. */
++/* The icons carry their stroke as an attribute (dark, for Paseo's filled buttons); CSS stroke overrides it.
++   :is(*) preserves the action slot when guardRules removes positional selectors from its prefilter. */
+ [data-cp-part="queued"] > div:last-child :is(svg, svg *) { stroke: var(--cp-muted) !important; }
+-[data-cp-part="queued"] > div:last-child > :last-child :is(svg, svg *) { stroke: var(--cp-accent) !important; }
+-[data-cp-part="queued"] > div:last-child > :last-child:is(:disabled, [aria-disabled="true"]) :is(svg, svg *) { stroke: var(--cp-muted) !important; }
++[data-cp-part="queued"] > div:last-child > :is(*):last-child :is(svg, svg *) { stroke: var(--cp-accent) !important; }
++[data-cp-part="queued"] > div:last-child > :is(*):last-child:is(:disabled, [aria-disabled="true"]) :is(svg, svg *) { stroke: var(--cp-muted) !important; }
+ [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]) { opacity: 0.45 !important; }
+ [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]):hover { background-color: transparent !important; }
+ 
+@@ -233,7 +234,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
+ ${PLAN} > div:last-child { padding: 10px 16px 12px !important; border-top: 1px solid var(--cp-rule) !important; }
+ 
+ [data-testid^="chat-outline-tick-"][aria-selected="true"] > div { background-color: var(--cp-accent) !important; }
+-[data-testid="chat-outline-preview"] { background-color: var(--cp-raised) !important; border-radius: 12px !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
++[data-testid="chat-outline-preview"] { background-color: var(--cp-raised, var(--colors-surface2)) !important; border-radius: 12px !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
+ [data-cp-part="outline-preview"] * { font-size: 13px !important; }
+ /* Between ticks, a copy of the last preview glides to the hovered tick until Paseo's next one takes over (ghostOutlinePreview). */
+ [data-testid="chat-outline-preview"][data-cp-ghost] { pointer-events: none; animation: none !important; transition: transform 100ms cubic-bezier(0.33, 1, 0.68, 1), opacity 100ms ease-out !important; }
+@@ -282,13 +283,27 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
+ ${USAGE} > div:nth-child(4) { margin-top: -6px !important; }
+ `;
+ 
++// Host defaults also cover embedded clients without the sidebar that calls setNativeColors.
+ export const NATIVE_CSS = `
++:root {
++  --cp-fg: var(--colors-foreground);
++  --cp-muted: var(--colors-foreground-muted);
++  --cp-accent: var(--colors-accent);
++  --cp-raised: var(--colors-surface1);
++  --cp-control: var(--colors-surface2);
++  --cp-accent-fg: var(--colors-accent-foreground);
++  --cp-sunken: color-mix(in srgb, var(--colors-surface0) 86%, #000);
++  --cp-rule: color-mix(in srgb, var(--colors-border) 60%, transparent);
++  --cp-ok: var(--colors-status-success);
++  --cp-warn: var(--colors-status-warning);
++}
+ /* Settings pages (tagged by tagSettings): surfaces 12, controls 8, and one text field, 32px in a sunken well that lights up on focus.
+    Settings has its own sidebar, so a reload there can come before the --cp-* colors are set: Paseo's own colors stand in. */
+ [data-cp-set="card"] { border-radius: 12px !important; }
+ [data-cp-set="control"] { height: 32px !important; min-height: 32px !important; padding-top: 0 !important; padding-bottom: 0 !important; border-radius: 8px !important; }
+ :is([data-cp-set="field"], [data-cp-set="area"]) { border: 1px solid var(--colors-border) !important; border-radius: 8px !important; background-color: var(--cp-sunken, color-mix(in srgb, var(--colors-surface0), #000 15%)) !important; transition: border-color 120ms ease-out, box-shadow 120ms ease-out; }
+-[data-cp-set="field"] { height: 32px !important; min-height: 32px !important; padding: 0 10px !important; }
++/* A wrapper can contain a shorter input; keep its authored padding and height so text stays centered. */
++input[data-cp-set="field"] { height: 32px !important; min-height: 32px !important; padding: 0 10px !important; }
+ :is([data-cp-set="field"], [data-cp-set="area"]):hover { border-color: color-mix(in srgb, var(--cp-muted, var(--colors-foreground-muted)) 55%, transparent) !important; }
+ :is([data-cp-set="field"], [data-cp-set="area"]):focus-within { border-color: var(--cp-accent, var(--colors-accent)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-accent, var(--colors-accent)) 25%, transparent) !important; }
+ /* The field draws focus; an input inside a wrapper field stays see-through. */
+diff --git a/test/web.test.mjs b/test/web.test.mjs
+index e421195..f1df73d 100644
+--- a/test/web.test.mjs
++++ b/test/web.test.mjs
+@@ -20,7 +20,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
+     const bundle = String.raw`Object.defineProperty(a,"mermaidRuntimeHtml",{get:function(){return o}});const o='<!doctype html>\n<p class="x" title=\'y\'>\x3c!-- __PASEO_MERMAID_RUNTIME_RECEIVE__ \\x41 \u0041 \u{1F600} \v \/ --\x3e</p>';`;
+     const mermaidDoc = "<!doctype html>\n<p class=\"x\" title='y'><!-- __PASEO_MERMAID_RUNTIME_RECEIVE__ \\x41 A \u{1F600} \v / --></p>";
+     const html = `<!doctype html><html><head><title>pending</title><script type="text/plain" src="/bundle.js"></script></head><body><img src="/hold" hidden>
+-      <div data-testid="settings-detail-pane"></div>
++      <div data-testid="settings-detail-pane" style="display:flex;gap:6px;align-items:flex-start">
++        <div id="label-field" style="display:flex;flex-direction:column;box-sizing:border-box;border:1px solid black;border-radius:6px;background:white;padding:6px 10px"><input id="label-input" value="Review" style="box-sizing:border-box;border:0;background:transparent;font:14px system-ui;height:20px;padding:0"></div>
++        <div id="prompt-field" style="display:flex;flex-direction:column;box-sizing:border-box;border:1px solid black;border-radius:6px;background:white;padding:6px 10px"><textarea id="prompt-input" style="box-sizing:border-box;border:0;background:transparent;font:14px/20px system-ui;height:20px;padding:0">Review</textarea></div>
++        <input id="direct-input" style="box-sizing:border-box;border:1px solid black;border-radius:6px;background:white;height:40px">
++      </div>
+       <div data-testid="context-window-details" style="position:absolute;border:1px solid black;border-radius:12px;background:white"><div><span>Context</span><span>35% used</span></div><div data-testid="usage-report-test" style="height:180px">Usage</div></div>
+       <div data-testid="assistant-message"><div data-paseo-markdown-tag="blockquote"><span id="marker">[!NO</span></div></div>
+       <div><div data-testid="permission-request-deny" style="color:#888"><div><span>Deny</span></div></div><div data-testid="permission-request-action-always" style="color:#888"><div><span>Allow always</span></div></div><div data-testid="permission-request-action-once" style="color:#eee"><div><span>Allow once</span></div></div></div>
+@@ -60,6 +64,35 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
+           localStorage.removeItem('chat-polish:context-card-heights');
+           const first = prompts(); const web = load('web');
+           const restyle = web.restyleNative(() => true); const clamp = web.clampUserMessages(() => true);
++          // Embedded Bots does not mount DashboardItem, so setNativeColors never runs.
++          const queued = document.createElement('div'); queued.style.display = 'flex';
++          queued.innerHTML = '<div style="color:#eeeeee">Queued prompt</div><div><button aria-label="Edit queued message"><svg stroke="#000"><path d="M0 0L10 10"/></svg></button><button><svg stroke="#000"><path d="M0 0L10 10"/></svg></button></div>';
++          document.body.appendChild(queued); await wait();
++          const hostTokens = { foreground: '#eeeeee', 'foreground-muted': '#aaaaaa', border: '#666666', accent: '#88bbff' };
++          const setHostTokens = (tokens) => { for (const [key, value] of Object.entries(tokens)) document.documentElement.style.setProperty('--colors-' + key, value); };
++          const queueColorsMatch = (fg, muted, accent) => getComputedStyle(queued.firstElementChild).color === fg
++            && getComputedStyle(queued, '::after').color === muted
++            && getComputedStyle(queued, '::before').backgroundColor === muted
++            && getComputedStyle(queued).borderTopWidth === '1px'
++            && getComputedStyle(queued).borderTopStyle === 'dashed'
++            && getComputedStyle(queued.querySelector('svg')).stroke === muted
++            && getComputedStyle(queued.querySelector('button:last-child svg')).stroke === accent;
++          setHostTokens(hostTokens);
++          checks.queueThemeWithoutSidebar = queueColorsMatch('rgb(238, 238, 238)', 'rgb(170, 170, 170)', 'rgb(136, 187, 255)');
++          setHostTokens({ foreground: '#222222', 'foreground-muted': '#555555', border: '#999999', accent: '#2255aa' });
++          checks.queueThemeSwitchWithoutSidebar = queueColorsMatch('rgb(34, 34, 34)', 'rgb(85, 85, 85)', 'rgb(34, 85, 170)');
++          // A mounted sidebar's explicit theme still takes precedence over the defaults.
++          document.documentElement.style.setProperty('--cp-fg', '#abcdef');
++          checks.queueSidebarThemeWins = getComputedStyle(queued.firstElementChild).color === 'rgb(171, 205, 239)';
++          document.documentElement.style.removeProperty('--cp-fg');
++          queued.querySelector('button:last-child').disabled = true;
++          checks.queueDisabledSendMuted = getComputedStyle(queued.querySelector('button:last-child svg')).stroke === 'rgb(85, 85, 85)';
++          queued.remove();
++          const labelField = document.getElementById('label-field'), labelInput = document.getElementById('label-input');
++          const promptField = document.getElementById('prompt-field'), promptInput = document.getElementById('prompt-input');
++          checks.wrappedSettingsFieldsKeepPadding = getComputedStyle(labelField).paddingTop === '6px' && getComputedStyle(labelField).paddingBottom === '6px';
++          checks.settingsLabelAlignsWithPrompt = labelField.getBoundingClientRect().height === promptField.getBoundingClientRect().height && labelInput.getBoundingClientRect().top === promptInput.getBoundingClientRect().top;
++          checks.directSettingsInputStaysCompact = document.getElementById('direct-input').getBoundingClientRect().height === 32;
+           checks.mermaidDocFromBundle = (await web.loadMermaidDoc()) === new TextDecoder().decode(Uint8Array.from(atob("${Buffer.from(mermaidDoc).toString("base64")}"), (ch) => ch.charCodeAt(0)));
+           await wait(); checks.observerSettles = !capped;
+           // Paseo 0.14 wraps a prompt's rows and text in a message preview that clamps long prompts itself.
+@@ -213,7 +246,7 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
+     assert.equal(report.error, undefined, report.error);
+     assert.deepEqual(report.errors, []);
+     for (const [check, passed] of Object.entries(report.checks)) assert.equal(passed, true, check);
+-    assert.equal(Object.keys(report.checks).length, 21);
++    assert.equal(Object.keys(report.checks).length, 28);
+   } finally {
+     server?.closeAllConnections(); server?.close();
+     rmSync(temp, { recursive: true, force: true });
