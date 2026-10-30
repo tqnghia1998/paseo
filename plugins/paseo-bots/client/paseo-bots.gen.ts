@@ -1389,6 +1389,7 @@ var ROUTINE_LABEL = "paseo-bots.routine";
 var CHAT_CONTEXT_LABEL = "paseo-bots.context";
 var CHAT_RUNTIME_LABEL = "paseo-bots.runtime";
 var MAX_TITLE_CHARS = 200;
+var MAX_CHAT_TITLE_CHARS = 200;
 function displayTitle(title) {
   return (title ?? "").replace(/^\[[^\]]*\]\s*/, "") || "New chat";
 }
@@ -4422,7 +4423,7 @@ function StartRow({ colors: colors2, label, hint, avatar, onPress }) {
     }
   );
 }
-function RenameDialog({ colors: colors2, title, initialValue, placeholder, submitLabel = "Rename", onClose, onSubmit }) {
+function RenameDialog({ colors: colors2, title, initialValue, placeholder, submitLabel = "Rename", maxLength, onClose, onSubmit }) {
   const [draft, setDraft2] = useState5(initialValue);
   const [error, setError] = useState5(null);
   const [pending2, setPending] = useState5(false);
@@ -4458,6 +4459,7 @@ function RenameDialog({ colors: colors2, title, initialValue, placeholder, submi
           setError(null);
         },
         placeholder,
+        maxLength,
         placeholderTextColor: colors2.foregroundMuted,
         autoFocus: true,
         selectTextOnFocus: true,
@@ -4535,6 +4537,7 @@ function botMenuEntries(actions) {
 }
 function chatMenuEntries(actions) {
   const entries = [
+    { label: "Rename", icon: "Pencil", onSelect: actions.onRename },
     { label: "Copy path", icon: "Copy", onSelect: actions.onCopyPath },
     { label: "Copy chat ID", icon: "Copy", onSelect: actions.onCopyId },
     { label: "Copy transcript", icon: "FileText", pendingLabel: "Copying...", onSelect: actions.onCopyTranscript },
@@ -13973,6 +13976,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
   const [editingTeam, setEditingTeam] = useState44(null);
   const [libraryView, setLibraryView] = useState44(null);
   const [renaming, setRenaming] = useState44(null);
+  const [renamingChat, setRenamingChat] = useState44(null);
   const [exporting, setExporting] = useState44(null);
   const [drafts2, setDrafts] = useState44({});
   const [uiOverride, setUiOverride] = useState44(null);
@@ -14329,6 +14333,7 @@ Its chats stay on the host and remain in Paseo's history.`,
         onTogglePin: () => updateUi(
           (current2) => context.pinned ? unpin(current2) : { ...current2, pinnedChats: [...current2.pinnedChats, { botId: bot.id, chatId: chat.id }] }
         ),
+        onRename: () => setRenamingChat({ bot, chat }),
         move: context.pinned || listUi.chatSort !== "manual" ? null : { up: move(-1), down: move(1) },
         onOpenInPaseo: !nativeChat && openAgent && botHost.online ? () => openAgent({ agentId: chat.id, serverId: botHost.key }) : void 0,
         onArchive: () => removeChat(bot, chat, context, "archive")
@@ -14352,6 +14357,14 @@ Its chats stay on the host and remain in Paseo's history.`,
     } catch (error) {
       toast.error(`Failed to ${kind} chat: ${errorText(error)}`);
     }
+  };
+  const renameChat = async (bot, chat, name) => {
+    const botHost = resolveHost2(bot.hostId);
+    if (!botHost.api) throw new Error("Host is not connected");
+    const ref = botHost.api.agents.ref(chat.id);
+    if (!ref.rename) throw new Error("This Paseo host can't rename chats");
+    await ref.rename(name);
+    await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key] });
   };
   const deleteChat = async (bot, chat, context) => {
     const confirmed = await confirmDialog({
@@ -14592,6 +14605,18 @@ Its chats stay on the host and remain in Paseo's history.`,
                 if (!await updateBot(renaming.id, { name }, true)) throw new Error("Unable to save");
                 if (panel.open && selection?.botId === renaming.id) setPanelVersion((version) => version + 1);
               }
+            }
+          ) : null,
+          renamingChat ? /* @__PURE__ */ jsx49(
+            RenameDialog,
+            {
+              colors: colors2,
+              title: "Rename chat",
+              initialValue: displayTitle(renamingChat.chat.title),
+              placeholder: "Chat name",
+              maxLength: MAX_CHAT_TITLE_CHARS,
+              onClose: () => setRenamingChat(null),
+              onSubmit: (name) => renameChat(renamingChat.bot, renamingChat.chat, name)
             }
           ) : null,
           exporting ? /* @__PURE__ */ jsx49(ExportDialog, { colors: colors2, target: exporting, onClose: () => setExporting(null) }) : null
