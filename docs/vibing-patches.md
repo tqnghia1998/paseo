@@ -129,7 +129,11 @@ Fork drafts allocate their bot/workspace/context-scoped ID before saving history
 attachments, so unsent forks restore after warm activation and iframe remount.
 Bot chat rows show a Delete icon before their kebab; it confirms, then permanently
 deletes the agent through the client handle's `delete()` (hosts without it report an
-error). Deleting or archiving the open chat selects the bot's next chat in sidebar
+error). The chat menu leads with Rename, which opens the plugin's rename dialog and
+sets the agent title through the handle's `rename()` (upstream's `update_agent_request`
+name; the daemon trims it and rejects a blank one). Renaming a closed agent (the idle
+reaper closes most chats) dispatches its stored state from `AgentManager.updateAgentMetadata`,
+so open chats show the new title. Deleting or archiving the open chat selects the bot's next chat in sidebar
 order (pins first), else the previous one; only a bot with no chats left opens a new
 chat. The new-chat draft shows the native Import session pill: the sheet is locked
 to the bound worktree (no "Show all") and labels the imported or restored agent with

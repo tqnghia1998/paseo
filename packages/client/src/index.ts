@@ -389,6 +389,8 @@ export interface PaseoAgentHandle {
    */
   commands(options?: PaseoAgentCommandsOptions): Promise<PaseoAgentCommandsResult>;
   archive(): Promise<{ archivedAt: string }>;
+  /** Sets the agent's title; the daemon trims it and rejects a blank one. */
+  rename(name: string): Promise<void>;
   /** Closes the agent and permanently removes its Paseo record. */
   delete(): Promise<void>;
   detach(): Promise<void>;
@@ -1029,6 +1031,12 @@ function createAgentHandleFactory(
           current = { ...current, archivedAt: result.archivedAt };
         }
         return result;
+      },
+      rename: async (name) => {
+        await daemonClient.updateAgent(id, { name });
+        if (current) {
+          current = { ...current, title: name.trim() };
+        }
       },
       delete: async () => {
         await daemonClient.deleteAgent(id);

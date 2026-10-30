@@ -2601,7 +2601,10 @@ export class AgentManager {
       return;
     }
 
-    await this.writeStoredMetadata(agentId, updates);
+    // Vibing: closed agents (the idle reaper closes most of them) still show in open
+    // chats, so a rename must reach subscribers as the live path's setTitle does.
+    const nextRecord = await this.writeStoredMetadata(agentId, updates);
+    if (!nextRecord.internal) this.dispatchStoredAgentState(nextRecord);
   }
 
   private async runLifecycleMutation<T>(agentId: string, mutation: () => Promise<T>): Promise<T> {

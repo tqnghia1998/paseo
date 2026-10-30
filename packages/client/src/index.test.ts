@@ -981,6 +981,43 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   await client.close();
 });
 
+test("agent handles rename the agent through the update RPC", async () => {
+  const { client, ws } = await connectClient();
+  const agent = client.agents.ref("agent_sdk");
+
+  const renamePromise = agent.rename("  Release notes  ");
+  const request = parseSentSessionMessage(ws.sent.at(-1));
+  expect(request).toMatchObject({
+    type: "update_agent_request",
+    agentId: "agent_sdk",
+    name: "  Release notes  ",
+  });
+  ws.message(
+    sessionMessage({
+      type: "update_agent_response",
+      payload: {
+        requestId: request.requestId,
+        agentId: "agent_sdk",
+        accepted: false,
+        error: "Nothing to update",
+      },
+    }),
+  );
+  await expect(renamePromise).rejects.toThrow("Nothing to update");
+
+  const acceptedPromise = agent.rename("Release notes");
+  const accepted = parseSentSessionMessage(ws.sent.at(-1));
+  ws.message(
+    sessionMessage({
+      type: "update_agent_response",
+      payload: { requestId: accepted.requestId, agentId: "agent_sdk", accepted: true, error: null },
+    }),
+  );
+  await expect(acceptedPromise).resolves.toBeUndefined();
+
+  await client.close();
+});
+
 test("agent handles list the session's own commands through the existing daemon RPC", async () => {
   const { client, ws } = await connectClient();
   const agent = client.agents.ref("agent_sdk");

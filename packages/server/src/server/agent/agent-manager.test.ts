@@ -5101,6 +5101,38 @@ test("updateAgentMetadata bumps updatedAt for stored agents", async () => {
   expect(Date.parse(after!.updatedAt)).toBeGreaterThan(Date.parse(before!.updatedAt));
 });
 
+test("updateAgentMetadata dispatches a stored agent's new title to subscribers", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-stored-metadata-dispatch-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+  });
+
+  const created = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  await manager.closeAgent(created.id);
+
+  const events: ManagedAgent[] = [];
+  manager.subscribe(
+    (event) => {
+      if (event.type === "agent_state" && event.agent.id === created.id) {
+        events.push(event.agent);
+      }
+    },
+    { agentId: created.id, replayState: false },
+  );
+
+  await manager.updateAgentMetadata(created.id, { title: "Renamed while closed" });
+
+  // Sessions read the title from storage when they forward agent_state.
+  expect(events).toHaveLength(1);
+  expect(events[0]?.lifecycle).toBe("closed");
+  expect((await storage.get(created.id))?.title).toBe("Renamed while closed");
+});
+
 test("persists live mode, model, and thinking changes without an external snapshot subscriber", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-live-persist-"));
   const storagePath = join(workdir, "agents");
