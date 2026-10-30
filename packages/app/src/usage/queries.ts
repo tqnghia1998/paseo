@@ -175,9 +175,9 @@ export function useUsageHostReports(serverId: string | null): UsageReportEntry[]
   const queryClient = useQueryClient();
   const canReport = useHostReportsUsage(serverId ?? "");
   const query = useFetchQuery({
-    enabled: setting.enabled,
     queryKey: usageReportsQueryKey(serverId ?? ""),
     queryFn: serverId ? () => listReports(queryClient, serverId) : skipToken,
+    // Includes the host's usage setting.
     enabled: canReport,
     dataShape: "list",
     staleTimeMs: REPORTS_STALE_TIME_MS,
