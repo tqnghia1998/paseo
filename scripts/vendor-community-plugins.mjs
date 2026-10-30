@@ -50,6 +50,14 @@ const plugins = [
     patch: "paseo-quick-prompts-vibing.patch",
   },
   {
+    id: "paseo-chat-polish",
+    repository: "lthieu96/paseo-chat-polish",
+    revision: "f7e667758ae4c3bc2aaf5819563bd4183e2f7d44",
+    patch: "paseo-chat-polish-vibing.patch",
+    // pele is inlined; sharp is native and loaded on demand, so thumbnails fall back to the original image.
+    bundleDependencies: true,
+  },
+  {
     id: "genui",
     repository: "anh-chu/paseo-plugin-genui",
     patch: "genui-vibing.patch",
