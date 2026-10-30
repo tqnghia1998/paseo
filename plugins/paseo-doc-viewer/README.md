@@ -1,7 +1,7 @@
 # paseo-doc-viewer
 
 Bundled from [nkwib/paseo-doc-viewer](https://github.com/nkwib/paseo-doc-viewer) at
-`163b524b649d163dd493f702e3dc3b584389b2f5` (version 0.6.0, MIT).
+`0f39c81883aef30711e0c5bce4fb2d41a544de0d` (version 0.7.0, MIT).
 
 Regenerate with `node scripts/vendor-community-plugins.mjs paseo-doc-viewer` in the Paseo fork.
 Generated code uses the host SDK, React, React Native, React Query and Zod.
