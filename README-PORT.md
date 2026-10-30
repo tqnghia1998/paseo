@@ -54,7 +54,7 @@ not in the environment inherited by providers, external commands, or terminals.
 
 - `paseo-web.js` — Executable CLI runner
 - `paseo-web-plugins.mjs` — One-time ordinary directory installation of each community addon in `communityPluginIds`
-- `community-plugins/` — Prebundled offline addon sources (Beautiful Chat, Annotations, PDF and Office viewer, Shell Yeah, Recap, Quick prompts, Generative UI), each copied into a runtime home the first time a bundle containing it starts there
+- `community-plugins/` — Prebundled offline addon sources (Chat Polish, Annotations, PDF and Office viewer, Shell Yeah, Recap, Quick prompts, Generative UI), each copied into a runtime home the first time a bundle containing it starts there
 - `plugin-process.js` — Bundled worker for isolated built-ins and installed plugins
 - `compiler-worker.js` — Plugin compilation isolate used by daemon and plugin workers
 - `package.json` — Packaged daemon name/version and ESM metadata

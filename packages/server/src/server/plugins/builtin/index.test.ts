@@ -82,21 +82,21 @@ test("Bots stays built-in while ordinary community plugins use native lifecycle 
     });
     expect(await client.listPlugins()).toEqual([]);
     await client.patchDaemonConfig({ pluginsEnabled: true });
-    for (const id of ["beautiful-chat", "annotations"]) {
+    for (const id of ["paseo-chat-polish", "annotations"]) {
       expect(builtinPlugins).not.toContain(id);
       await client.installDirectoryPlugin(path.join(resolveBuiltinPluginsRoot(), id));
     }
     expect((await client.listPlugins()).map(({ id }) => id).sort()).toEqual([
       "annotations",
-      "beautiful-chat",
+      "paseo-chat-polish",
     ]);
-    await client.disablePlugin("beautiful-chat");
+    await client.disablePlugin("paseo-chat-polish");
     expect(await client.listPlugins()).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "beautiful-chat", status: "disabled" }),
+        expect.objectContaining({ id: "paseo-chat-polish", status: "disabled" }),
       ]),
     );
-    await client.enablePlugin("beautiful-chat");
+    await client.enablePlugin("paseo-chat-polish");
     const installedCatalog = await client.getPluginCatalog();
     const annotation = {
       id: "bundle-test",
@@ -122,23 +122,15 @@ test("Bots stays built-in while ordinary community plugins use native lifecycle 
     expect(catalog.find(({ id }) => id === "space-app-vibing-theme")?.clientBundle).toContain(
       "Space App Vibing",
     );
-    expect(installedCatalog.find(({ id }) => id === "beautiful-chat")?.clientBundle).toContain(
-      "Chat presentation",
+    expect(installedCatalog.find(({ id }) => id === "paseo-chat-polish")?.clientBundle).toContain(
+      "Open Chat Polish",
     );
+    // Chat Polish draws diagrams on the daemon with its inlined Pele dependency.
     expect(
-      await client.invokePluginRpc("beautiful-chat", "highlight.tokens", {
-        code: "const bundled = true;",
-        language: "typescript",
-        dark: true,
+      await client.invokePluginRpc("paseo-chat-polish", "diagram.render", {
+        source: "flowchart LR\n  A --> B",
       }),
-    ).toMatchObject({
-      language: "typescript",
-      lines: [
-        expect.arrayContaining([
-          expect.objectContaining({ color: expect.stringMatching(/^#[a-f0-9]{6}$/i) }),
-        ]),
-      ],
-    });
+    ).toMatchObject({ svg: expect.stringContaining("<svg"), width: expect.any(Number) });
     await client.removePlugin("annotations");
     expect(
       (

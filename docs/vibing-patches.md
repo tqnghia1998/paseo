@@ -50,7 +50,7 @@ agents keep their existing completion and parent-owned recovery contracts.
 
 ## Plugin boundary
 
-Keep `useRevealedText` in the plugin UI exports: vendored Bots, Beautiful Chat and
+Keep `useRevealedText` in the plugin UI exports: vendored Bots and
 Generative UI use the hook for custom Markdown and reasoning renderers. A runtime
 refresh must preserve it for already-installed plugin bundles too.
 
@@ -62,16 +62,18 @@ home's `.vibing-community-plugins.json` marker records each addon already offere
 later launches never reinstall removed plugins or reset disabled ones, while newly
 bundled addons still reach existing homes. Homes with the legacy
 `.vibing-community-plugins-v1` marker count Beautiful Chat and Annotations as offered.
+Chat Polish replaced Beautiful Chat, which is removed from the fork. On its next start, a home
+whose Beautiful Chat entry points at the copy Vibing installed drops that entry and folder and
+gets Chat Polish with the same enabled state; a Beautiful Chat installed from elsewhere stays.
 Existing entries, including the same ID installed from another source, and an explicit
 global plugin opt-out are preserved. The addons follow native enable, disable, reload
 and remove controls. They are not reserved built-in IDs. Offline source copies live
 beside the bundle in `community-plugins/`.
 
-Besides Beautiful Chat and Annotations, the addons are PDF and Office viewer
+Besides Chat Polish (`paseo-chat-polish`) and Annotations, the addons are PDF and Office viewer
 (`paseo-doc-viewer`), Shell Yeah (`shell-yeah`), Recap (`paseo-recap`), Quick prompts
 (`paseo-quick-prompts`) and Generative UI (`genui`). Fold Turns (`completed-turns`) is
-deliberately not shipped: the host applies timeline transformers in plugin-ID order,
-so Beautiful Chat claims tool and reasoning rows first and Fold Turns cannot fold them.
+deliberately not shipped: Chat Polish already merges the steps between replies into one row.
 Bots chats use the native agent panel, so their slash commands, composer pills,
 attachment sources and timeline renderers apply there. Addon workspace panels open
 inside the chat through the Bots workspace views below (Cmd+K or plugin actions); header
@@ -101,12 +103,12 @@ the bundler copies only listed built-ins.
 The separate customization catalog and redundant Mermaid plugin are removed;
 Paseo's native Markdown renderer handles Mermaid diagrams.
 
-[Beautiful Chat](../plugins/beautiful-chat/README.md) ships a pinned, prebundled
-upstream revision so embedded startup stays offline. Its tool, reasoning and task
-cards are enabled; native user and assistant rendering remains the default to
-retain Find and citation handling. Saved Chat presentation preferences win.
-Attachment rows and interactive Shell input remain native even when users enable
-enhanced messages. Preserve these boundaries when updating the vendored plugin.
+[Chat Polish](../plugins/paseo-chat-polish/README.md) is the default chat restyler; it
+replaced Beautiful Chat. `paseo-chat-polish-vibing.patch`
+gives its CSS host-color fallbacks for embedded frames without the sidebar that sets them,
+and keeps its field and queued-message selectors working. Its native `sharp` dependency is
+not bundled: thumbnails fall back to the original image. Its optional headless browser is
+downloaded at runtime only when a user enables page checks in its dashboard.
 
 Vibing exposes Bots as its only agent tool. Embedded folder launches, including
 legacy entries and Live Design, bind the worktree and open the Bots plugin.
@@ -219,13 +221,12 @@ for the route's workspace and the visible chat for the focused agent, so plugin 
 file search work. Workspace results are dropped, agent results are limited to the bound
 worktree, and only Settings and shortcut help remain among the root commands.
 
-Bots and the other community addons except Beautiful Chat are pinned and regenerated
+Bots and the other community addons are pinned and regenerated
 with `scripts/vendor-community-plugins.mjs [id...]`; each README records attribution,
 revision and license. Addons with npm dependencies (`bundleDependencies`) install
 their lockfile from the public npm registry at vendoring time and inline it, with
 `THIRD_PARTY_LICENSES.txt`; the upstream manifest `build` step is dropped, so
-installs never run npm (company registry mirrors lack some packages). Beautiful Chat yields Mermaid messages and Bots tools so native
-diagrams and actionable proposal/sign-in cards can run.
+installs never run npm (company registry mirrors lack some packages).
 
 Bots and ordinary installed plugins run in workers with the owning daemon's
 `PASEO_HOME`, including isolated test homes. Workspace Bots and Live Design share one production home. Bots owns its screen,

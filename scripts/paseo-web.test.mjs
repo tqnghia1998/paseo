@@ -152,7 +152,7 @@ test("community plugins install once as ordinary directory sources and respect r
     const home = path.join(root, "home");
     const sourceRoot = path.join(root, "sources");
     mkdirSync(home);
-    for (const id of ["beautiful-chat", "annotations"]) {
+    for (const id of ["paseo-chat-polish", "annotations"]) {
       mkdirSync(path.join(sourceRoot, id), { recursive: true });
       writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
     }
@@ -165,12 +165,12 @@ test("community plugins install once as ordinary directory sources and respect r
     const config = JSON.parse(readFileSync(configPath, "utf8"));
     assert.equal(config.pluginsEnabled, false);
     assert.equal(config.log.level, "warn");
-    for (const id of ["beautiful-chat", "annotations"]) {
+    for (const id of ["paseo-chat-polish", "annotations"]) {
       assert.equal(config.plugins[id].source, "directory");
       assert.equal(config.plugins[id].enabled, true);
       assert.ok(existsSync(path.join(config.plugins[id].path, "paseo-plugin.json")));
     }
-    delete config.plugins["beautiful-chat"];
+    delete config.plugins["paseo-chat-polish"];
     config.plugins.annotations.enabled = false;
     writeFileSync(configPath, JSON.stringify(config));
     prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
@@ -187,7 +187,7 @@ test("homes bootstrapped by the legacy marker receive only newly bundled communi
     const home = path.join(root, "home");
     const sourceRoot = path.join(root, "sources");
     mkdirSync(home);
-    for (const id of ["beautiful-chat", "annotations", "genui", "paseo-recap"]) {
+    for (const id of ["paseo-chat-polish", "annotations", "genui", "paseo-recap"]) {
       mkdirSync(path.join(sourceRoot, id), { recursive: true });
       writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
     }
@@ -212,11 +212,87 @@ test("homes bootstrapped by the legacy marker receive only newly bundled communi
     assert.deepEqual(config.plugins["paseo-recap"], recap);
     assert.equal(config.plugins.genui.source, "directory");
     assert.equal(config.plugins.genui.enabled, true);
+    // Without Beautiful Chat, its replacement is offered.
+    assert.equal(config.plugins["paseo-chat-polish"].enabled, true);
 
     delete config.plugins.genui;
     writeFileSync(configPath, JSON.stringify(config));
     prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
     assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), config);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function communityHome(root, ids) {
+  const home = path.join(root, "home");
+  const sourceRoot = path.join(root, "sources");
+  mkdirSync(home);
+  for (const id of ids) {
+    mkdirSync(path.join(sourceRoot, id), { recursive: true });
+    writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
+  }
+  return { home, sourceRoot, configPath: path.join(home, "config.json") };
+}
+
+function installRetiredBeautifulChat(home) {
+  const directory = path.join(home, "installed-plugins", "beautiful-chat");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    path.join(directory, "paseo-plugin.json"),
+    JSON.stringify({ id: "beautiful-chat" }),
+  );
+  return directory;
+}
+
+for (const offered of [["beautiful-chat"], ["beautiful-chat", "paseo-chat-polish"]]) {
+  test(`the bundled Beautiful Chat is replaced by Chat Polish, keeping its state: ${offered}`, async () => {
+    const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+    const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+    try {
+      const { home, sourceRoot, configPath } = communityHome(root, ["paseo-chat-polish", "genui"]);
+      const retired = installRetiredBeautifulChat(home);
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          version: 1,
+          pluginsEnabled: false,
+          plugins: { "beautiful-chat": { source: "directory", path: retired, enabled: false } },
+        }),
+      );
+      writeFileSync(path.join(home, ".vibing-community-plugins.json"), JSON.stringify(offered));
+      prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+      const config = JSON.parse(readFileSync(configPath, "utf8"));
+      assert.equal(config.pluginsEnabled, false);
+      assert.equal(config.plugins["beautiful-chat"], undefined);
+      assert.ok(!existsSync(retired));
+      assert.equal(config.plugins["paseo-chat-polish"].source, "directory");
+      assert.equal(config.plugins["paseo-chat-polish"].enabled, false);
+      assert.ok(
+        existsSync(path.join(config.plugins["paseo-chat-polish"].path, "paseo-plugin.json")),
+      );
+      assert.equal(config.plugins.genui.enabled, true);
+
+      prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+      assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), config);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("a Beautiful Chat installed from elsewhere is left alone", async () => {
+  const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+  try {
+    const { home, sourceRoot, configPath } = communityHome(root, ["paseo-chat-polish"]);
+    const own = { source: "directory", path: "/elsewhere/beautiful-chat", enabled: true };
+    writeFileSync(configPath, JSON.stringify({ version: 1, plugins: { "beautiful-chat": own } }));
+    writeFileSync(path.join(home, ".vibing-community-plugins.json"), '["paseo-chat-polish"]\n');
+    prepareCommunityPlugins({ home, sourceRoot, readPersistedConfig, savePersistedConfig });
+    assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")).plugins, {
+      "beautiful-chat": own,
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -230,7 +306,7 @@ for (const marker of ['["beautiful-chat","annot', '{"offered":true}']) {
       const home = path.join(root, "home");
       const sourceRoot = path.join(root, "sources");
       mkdirSync(home);
-      for (const id of ["beautiful-chat", "genui"]) {
+      for (const id of ["paseo-chat-polish", "genui"]) {
         mkdirSync(path.join(sourceRoot, id), { recursive: true });
         writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
       }
@@ -257,7 +333,7 @@ for (const kind of ["bom", "permissions", "symlink"]) {
         const home = path.join(root, "home");
         const sourceRoot = path.join(root, "sources");
         mkdirSync(home, { mode: 0o755 });
-        for (const id of ["beautiful-chat", "annotations"]) {
+        for (const id of ["paseo-chat-polish", "annotations"]) {
           mkdirSync(path.join(sourceRoot, id), { recursive: true });
           writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
         }
