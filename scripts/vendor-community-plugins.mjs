@@ -25,7 +25,7 @@ const plugins = [
   {
     id: "paseo-doc-viewer",
     repository: "nkwib/paseo-doc-viewer",
-    revision: "163b524b649d163dd493f702e3dc3b584389b2f5",
+    revision: "0f39c81883aef30711e0c5bce4fb2d41a544de0d",
     bundleDependencies: true,
     assets: ["NOTICE"],
   },
@@ -33,13 +33,13 @@ const plugins = [
     id: "shell-yeah",
     repository: "stevecastaneda/paseo-plugins",
     directory: "shell-yeah",
-    revision: "0cbe39cc953f67415407c602c7f865eedcd76461",
+    revision: "2f79b6177c6fc4007a247b2cf1ca37d1fd35f4a0",
   },
   {
     id: "paseo-recap",
     repository: "kingsleydon/paseo-plugins",
     directory: "plugins/recap",
-    revision: "ae8d919cd32d4be0ec30a3f58548398d6479a69b",
+    revision: "ceb91bef9d9a978d083cbc373bb192f98b794581",
     patch: "paseo-recap-vibing.patch",
   },
   {
