@@ -1106,11 +1106,13 @@ describe("Codex app-server provider", () => {
       let handle: NonNullable<ReturnType<AgentSession["describePersistence"]>>;
       try {
         await first.startTurn("first question");
+        const threadStart = await firstServer.waitForRequest("thread/start");
+        const turnStart = await firstServer.waitForTurnStart();
+        const saved = waitForNextEvent(first, "thread_started");
+        firstServer.startsTurn({ threadId: "thread-1" });
+        await saved;
         handle = first.describePersistence()!;
-        for (const params of [
-          await firstServer.waitForRequest("thread/start"),
-          await firstServer.waitForTurnStart(),
-        ]) {
+        for (const params of [threadStart, turnStart]) {
           expect(params.developerInstructions).toContain(systemPrompt ?? nativeInstructions);
           expect(params.developerInstructions).toContain(
             "Use request_user_input for user questions",
@@ -1247,7 +1249,6 @@ describe("Codex app-server provider", () => {
       let handle: NonNullable<ReturnType<AgentSession["describePersistence"]>>;
       try {
         await first.startTurn("first question");
-        handle = first.describePersistence()!;
         await expect(firstServer.waitForRequest("thread/start")).resolves.toMatchObject({
           config: expectedConfig,
           developerInstructions: expect.stringContaining(
@@ -1258,6 +1259,10 @@ describe("Codex app-server provider", () => {
           config: expectedConfig,
           developerInstructions: expect.stringContaining("Do not use request_user_input_async"),
         });
+        const saved = waitForNextEvent(first, "thread_started");
+        firstServer.startsTurn({ threadId: "thread-1" });
+        await saved;
+        handle = first.describePersistence()!;
         firstServer.assertNoErrors();
       } finally {
         await first.close();
@@ -3391,6 +3396,7 @@ describe("Codex app-server provider", () => {
     const capturedRequests = await runCustomCodexProviderTurn("ollama", "https://ollama.com");
 
     expect(capturedThreadStartConfig(capturedRequests)).toEqual({
+      features: { default_mode_request_user_input: true },
       model_provider: "paseo:ollama",
       model_providers: {
         "paseo:ollama": expect.objectContaining({
@@ -8546,9 +8552,10 @@ describe("Codex importable sessions", () => {
 
     const sessions = await provider.listImportableSessions({ cwd: "/workspace/project-a" });
 
+    // Most recent activity first (the fork merges active and archived windows).
     expect(sessions.map((session) => session.providerHandleId)).toEqual([
-      "custom-thread",
       "new-custom-thread",
+      "custom-thread",
     ]);
     appServer.assertNoErrors();
   });
