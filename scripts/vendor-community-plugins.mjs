@@ -33,7 +33,7 @@ const plugins = [
     id: "shell-yeah",
     repository: "stevecastaneda/paseo-plugins",
     directory: "shell-yeah",
-    revision: "2f79b6177c6fc4007a247b2cf1ca37d1fd35f4a0",
+    revision: "aa56a356cf1b3b658776c31dd238b9bea758322d",
   },
   {
     id: "paseo-recap",
