@@ -1,5 +1,5 @@
 diff --git a/client/BotDialogs.tsx b/client/BotDialogs.tsx
-index 9d97c7f..27494ae 100644
+index 9d97c7f..7dc6b33 100644
 --- a/client/BotDialogs.tsx
 +++ b/client/BotDialogs.tsx
 @@ -4,14 +4,15 @@ import { Icon, Modal, TextInput, copyText, useToast } from "@getpaseo/plugin/cli
@@ -134,7 +134,24 @@ index 9d97c7f..27494ae 100644
              placeholderTextColor={colors.foregroundMuted}
              autoFocus
              selectTextOnFocus
-@@ -289,6 +317,7 @@ export interface ChatMenuActions {
+@@ -257,6 +285,8 @@ export interface BotMenuActions {
+   onCopyId(): void;
+   onSaveAsPreset(): void;
+   onToggleArchive(): void;
++  /** Permanently deletes every chat this bot lists (after confirming). */
++  onDeleteAllChats(): Promise<void>;
+   onDelete(): Promise<void>;
+ }
+ 
+@@ -278,6 +308,7 @@ export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
+     { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId },
+     { kind: "separator" },
+     { label: bot.archived ? "Unarchive bot" : "Archive bot", icon: bot.archived ? "ArchiveRestore" : "Archive", onSelect: actions.onToggleArchive },
++    { label: "Delete all chats", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDeleteAllChats },
+     { label: "Delete bot", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDelete },
+   );
+   return entries;
+@@ -289,6 +320,7 @@ export interface ChatMenuActions {
    onCopyId(): void;
    onCopyTranscript(): Promise<void>;
    onTogglePin(): void;
@@ -142,7 +159,7 @@ index 9d97c7f..27494ae 100644
    /** Present in manual order; undefined at an edge. `null` hides the pair (pinned chats, activity order). */
    move: { up?: () => void; down?: () => void } | null;
    onOpenInPaseo?: () => void;
-@@ -298,6 +327,7 @@ export interface ChatMenuActions {
+@@ -298,6 +330,7 @@ export interface ChatMenuActions {
  /** The chat menu, after Paseo's workspace menu (sidebar/sidebar-workspace-menu.tsx). */
  export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
    const entries: MenuEntry[] = [
@@ -150,7 +167,7 @@ index 9d97c7f..27494ae 100644
      { label: "Copy path", icon: "Copy", onSelect: actions.onCopyPath },
      { label: "Copy chat ID", icon: "Copy", onSelect: actions.onCopyId },
      { label: "Copy transcript", icon: "FileText", pendingLabel: "Copying...", onSelect: actions.onCopyTranscript },
-@@ -314,25 +344,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
+@@ -314,25 +347,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
  
  // ------------------------------------------------------------------ export
  
@@ -186,7 +203,7 @@ index 9d97c7f..27494ae 100644
          <SettingsCard>
            <SettingsSwitch
              label="Include memory"
-@@ -340,17 +376,24 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
+@@ -340,17 +379,24 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
              value={includeMemory}
              onValueChange={setIncludeMemory}
            />
@@ -510,10 +527,10 @@ index 7533cb6..24c41b7 100644
    if (bucket === "running") {
      const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..0634102 100644
+index ebc4ed2..3f3b817 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
-@@ -1,32 +1,35 @@
+@@ -1,32 +1,36 @@
 +import type { NativeChatSlot } from "./NativeChat";
  import type { PluginTheme } from "@getpaseo/plugin";
 -import type { PaseoAgent } from "./paseo";
@@ -534,6 +551,7 @@ index ebc4ed2..0634102 100644
 -import { displayTitle, startBotChat, syncBotWorkspaceTitle } from "../shared/chat";
 -import { moveKey } from "../shared/sidebar";
 +import { CHAT_CONTEXT_LABEL, MAX_CHAT_TITLE_CHARS, botForChat, displayTitle, startBotChat, syncBotWorkspaceTitle } from "../shared/chat";
++import { deleteAllChatsMessage, deleteChats, pinsWithout } from "../shared/delete-chats";
 +import { chatAfterRemoval, moveKey } from "../shared/sidebar";
  import { chatTranscript } from "../shared/transcript";
  import { ensureBotHomeRpc, mountRpc, exportBotRpc, importBotRpc, importTeamRpc, systemPromptRpc } from "../shared/rpc";
@@ -556,7 +574,7 @@ index ebc4ed2..0634102 100644
  import { TeamTabsRow, TeamTabSwitcher } from "./teams/TeamTabs";
  import { ResizeHandle, SlideOver } from "./ui/Columns";
  import { fitColumns } from "../shared/layout";
-@@ -43,6 +46,9 @@ import { ui, useTypeScale } from "./typography";
+@@ -43,6 +47,9 @@ import { ui, useTypeScale } from "./typography";
  
  type Colors = PluginTheme["colors"];
  
@@ -566,7 +584,7 @@ index ebc4ed2..0634102 100644
  const SETUP_PROMPT =
    "Let's set you up. Interview me one short question at a time about what I want from you, how I like to work, and what you should never do. " +
    "Then propose standing instructions for yourself and a starting MEMORY.md. Write the memory file once I confirm, and give me the instructions to paste into your Soul settings.";
-@@ -50,9 +56,10 @@ const SETUP_PROMPT =
+@@ -50,9 +57,10 @@ const SETUP_PROMPT =
  /** Autosave delay after the last edit in the settings panel. */
  const SAVE_DELAY_MS = 600;
  
@@ -578,7 +596,7 @@ index ebc4ed2..0634102 100644
    return (
      <MenuProvider colors={colors} compact={props.layout.compact}>
        <AvatarTheme dark={nativeTokens(colors).dark}>
-@@ -63,30 +70,31 @@ export function BotsSurface(props: PluginSurfaceProps) {
+@@ -63,30 +71,31 @@ export function BotsSurface(props: PluginSurfaceProps) {
  }
  
  
@@ -615,14 +633,14 @@ index ebc4ed2..0634102 100644
    const [drafts, setDrafts] = useState<Record<string, Bot>>({});
    // List state (collapsed groups, pins, order, display options) applies at once and saves behind.
    const [uiOverride, setUiOverride] = useState<BotListUi | null>(null);
-@@ -222,8 +230,61 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -222,9 +231,62 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    // "New bot" from the Command Center opens a fresh Bots screen; only that one consumes it.
    useEffect(() => {
      const intent = takeIntent();
 -    if (intent?.kind === "new-bot") setCreating(true);
 +    if (intent?.kind === "new-bot") setCreating("new");
-+  }, []);
-+
+   }, []);
+ 
 +  // Vibing's defaults: Codex (the reserved default) and Claude bots, and a minimum-width list.
 +  const seedingDefaults = useRef(false);
 +  // The bot a workspace opens on: Codex, or Claude when Codex can't run here. Undefined
@@ -631,7 +649,7 @@ index ebc4ed2..0634102 100644
 +  useEffect(() => {
 +    const timer = setTimeout(() => setDefaultBotWaitOver(true), DEFAULT_BOT_WAIT_MS);
 +    return () => clearTimeout(timer);
-   }, []);
++  }, []);
 +  const defaultBotId =
 +    preferredDefaultBotId(settings.status === "ready" ? settings.values.bots : [], localProviders.data, host.id) ??
 +    (defaultBotWaitOver ? DEFAULT_BOT_ID : undefined);
@@ -675,10 +693,11 @@ index ebc4ed2..0634102 100644
 +    const open = groups.find((group) => group.id === currentUi().tab);
 +    if (open && open !== team) updateUi((current) => ({ ...current, tab: team?.id ?? ALL_BOTS_TAB }));
 +  }, [selection]);
- 
++
    if (settings.status !== "ready") {
      return (
-@@ -269,12 +330,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+       <View style={{ flex: 1, padding: 24, gap: 12, backgroundColor: colors.surface0, justifyContent: settings.status === "loading" ? "center" : "flex-start", alignItems: settings.status === "loading" ? "center" : "stretch" }}>
+@@ -269,12 +331,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    const select = (next: Selection) => {
      setSelection(next);
      setTeamMap(false);
@@ -713,7 +732,7 @@ index ebc4ed2..0634102 100644
    const openPanel = (bot: Bot, section: SectionId | null) => {
      if (selection?.botId !== bot.id) select({ botId: bot.id, chatId: null });
      setPanel({ open: true, section });
-@@ -366,7 +448,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -366,7 +449,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
  
    const openBotMenu = (bot: Bot, anchor: LayoutRectangle, source: MenuSource) => {
      const botHost = resolveHost(bot.hostId);
@@ -722,7 +741,7 @@ index ebc4ed2..0634102 100644
      const workspaceId = chats.find((chat) => chat.workspaceId)?.workspaceId;
      const openWorkspace = navigation?.openWorkspace;
      menu.open({
-@@ -376,14 +458,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -376,20 +459,21 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        title: "Bot actions",
        entries: botMenuEntries({
          bot,
@@ -739,7 +758,14 @@ index ebc4ed2..0634102 100644
          onCopyId: () => copy(bot.id, "Bot ID copied"),
          onSaveAsPreset: () =>
            void flush()
-@@ -459,26 +541,55 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+             .then(() => commit((values) => ({ ...values, presets: [...(values.presets ?? []), presetFromBot(values.bots.find((entry) => entry.id === bot.id) ?? bot)] })))
+             .then((saved) => saved && toast.show(`Saved ${bot.name} as a preset. It's under New bot.`, { variant: "success" })),
+         onToggleArchive: () => void updateBot(bot.id, { archived: !bot.archived }),
++        onDeleteAllChats: () => deleteAllChats(bot),
+         onDelete: async () => {
+           const confirmed = await confirmDialog({
+             title: "Delete bot?",
+@@ -459,26 +543,106 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            updateUi((current) =>
              context.pinned ? unpin(current) : { ...current, pinnedChats: [...current.pinnedChats, { botId: bot.id, chatId: chat.id }] },
            ),
@@ -807,10 +833,61 @@ index ebc4ed2..0634102 100644
 +    if (confirmed) await removeChat(bot, chat, context, "delete");
 +  };
 +
++  /** Permanently deletes every chat the bot lists, after confirming, then moves the selection and pins off them. */
++  const deleteAllChats = async (bot: Bot) => {
++    const botHost = resolveHost(bot.hostId);
++    const query = botChatsQuery(botHost, bot.id);
++    const api = botHost.api;
++    if (!api || !query.enabled) {
++      toast.error("Host is not connected");
++      return;
++    }
++    let chats: PaseoAgent[];
++    try {
++      // Fetched fresh, so a chat a routine just started is counted and the count matches what's deleted.
++      // The query's own select is the sidebar's filter, so "all" is exactly the chats the bot lists.
++      chats = query.select!(await queryClient.fetchQuery({ queryKey: query.queryKey, queryFn: query.queryFn, staleTime: 0 }));
++    } catch (error) {
++      toast.error(`Couldn't list chats: ${errorText(error)}`);
++      return;
++    }
++    if (!chats.length) {
++      toast.show(`${bot.name} has no chats to delete`);
++      return;
++    }
++    const running = chats.filter((chat) => chat.status === "running" || chat.status === "initializing").length;
++    const confirmed = await confirmDialog({
++      title: "Delete all chats?",
++      message: deleteAllChatsMessage(bot.name, chats.length, running),
++      confirmLabel: "Delete all",
++      cancelLabel: "Cancel",
++      destructive: true,
++    });
++    if (!confirmed) return;
++    const result = await deleteChats(
++      chats.map((chat) => chat.id),
++      async (id) => {
++        const ref: DeletableAgentHandle = api.agents.ref(id);
++        if (!ref.delete) throw new Error("this Paseo host can't delete chats");
++        await ref.delete();
++      },
++    );
++    const deleted = new Set(result.deleted);
++    const open = selectionRef.current;
++    if (open?.botId === bot.id && open.chatId && deleted.has(open.chatId)) setSelection({ botId: bot.id, chatId: null });
++    if (deleted.size) updateUi((current) => ({ ...current, pinnedChats: pinsWithout(current.pinnedChats, deleted) }));
++    await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key] });
++    if (result.failed.length) {
++      toast.error(`Deleted ${deleted.size} of ${chats.length} chats. ${result.failed.length} failed: ${errorText(result.failed[0]!.error)}`);
++    } else {
++      toast.show(deleted.size === 1 ? "Deleted 1 chat" : `Deleted ${deleted.size} chats`, { variant: "success" });
++    }
++  };
++
    const openDisplayMenu = (anchor: LayoutRectangle) => {
      menu.open({
        anchor,
-@@ -518,6 +629,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -518,6 +682,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        touch={layout.compact || layout.platform !== "web"}
        splash={layout.compact}
        bottomInset={bottomInset}
@@ -818,7 +895,7 @@ index ebc4ed2..0634102 100644
        onToggle={(botId) =>
          updateUi((current) => ({
            ...current,
-@@ -527,9 +639,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -527,9 +692,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        onTogglePinnedSection={() => updateUi((current) => ({ ...current, pinnedCollapsed: !current.pinnedCollapsed }))}
        onShowArchived={() => updateUi((current) => ({ ...current, showArchived: true }))}
        onSelect={select}
@@ -832,7 +909,7 @@ index ebc4ed2..0634102 100644
        onDisplayMenu={openDisplayMenu}
        onEditTeam={setEditingTeam}
        onTeamMap={() => setTeamMap(true)}
-@@ -537,7 +652,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -537,7 +705,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    );
  
    const tabProps = openTab
@@ -841,7 +918,7 @@ index ebc4ed2..0634102 100644
      : null;
  
    const pane = teamMap ? (
-@@ -558,11 +673,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -558,11 +726,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : selectedBot && selection ? (
        <SelectedChat
@@ -855,7 +932,7 @@ index ebc4ed2..0634102 100644
          localHost={localHost}
          panelOpen={panel.open}
          layout={layout}
-@@ -571,6 +687,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -571,6 +740,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          onBack={layout.compact ? () => setSelection(null) : undefined}
          onBotMenu={(anchor) => (anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot))}
          onTogglePanel={() => setPanel({ open: !panel.open, section: panel.section })}
@@ -864,7 +941,7 @@ index ebc4ed2..0634102 100644
          onStarted={(chatId) => setSelection({ botId: selectedBot.id, chatId })}
        />
      ) : (
-@@ -599,7 +717,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -599,7 +770,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            setPanelVersion((version) => version + 1);
            toast.show("Restored. Undo it from History if needed.", { variant: "success" });
          }}
@@ -873,7 +950,7 @@ index ebc4ed2..0634102 100644
          onOpenChat={(chatId) => {
            select({ botId: selectedBot.id, chatId });
            // On phones the panel covers the chat.
-@@ -621,13 +739,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -621,13 +792,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : null;
  
@@ -895,7 +972,7 @@ index ebc4ed2..0634102 100644
      {/* The host gives plugin surfaces no keyboard handling; lift everything above the keyboard. */}
      <View
        style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}
-@@ -684,6 +809,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -684,6 +862,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        {creating ? (
          <NewBotDialog
            colors={colors}
@@ -903,7 +980,7 @@ index ebc4ed2..0634102 100644
            onClose={() => setCreating(false)}
            presets={settings.status === "ready" ? (settings.values.presets ?? []) : []}
            onCreate={(start) => {
-@@ -694,13 +820,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -694,13 +873,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            }}
            onImport={async (json) => {
              const { bots, teams } = await importTeam({ json });
@@ -920,7 +997,7 @@ index ebc4ed2..0634102 100644
              }
            }}
          />
-@@ -721,17 +848,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -721,17 +901,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          />
        ) : null}
  
@@ -954,7 +1031,7 @@ index ebc4ed2..0634102 100644
    localHost: LocalHost;
    panelOpen: boolean;
    layout: PluginSurfaceProps["layout"];
-@@ -743,9 +883,12 @@ interface SelectedChatProps {
+@@ -743,9 +936,12 @@ interface SelectedChatProps {
    onStarted(chatId: string): void;
  }
  
@@ -969,7 +1046,7 @@ index ebc4ed2..0634102 100644
    const ensureHome = useRpc(ensureBotHomeRpc);
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
-@@ -754,15 +897,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -754,15 +950,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
  
    const start = async (message: OutgoingMessage) => {
      if (!host.api) throw new Error(`${host.label} is offline.`);
@@ -992,7 +1069,7 @@ index ebc4ed2..0634102 100644
        library,
        ...(host.isLocal ? { agentId } : {}),
        plugin,
-@@ -773,13 +921,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -773,13 +974,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        attachments: message.attachments,
        clientMessageId: message.messageId,
      });
@@ -1016,7 +1093,7 @@ index ebc4ed2..0634102 100644
      const api = host.api;
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
-@@ -799,8 +955,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -799,8 +1008,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
      // Runs once for the selection that carries the prompt.
    }, [host.api]);
  
@@ -1034,7 +1111,7 @@ index ebc4ed2..0634102 100644
        colors={colors}
        bot={bot}
        host={host}
-@@ -815,6 +980,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -815,6 +1033,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        onTogglePanel={onTogglePanel}
        onStart={start}
        onOpenChat={onStarted}
@@ -1171,7 +1248,7 @@ index 0000000..8869559
 +  workspaceBridge?: ComponentType<BotWorkspaceBridgeProps>;
 +}
 diff --git a/client/data.ts b/client/data.ts
-index ea7654d..7cd5e0e 100644
+index ea7654d..d8dbb97 100644
 --- a/client/data.ts
 +++ b/client/data.ts
 @@ -1,17 +1,22 @@
@@ -1180,7 +1257,7 @@ index ea7654d..7cd5e0e 100644
 -import { useQuery, useQueryClient } from "@tanstack/react-query";
 +import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
  import { useEffect, useMemo } from "react";
-+import { isWorkspaceBotChat } from "../shared/chat";
++import { scopeBotChats } from "../shared/chat";
  import { BOT_LABEL } from "../shared/bot";
  import { paseoToolsState, type PaseoToolsConfig } from "../shared/paseo-tools";
  
@@ -1273,7 +1350,7 @@ index ea7654d..7cd5e0e 100644
 +      return agents.filter(agent => !agent.archivedAt)
          .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
      },
-+    select: (agents: PaseoAgent[]) => !available ? [] : directory ? agents.filter(agent => isWorkspaceBotChat(agent, directory, botId, host.chatContext)) : agents,
++    select: (agents: PaseoAgent[]) => !available ? [] : scopeBotChats(agents, { directory, isLocal: host.isLocal, chatContext: host.chatContext }, botId),
    });
  }
  
@@ -1758,7 +1835,7 @@ index 8c4ecdd..bc522d3 100644
    migrate: (values, fromVersion) => {
      let migrated = values;
 diff --git a/shared/chat.ts b/shared/chat.ts
-index cd27e0d..588df72 100644
+index cd27e0d..ed5748c 100644
 --- a/shared/chat.ts
 +++ b/shared/chat.ts
 @@ -1,18 +1,27 @@
@@ -1789,7 +1866,7 @@ index cd27e0d..588df72 100644
    /** The bot's own folder: its workspace's working folder. */
    path: string;
    /** Folder of the shared Bots project, or null when the bot has its own working folder. */
-@@ -21,6 +30,13 @@ export interface BotPlacement {
+@@ -21,6 +30,29 @@ export interface BotPlacement {
  
  const normalize = (path: string | null | undefined) => (path ?? "").replace(/\/+$/, "");
  
@@ -1800,10 +1877,26 @@ index cd27e0d..588df72 100644
 +    (agent.labels?.[BOT_LABEL] === botId || (botId === "vibing-general" && !agent.labels?.[BOT_LABEL]));
 +}
 +
++/**
++ * The chats a bot lists. Outside an embedded workspace the chat query is already filtered by
++ * the bot; inside one it lists the whole workspace, so keep this bot's chats for that
++ * workspace and chat context. A remote host lists nothing there, as its directory is local.
++ */
++export function scopeBotChats<T extends { cwd?: string; labels?: Record<string, string> }>(
++  agents: readonly T[],
++  scope: { directory?: string; isLocal: boolean; chatContext?: string },
++  botId: string,
++): T[] {
++  if (!scope.directory) return [...agents];
++  if (!scope.isLocal) return [];
++  const directory = scope.directory;
++  return agents.filter((agent) => isWorkspaceBotChat(agent, directory, botId, scope.chatContext));
++}
++
  // The part of Paseo's API these helpers use. Shared code may only import the plugin SDK's
  // root, so the app and the server pass their Paseo API in, and it's checked against this.
  
-@@ -107,8 +123,40 @@ export async function syncBotWorkspaceTitle(api: ChatApi, bot: Bot, placement: B
+@@ -107,8 +139,40 @@ export async function syncBotWorkspaceTitle(api: ChatApi, bot: Bot, placement: B
    if (mine && mine.title !== bot.name) await api.workspaces.ref(mine).setTitle(bot.name);
  }
  
@@ -1844,7 +1937,7 @@ index cd27e0d..588df72 100644
    /** Resolves the bot's MCP servers. */
    library: Library;
    /** The chat's agent id, picked in advance so its tools URL can name it. */
-@@ -131,13 +179,22 @@ export interface StartChatInput {
+@@ -131,13 +195,22 @@ export interface StartChatInput {
   * and sends the first message. Used by the app and by the routine scheduler.
   */
  export async function startBotChat(api: ChatApi, input: StartChatInput): Promise<string> {
@@ -1871,6 +1964,63 @@ index cd27e0d..588df72 100644
      prompt: input.prompt,
      ...(input.title ? { title: input.title.slice(0, MAX_TITLE_CHARS) } : {}),
      ...(input.images?.length ? { images: input.images } : {}),
+diff --git a/shared/delete-chats.ts b/shared/delete-chats.ts
+new file mode 100644
+index 0000000..14ab7d2
+--- /dev/null
++++ b/shared/delete-chats.ts
+@@ -0,0 +1,51 @@
++/** How many deletes run at once; each closes its agent, so a long list shouldn't hit the host all together. */
++export const DELETE_CHATS_CONCURRENCY = 4;
++
++export interface DeleteChatsResult {
++  deleted: string[];
++  failed: { id: string; error: unknown }[];
++}
++
++/** Deletes chats a few at a time, carrying on past failures so one bad chat doesn't strand the rest. */
++export async function deleteChats(
++  ids: readonly string[],
++  remove: (id: string) => Promise<void>,
++  concurrency = DELETE_CHATS_CONCURRENCY,
++): Promise<DeleteChatsResult> {
++  const outcomes = new Map<string, { error: unknown } | null>();
++  let next = 0;
++  const worker = async () => {
++    while (next < ids.length) {
++      const id = ids[next++]!;
++      try {
++        await remove(id);
++        outcomes.set(id, null);
++      } catch (error) {
++        outcomes.set(id, { error });
++      }
++    }
++  };
++  await Promise.all(Array.from({ length: Math.min(Math.max(concurrency, 1), ids.length) }, worker));
++  const result: DeleteChatsResult = { deleted: [], failed: [] };
++  for (const id of ids) {
++    const outcome = outcomes.get(id);
++    if (outcome) result.failed.push({ id, error: outcome.error });
++    else result.deleted.push(id);
++  }
++  return result;
++}
++
++/** The confirmation for deleting every chat of a bot. `running` chats are stopped by deleting them. */
++export function deleteAllChatsMessage(botName: string, count: number, running: number): string {
++  const base =
++    count === 1
++      ? `Delete the 1 chat of "${botName}"? This permanently removes it and can't be undone.`
++      : `Delete all ${count} chats of "${botName}"? This permanently removes them and can't be undone.`;
++  if (running === 0) return base;
++  return `${base}\n\n${running === 1 ? "1 is still running" : `${running} are still running`} and will be stopped.`;
++}
++
++/** The pinned chats that survive deleting `deleted`. */
++export function pinsWithout<T extends { chatId: string }>(pins: readonly T[], deleted: ReadonlySet<string>): T[] {
++  return pins.filter((pin) => !deleted.has(pin.chatId));
++}
 diff --git a/shared/groups.ts b/shared/groups.ts
 index 174863a..a8e4aad 100644
 --- a/shared/groups.ts
@@ -2337,6 +2487,152 @@ index 0000000..cf60f81
 +    if (first && "onSelect" in first) void first.onSelect?.();
 +    expect(onRename).toHaveBeenCalledOnce();
 +    expect(noop).not.toHaveBeenCalled();
++  });
++});
+diff --git a/tests/delete-all-chats.test.ts b/tests/delete-all-chats.test.ts
+new file mode 100644
+index 0000000..e232404
+--- /dev/null
++++ b/tests/delete-all-chats.test.ts
+@@ -0,0 +1,140 @@
++import { describe, expect, it, vi } from "vitest";
++import { BOT_LABEL } from "../shared/bot";
++import { CHAT_CONTEXT_LABEL, scopeBotChats } from "../shared/chat";
++import { deleteAllChatsMessage, deleteChats, pinsWithout } from "../shared/delete-chats";
++
++// BotDialogs pulls in React Native; the menu builder needs none of it.
++vi.mock("@getpaseo/plugin/client", () => ({ useRpc: () => vi.fn() }));
++vi.mock("@getpaseo/plugin/client/react-native", () => ({}));
++vi.mock("@getpaseo/plugin/client/ui", () => ({}));
++vi.mock("react-native", () => ({ Platform: { OS: "web" } }));
++vi.mock("../client/Avatar", () => ({}));
++vi.mock("../client/native", () => ({}));
++vi.mock("../client/panel/controls", () => ({}));
++vi.mock("../client/web", () => ({}));
++
++const { botMenuEntries } = await import("../client/BotDialogs");
++const { makeBot } = await import("./helpers");
++
++function actions(overrides: Record<string, unknown> = {}) {
++  const noop = vi.fn();
++  return {
++    bot: makeBot(),
++    onOpenSettings: noop,
++    onTogglePin: noop,
++    onRename: noop,
++    onDuplicate: async () => {},
++    onExport: noop,
++    onCopyId: noop,
++    onSaveAsPreset: noop,
++    onToggleArchive: noop,
++    onDeleteAllChats: async () => {},
++    onDelete: async () => {},
++    ...overrides,
++  };
++}
++
++describe("botMenuEntries: Delete all chats", () => {
++  it("sits between Archive and Delete bot as a destructive action that runs only its own handler", () => {
++    const onDeleteAllChats = vi.fn(async () => {});
++    const onDelete = vi.fn(async () => {});
++    const onToggleArchive = vi.fn();
++    const entries = botMenuEntries(actions({ onDeleteAllChats, onDelete, onToggleArchive }));
++    const labels = entries.flatMap((entry) => ("label" in entry ? [entry.label] : []));
++
++    expect(labels.slice(-3)).toEqual(["Archive bot", "Delete all chats", "Delete bot"]);
++    const entry = entries.find((candidate) => "label" in candidate && candidate.label === "Delete all chats");
++    expect(entry).toMatchObject({ icon: "Trash2", destructive: true, pendingLabel: "Deleting..." });
++    if (entry && "onSelect" in entry) void entry.onSelect?.();
++    expect(onDeleteAllChats).toHaveBeenCalledOnce();
++    expect(onDelete).not.toHaveBeenCalled();
++    expect(onToggleArchive).not.toHaveBeenCalled();
++  });
++});
++
++describe("scopeBotChats", () => {
++  const chat = (id: string, cwd: string, labels: Record<string, string> = {}) => ({ id, cwd, labels: { [BOT_LABEL]: "bot-a", ...labels } });
++  const agents = [
++    chat("mine", "/work/app"),
++    chat("other-bot", "/work/app", { [BOT_LABEL]: "bot-b" }),
++    chat("other-dir", "/work/other"),
++    chat("live-design", "/work/app", { [CHAT_CONTEXT_LABEL]: "live-design" }),
++  ];
++
++  it("keeps everything outside an embedded workspace, where the query is already filtered by bot", () => {
++    expect(scopeBotChats(agents, { isLocal: true }, "bot-a")).toEqual(agents);
++  });
++
++  it("keeps only the bot's chats for this workspace and chat context", () => {
++    expect(scopeBotChats(agents, { directory: "/work/app/", isLocal: true }, "bot-a").map(({ id }) => id)).toEqual(["mine"]);
++    expect(scopeBotChats(agents, { directory: "/work/app", isLocal: true, chatContext: "live-design" }, "bot-a").map(({ id }) => id)).toEqual(["live-design"]);
++  });
++
++  it("lists nothing for a remote host in an embedded workspace", () => {
++    expect(scopeBotChats(agents, { directory: "/work/app", isLocal: false }, "bot-a")).toEqual([]);
++  });
++});
++
++describe("deleteChats", () => {
++  it("deletes every chat, never more than the limit at once", async () => {
++    let active = 0;
++    let peak = 0;
++    const ids = Array.from({ length: 10 }, (_, index) => `chat-${index}`);
++    const result = await deleteChats(
++      ids,
++      async () => {
++        active += 1;
++        peak = Math.max(peak, active);
++        await new Promise((resolve) => setTimeout(resolve, 2));
++        active -= 1;
++      },
++      3,
++    );
++
++    expect(result.deleted).toEqual(ids);
++    expect(result.failed).toEqual([]);
++    expect(peak).toBeLessThanOrEqual(3);
++  });
++
++  it("keeps going after a failure and reports exactly which chats failed", async () => {
++    const error = new Error("host went away");
++    const result = await deleteChats(["a", "b", "c", "d"], async (id) => {
++      if (id === "b") throw error;
++    });
++
++    expect(result.deleted).toEqual(["a", "c", "d"]);
++    expect(result.failed).toEqual([{ id: "b", error }]);
++  });
++
++  it("does nothing for an empty list", async () => {
++    const remove = vi.fn();
++    expect(await deleteChats([], remove)).toEqual({ deleted: [], failed: [] });
++    expect(remove).not.toHaveBeenCalled();
++  });
++});
++
++describe("deleteAllChatsMessage", () => {
++  it("names the bot and the count, and warns it can't be undone", () => {
++    expect(deleteAllChatsMessage("Codex", 1, 0)).toBe('Delete the 1 chat of "Codex"? This permanently removes it and can\'t be undone.');
++    expect(deleteAllChatsMessage("Codex", 12, 0)).toBe('Delete all 12 chats of "Codex"? This permanently removes them and can\'t be undone.');
++  });
++
++  it("says running chats are stopped", () => {
++    expect(deleteAllChatsMessage("Codex", 3, 1)).toContain("1 is still running and will be stopped.");
++    expect(deleteAllChatsMessage("Codex", 5, 2)).toContain("2 are still running and will be stopped.");
++  });
++});
++
++describe("pinsWithout", () => {
++  it("drops the pins of deleted chats and keeps every other pin", () => {
++    const pins = [
++      { botId: "bot-a", chatId: "gone" },
++      { botId: "bot-a", chatId: "kept" },
++      { botId: "bot-b", chatId: "other" },
++    ];
++    expect(pinsWithout(pins, new Set(["gone", "other-but-not-deleted"]))).toEqual([
++      { botId: "bot-a", chatId: "kept" },
++      { botId: "bot-b", chatId: "other" },
++    ]);
 +  });
 +});
 diff --git a/tests/groups.test.ts b/tests/groups.test.ts
