@@ -2879,7 +2879,7 @@ var commandRemoveRpc = defineRpc({
 // shared/vibing-defaults.ts
 var DEFAULT_BOT_ID = "vibing-general";
 var CLAUDE_BOT_ID = "vibing-claude";
-var VIBING_DEFAULTS_VERSION = 2;
+var VIBING_DEFAULTS_VERSION = 3;
 var OLD_LIST_WIDTH = 320;
 function defaultBot(id, name, provider, values) {
   const defaults = values.defaults ?? DEFAULT_BOT_DEFAULTS;
@@ -2898,31 +2898,56 @@ function defaultBot(id, name, provider, values) {
   };
 }
 function seedDefaultBots(values, migrating) {
+  if (!migrating) return values.bots;
   let bots = values.bots;
   const current2 = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
   if (!current2) {
     bots = [defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values), ...bots];
-  } else if (migrating && current2.name === "General") {
+  } else if (current2.name === "General") {
     const codex = defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values);
     const converted = { ...current2, name: codex.name, provider: codex.provider, model: codex.model, modeId: codex.modeId, thinkingOptionId: codex.thinkingOptionId };
     bots = bots.map((bot) => bot.id === DEFAULT_BOT_ID ? converted : bot);
   }
-  if (migrating && !bots.some((bot) => bot.id === CLAUDE_BOT_ID)) {
+  if (!bots.some((bot) => bot.id === CLAUDE_BOT_ID)) {
     const at = bots.findIndex((bot) => bot.id === DEFAULT_BOT_ID) + 1;
     bots = [...bots.slice(0, at), defaultBot(CLAUDE_BOT_ID, "Claude", "claude", values), ...bots.slice(at)];
   }
   return bots;
 }
+var DEFAULT_BOT_NAMES = [
+  [DEFAULT_BOT_ID, "Codex"],
+  [CLAUDE_BOT_ID, "Claude"]
+];
+var nameKey = (name) => name.trim().toLowerCase();
+function distinctDefaultNames(bots) {
+  let result = bots;
+  for (const [id, seededName] of DEFAULT_BOT_NAMES) {
+    const bot = result.find((entry) => entry.id === id);
+    if (!bot || nameKey(bot.name) !== nameKey(seededName)) continue;
+    const taken = new Set(result.filter((entry) => entry.id !== id).map((entry) => nameKey(entry.name)));
+    if (!taken.has(nameKey(seededName))) continue;
+    let name = `${seededName} (default)`;
+    for (let n = 2; taken.has(nameKey(name)); n++) name = `${seededName} (default ${n})`;
+    result = result.map((entry) => entry.id === id ? { ...entry, name } : entry);
+  }
+  return result;
+}
 function applyVibingDefaults(values) {
   const from = values.vibingDefaults ?? 0;
-  const bots = seedDefaultBots(values, from < 1);
+  const seeded = seedDefaultBots(values, from < 1);
+  const bots = from < 3 ? distinctDefaultNames(seeded) : seeded;
   const ui2 = from < 2 && values.ui?.listWidth === OLD_LIST_WIDTH ? { ...values.ui, listWidth: LIST_WIDTH.min } : values.ui;
   if (from >= VIBING_DEFAULTS_VERSION && bots === values.bots) return null;
   return { ...values, bots, ...ui2 ? { ui: ui2 } : {}, vibingDefaults: VIBING_DEFAULTS_VERSION };
 }
+function fallbackDefaultBotId(bots, hostId) {
+  const local = bots.filter((bot) => !bot.hostId || bot.hostId === hostId);
+  return (local.find((bot) => bot.id === DEFAULT_BOT_ID) ?? local.find((bot) => bot.id === CLAUDE_BOT_ID) ?? local[0])?.id;
+}
 function preferredDefaultBotId(bots, providers, hostId) {
-  const codex = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
-  if (!providers || !codex) return void 0;
+  if (!providers || bots.length === 0) return void 0;
+  const codex = bots.find((bot) => bot.id === DEFAULT_BOT_ID && (!bot.hostId || bot.hostId === hostId));
+  if (!codex) return fallbackDefaultBotId(bots, hostId);
   const statusOf = (bot) => providers.find((entry) => entry.provider === bot.provider)?.status ?? "unavailable";
   const status = statusOf(codex);
   if (status === "ready") return DEFAULT_BOT_ID;
@@ -14174,7 +14199,8 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     const timer2 = setTimeout(() => setDefaultBotWaitOver(true), DEFAULT_BOT_WAIT_MS);
     return () => clearTimeout(timer2);
   }, []);
-  const defaultBotId = preferredDefaultBotId(settings.status === "ready" ? settings.values.bots : [], localProviders.data, host2.id) ?? (defaultBotWaitOver ? DEFAULT_BOT_ID : void 0);
+  const readyBots = settings.status === "ready" ? settings.values.bots : [];
+  const defaultBotId = preferredDefaultBotId(readyBots, localProviders.data, host2.id) ?? (defaultBotWaitOver ? fallbackDefaultBotId(readyBots, host2.id) : void 0);
   const defaultBotRef = useRef20(defaultBotId ?? DEFAULT_BOT_ID);
   defaultBotRef.current = defaultBotId ?? DEFAULT_BOT_ID;
   useEffect24(() => {
@@ -14651,7 +14677,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       onBack: () => setLibraryView(null)
     }
   ) : null;
-  const localBotIds = allBots.some((bot) => bot.id === DEFAULT_BOT_ID) && defaultBotId && !applyVibingDefaults(settings.values) ? allBots.filter((bot) => !bot.hostId || bot.hostId === host2.id).map((bot) => bot.id) : void 0;
+  const localBotIds = settings.status === "ready" && defaultBotId && !applyVibingDefaults(settings.values) ? allBots.filter((bot) => !bot.hostId || bot.hostId === host2.id).map((bot) => bot.id) : void 0;
   const workspaceHeader = WorkspaceBridge ? /* @__PURE__ */ jsx49(WorkspaceBridge, { localBotIds, selectedAgentId: selection?.chatId, selectedDraftId: selection?.draftId, botId: selection?.botId === DEFAULT_BOT_ID && !selection.chatId && !selection.draftId ? defaultBotId ?? DEFAULT_BOT_ID : selection?.botId ?? defaultBotRef.current, onActivate: activateWorkspaceChat }) : null;
   if (libraryScreen && !layout.compact) {
     return /* @__PURE__ */ jsxs47(Fragment23, { children: [

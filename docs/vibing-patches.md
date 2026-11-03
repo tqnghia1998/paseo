@@ -163,9 +163,10 @@ Prompt composition and agent creation use the same runtime choice. Draft prefere
 services are local to the mounted conversation so global composer preferences cannot
 replace bot/provider defaults or receive these overrides.
 The fork menu omits its new-workspace destination inside Bots chats.
-Two default bots are seeded (`shared/vibing-defaults.ts`): Codex, the reserved default
-(`vibing-general`, recreated whenever missing), and Claude (`vibing-claude`, added once so a
-deletion sticks). An existing home's untouched General bot becomes Codex once (a renamed one is
+Two default bots are seeded once (`shared/vibing-defaults.ts`), so deleting either sticks:
+Codex, the default (`vibing-general`), and Claude (`vibing-claude`). Version 3 renames an
+untouched default bot to "Codex (default)" or "Claude (default)" once when another bot already
+uses its name. Without Codex, a workspace opens on Claude, else its first local bot. An existing home's untouched General bot becomes Codex once (a renamed one is
 left alone), tracked by the settings' `vibingDefaults` version. A workspace opens on Claude
 instead when the Codex bot's provider can't run and Claude's can (`preferredDefaultBotId`). The bot list opens at its
 200px minimum width; version 2 narrows a list still saved at the old 320px default once, so a
