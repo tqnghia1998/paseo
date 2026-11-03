@@ -70,6 +70,8 @@ export const AgentControlTrigger = forwardRef<View, AgentControlTriggerProps>(
         accessibilityLabel={accessibilityLabel}
         testID={testID}
         chevron={showCaret ? undefined : null}
+        // Sheet rows span the sheet so the label grows and the value keeps its 45% share.
+        block={isSheet}
       >
         {isSheet ? (
           <View style={styles.sheetGlyph}>
