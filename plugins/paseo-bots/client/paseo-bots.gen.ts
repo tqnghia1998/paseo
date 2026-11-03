@@ -2879,8 +2879,12 @@ var commandRemoveRpc = defineRpc({
 // shared/vibing-defaults.ts
 var DEFAULT_BOT_ID = "vibing-general";
 var CLAUDE_BOT_ID = "vibing-claude";
-var VIBING_DEFAULTS_VERSION = 3;
+var VIBING_DEFAULTS_VERSION = 4;
 var OLD_LIST_WIDTH = 320;
+var DEFAULT_BOT_MODES = /* @__PURE__ */ new Map([
+  ["codex", "full-access"],
+  ["claude", "bypassPermissions"]
+]);
 function defaultBot(id, name, provider, values) {
   const defaults = values.defaults ?? DEFAULT_BOT_DEFAULTS;
   const same = defaults.provider === provider;
@@ -2892,9 +2896,9 @@ function defaultBot(id, name, provider, values) {
     // Distinct avatars, so the two default bots are told apart in the sidebar.
     avatar: { ...base.avatar, seed: `vibing-${provider}` },
     model: same ? defaults.model : null,
-    modeId: same ? defaults.modeId : null,
+    modeId: DEFAULT_BOT_MODES.get(provider) ?? null,
     thinkingOptionId: same ? defaults.thinkingOptionId : null,
-    contactBots: defaults.contactBots
+    contactBots: "allow"
   };
 }
 function seedDefaultBots(values, migrating) {
@@ -2932,10 +2936,16 @@ function distinctDefaultNames(bots) {
   }
   return result;
 }
+function fullAccessDefaultBots(bots) {
+  return bots.map(
+    (bot) => bot.id === DEFAULT_BOT_ID || bot.id === CLAUDE_BOT_ID ? { ...bot, modeId: DEFAULT_BOT_MODES.get(bot.provider) ?? bot.modeId, contactBots: "allow" } : bot
+  );
+}
 function applyVibingDefaults(values) {
   const from = values.vibingDefaults ?? 0;
   const seeded = seedDefaultBots(values, from < 1);
-  const bots = from < 3 ? distinctDefaultNames(seeded) : seeded;
+  const named = from < 3 ? distinctDefaultNames(seeded) : seeded;
+  const bots = from < 4 ? fullAccessDefaultBots(named) : named;
   const ui2 = from < 2 && values.ui?.listWidth === OLD_LIST_WIDTH ? { ...values.ui, listWidth: LIST_WIDTH.min } : values.ui;
   if (from >= VIBING_DEFAULTS_VERSION && bots === values.bots) return null;
   return { ...values, bots, ...ui2 ? { ui: ui2 } : {}, vibingDefaults: VIBING_DEFAULTS_VERSION };
