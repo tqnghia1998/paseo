@@ -217,7 +217,7 @@ index 9d97c7f..27494ae 100644
      </Modal>
    );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 7533cb6..77f0b76 100644
+index 7533cb6..24c41b7 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
 @@ -1,7 +1,7 @@
@@ -314,13 +314,13 @@ index 7533cb6..77f0b76 100644
      </View>
    );
  }
-@@ -141,8 +161,19 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
+@@ -141,36 +161,24 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
    );
  }
  
 -function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): void; onTeamMap(): void }) {
+-  const { hovered, hoverProps } = useHover();
 +function Footer({ colors, onNewBot, onImportBot, onExportAllBots, onTeamMap }: { colors: Colors; onNewBot(): void; onImportBot(): void; onExportAllBots?: () => void; onTeamMap(): void }) {
-   const { hovered, hoverProps } = useHover();
 +  const menu = useMenu();
 +  const sharingRef = useRef<View>(null);
 +  const openSharing = () => void measureAnchor(sharingRef).then((anchor) => anchor && menu.open({
@@ -332,18 +332,42 @@ index 7533cb6..77f0b76 100644
 +      { label: "Export all bots", icon: "Share", disabled: !onExportAllBots, onSelect: () => onExportAllBots?.() },
 +    ],
 +  }));
++  // New bot is an icon with a tooltip, like the buttons beside it, so the footer fits the list's 200px minimum.
    return (
      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
-       <Pressable
-@@ -171,6 +202,7 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
-           New bot
-         </Text>
-       </Pressable>
+-      <Pressable
+-        accessibilityRole="button"
+-        accessibilityLabel="New bot"
+-        onPress={onNewBot}
+-        {...hoverProps}
+-        style={({ pressed }) => [
+-          {
+-            minWidth: 0,
+-            minHeight: 32,
+-            flex: 1,
+-            flexDirection: "row",
+-            alignItems: "center",
+-            gap: 8,
+-            paddingVertical: 6,
+-            paddingHorizontal: 8,
+-            borderRadius: 8,
+-            backgroundColor: pressed ? colors.surface2 : hovered ? colors.surface1 : "transparent",
+-          },
+-          noSelect,
+-        ]}
+-      >
+-        <Icon name="Plus" size={14} color={hovered ? colors.foreground : colors.foregroundMuted} />
+-        <Text numberOfLines={1} style={{ minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered ? colors.foreground : colors.foregroundMuted }}>
+-          New bot
+-        </Text>
+-      </Pressable>
++      <FooterIconButton colors={colors} icon="Plus" label="New bot" onPress={onNewBot} />
++      <View style={{ flex: 1 }} />
 +      <FooterIconButton colors={colors} icon="ArrowDownUp" label="Import or export bots" buttonRef={sharingRef} onPress={openSharing} />
        <FooterIconButton colors={colors} icon="Network" label="Team map" onPress={onTeamMap} />
        <FooterIconButton colors={colors} icon="Blocks" label="Skills & Tools" onPress={() => openLibrary()} />
      </View>
-@@ -178,17 +210,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
+@@ -178,17 +186,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
  }
  
  /** The sidebar footer's trailing icon buttons (Paseo's host, import and settings buttons): 32 box, 16pt icon. */
@@ -366,7 +390,7 @@ index 7533cb6..77f0b76 100644
          noSelect,
        ]}
      >
-@@ -272,11 +307,12 @@ function PinnedSection(props: PinnedProps) {
+@@ -272,11 +283,12 @@ function PinnedSection(props: PinnedProps) {
    );
  }
  
@@ -380,7 +404,7 @@ index 7533cb6..77f0b76 100644
    return (
      <ChatRow
        colors={colors}
-@@ -287,7 +323,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -287,7 +299,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
        touch={touch}
        selected={selection?.botId === bot.id && selection.chatId === chat.id}
        onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -390,7 +414,7 @@ index 7533cb6..77f0b76 100644
      />
    );
  }
-@@ -297,7 +334,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -297,7 +310,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
  type GroupProps = BotSidebarProps & { bot: Bot; tokens: NativeTokens; pinnedIds: ReadonlySet<string>; /** The team's Chief of Staff. */ lead?: boolean };
  
  function BotGroup(props: GroupProps) {
@@ -399,7 +423,7 @@ index 7533cb6..77f0b76 100644
    const host = useBotHost(bot.hostId, localHost);
    const chats = useBotChats(host, bot.id);
    const [expanded, setExpanded] = useState(false);
-@@ -308,6 +345,7 @@ function BotGroup(props: GroupProps) {
+@@ -308,6 +321,7 @@ function BotGroup(props: GroupProps) {
    const unpinned = (chats.data ?? []).filter((chat) => !pinnedIds.has(chat.id));
    const ordered = orderChats(unpinned, listUi.chatSort, listUi.chatOrder[bot.id]);
    const siblings = ordered.map((chat) => chat.id);
@@ -407,7 +431,7 @@ index 7533cb6..77f0b76 100644
    const visible = expanded ? ordered : ordered.slice(0, SIDEBAR_GROUP_LIMIT);
    const loading = !!host.api && chats.isLoading;
    // Collapsed rows carry their chats' most urgent status; open ones leave it to the rows.
-@@ -330,7 +368,8 @@ function BotGroup(props: GroupProps) {
+@@ -330,7 +344,8 @@ function BotGroup(props: GroupProps) {
                touch={touch}
                selected={botSelected && selection?.chatId === chat.id}
                onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -417,7 +441,7 @@ index 7533cb6..77f0b76 100644
              />
            ))}
            {ordered.length > SIDEBAR_GROUP_LIMIT ? <ShowMoreRow colors={colors} expanded={expanded} onPress={() => setExpanded(!expanded)} /> : null}
-@@ -452,10 +491,11 @@ interface ChatRowProps {
+@@ -452,10 +467,11 @@ interface ChatRowProps {
    hoisted?: boolean;
    onPress(): void;
    onMenu(anchor: LayoutRectangle, source: MenuSource): void;
@@ -430,7 +454,7 @@ index 7533cb6..77f0b76 100644
    const [hovered, setHovered] = useState(false);
    const kebabRef = useRef<View>(null);
    const bucket = chatBucket(chat);
-@@ -508,7 +548,7 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -508,7 +524,7 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
                {title}
              </Text>
              {/* On touch the kebab stays, so its space is reserved; on desktop it overlays the title's tail. */}
@@ -439,7 +463,7 @@ index 7533cb6..77f0b76 100644
            </View>
            {hoisted ? (
              <Text numberOfLines={1} style={{ fontSize: ui(12), lineHeight: 16, color: colors.foregroundMuted }}>
-@@ -520,8 +560,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -520,8 +536,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
        {showKebab ? (
          <View style={{ position: "absolute", top: 8, right: 12, flexDirection: "row" }}>
            {/* A short scrim in the row's colour hides the title's tail under the kebab, as native does. */}
@@ -451,7 +475,7 @@ index 7533cb6..77f0b76 100644
              <KebabButton colors={colors} buttonRef={kebabRef} label="Chat actions" onPress={() => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab"))} />
            </View>
          </View>
-@@ -611,6 +652,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -611,6 +628,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
    );
  }
  
@@ -476,7 +500,7 @@ index 7533cb6..77f0b76 100644
  /**
   * Kebab triggers. Chat rows use Paseo's workspace trigger (padding 2, radius 4, pulled
   * onto the rail with marginRight -7); bot rows use the 24pt project kebab (`box`).
-@@ -688,7 +747,7 @@ const BADGE_SIZE = 12;
+@@ -688,7 +723,7 @@ const BADGE_SIZE = 12;
  const BADGE_OFFSET = -4;
  const RING_FRAME = 14;
  
@@ -486,10 +510,10 @@ index 7533cb6..77f0b76 100644
    if (bucket === "running") {
      const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..c9314ac 100644
+index ebc4ed2..0634102 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
-@@ -1,32 +1,34 @@
+@@ -1,32 +1,35 @@
 +import type { NativeChatSlot } from "./NativeChat";
  import type { PluginTheme } from "@getpaseo/plugin";
 -import type { PaseoAgent } from "./paseo";
@@ -513,8 +537,8 @@ index ebc4ed2..c9314ac 100644
 +import { chatAfterRemoval, moveKey } from "../shared/sidebar";
  import { chatTranscript } from "../shared/transcript";
  import { ensureBotHomeRpc, mountRpc, exportBotRpc, importBotRpc, importTeamRpc, systemPromptRpc } from "../shared/rpc";
--import { botFromPreset, newBot } from "../shared/templates";
-+import { BOT_TEMPLATES, botFromPreset, newBot } from "../shared/templates";
+ import { botFromPreset, newBot } from "../shared/templates";
++import { applyVibingDefaults, DEFAULT_BOT_ID, preferredDefaultBotId } from "../shared/vibing-defaults";
  import { AvatarTheme } from "./Avatar";
 -import { botMenuEntries, chatMenuEntries, ExportDialog, NewBotDialog, RenameDialog } from "./BotDialogs";
 +import { botMenuEntries, chatMenuEntries, ExportDialog, NewBotDialog, RenameDialog, type ExportTarget } from "./BotDialogs";
@@ -532,7 +556,17 @@ index ebc4ed2..c9314ac 100644
  import { TeamTabsRow, TeamTabSwitcher } from "./teams/TeamTabs";
  import { ResizeHandle, SlideOver } from "./ui/Columns";
  import { fitColumns } from "../shared/layout";
-@@ -50,9 +52,10 @@ const SETUP_PROMPT =
+@@ -43,6 +46,9 @@ import { ui, useTypeScale } from "./typography";
+ 
+ type Colors = PluginTheme["colors"];
+ 
++/** How long a workspace waits for provider probes before opening on Codex anyway; Claude's can take several seconds. */
++const DEFAULT_BOT_WAIT_MS = 15_000;
++
+ const SETUP_PROMPT =
+   "Let's set you up. Interview me one short question at a time about what I want from you, how I like to work, and what you should never do. " +
+   "Then propose standing instructions for yourself and a starting MEMORY.md. Write the memory file once I confirm, and give me the instructions to paste into your Soul settings.";
+@@ -50,9 +56,10 @@ const SETUP_PROMPT =
  /** Autosave delay after the last edit in the settings panel. */
  const SAVE_DELAY_MS = 600;
  
@@ -544,7 +578,7 @@ index ebc4ed2..c9314ac 100644
    return (
      <MenuProvider colors={colors} compact={props.layout.compact}>
        <AvatarTheme dark={nativeTokens(colors).dark}>
-@@ -63,30 +66,31 @@ export function BotsSurface(props: PluginSurfaceProps) {
+@@ -63,30 +70,31 @@ export function BotsSurface(props: PluginSurfaceProps) {
  }
  
  
@@ -581,29 +615,46 @@ index ebc4ed2..c9314ac 100644
    const [drafts, setDrafts] = useState<Record<string, Bot>>({});
    // List state (collapsed groups, pins, order, display options) applies at once and saves behind.
    const [uiOverride, setUiOverride] = useState<BotListUi | null>(null);
-@@ -222,9 +226,45 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -222,8 +230,61 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    // "New bot" from the Command Center opens a fresh Bots screen; only that one consumes it.
    useEffect(() => {
      const intent = takeIntent();
 -    if (intent?.kind === "new-bot") setCreating(true);
 +    if (intent?.kind === "new-bot") setCreating("new");
-   }, []);
- 
-+  const initializingGeneral = useRef(false);
++  }, []);
++
++  // Vibing's defaults: Codex (the reserved default) and Claude bots, and a minimum-width list.
++  const seedingDefaults = useRef(false);
++  // The bot a workspace opens on: Codex, or Claude when Codex can't run here. Undefined
++  // while providers are still probed, for at most DEFAULT_BOT_WAIT_MS.
++  const [defaultBotWaitOver, setDefaultBotWaitOver] = useState(false);
 +  useEffect(() => {
-+    if (!botWorkspace || settings.status !== "ready" || settings.values.bots.some(bot => bot.id === "vibing-general") || !localProviders.data || initializingGeneral.current) return;
-+    const ready = localProviders.data.filter(entry => entry.status === "ready");
-+    const provider = ready[0]?.provider ?? localProviders.data[0]?.provider ?? "codex";
-+    initializingGeneral.current = true;
-+    const bot = { ...applyDefaults(newBot(provider, BOT_TEMPLATES[0]), settings.values.defaults ?? DEFAULT_BOT_DEFAULTS, provider), id: "vibing-general", name: "General" };
-+    void commit(values => values.bots.some(entry => entry.id === bot.id) ? values : { ...values, bots: [bot, ...values.bots] }).finally(() => { initializingGeneral.current = false; });
-+  }, [botWorkspace, settings, localProviders.data, commit]);
++    const timer = setTimeout(() => setDefaultBotWaitOver(true), DEFAULT_BOT_WAIT_MS);
++    return () => clearTimeout(timer);
+   }, []);
++  const defaultBotId =
++    preferredDefaultBotId(settings.status === "ready" ? settings.values.bots : [], localProviders.data, host.id) ??
++    (defaultBotWaitOver ? DEFAULT_BOT_ID : undefined);
++  const defaultBotRef = useRef(defaultBotId ?? DEFAULT_BOT_ID);
++  defaultBotRef.current = defaultBotId ?? DEFAULT_BOT_ID;
++  // The workspace opens on DEFAULT_BOT_ID before providers are known; move an untouched
++  // selection to the chosen default once they are.
++  useEffect(() => {
++    if (!botWorkspace || !defaultBotId || defaultBotId === DEFAULT_BOT_ID) return;
++    setSelection((current) => (current?.botId === DEFAULT_BOT_ID && !current.chatId && !current.draftId ? { botId: defaultBotId, chatId: null } : current));
++  }, [botWorkspace, defaultBotId]);
++  useEffect(() => {
++    if (!botWorkspace || settings.status !== "ready" || seedingDefaults.current || !applyVibingDefaults(settings.values)) return;
++    seedingDefaults.current = true;
++    void commit(values => applyVibingDefaults(values) ?? values).finally(() => { seedingDefaults.current = false; });
++  }, [botWorkspace, settings, commit]);
 +  const activateWorkspaceChat = useCallback((target: { botId?: string; agentId?: string; draftId?: string }) => {
 +    setSelection(current => {
-+      const selectedId = target.botId ?? current?.botId ?? "vibing-general";
++      const fallback = defaultBotRef.current;
++      const selectedId = target.botId ?? current?.botId ?? fallback;
 +      const bot = latest.current.status === "ready" ? latest.current.values.bots.find(entry => entry.id === selectedId) : null;
 +      const local = !bot?.hostId || bot.hostId === host.id;
-+      return !local ? { botId: "vibing-general", chatId: null, draftId: target.draftId } : !target.agentId && !target.draftId ? current ?? { botId: "vibing-general", chatId: null } : ({ botId: target.botId ?? current?.botId ?? "vibing-general", chatId: target.agentId ?? null, draftId: target.draftId });
++      return !local ? { botId: fallback, chatId: null, draftId: target.draftId } : !target.agentId && !target.draftId ? current ?? { botId: fallback, chatId: null } : ({ botId: target.botId ?? current?.botId ?? fallback, chatId: target.agentId ?? null, draftId: target.draftId });
 +    });
 +    setPanel({ open: false, section: null });
 +    setLibraryView(null);
@@ -624,11 +675,10 @@ index ebc4ed2..c9314ac 100644
 +    const open = groups.find((group) => group.id === currentUi().tab);
 +    if (open && open !== team) updateUi((current) => ({ ...current, tab: team?.id ?? ALL_BOTS_TAB }));
 +  }, [selection]);
-+
+ 
    if (settings.status !== "ready") {
      return (
-       <View style={{ flex: 1, padding: 24, gap: 12, backgroundColor: colors.surface0, justifyContent: settings.status === "loading" ? "center" : "flex-start", alignItems: settings.status === "loading" ? "center" : "stretch" }}>
-@@ -269,12 +309,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -269,12 +330,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    const select = (next: Selection) => {
      setSelection(next);
      setTeamMap(false);
@@ -663,7 +713,7 @@ index ebc4ed2..c9314ac 100644
    const openPanel = (bot: Bot, section: SectionId | null) => {
      if (selection?.botId !== bot.id) select({ botId: bot.id, chatId: null });
      setPanel({ open: true, section });
-@@ -366,7 +427,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -366,7 +448,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
  
    const openBotMenu = (bot: Bot, anchor: LayoutRectangle, source: MenuSource) => {
      const botHost = resolveHost(bot.hostId);
@@ -672,7 +722,7 @@ index ebc4ed2..c9314ac 100644
      const workspaceId = chats.find((chat) => chat.workspaceId)?.workspaceId;
      const openWorkspace = navigation?.openWorkspace;
      menu.open({
-@@ -376,14 +437,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -376,14 +458,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        title: "Bot actions",
        entries: botMenuEntries({
          bot,
@@ -689,7 +739,7 @@ index ebc4ed2..c9314ac 100644
          onCopyId: () => copy(bot.id, "Bot ID copied"),
          onSaveAsPreset: () =>
            void flush()
-@@ -459,26 +520,55 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -459,26 +541,55 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            updateUi((current) =>
              context.pinned ? unpin(current) : { ...current, pinnedChats: [...current.pinnedChats, { botId: bot.id, chatId: chat.id }] },
            ),
@@ -760,7 +810,7 @@ index ebc4ed2..c9314ac 100644
    const openDisplayMenu = (anchor: LayoutRectangle) => {
      menu.open({
        anchor,
-@@ -518,6 +608,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -518,6 +629,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        touch={layout.compact || layout.platform !== "web"}
        splash={layout.compact}
        bottomInset={bottomInset}
@@ -768,7 +818,7 @@ index ebc4ed2..c9314ac 100644
        onToggle={(botId) =>
          updateUi((current) => ({
            ...current,
-@@ -527,9 +618,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -527,9 +639,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        onTogglePinnedSection={() => updateUi((current) => ({ ...current, pinnedCollapsed: !current.pinnedCollapsed }))}
        onShowArchived={() => updateUi((current) => ({ ...current, showArchived: true }))}
        onSelect={select}
@@ -782,7 +832,7 @@ index ebc4ed2..c9314ac 100644
        onDisplayMenu={openDisplayMenu}
        onEditTeam={setEditingTeam}
        onTeamMap={() => setTeamMap(true)}
-@@ -537,7 +631,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -537,7 +652,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    );
  
    const tabProps = openTab
@@ -791,7 +841,7 @@ index ebc4ed2..c9314ac 100644
      : null;
  
    const pane = teamMap ? (
-@@ -558,11 +652,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -558,11 +673,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : selectedBot && selection ? (
        <SelectedChat
@@ -805,7 +855,7 @@ index ebc4ed2..c9314ac 100644
          localHost={localHost}
          panelOpen={panel.open}
          layout={layout}
-@@ -571,6 +666,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -571,6 +687,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          onBack={layout.compact ? () => setSelection(null) : undefined}
          onBotMenu={(anchor) => (anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot))}
          onTogglePanel={() => setPanel({ open: !panel.open, section: panel.section })}
@@ -814,7 +864,7 @@ index ebc4ed2..c9314ac 100644
          onStarted={(chatId) => setSelection({ botId: selectedBot.id, chatId })}
        />
      ) : (
-@@ -599,7 +696,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -599,7 +717,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            setPanelVersion((version) => version + 1);
            toast.show("Restored. Undo it from History if needed.", { variant: "success" });
          }}
@@ -823,14 +873,15 @@ index ebc4ed2..c9314ac 100644
          onOpenChat={(chatId) => {
            select({ botId: selectedBot.id, chatId });
            // On phones the panel covers the chat.
-@@ -621,13 +718,19 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -621,13 +739,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : null;
  
-+  const localBotIds = allBots.some(bot => bot.id === "vibing-general")
++  // Waiting for the default bots and the default choice keeps the workspace from restoring onto Codex first.
++  const localBotIds = allBots.some(bot => bot.id === DEFAULT_BOT_ID) && defaultBotId && !applyVibingDefaults(settings.values)
 +    ? allBots.filter(bot => !bot.hostId || bot.hostId === host.id).map(bot => bot.id)
 +    : undefined;
-+  const workspaceHeader = WorkspaceBridge ? <WorkspaceBridge localBotIds={localBotIds} selectedAgentId={selection?.chatId} selectedDraftId={selection?.draftId} botId={selection?.botId ?? "vibing-general"} onActivate={activateWorkspaceChat} /> : null;
++  const workspaceHeader = WorkspaceBridge ? <WorkspaceBridge localBotIds={localBotIds} selectedAgentId={selection?.chatId} selectedDraftId={selection?.draftId} botId={selection?.botId === DEFAULT_BOT_ID && !selection.chatId && !selection.draftId ? (defaultBotId ?? DEFAULT_BOT_ID) : (selection?.botId ?? defaultBotRef.current)} onActivate={activateWorkspaceChat} /> : null;
 +
    // On desktop Skills & Tools takes over the screen, like Paseo's settings.
    if (libraryScreen && !layout.compact) {
@@ -844,7 +895,7 @@ index ebc4ed2..c9314ac 100644
      {/* The host gives plugin surfaces no keyboard handling; lift everything above the keyboard. */}
      <View
        style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}
-@@ -684,6 +787,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -684,6 +809,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        {creating ? (
          <NewBotDialog
            colors={colors}
@@ -852,7 +903,7 @@ index ebc4ed2..c9314ac 100644
            onClose={() => setCreating(false)}
            presets={settings.status === "ready" ? (settings.values.presets ?? []) : []}
            onCreate={(start) => {
-@@ -694,13 +798,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -694,13 +820,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            }}
            onImport={async (json) => {
              const { bots, teams } = await importTeam({ json });
@@ -869,7 +920,7 @@ index ebc4ed2..c9314ac 100644
              }
            }}
          />
-@@ -721,17 +826,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -721,17 +848,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          />
        ) : null}
  
@@ -903,7 +954,7 @@ index ebc4ed2..c9314ac 100644
    localHost: LocalHost;
    panelOpen: boolean;
    layout: PluginSurfaceProps["layout"];
-@@ -743,9 +861,12 @@ interface SelectedChatProps {
+@@ -743,9 +883,12 @@ interface SelectedChatProps {
    onStarted(chatId: string): void;
  }
  
@@ -918,7 +969,7 @@ index ebc4ed2..c9314ac 100644
    const ensureHome = useRpc(ensureBotHomeRpc);
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
-@@ -754,15 +875,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -754,15 +897,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
  
    const start = async (message: OutgoingMessage) => {
      if (!host.api) throw new Error(`${host.label} is offline.`);
@@ -941,7 +992,7 @@ index ebc4ed2..c9314ac 100644
        library,
        ...(host.isLocal ? { agentId } : {}),
        plugin,
-@@ -773,13 +899,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -773,13 +921,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        attachments: message.attachments,
        clientMessageId: message.messageId,
      });
@@ -965,7 +1016,7 @@ index ebc4ed2..c9314ac 100644
      const api = host.api;
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
-@@ -799,8 +933,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -799,8 +955,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
      // Runs once for the selection that carries the prompt.
    }, [host.api]);
  
@@ -983,7 +1034,7 @@ index ebc4ed2..c9314ac 100644
        colors={colors}
        bot={bot}
        host={host}
-@@ -815,6 +958,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -815,6 +980,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        onTogglePanel={onTogglePanel}
        onStart={start}
        onOpenChat={onStarted}
@@ -1120,7 +1171,7 @@ index 0000000..8869559
 +  workspaceBridge?: ComponentType<BotWorkspaceBridgeProps>;
 +}
 diff --git a/client/data.ts b/client/data.ts
-index ea7654d..fafc9b3 100644
+index ea7654d..7cd5e0e 100644
 --- a/client/data.ts
 +++ b/client/data.ts
 @@ -1,17 +1,22 @@
@@ -1176,7 +1227,17 @@ index ea7654d..fafc9b3 100644
    );
  }
  
-@@ -92,22 +97,37 @@ export function useHostWorkspaces(host: BotHost) {
+@@ -60,6 +65,9 @@ export function useProviders(host: BotHost) {
+     queryKey: ["paseo-bots", "providers", host.key],
+     enabled: !!host.api,
+     staleTime: 60_000,
++    // Providers report "loading" while the daemon probes them; poll until they settle so
++    // callers (such as the default bot choice) see whether each one is installed.
++    refetchInterval: (query) => (query.state.data?.some((entry) => entry.status === "loading") ? 1_000 : false),
+     queryFn: async () => {
+       const snapshot = await host.api!.providers.snapshot();
+       return snapshot.entries.filter((entry) => entry.enabled);
+@@ -92,22 +100,37 @@ export function useHostWorkspaces(host: BotHost) {
    });
  }
  
@@ -1653,19 +1714,32 @@ index 3c95809..1292bd9 100644
      const paseo = host.requirePaseo();
      await paseo.agents.ref(chatId).waitForFinish(ASK_WAIT_MS).catch(() => null);
 diff --git a/shared/bot.ts b/shared/bot.ts
-index 8c4ecdd..7082cfd 100644
+index 8c4ecdd..bc522d3 100644
 --- a/shared/bot.ts
 +++ b/shared/bot.ts
-@@ -205,7 +205,7 @@ export const BotListUiSchema = z.object({
+@@ -2,6 +2,7 @@ import { defineSettings } from "@getpaseo/plugin";
+ import { z } from "zod";
+ import { APPS_MCP_NAME, appsPrompt, type PromptApp } from "./apps";
+ import { botToolsPrompt, QUIET_TOOLS, supportsToolGrants, TOOLS_MCP_NAME } from "./bot-tools";
++import { LIST_WIDTH } from "./layout";
+ import { PASEO_MCP_NAME, PASEO_TOOLS_PROMPT } from "./paseo-tools";
+ import { renderPlaybooks } from "./playbooks";
+ 
+@@ -205,10 +206,10 @@ export const BotListUiSchema = z.object({
    chatOrder: z.record(z.string(), z.array(z.string())).default({}),
    chatSort: z.enum(["manual", "activity"]).default("manual"),
    showArchived: z.boolean().default(false),
 -  /** The open team tab: a team id, or OTHER_BOTS_TAB. Null opens the first. */
 +  /** The open team tab: a team id, or ALL_BOTS_TAB. Null (or a retired id) opens the first. */
    tab: z.string().nullable().default(null),
-   /** Desktop column widths, like Paseo's resizable sidebar (default 320) and explorer (default 320). */
-   listWidth: z.number().default(320),
-@@ -248,7 +248,7 @@ export const TeamFileTeamSchema = z.object({
+-  /** Desktop column widths, like Paseo's resizable sidebar (default 320) and explorer (default 320). */
+-  listWidth: z.number().default(320),
++  /** Desktop column widths, like Paseo's resizable sidebar and explorer (default 320); Vibing opens the list at its 200px minimum. */
++  listWidth: z.number().default(LIST_WIDTH.min),
+   panelWidth: z.number().default(320),
+ });
+ export type BotListUi = z.infer<typeof BotListUiSchema>;
+@@ -248,7 +249,7 @@ export const TeamFileTeamSchema = z.object({
    name: z.string().max(60),
    logo: TeamLogoSchema.nullable().default(null),
    lead: z.number().int().min(0).nullable().default(null),
@@ -1674,8 +1748,17 @@ index 8c4ecdd..7082cfd 100644
    instructions: z.string().max(20_000).default(""),
  });
  export type TeamFileTeam = z.infer<typeof TeamFileTeamSchema>;
+@@ -295,6 +296,8 @@ export const botSettings = defineSettings({
+     defaults: BotDefaultsSchema.optional(),
+     presets: z.array(PresetSchema).optional(),
+     groups: z.array(BotGroupSchema).optional(),
++    /** The version of Vibing's defaults (default bots, list width) this home was migrated to. */
++    vibingDefaults: z.number().int().optional(),
+   }),
+   migrate: (values, fromVersion) => {
+     let migrated = values;
 diff --git a/shared/chat.ts b/shared/chat.ts
-index cd27e0d..ebf5824 100644
+index cd27e0d..588df72 100644
 --- a/shared/chat.ts
 +++ b/shared/chat.ts
 @@ -1,18 +1,27 @@
@@ -1710,7 +1793,7 @@ index cd27e0d..ebf5824 100644
  
  const normalize = (path: string | null | undefined) => (path ?? "").replace(/\/+$/, "");
  
-+/** Embedded workspaces also expose pre-Bots conversations through General. */
++/** Embedded workspaces also expose pre-Bots conversations through the default (Codex) bot. */
 +export function isWorkspaceBotChat(agent: { cwd?: string; labels?: Record<string, string> }, directory: string, botId: string, context = "workspace"): boolean {
 +  return normalize(agent.cwd) === normalize(directory) &&
 +    (agent.labels?.[CHAT_CONTEXT_LABEL] ?? "workspace") === context &&
@@ -1877,6 +1960,18 @@ index 174863a..a8e4aad 100644
 +  const team = teamOf(botId, groups);
 +  return team ? [ALL_BOTS_TAB, team.id] : [ALL_BOTS_TAB];
  }
+diff --git a/shared/layout.ts b/shared/layout.ts
+index 2274366..93caa53 100644
+--- a/shared/layout.ts
++++ b/shared/layout.ts
+@@ -1,6 +1,6 @@
+ // Column widths from Paseo's desktop layout (stores/panel-store/state.ts,
+ // components/explorer-sidebar-layout.ts, components/desktop-sidebar-layout.ts).
+-export const LIST_WIDTH = { default: 320, min: 200, max: 600 };
++export const LIST_WIDTH = { min: 200, max: 600 };
+ const PANEL_WIDTH = { default: 320, min: 240 };
+ /** The centre column never gets narrower than this while space allows. */
+ export const CENTER_MIN_WIDTH = 400;
 diff --git a/shared/rpc.ts b/shared/rpc.ts
 index c54be3b..8d4b0d5 100644
 --- a/shared/rpc.ts
@@ -1904,6 +1999,103 @@ index 0ffd98e..420e450 100644
 +  const rest = keys.filter((entry) => entry !== key);
 +  const index = keys.indexOf(key);
 +  return rest[Math.min(Math.max(index, 0), rest.length - 1)] ?? null;
++}
+diff --git a/shared/vibing-defaults.ts b/shared/vibing-defaults.ts
+new file mode 100644
+index 0000000..2c9a978
+--- /dev/null
++++ b/shared/vibing-defaults.ts
+@@ -0,0 +1,91 @@
++import { DEFAULT_BOT_DEFAULTS, type Bot, type BotSettingsValues } from "./bot";
++import { LIST_WIDTH } from "./layout";
++import { BOT_TEMPLATES, newBot } from "./templates";
++
++/** The reserved default bot: chats without a bot label belong to it, and selection falls back to it. */
++export const DEFAULT_BOT_ID = "vibing-general";
++export const CLAUDE_BOT_ID = "vibing-claude";
++/**
++ * Bumped when Vibing's defaults change; each home is migrated once per version.
++ * 1: Codex and Claude default bots. 2: the bot list opens at its minimum width.
++ */
++export const VIBING_DEFAULTS_VERSION = 2;
++/** The list width every home was saved with before version 2. */
++const OLD_LIST_WIDTH = 320;
++
++function defaultBot(id: string, name: string, provider: string, values: BotSettingsValues): Bot {
++  const defaults = values.defaults ?? DEFAULT_BOT_DEFAULTS;
++  // A model, mode or thinking level only means something for the provider it was picked for.
++  const same = defaults.provider === provider;
++  const base = newBot(provider, BOT_TEMPLATES[0]);
++  return {
++    ...base,
++    id,
++    name,
++    // Distinct avatars, so the two default bots are told apart in the sidebar.
++    avatar: { ...base.avatar, seed: `vibing-${provider}` },
++    model: same ? defaults.model : null,
++    modeId: same ? defaults.modeId : null,
++    thinkingOptionId: same ? defaults.thinkingOptionId : null,
++    contactBots: defaults.contactBots,
++  };
++}
++
++/** Version 1: Codex (the reserved default) and Claude; an untouched General bot becomes Codex. */
++function seedDefaultBots(values: BotSettingsValues, migrating: boolean): Bot[] {
++  let bots = values.bots;
++  const current = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
++  if (!current) {
++    bots = [defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values), ...bots];
++  } else if (migrating && current.name === "General") {
++    const codex = defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values);
++    const converted = { ...current, name: codex.name, provider: codex.provider, model: codex.model, modeId: codex.modeId, thinkingOptionId: codex.thinkingOptionId };
++    bots = bots.map((bot) => (bot.id === DEFAULT_BOT_ID ? converted : bot));
++  }
++  if (migrating && !bots.some((bot) => bot.id === CLAUDE_BOT_ID)) {
++    const at = bots.findIndex((bot) => bot.id === DEFAULT_BOT_ID) + 1;
++    bots = [...bots.slice(0, at), defaultBot(CLAUDE_BOT_ID, "Claude", "claude", values), ...bots.slice(at)];
++  }
++  return bots;
++}
++
++/**
++ * Applies Vibing's defaults to the Bots settings. The default Codex bot is recreated
++ * whenever it's missing; every other step runs once per home, so later choices stick:
++ * deleting Claude, renaming General, or dragging the list to any width. Returns null
++ * when nothing changes.
++ */
++export function applyVibingDefaults(values: BotSettingsValues): BotSettingsValues | null {
++  const from = values.vibingDefaults ?? 0;
++  const bots = seedDefaultBots(values, from < 1);
++  // Before version 2 the list was saved at 320px unless the user dragged it, which
++  // never lands on exactly 320, so that value means "still the default".
++  const ui = from < 2 && values.ui?.listWidth === OLD_LIST_WIDTH ? { ...values.ui, listWidth: LIST_WIDTH.min } : values.ui;
++  if (from >= VIBING_DEFAULTS_VERSION && bots === values.bots) return null;
++  return { ...values, bots, ...(ui ? { ui } : {}), vibingDefaults: VIBING_DEFAULTS_VERSION };
++}
++
++/**
++ * The bot a workspace opens on: Codex, unless its provider can't run here (not installed
++ * or failing) and the Claude bot's can. Undefined while that's still unknown, so callers
++ * wait instead of opening Codex and switching. Each bot's own provider decides, so a
++ * user's provider change is respected.
++ */
++export function preferredDefaultBotId(
++  bots: readonly Bot[],
++  providers: readonly { provider: string; status: string }[] | undefined,
++  hostId?: string,
++): string | undefined {
++  const codex = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
++  // Before the default bots are seeded there is nothing to choose between yet.
++  if (!providers || !codex) return undefined;
++  const statusOf = (bot: Bot) => providers.find((entry) => entry.provider === bot.provider)?.status ?? "unavailable";
++  const status = statusOf(codex);
++  if (status === "ready") return DEFAULT_BOT_ID;
++  if (status === "loading") return undefined;
++  const claude = bots.find((bot) => bot.id === CLAUDE_BOT_ID && (!bot.hostId || bot.hostId === hostId));
++  if (!claude) return DEFAULT_BOT_ID;
++  const claudeStatus = statusOf(claude);
++  if (claudeStatus === "loading") return undefined;
++  return claudeStatus === "ready" ? CLAUDE_BOT_ID : DEFAULT_BOT_ID;
 +}
 diff --git a/tests/bots.test.ts b/tests/bots.test.ts
 index 9e592cd..0e319ca 100644
@@ -2485,7 +2677,7 @@ index 0000000..a611aec
 +  expect(revoke).toHaveBeenCalledWith("blob:bot-export");
 +});
 diff --git a/tests/sidebar.test.ts b/tests/sidebar.test.ts
-index 367000b..3d686cd 100644
+index 367000b..2b80bea 100644
 --- a/tests/sidebar.test.ts
 +++ b/tests/sidebar.test.ts
 @@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
@@ -2497,7 +2689,7 @@ index 367000b..3d686cd 100644
  
  describe("chatBucket", () => {
    const base = { status: "idle", pendingPermissions: [], requiresAttention: false, attentionReason: null };
-@@ -69,6 +69,15 @@ describe("moveKey", () => {
+@@ -69,11 +69,20 @@ describe("moveKey", () => {
    });
  });
  
@@ -2513,3 +2705,127 @@ index 367000b..3d686cd 100644
  describe("bot list UI state", () => {
    it("is optional in the settings document and fills its defaults", () => {
      expect(botSettings.schema.parse({}).ui).toBeUndefined();
+     expect(botSettings.schema.parse({ ui: {} }).ui).toEqual(DEFAULT_BOT_LIST_UI);
+-    expect(DEFAULT_BOT_LIST_UI).toEqual({ collapsed: [], pinnedCollapsed: false, pinnedChats: [], chatOrder: {}, chatSort: "manual", showArchived: false, tab: null, listWidth: 320, panelWidth: 320 });
++    expect(DEFAULT_BOT_LIST_UI).toEqual({ collapsed: [], pinnedCollapsed: false, pinnedChats: [], chatOrder: {}, chatSort: "manual", showArchived: false, tab: null, listWidth: 200, panelWidth: 320 });
+   });
+ 
+   it("rejects an unknown sort", () => {
+diff --git a/tests/vibing-defaults.test.ts b/tests/vibing-defaults.test.ts
+new file mode 100644
+index 0000000..c3a1fde
+--- /dev/null
++++ b/tests/vibing-defaults.test.ts
+@@ -0,0 +1,112 @@
++import { describe, expect, it } from "vitest";
++import type { BotSettingsValues } from "../shared/bot";
++import { DEFAULT_BOT_LIST_UI } from "../shared/bot";
++import { LIST_WIDTH } from "../shared/layout";
++import { applyVibingDefaults, CLAUDE_BOT_ID, DEFAULT_BOT_ID, preferredDefaultBotId } from "../shared/vibing-defaults";
++import { makeBot } from "./helpers";
++
++const empty = (): BotSettingsValues => ({ bots: [], history: [] });
++
++describe("applyVibingDefaults", () => {
++  it("creates Codex as the default bot and Claude beside it in a new home", () => {
++    const seeded = applyVibingDefaults(empty())!;
++
++    expect(seeded.bots.map(({ id, name, provider }) => ({ id, name, provider }))).toEqual([
++      { id: DEFAULT_BOT_ID, name: "Codex", provider: "codex" },
++      { id: CLAUDE_BOT_ID, name: "Claude", provider: "claude" },
++    ]);
++    expect(applyVibingDefaults(seeded)).toBeNull();
++    expect(seeded.bots[0]!.avatar.seed).not.toBe(seeded.bots[1]!.avatar.seed);
++  });
++
++  it("keeps each bot on its own provider even when new bots default to another one", () => {
++    const values = { ...empty(), defaults: { provider: "claude", model: "opus", modeId: "plan", thinkingOptionId: "high", contactBots: "allow" as const } };
++    const [codex, claude] = applyVibingDefaults(values)!.bots;
++
++    expect(codex).toMatchObject({ provider: "codex", model: null, modeId: null, thinkingOptionId: null, contactBots: "allow" });
++    expect(claude).toMatchObject({ provider: "claude", model: "opus", modeId: "plan", thinkingOptionId: "high" });
++  });
++
++  it("turns an untouched General bot into Codex once, keeping its instructions and chats' bot id", () => {
++    const general = makeBot({ id: DEFAULT_BOT_ID, name: "General", provider: "claude", model: "sonnet", soul: "Be brief." });
++    const seeded = applyVibingDefaults({ ...empty(), bots: [general, makeBot({ id: "bot-mine", name: "Mine" })] })!;
++
++    expect(seeded.bots.map(({ id }) => id)).toEqual([DEFAULT_BOT_ID, CLAUDE_BOT_ID, "bot-mine"]);
++    expect(seeded.bots[0]).toMatchObject({ name: "Codex", provider: "codex", model: null, soul: "Be brief." });
++  });
++
++  it("leaves a renamed General bot alone", () => {
++    const renamed = makeBot({ id: DEFAULT_BOT_ID, name: "Helper", provider: "claude" });
++    const seeded = applyVibingDefaults({ ...empty(), bots: [renamed] })!;
++
++    expect(seeded.bots[0]).toEqual(renamed);
++    expect(seeded.bots[1]?.id).toBe(CLAUDE_BOT_ID);
++  });
++
++  it("recreates the reserved default bot but not a Claude bot the user deleted", () => {
++    const seeded = applyVibingDefaults(empty())!;
++    const withoutBoth = { ...seeded, bots: [] };
++
++    expect(applyVibingDefaults(withoutBoth)!.bots.map(({ id }) => id)).toEqual([DEFAULT_BOT_ID]);
++  });
++
++  it("opens the bot list at its minimum width", () => {
++    expect(DEFAULT_BOT_LIST_UI.listWidth).toBe(LIST_WIDTH.min);
++  });
++
++  it("narrows a list still at the old 320px default once, keeping a width the user dragged to", () => {
++    const old = { ...empty(), vibingDefaults: 1, ui: { ...DEFAULT_BOT_LIST_UI, listWidth: 320 } };
++    const narrowed = applyVibingDefaults({ ...old, bots: applyVibingDefaults(empty())!.bots })!;
++    expect(narrowed.ui?.listWidth).toBe(LIST_WIDTH.min);
++    expect(applyVibingDefaults({ ...narrowed, ui: { ...narrowed.ui!, listWidth: 320 } })).toBeNull();
++
++    const dragged = { ...old, ui: { ...old.ui, listWidth: 287 } };
++    expect(applyVibingDefaults({ ...dragged, bots: narrowed.bots })!.ui?.listWidth).toBe(287);
++  });
++});
++
++describe("preferredDefaultBotId", () => {
++  const bots = applyVibingDefaults({ bots: [], history: [] })!.bots;
++  const providers = (codex: string, claude = "ready") => [
++    { provider: "codex", status: codex },
++    { provider: "claude", status: claude },
++  ];
++
++  it("uses Codex when it's ready", () => {
++    expect(preferredDefaultBotId(bots, providers("ready"))).toBe(DEFAULT_BOT_ID);
++  });
++
++  it("falls back to Claude when Codex isn't installed", () => {
++    expect(preferredDefaultBotId(bots, providers("unavailable"))).toBe(CLAUDE_BOT_ID);
++    expect(preferredDefaultBotId(bots, [{ provider: "claude", status: "ready" }])).toBe(CLAUDE_BOT_ID);
++  });
++
++  it("waits while providers or Codex are still loading", () => {
++    expect(preferredDefaultBotId(bots, undefined)).toBeUndefined();
++    expect(preferredDefaultBotId(bots, providers("loading"))).toBeUndefined();
++  });
++
++  it("waits for the default bots to be seeded", () => {
++    expect(preferredDefaultBotId([], providers("unavailable"))).toBeUndefined();
++  });
++
++  it("waits for Claude's check when Codex can't run", () => {
++    expect(preferredDefaultBotId(bots, providers("unavailable", "loading"))).toBeUndefined();
++  });
++
++  it("keeps Codex when Claude can't run either, or the Claude bot was deleted", () => {
++    expect(preferredDefaultBotId(bots, providers("error", "unavailable"))).toBe(DEFAULT_BOT_ID);
++    expect(preferredDefaultBotId(bots.filter((bot) => bot.id !== CLAUDE_BOT_ID), providers("unavailable"))).toBe(DEFAULT_BOT_ID);
++  });
++
++  it("follows the bots' own providers after the user changes them", () => {
++    const edited = bots.map((bot) => (bot.id === DEFAULT_BOT_ID ? { ...bot, provider: "claude" } : bot));
++    expect(preferredDefaultBotId(edited, providers("unavailable"))).toBe(DEFAULT_BOT_ID);
++  });
++
++  it("skips a Claude bot that lives on another host", () => {
++    const remote = bots.map((bot) => (bot.id === CLAUDE_BOT_ID ? { ...bot, hostId: "other" } : bot));
++    expect(preferredDefaultBotId(remote, providers("unavailable"), "local")).toBe(DEFAULT_BOT_ID);
++  });
++});
++

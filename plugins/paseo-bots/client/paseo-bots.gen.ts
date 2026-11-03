@@ -651,6 +651,26 @@ function supportsToolGrants(provider) {
   return /^(claude|codex|opencode)(\b|$)/.test(provider);
 }
 
+// shared/layout.ts
+var LIST_WIDTH = { min: 200, max: 600 };
+var PANEL_WIDTH = { default: 320, min: 240 };
+var CENTER_MIN_WIDTH = 400;
+var clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+function fitColumns(total, list2, panel) {
+  let listWidth = clamp(list2, LIST_WIDTH.min, LIST_WIDTH.max);
+  if (panel === null) {
+    return { list: Math.max(LIST_WIDTH.min, Math.min(listWidth, total - CENTER_MIN_WIDTH)), panel: null };
+  }
+  let panelWidth = Math.max(PANEL_WIDTH.min, panel);
+  const overflow = listWidth + panelWidth + CENTER_MIN_WIDTH - total;
+  if (overflow > 0) {
+    const fromPanel = Math.min(overflow, panelWidth - PANEL_WIDTH.min);
+    panelWidth -= fromPanel;
+    listWidth -= Math.min(overflow - fromPanel, listWidth - LIST_WIDTH.min);
+  }
+  return { list: listWidth, panel: panelWidth };
+}
+
 // shared/paseo-tools.ts
 var PASEO_MCP_NAME = "paseo";
 function paseoToolsState(config, provider) {
@@ -823,8 +843,8 @@ var BotListUiSchema = z.object({
   showArchived: z.boolean().default(false),
   /** The open team tab: a team id, or ALL_BOTS_TAB. Null (or a retired id) opens the first. */
   tab: z.string().nullable().default(null),
-  /** Desktop column widths, like Paseo's resizable sidebar (default 320) and explorer (default 320). */
-  listWidth: z.number().default(320),
+  /** Desktop column widths, like Paseo's resizable sidebar and explorer (default 320); Vibing opens the list at its 200px minimum. */
+  listWidth: z.number().default(LIST_WIDTH.min),
   panelWidth: z.number().default(320)
 });
 var DEFAULT_BOT_LIST_UI = BotListUiSchema.parse({});
@@ -888,7 +908,9 @@ var botSettings = defineSettings({
     library: LibrarySchema.optional(),
     defaults: BotDefaultsSchema.optional(),
     presets: z.array(PresetSchema).optional(),
-    groups: z.array(BotGroupSchema).optional()
+    groups: z.array(BotGroupSchema).optional(),
+    /** The version of Vibing's defaults (default bots, list width) this home was migrated to. */
+    vibingDefaults: z.number().int().optional()
   }),
   migrate: (values, fromVersion) => {
     let migrated = values;
@@ -2812,6 +2834,64 @@ var commandRemoveRpc = defineRpc({
   output: z6.object({ ok: z6.boolean() })
 });
 
+// shared/vibing-defaults.ts
+var DEFAULT_BOT_ID = "vibing-general";
+var CLAUDE_BOT_ID = "vibing-claude";
+var VIBING_DEFAULTS_VERSION = 2;
+var OLD_LIST_WIDTH = 320;
+function defaultBot(id, name, provider, values) {
+  const defaults = values.defaults ?? DEFAULT_BOT_DEFAULTS;
+  const same = defaults.provider === provider;
+  const base = newBot(provider, BOT_TEMPLATES[0]);
+  return {
+    ...base,
+    id,
+    name,
+    // Distinct avatars, so the two default bots are told apart in the sidebar.
+    avatar: { ...base.avatar, seed: `vibing-${provider}` },
+    model: same ? defaults.model : null,
+    modeId: same ? defaults.modeId : null,
+    thinkingOptionId: same ? defaults.thinkingOptionId : null,
+    contactBots: defaults.contactBots
+  };
+}
+function seedDefaultBots(values, migrating) {
+  let bots = values.bots;
+  const current2 = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
+  if (!current2) {
+    bots = [defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values), ...bots];
+  } else if (migrating && current2.name === "General") {
+    const codex = defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values);
+    const converted = { ...current2, name: codex.name, provider: codex.provider, model: codex.model, modeId: codex.modeId, thinkingOptionId: codex.thinkingOptionId };
+    bots = bots.map((bot) => bot.id === DEFAULT_BOT_ID ? converted : bot);
+  }
+  if (migrating && !bots.some((bot) => bot.id === CLAUDE_BOT_ID)) {
+    const at = bots.findIndex((bot) => bot.id === DEFAULT_BOT_ID) + 1;
+    bots = [...bots.slice(0, at), defaultBot(CLAUDE_BOT_ID, "Claude", "claude", values), ...bots.slice(at)];
+  }
+  return bots;
+}
+function applyVibingDefaults(values) {
+  const from = values.vibingDefaults ?? 0;
+  const bots = seedDefaultBots(values, from < 1);
+  const ui2 = from < 2 && values.ui?.listWidth === OLD_LIST_WIDTH ? { ...values.ui, listWidth: LIST_WIDTH.min } : values.ui;
+  if (from >= VIBING_DEFAULTS_VERSION && bots === values.bots) return null;
+  return { ...values, bots, ...ui2 ? { ui: ui2 } : {}, vibingDefaults: VIBING_DEFAULTS_VERSION };
+}
+function preferredDefaultBotId(bots, providers, hostId) {
+  const codex = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
+  if (!providers || !codex) return void 0;
+  const statusOf = (bot) => providers.find((entry) => entry.provider === bot.provider)?.status ?? "unavailable";
+  const status = statusOf(codex);
+  if (status === "ready") return DEFAULT_BOT_ID;
+  if (status === "loading") return void 0;
+  const claude = bots.find((bot) => bot.id === CLAUDE_BOT_ID && (!bot.hostId || bot.hostId === hostId));
+  if (!claude) return DEFAULT_BOT_ID;
+  const claudeStatus = statusOf(claude);
+  if (claudeStatus === "loading") return void 0;
+  return claudeStatus === "ready" ? CLAUDE_BOT_ID : DEFAULT_BOT_ID;
+}
+
 // client/Avatar.tsx
 import { createContext, useContext, useMemo } from "react";
 import { Image, View } from "react-native";
@@ -4652,6 +4732,9 @@ function useProviders(host2) {
     queryKey: ["paseo-bots", "providers", host2.key],
     enabled: !!host2.api,
     staleTime: 6e4,
+    // Providers report "loading" while the daemon probes them; poll until they settle so
+    // callers (such as the default bot choice) see whether each one is installed.
+    refetchInterval: (query) => query.state.data?.some((entry) => entry.status === "loading") ? 1e3 : false,
     queryFn: async () => {
       const snapshot = await host2.api.providers.snapshot();
       return snapshot.entries.filter((entry) => entry.enabled);
@@ -4872,7 +4955,6 @@ function SectionHeader({ colors: colors2, onDisplayMenu }) {
   ] });
 }
 function Footer({ colors: colors2, onNewBot, onImportBot, onExportAllBots, onTeamMap }) {
-  const { hovered, hoverProps } = useHover();
   const menu = useMenu();
   const sharingRef = useRef3(null);
   const openSharing = () => void measureAnchor(sharingRef).then((anchor) => anchor && menu.open({
@@ -4885,34 +4967,8 @@ function Footer({ colors: colors2, onNewBot, onImportBot, onExportAllBots, onTea
     ]
   }));
   return /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors2.border }, children: [
-    /* @__PURE__ */ jsxs5(
-      Pressable4,
-      {
-        accessibilityRole: "button",
-        accessibilityLabel: "New bot",
-        onPress: onNewBot,
-        ...hoverProps,
-        style: ({ pressed }) => [
-          {
-            minWidth: 0,
-            minHeight: 32,
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            paddingVertical: 6,
-            paddingHorizontal: 8,
-            borderRadius: 8,
-            backgroundColor: pressed ? colors2.surface2 : hovered ? colors2.surface1 : "transparent"
-          },
-          noSelect
-        ],
-        children: [
-          /* @__PURE__ */ jsx6(Icon4, { name: "Plus", size: 14, color: hovered ? colors2.foreground : colors2.foregroundMuted }),
-          /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered ? colors2.foreground : colors2.foregroundMuted }, children: "New bot" })
-        ]
-      }
-    ),
+    /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Plus", label: "New bot", onPress: onNewBot }),
+    /* @__PURE__ */ jsx6(View6, { style: { flex: 1 } }),
     /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "ArrowDownUp", label: "Import or export bots", buttonRef: sharingRef, onPress: openSharing }),
     /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Network", label: "Team map", onPress: onTeamMap }),
     /* @__PURE__ */ jsx6(FooterIconButton, { colors: colors2, icon: "Blocks", label: "Skills & Tools", onPress: () => openLibrary() })
@@ -11449,7 +11505,7 @@ function McpPage({ colors: colors2, server, bots, otherNames, showTitle, onPatch
 
 // client/library/LibraryView.tsx
 import { Fragment as Fragment15, jsx as jsx33, jsxs as jsxs31 } from "react/jsx-runtime";
-var LIST_WIDTH = 320;
+var LIST_WIDTH2 = 320;
 function LibraryView({ colors: colors2, layout, values, commit, target, onTarget: setTarget, onBack, bottomInset }) {
   const compact2 = layout.compact;
   const toast = useToast10();
@@ -11647,7 +11703,7 @@ function LibraryView({ colors: colors2, layout, values, commit, target, onTarget
         ] }) }) : null
       ] })
     ) : /* @__PURE__ */ jsxs31(Fragment15, { children: [
-      /* @__PURE__ */ jsx33(View33, { style: { width: LIST_WIDTH, borderRightWidth: 1, borderRightColor: colors2.border, backgroundColor: nativeTokens(colors2).surfaceSidebar }, children: list2 }),
+      /* @__PURE__ */ jsx33(View33, { style: { width: LIST_WIDTH2, borderRightWidth: 1, borderRightColor: colors2.border, backgroundColor: nativeTokens(colors2).surfaceSidebar }, children: list2 }),
       /* @__PURE__ */ jsx33(View33, { style: { flex: 1, minWidth: 0 }, children: scrollPage })
     ] }),
     sheet?.kind === "import-skills" ? /* @__PURE__ */ jsx33(
@@ -12098,26 +12154,6 @@ function TeamTabSwitcher({ colors: colors2, tabs, openTab, onTab, onNewTeam, res
       ]
     }
   ) });
-}
-
-// shared/layout.ts
-var LIST_WIDTH2 = { default: 320, min: 200, max: 600 };
-var PANEL_WIDTH = { default: 320, min: 240 };
-var CENTER_MIN_WIDTH = 400;
-var clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-function fitColumns(total, list2, panel) {
-  let listWidth = clamp(list2, LIST_WIDTH2.min, LIST_WIDTH2.max);
-  if (panel === null) {
-    return { list: Math.max(LIST_WIDTH2.min, Math.min(listWidth, total - CENTER_MIN_WIDTH)), panel: null };
-  }
-  let panelWidth = Math.max(PANEL_WIDTH.min, panel);
-  const overflow = listWidth + panelWidth + CENTER_MIN_WIDTH - total;
-  if (overflow > 0) {
-    const fromPanel = Math.min(overflow, panelWidth - PANEL_WIDTH.min);
-    panelWidth -= fromPanel;
-    listWidth -= Math.min(overflow - fromPanel, listWidth - LIST_WIDTH2.min);
-  }
-  return { list: listWidth, panel: panelWidth };
 }
 
 // client/panel/BotPanel.tsx
@@ -13948,6 +13984,7 @@ function newUuid() {
 
 // client/BotsSurface.tsx
 import { Fragment as Fragment23, jsx as jsx49, jsxs as jsxs47 } from "react/jsx-runtime";
+var DEFAULT_BOT_WAIT_MS = 15e3;
 var SETUP_PROMPT = "Let's set you up. Interview me one short question at a time about what I want from you, how I like to work, and what you should never do. Then propose standing instructions for yourself and a starting MEMORY.md. Write the memory file once I confirm, and give me the instructions to paste into your Soul settings.";
 var SAVE_DELAY_MS = 600;
 function BotsSurface(props) {
@@ -14088,23 +14125,33 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     const intent = takeIntent();
     if (intent?.kind === "new-bot") setCreating("new");
   }, []);
-  const initializingGeneral = useRef20(false);
+  const seedingDefaults = useRef20(false);
+  const [defaultBotWaitOver, setDefaultBotWaitOver] = useState44(false);
   useEffect24(() => {
-    if (!botWorkspace || settings.status !== "ready" || settings.values.bots.some((bot2) => bot2.id === "vibing-general") || !localProviders.data || initializingGeneral.current) return;
-    const ready = localProviders.data.filter((entry) => entry.status === "ready");
-    const provider = ready[0]?.provider ?? localProviders.data[0]?.provider ?? "codex";
-    initializingGeneral.current = true;
-    const bot = { ...applyDefaults(newBot(provider, BOT_TEMPLATES[0]), settings.values.defaults ?? DEFAULT_BOT_DEFAULTS, provider), id: "vibing-general", name: "General" };
-    void commit((values) => values.bots.some((entry) => entry.id === bot.id) ? values : { ...values, bots: [bot, ...values.bots] }).finally(() => {
-      initializingGeneral.current = false;
+    const timer2 = setTimeout(() => setDefaultBotWaitOver(true), DEFAULT_BOT_WAIT_MS);
+    return () => clearTimeout(timer2);
+  }, []);
+  const defaultBotId = preferredDefaultBotId(settings.status === "ready" ? settings.values.bots : [], localProviders.data, host2.id) ?? (defaultBotWaitOver ? DEFAULT_BOT_ID : void 0);
+  const defaultBotRef = useRef20(defaultBotId ?? DEFAULT_BOT_ID);
+  defaultBotRef.current = defaultBotId ?? DEFAULT_BOT_ID;
+  useEffect24(() => {
+    if (!botWorkspace || !defaultBotId || defaultBotId === DEFAULT_BOT_ID) return;
+    setSelection((current2) => current2?.botId === DEFAULT_BOT_ID && !current2.chatId && !current2.draftId ? { botId: defaultBotId, chatId: null } : current2);
+  }, [botWorkspace, defaultBotId]);
+  useEffect24(() => {
+    if (!botWorkspace || settings.status !== "ready" || seedingDefaults.current || !applyVibingDefaults(settings.values)) return;
+    seedingDefaults.current = true;
+    void commit((values) => applyVibingDefaults(values) ?? values).finally(() => {
+      seedingDefaults.current = false;
     });
-  }, [botWorkspace, settings, localProviders.data, commit]);
+  }, [botWorkspace, settings, commit]);
   const activateWorkspaceChat = useCallback6((target) => {
     setSelection((current2) => {
-      const selectedId = target.botId ?? current2?.botId ?? "vibing-general";
+      const fallback = defaultBotRef.current;
+      const selectedId = target.botId ?? current2?.botId ?? fallback;
       const bot = latest.current.status === "ready" ? latest.current.values.bots.find((entry) => entry.id === selectedId) : null;
       const local = !bot?.hostId || bot.hostId === host2.id;
-      return !local ? { botId: "vibing-general", chatId: null, draftId: target.draftId } : !target.agentId && !target.draftId ? current2 ?? { botId: "vibing-general", chatId: null } : { botId: target.botId ?? current2?.botId ?? "vibing-general", chatId: target.agentId ?? null, draftId: target.draftId };
+      return !local ? { botId: fallback, chatId: null, draftId: target.draftId } : !target.agentId && !target.draftId ? current2 ?? { botId: fallback, chatId: null } : { botId: target.botId ?? current2?.botId ?? fallback, chatId: target.agentId ?? null, draftId: target.draftId };
     });
     setPanel({ open: false, section: null });
     setLibraryView(null);
@@ -14513,8 +14560,8 @@ Its chats stay on the host and remain in Paseo's history.`,
       onBack: () => setLibraryView(null)
     }
   ) : null;
-  const localBotIds = allBots.some((bot) => bot.id === "vibing-general") ? allBots.filter((bot) => !bot.hostId || bot.hostId === host2.id).map((bot) => bot.id) : void 0;
-  const workspaceHeader = WorkspaceBridge ? /* @__PURE__ */ jsx49(WorkspaceBridge, { localBotIds, selectedAgentId: selection?.chatId, selectedDraftId: selection?.draftId, botId: selection?.botId ?? "vibing-general", onActivate: activateWorkspaceChat }) : null;
+  const localBotIds = allBots.some((bot) => bot.id === DEFAULT_BOT_ID) && defaultBotId && !applyVibingDefaults(settings.values) ? allBots.filter((bot) => !bot.hostId || bot.hostId === host2.id).map((bot) => bot.id) : void 0;
+  const workspaceHeader = WorkspaceBridge ? /* @__PURE__ */ jsx49(WorkspaceBridge, { localBotIds, selectedAgentId: selection?.chatId, selectedDraftId: selection?.draftId, botId: selection?.botId === DEFAULT_BOT_ID && !selection.chatId && !selection.draftId ? defaultBotId ?? DEFAULT_BOT_ID : selection?.botId ?? defaultBotRef.current, onActivate: activateWorkspaceChat }) : null;
   if (libraryScreen && !layout.compact) {
     return /* @__PURE__ */ jsxs47(Fragment23, { children: [
       workspaceHeader,
