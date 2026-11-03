@@ -103,7 +103,7 @@ Vibing uses a renderer-owned `iframe` in both browser and Electron builds. Paseo
 1. Detects the `?folder=` query parameter.
 2. Resolves it through the daemon's idempotent `openProject` path on every entry, preserving its workspace and agent thread on remount without a second frontend workspace cache.
 3. Binds that worktree and opens its Bots surface directly; normal workspace routes redirect to the binding.
-4. In Live Design, readiness activates the selected local bot or General, and Send new agent creates a fresh bot draft.
+4. In Live Design, readiness activates the selected local bot or the default Codex bot, and Send new agent creates a fresh bot draft.
 5. Dictation and voice mode are enabled by the standalone runner (`PASEO_DICTATION_ENABLED`/`PASEO_VOICE_MODE_ENABLED` in `scripts/paseo-web.js`); the host iframe must keep `microphone` in its `allow` list.
 
 ### Upstream rebase guard

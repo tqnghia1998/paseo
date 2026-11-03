@@ -1017,6 +1017,11 @@ async function disconnect({ accountId: accountId2 }) {
 // shared/bot.ts
 import { defineSettings } from "@getpaseo/plugin";
 import { z } from "zod";
+
+// shared/layout.ts
+var LIST_WIDTH = { min: 200, max: 600 };
+
+// shared/bot.ts
 var BOT_LABEL = "paseo-bots.bot";
 var StringRecord = z.record(z.string(), z.string());
 var McpServerConfigSchema = z.discriminatedUnion("type", [
@@ -1167,8 +1172,8 @@ var BotListUiSchema = z.object({
   showArchived: z.boolean().default(false),
   /** The open team tab: a team id, or ALL_BOTS_TAB. Null (or a retired id) opens the first. */
   tab: z.string().nullable().default(null),
-  /** Desktop column widths, like Paseo's resizable sidebar (default 320) and explorer (default 320). */
-  listWidth: z.number().default(320),
+  /** Desktop column widths, like Paseo's resizable sidebar and explorer (default 320); Vibing opens the list at its 200px minimum. */
+  listWidth: z.number().default(LIST_WIDTH.min),
   panelWidth: z.number().default(320)
 });
 var DEFAULT_BOT_LIST_UI = BotListUiSchema.parse({});
@@ -1232,7 +1237,9 @@ var botSettings = defineSettings({
     library: LibrarySchema.optional(),
     defaults: BotDefaultsSchema.optional(),
     presets: z.array(PresetSchema).optional(),
-    groups: z.array(BotGroupSchema).optional()
+    groups: z.array(BotGroupSchema).optional(),
+    /** The version of Vibing's defaults (default bots, list width) this home was migrated to. */
+    vibingDefaults: z.number().int().optional()
   }),
   migrate: (values, fromVersion) => {
     let migrated = values;
