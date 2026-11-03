@@ -163,8 +163,14 @@ Prompt composition and agent creation use the same runtime choice. Draft prefere
 services are local to the mounted conversation so global composer preferences cannot
 replace bot/provider defaults or receive these overrides.
 The fork menu omits its new-workspace destination inside Bots chats.
-General is created automatically and includes legacy unlabeled chats from the same
-directory without mutating their records. Embedded conversation lists, pins, usage and routine chat links are strictly
+Two default bots are seeded (`shared/vibing-defaults.ts`): Codex, the reserved default
+(`vibing-general`, recreated whenever missing), and Claude (`vibing-claude`, added once so a
+deletion sticks). An existing home's untouched General bot becomes Codex once (a renamed one is
+left alone), tracked by the settings' `vibingDefaults` version. A workspace opens on Claude
+instead when the Codex bot's provider can't run and Claude's can (`preferredDefaultBotId`). The bot list opens at its
+200px minimum width; version 2 narrows a list still saved at the old 320px default once, so a
+dragged width is kept. The default bot includes
+legacy unlabeled chats from the same directory without mutating their records. Embedded conversation lists, pins, usage and routine chat links are strictly
 scoped to the bound worktree. There is no all-folder override. Selected chat IDs
 are checked against that scope before loading a transcript, and unresolved binding
 waits instead of falling back to the global list. Remote-host bots cannot open
@@ -259,7 +265,7 @@ Do not label these patches as installed plugins merely to make them discoverable
   policy, not a sandbox for agents or plugins. Standalone builds keep upstream
   navigation, sidebar preferences and multi-tool workspace layouts.
 - Live Design shares the workspace Bots runtime, bot definitions and memory. Its `paseo-bots.context=live-design` label scopes chat lists and imports; native draft/selection keys and command-center results also stay separate by surface and worktree. Readiness activates the selected
-  local bot or General; fresh requests create unique bot drafts. Embedded activity
+  local bot or the default Codex bot; fresh requests create unique bot drafts. Embedded activity
   indicators use the same conversation context, so a running workspace chat cannot
   keep Live Design's dot flashing (or the reverse). Pending completion
   observation returns to the owning conversation in the bound directory.
@@ -331,9 +337,21 @@ Send path, keeping Insert as the trailing action. Keep `model.test.ts`, the patc
 Some fixes need the upstream execution path: active/archived Codex import
 pagination, terminal output event mapping, optional wait/protocol fields, Pi turn
 settlement, assistant-only citation normalization shared by transcript and clipboard HTML, retained-panel tooltip cleanup,
+retained-panel desktop sheet cleanup, the macOS Codex app CLI fallback,
 text-attachment support, and tab/header/sheet rendering. Keep these edits local
 to their existing owner and preserve their regression tests. Moving an entire
 upstream component into the patch directory would create a second copy to rebase.
+
+`AdaptiveModalSheet` drops its desktop portal while its retained panel is inactive
+(`adaptive-modal-sheet.browser.test.tsx`). A picker that closes and navigates in one
+handler (the model picker's Create profile opens Settings) otherwise leaves its
+fading overlay frozen at opacity 0 over the whole page, because the hidden chat can
+no longer commit the exit unmount.
+
+`findDefaultCodexBinary` falls back to the CLI bundled in the macOS Codex app
+(`/Applications/Codex.app/Contents/Resources/codex`, then `~/Applications`) after
+PATH and the Microsoft Store install, so users with only the desktop app can pick
+Codex (`provider-availability.test.ts`).
 
 ## Rebase and verification
 
