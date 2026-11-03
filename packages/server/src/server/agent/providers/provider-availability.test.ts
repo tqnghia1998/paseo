@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -99,6 +99,31 @@ describe("default provider availability", () => {
       }
     }
   });
+
+  test.skipIf(process.platform !== "darwin" || existsSync("/Applications/Codex.app"))(
+    "Codex reports available from the macOS Codex app bundle when PATH misses codex",
+    async () => {
+      const originalHome = process.env.HOME;
+      const home = makeTempDir("provider-availability-codex-app-");
+      const emptyPathDir = join(home, "empty-path");
+      const resourcesDir = join(home, "Applications", "Codex.app", "Contents", "Resources");
+      const codexBin = join(resourcesDir, "codex");
+      mkdirSync(emptyPathDir, { recursive: true });
+      mkdirSync(resourcesDir, { recursive: true });
+      copyFileSync(process.execPath, codexBin);
+      process.env.HOME = home;
+      isolatePathTo(emptyPathDir);
+
+      try {
+        const client = new CodexAppServerAgentClient(createTestLogger());
+
+        await expect(findDefaultCodexBinary()).resolves.toBe(codexBin);
+        await expect(client.isAvailable()).resolves.toBe(true);
+      } finally {
+        process.env.HOME = originalHome;
+      }
+    },
+  );
 
   test("Claude reports unavailable when the default command cannot be resolved", async () => {
     const binDir = makeTempDir("provider-availability-claude-");
