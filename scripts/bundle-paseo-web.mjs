@@ -151,6 +151,21 @@ const __dirname = __dirnameFn(__filename);
   });
 }
 
+console.log("4. Copying bundled OpenCode bridge plugins...");
+// The flattened daemon resolves both bridge versions beside server.mjs.
+for (const artifact of [
+  "bridge-plugin.bundle.mjs",
+  "v2/bridge-plugin.bundle.mjs",
+  "v2/state.mjs",
+]) {
+  const destination = path.join(DEST_DIR, artifact);
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.copyFileSync(
+    path.join(ROOT_DIR, "packages/server/dist/server/server/agent/providers/opencode", artifact),
+    destination,
+  );
+}
+
 if (serverOnly) {
   console.log("Updated standalone server and its terminal/plugin workers in", DEST_DIR);
   process.exit(0);
@@ -178,15 +193,6 @@ const __dirname = __dirnameFn(__filename);
 fs.writeFileSync(
   path.join(DEST_DIR, "worker-process.js"),
   fs.readFileSync(path.join(DEST_DIR, "worker-process.js"), "utf8").replace(/[\t ]+$/gm, ""),
-);
-
-console.log("4. Copying bundled OpenCode bridge plugin...");
-fs.copyFileSync(
-  path.join(
-    ROOT_DIR,
-    "packages/server/dist/server/server/agent/providers/opencode/bridge-plugin.bundle.mjs",
-  ),
-  path.join(DEST_DIR, "bridge-plugin.bundle.mjs"),
 );
 
 console.log("5. Copying static web-ui assets...");
