@@ -59,7 +59,14 @@ to one worktree per frame and to the host's native chat.
   runs show only that workspace's chats (`client/data.ts`, panel sections), and new chats start
   there instead of the bot's folder. Chats carry a `paseo-bots.context` label so Live Design
   conversations stay separate from workspace ones while sharing bot configuration
-  (`shared/chat.ts`). General also lists the workspace's pre-Bots conversations.
+  (`shared/chat.ts`). The default Codex bot also lists the workspace's pre-Bots conversations.
+- **Default bots and list width.** Codex (the reserved default, `vibing-general`) and Claude are
+  seeded per home (`shared/vibing-defaults.ts`); an untouched General bot from older homes becomes
+  Codex once. A workspace opens on Codex, or on Claude when the Codex bot's provider can't run
+  there (not installed or failing) and Claude's can (`preferredDefaultBotId`); restore waits for
+  provider probes for up to 15 seconds. The bot list opens at its 200px minimum; a list still at the old 320px default is
+  narrowed once, and a dragged width is kept. The sidebar footer's New bot is an icon button
+  with a tooltip, like the buttons beside it, so the footer fits that width.
 - **Delete and rename chats.** Rows get a Delete icon before the kebab (confirm, then
   permanent delete through the host handle's `delete()`); the chat menu leads with Rename
   (`rename()`, capped at Paseo's 200-character title limit). Removing the open chat selects the
@@ -105,6 +112,9 @@ reading the installed macOS AIS Switch app's login, read-only (see its README).
 `client/web/restyle-css.ts` adds `:root` fallbacks from Paseo's own colour variables, so embedded
 frames without the sidebar that normally calls `setNativeColors` still get its colours, and keeps
 its queued-message action icons and chat-outline preview styled after Paseo 0.14's markup.
+`client/web/selectors.ts` limits its composer chip styling to the toolbar: the model sheet
+reuses `mode-control` as a labelled row, and the chip rule that hides a third child would
+otherwise hide its current mode (Plan mode, Auto mode).
 Covered by `test/web.test.mjs`. Native `sharp` is not bundled, so thumbnails fall back to the
 original image; the optional headless browser downloads only when a user enables page checks.
 
