@@ -630,10 +630,31 @@ export async function findCodexMicrosoftStoreBinary(): Promise<string | null> {
   return null;
 }
 
+// The macOS Codex desktop app bundles the CLI it runs as its own app-server. A user
+// with only the app installed has no `codex` on PATH, and a Finder-launched host
+// never sees the PATH line the app adds to ~/.zshrc.
+export function codexMacAppBinaryCandidates(homeDir: string): string[] {
+  return ["/Applications", path.join(homeDir, "Applications")].map((root) =>
+    path.join(root, "Codex.app", "Contents", "Resources", "codex"),
+  );
+}
+
+export async function findCodexMacAppBinary(): Promise<string | null> {
+  if (process.platform !== "darwin") {
+    return null;
+  }
+  for (const candidate of codexMacAppBinaryCandidates(os.homedir())) {
+    if (await probeExecutable(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export async function findDefaultCodexBinary(): Promise<string | null> {
   const pathBinary = await findExecutable("codex");
   if (pathBinary) return pathBinary;
-  return await findCodexMicrosoftStoreBinary();
+  return (await findCodexMicrosoftStoreBinary()) ?? (await findCodexMacAppBinary());
 }
 
 async function resolveCodexLaunchPrefix(
