@@ -8,7 +8,7 @@ import {
   getEmbeddedWorkspace,
   isEmbeddedHostSectionAllowed,
 } from "@/patches/vibing/workspace-boundary";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { Alert, Pressable, ScrollView, View, type PressableStateCallbackType } from "react-native";
 import { useNavigation, useRouter } from "expo-router";
