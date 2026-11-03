@@ -164,7 +164,11 @@ services are local to the mounted conversation so global composer preferences ca
 replace bot/provider defaults or receive these overrides.
 The fork menu omits its new-workspace destination inside Bots chats.
 Two default bots are seeded once (`shared/vibing-defaults.ts`), so deleting either sticks:
-Codex, the default (`vibing-general`), and Claude (`vibing-claude`). Version 3 renames an
+Codex, the default (`vibing-general`), and Claude (`vibing-claude`). They start with full access
+(`full-access` for Codex, `bypassPermissions` for Claude) and permission to contact other bots.
+Version 4 upgrades those two reserved bots once, using their current providers; unsupported
+providers keep their mode. Other bots and the general new-bot defaults stay unchanged, and
+later permission edits stick. Version 3 renames an
 untouched default bot to "Codex (default)" or "Claude (default)" once when another bot already
 uses its name. Without Codex, a workspace opens on Claude, else its first local bot. An existing home's untouched General bot becomes Codex once (a renamed one is
 left alone), tracked by the settings' `vibingDefaults` version. A workspace opens on Claude
