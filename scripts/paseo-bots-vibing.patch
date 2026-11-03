@@ -2153,10 +2153,10 @@ index 0ffd98e..420e450 100644
 +}
 diff --git a/shared/vibing-defaults.ts b/shared/vibing-defaults.ts
 new file mode 100644
-index 0000000..c453875
+index 0000000..41fdd61
 --- /dev/null
 +++ b/shared/vibing-defaults.ts
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,148 @@
 +import { DEFAULT_BOT_DEFAULTS, type Bot, type BotSettingsValues } from "./bot";
 +import { LIST_WIDTH } from "./layout";
 +import { BOT_TEMPLATES, newBot } from "./templates";
@@ -2171,14 +2171,19 @@ index 0000000..c453875
 + * Bumped when Vibing's defaults change; each home is migrated once per version.
 + * 1: Codex and Claude default bots. 2: the bot list opens at its minimum width.
 + * 3: a default bot whose name another bot already uses gets a distinct name.
++ * 4: default bots have full access and may contact other bots.
 + */
-+export const VIBING_DEFAULTS_VERSION = 3;
++export const VIBING_DEFAULTS_VERSION = 4;
 +/** The list width every home was saved with before version 2. */
 +const OLD_LIST_WIDTH = 320;
++const DEFAULT_BOT_MODES = new Map([
++  ["codex", "full-access"],
++  ["claude", "bypassPermissions"],
++]);
 +
 +function defaultBot(id: string, name: string, provider: string, values: BotSettingsValues): Bot {
 +  const defaults = values.defaults ?? DEFAULT_BOT_DEFAULTS;
-+  // A model, mode or thinking level only means something for the provider it was picked for.
++  // A model or thinking level only means something for the provider it was picked for.
 +  const same = defaults.provider === provider;
 +  const base = newBot(provider, BOT_TEMPLATES[0]);
 +  return {
@@ -2188,9 +2193,9 @@ index 0000000..c453875
 +    // Distinct avatars, so the two default bots are told apart in the sidebar.
 +    avatar: { ...base.avatar, seed: `vibing-${provider}` },
 +    model: same ? defaults.model : null,
-+    modeId: same ? defaults.modeId : null,
++    modeId: DEFAULT_BOT_MODES.get(provider) ?? null,
 +    thinkingOptionId: same ? defaults.thinkingOptionId : null,
-+    contactBots: defaults.contactBots,
++    contactBots: "allow",
 +  };
 +}
 +
@@ -2239,6 +2244,15 @@ index 0000000..c453875
 +  return result;
 +}
 +
++/** Version 4: upgrade only the two reserved default bots, using their current providers. */
++function fullAccessDefaultBots(bots: Bot[]): Bot[] {
++  return bots.map((bot) =>
++    bot.id === DEFAULT_BOT_ID || bot.id === CLAUDE_BOT_ID
++      ? { ...bot, modeId: DEFAULT_BOT_MODES.get(bot.provider) ?? bot.modeId, contactBots: "allow" }
++      : bot,
++  );
++}
++
 +/**
 + * Applies Vibing's defaults to the Bots settings. Every step runs once per home, so later
 + * choices stick: deleting Codex or Claude, renaming General, or dragging the list to any
@@ -2247,7 +2261,8 @@ index 0000000..c453875
 +export function applyVibingDefaults(values: BotSettingsValues): BotSettingsValues | null {
 +  const from = values.vibingDefaults ?? 0;
 +  const seeded = seedDefaultBots(values, from < 1);
-+  const bots = from < 3 ? distinctDefaultNames(seeded) : seeded;
++  const named = from < 3 ? distinctDefaultNames(seeded) : seeded;
++  const bots = from < 4 ? fullAccessDefaultBots(named) : named;
 +  // Before version 2 the list was saved at 320px unless the user dragged it, which
 +  // never lands on exactly 320, so that value means "still the default".
 +  const ui = from < 2 && values.ui?.listWidth === OLD_LIST_WIDTH ? { ...values.ui, listWidth: LIST_WIDTH.min } : values.ui;
@@ -3052,10 +3067,10 @@ index 367000b..2b80bea 100644
    it("rejects an unknown sort", () => {
 diff --git a/tests/vibing-defaults.test.ts b/tests/vibing-defaults.test.ts
 new file mode 100644
-index 0000000..9cc8d33
+index 0000000..85203ac
 --- /dev/null
 +++ b/tests/vibing-defaults.test.ts
-@@ -0,0 +1,170 @@
+@@ -0,0 +1,205 @@
 +import { describe, expect, it } from "vitest";
 +import type { BotSettingsValues } from "../shared/bot";
 +import { DEFAULT_BOT_LIST_UI } from "../shared/bot";
@@ -3073,6 +3088,8 @@ index 0000000..9cc8d33
 +      { id: DEFAULT_BOT_ID, name: "Codex", provider: "codex" },
 +      { id: CLAUDE_BOT_ID, name: "Claude", provider: "claude" },
 +    ]);
++    expect(seeded.bots[0]).toMatchObject({ modeId: "full-access", contactBots: "allow" });
++    expect(seeded.bots[1]).toMatchObject({ modeId: "bypassPermissions", contactBots: "allow" });
 +    expect(applyVibingDefaults(seeded)).toBeNull();
 +    expect(seeded.bots[0]!.avatar.seed).not.toBe(seeded.bots[1]!.avatar.seed);
 +  });
@@ -3081,8 +3098,8 @@ index 0000000..9cc8d33
 +    const values = { ...empty(), defaults: { provider: "claude", model: "opus", modeId: "plan", thinkingOptionId: "high", contactBots: "allow" as const } };
 +    const [codex, claude] = applyVibingDefaults(values)!.bots;
 +
-+    expect(codex).toMatchObject({ provider: "codex", model: null, modeId: null, thinkingOptionId: null, contactBots: "allow" });
-+    expect(claude).toMatchObject({ provider: "claude", model: "opus", modeId: "plan", thinkingOptionId: "high" });
++    expect(codex).toMatchObject({ provider: "codex", model: null, modeId: "full-access", thinkingOptionId: null, contactBots: "allow" });
++    expect(claude).toMatchObject({ provider: "claude", model: "opus", modeId: "bypassPermissions", thinkingOptionId: "high", contactBots: "allow" });
 +  });
 +
 +  it("turns an untouched General bot into Codex once, keeping its instructions and chats' bot id", () => {
@@ -3093,11 +3110,11 @@ index 0000000..9cc8d33
 +    expect(seeded.bots[0]).toMatchObject({ name: "Codex", provider: "codex", model: null, soul: "Be brief." });
 +  });
 +
-+  it("leaves a renamed General bot alone", () => {
++  it("preserves a renamed General bot while upgrading its access", () => {
 +    const renamed = makeBot({ id: DEFAULT_BOT_ID, name: "Helper", provider: "claude" });
 +    const seeded = applyVibingDefaults({ ...empty(), bots: [renamed] })!;
 +
-+    expect(seeded.bots[0]).toEqual(renamed);
++    expect(seeded.bots[0]).toEqual({ ...renamed, modeId: "bypassPermissions", contactBots: "allow" });
 +    expect(seeded.bots[1]?.id).toBe(CLAUDE_BOT_ID);
 +  });
 +
@@ -3144,6 +3161,39 @@ index 0000000..9cc8d33
 +    const upgraded = applyVibingDefaults({ ...seeded, vibingDefaults: 2, bots: [...bots, makeBot({ id: "bot-own", name: "Mine" })] })!;
 +
 +    expect(upgraded.bots.find((bot) => bot.id === DEFAULT_BOT_ID)?.name).toBe("Mine");
++  });
++
++  it("upgrades existing default bots once without changing other bots or their defaults", () => {
++    const codex = makeBot({ id: DEFAULT_BOT_ID, provider: "codex", modeId: "auto-review", contactBots: "off", name: "My Codex", model: "custom", soul: "Keep this." });
++    const claude = makeBot({ id: CLAUDE_BOT_ID, provider: "claude", modeId: "plan" });
++    const other = makeBot({ id: "bot-own", provider: "codex", modeId: "auto" });
++    const defaults = { provider: "claude", model: null, modeId: "plan", thinkingOptionId: null, contactBots: "off" as const };
++    const upgraded = applyVibingDefaults({ ...empty(), vibingDefaults: 3, bots: [codex, claude, other], defaults })!;
++
++    expect(upgraded.vibingDefaults).toBe(4);
++    expect(upgraded.bots).toEqual([
++      { ...codex, modeId: "full-access", contactBots: "allow" },
++      { ...claude, modeId: "bypassPermissions", contactBots: "allow" },
++      other,
++    ]);
++    expect(upgraded.defaults).toEqual(defaults);
++    const edited = upgraded.bots.map(bot => ({ ...bot, modeId: "plan", contactBots: "off" as const }));
++    expect(applyVibingDefaults({ ...upgraded, bots: edited })).toBeNull();
++  });
++
++  it("does not recreate deleted default bots during the access upgrade", () => {
++    const other = makeBot({ id: "bot-own" });
++    expect(applyVibingDefaults({ ...empty(), vibingDefaults: 3, bots: [other] })!.bots).toEqual([other]);
++  });
++
++  it("uses a default bot's current provider and preserves unsupported provider modes", () => {
++    const switched = makeBot({ id: DEFAULT_BOT_ID, provider: "claude", modeId: "plan" });
++    const custom = makeBot({ id: CLAUDE_BOT_ID, provider: "pi", modeId: "custom" });
++    const upgraded = applyVibingDefaults({ ...empty(), vibingDefaults: 3, bots: [switched, custom] })!;
++    expect(upgraded.bots).toEqual([
++      { ...switched, modeId: "bypassPermissions", contactBots: "allow" },
++      { ...custom, contactBots: "allow" },
++    ]);
 +  });
 +
 +  it("opens the bot list at its minimum width", () => {

@@ -138,6 +138,22 @@ test("server-only packaging relocates the upstream terminal worker without repla
     assert.ok(existsSync(path.join(directory, "terminal-worker", "terminal-worker.mjs")));
     assert.ok(existsSync(path.join(directory, "plugin-process.js")));
     assert.ok(existsSync(path.join(directory, "compiler-worker.js")));
+    for (const artifact of [
+      "bridge-plugin.bundle.mjs",
+      "v2/bridge-plugin.bundle.mjs",
+      "v2/state.mjs",
+    ]) {
+      assert.deepEqual(
+        readFileSync(path.join(directory, artifact)),
+        readFileSync(
+          path.join(
+            import.meta.dirname,
+            "../packages/server/dist/server/server/agent/providers/opencode",
+            artifact,
+          ),
+        ),
+      );
+    }
     assert.ok(
       existsSync(path.join(directory, "terminal-worker", "shell-integration", "zsh", ".zshenv")),
     );
