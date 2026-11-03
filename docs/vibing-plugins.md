@@ -72,6 +72,13 @@ to one worktree per frame and to the host's native chat.
   (`rename()`, capped at Paseo's 200-character title limit). Removing the open chat selects the
   next chat in sidebar order, else the previous one (`shared/sidebar.ts`); only an emptied bot
   opens a new chat. Hosts without the handle methods report an error.
+- **Delete all chats.** The bot menu (kebab and right-click) has a destructive Delete all chats,
+  between Archive bot and Delete bot (`shared/delete-chats.ts`). It lists the bot's chats fresh
+  through the same query and `select` the sidebar uses (`scopeBotChats` in `shared/chat.ts`, so
+  inside an embedded workspace that is this workspace and chat context only), confirms with the
+  count and how many are still running (deleting closes the agent first, so they are stopped),
+  then deletes four at a time and keeps going past failures, reporting how many failed. Deleted
+  chats leave the selection (a new chat opens) and the pins; it never touches the bot itself.
 - **Import session.** A bot's new-chat draft offers Import session; imported or restored agents
   get the bot's labels and open once the bot lists them.
 - **Team tabs.** With teams, the first tab is All bots (every bot, teams' included; it replaced
