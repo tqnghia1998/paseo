@@ -29,6 +29,7 @@ import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility";
 import { SafeAreaInsetsContext, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AdaptiveTextInput } from "@/components/adaptive-text-input";
 import { useDismissibleOverlay } from "@/components/ui/overlay-dismissal";
+import { useRetainedPanelActive } from "@/components/retained-panel";
 export { AdaptiveTextInput, type AdaptiveTextInputProps } from "@/components/adaptive-text-input";
 
 // Horizontal indent token shared by the sheet header (title, back arrow,
@@ -677,7 +678,12 @@ export function AdaptiveModalSheet({
   });
   const [shouldRenderWeb, setShouldRenderWeb] = useState(visible);
   const [isWebClosing, setIsWebClosing] = useState(false);
-  const modalLayer = useGlobalOverlayLayer("modal", visible || shouldRenderWeb);
+  // The desktop portal escapes a hidden retained chat, whose frozen subtree can no
+  // longer commit the exit unmount, so drop it with the chat (as tooltips do).
+  const isPanelActive = useRetainedPanelActive();
+  const rendersWebPortal = shouldRenderWeb && isPanelActive;
+  const overlayPanelActive = !isWeb || isMobile || isPanelActive;
+  const modalLayer = useGlobalOverlayLayer("modal", (visible || shouldRenderWeb) && overlayPanelActive);
   const handleDismiss = useCallback(() => {
     handleSheetDismiss();
     onDismiss?.();
@@ -718,7 +724,7 @@ export function AdaptiveModalSheet({
   );
   const setOverlayScope = useOverlayRegistration({
     keys: ["Escape"],
-    active: visible,
+    active: visible && overlayPanelActive,
     layer: modalLayer,
     onKeyDown: handleOverlayKeyDown,
   });
@@ -824,7 +830,7 @@ export function AdaptiveModalSheet({
 
   // On web, use portal to overlay root for consistent stacking with toasts
   if (isWeb && typeof document !== "undefined") {
-    if (!shouldRenderWeb) return null;
+    if (!rendersWebPortal) return null;
     return createPortal(desktopContent, getOverlayRoot());
   }
 
