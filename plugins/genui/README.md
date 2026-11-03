@@ -1,7 +1,7 @@
 # genui
 
 Bundled from [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) at
-`f2ebfcf2147b36b676b778794b5b29e2f72e179f` (version 0.2.1, Apache-2.0).
+`1c2dac69d0ffe9a111f3926b80a52c18253e4946` (version 0.3.2, Apache-2.0).
 
 Regenerate with `node scripts/vendor-community-plugins.mjs genui` in the Paseo fork.
 Generated code uses the host SDK, React, React Native, React Query and Zod.
