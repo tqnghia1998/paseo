@@ -55,8 +55,22 @@ index a186d56..3976ff4 100644
  :is([data-cp-set="field"], [data-cp-set="area"]):hover { border-color: color-mix(in srgb, var(--cp-muted, var(--colors-foreground-muted)) 55%, transparent) !important; }
  :is([data-cp-set="field"], [data-cp-set="area"]):focus-within { border-color: var(--cp-accent, var(--colors-accent)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-accent, var(--colors-accent)) 25%, transparent) !important; }
  /* The field draws focus; an input inside a wrapper field stays see-through. */
+diff --git a/client/web/selectors.ts b/client/web/selectors.ts
+index ed50550..ec1b988 100644
+--- a/client/web/selectors.ts
++++ b/client/web/selectors.ts
+@@ -29,7 +29,8 @@ export const ADMONITION = `${MD} .enrm-admonition`;
+ export const LANG = '[data-paseo-markdown-language]:not([data-paseo-markdown-language=""])';
+ export const SLASH = '[data-testid="composer-autocomplete-popover"]';
+ export const SLASH_GLIDE_MS = 140;
+-export const CHIP = ':is([data-testid="combined-model-selector"], [data-testid="agent-thinking-selector"], [data-testid="mode-control"])';
++// Composer toolbar chips only: the model sheet reuses mode-control as a labelled settings row, whose value must stay visible.
++export const CHIP = ':is([data-testid="combined-model-selector"], [data-testid="agent-thinking-selector"], [data-testid="mode-control"]):not([data-testid="agent-controls-settings-list"] *)';
+ export const PERMISSION = '[data-cp-part="permission"]';
+ export const PLAN = '[data-testid="permission-plan-card"]';
+ export const CTX = '[data-cp-part="context"]';
 diff --git a/test/web.test.mjs b/test/web.test.mjs
-index e421195..f1df73d 100644
+index e421195..118b360 100644
 --- a/test/web.test.mjs
 +++ b/test/web.test.mjs
 @@ -20,7 +20,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
@@ -72,7 +86,7 @@ index e421195..f1df73d 100644
        <div data-testid="context-window-details" style="position:absolute;border:1px solid black;border-radius:12px;background:white"><div><span>Context</span><span>35% used</span></div><div data-testid="usage-report-test" style="height:180px">Usage</div></div>
        <div data-testid="assistant-message"><div data-paseo-markdown-tag="blockquote"><span id="marker">[!NO</span></div></div>
        <div><div data-testid="permission-request-deny" style="color:#888"><div><span>Deny</span></div></div><div data-testid="permission-request-action-always" style="color:#888"><div><span>Allow always</span></div></div><div data-testid="permission-request-action-once" style="color:#eee"><div><span>Allow once</span></div></div></div>
-@@ -60,6 +64,35 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
+@@ -60,6 +64,43 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
            localStorage.removeItem('chat-polish:context-card-heights');
            const first = prompts(); const web = load('web');
            const restyle = web.restyleNative(() => true); const clamp = web.clampUserMessages(() => true);
@@ -100,6 +114,14 @@ index e421195..f1df73d 100644
 +          queued.querySelector('button:last-child').disabled = true;
 +          checks.queueDisabledSendMuted = getComputedStyle(queued.querySelector('button:last-child svg')).stroke === 'rgb(85, 85, 85)';
 +          queued.remove();
++          // The model sheet reuses mode-control as a labelled row; only composer toolbar chips hide their third child.
++          const modes = document.createElement('div');
++          modes.innerHTML = '<button data-testid="mode-control" id="toolbar-mode"><div><div>i</div><div>Auto</div><div id="toolbar-caret">v</div></div></button>'
++            + '<div data-testid="agent-controls-settings-list"><button data-testid="mode-control"><div><div>i</div><div>Mode</div><div id="sheet-mode-value">Plan mode</div></div></button></div>';
++          document.body.appendChild(modes); await wait();
++          checks.toolbarModeChipHidesCaret = getComputedStyle(document.getElementById('toolbar-caret')).display === 'none';
++          checks.sheetModeRowShowsValue = getComputedStyle(document.getElementById('sheet-mode-value')).display !== 'none';
++          modes.remove();
 +          const labelField = document.getElementById('label-field'), labelInput = document.getElementById('label-input');
 +          const promptField = document.getElementById('prompt-field'), promptInput = document.getElementById('prompt-input');
 +          checks.wrappedSettingsFieldsKeepPadding = getComputedStyle(labelField).paddingTop === '6px' && getComputedStyle(labelField).paddingBottom === '6px';
@@ -108,12 +130,12 @@ index e421195..f1df73d 100644
            checks.mermaidDocFromBundle = (await web.loadMermaidDoc()) === new TextDecoder().decode(Uint8Array.from(atob("${Buffer.from(mermaidDoc).toString("base64")}"), (ch) => ch.charCodeAt(0)));
            await wait(); checks.observerSettles = !capped;
            // Paseo 0.14 wraps a prompt's rows and text in a message preview that clamps long prompts itself.
-@@ -213,7 +246,7 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
+@@ -213,7 +254,7 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
      assert.equal(report.error, undefined, report.error);
      assert.deepEqual(report.errors, []);
      for (const [check, passed] of Object.entries(report.checks)) assert.equal(passed, true, check);
 -    assert.equal(Object.keys(report.checks).length, 21);
-+    assert.equal(Object.keys(report.checks).length, 28);
++    assert.equal(Object.keys(report.checks).length, 30);
    } finally {
      server?.closeAllConnections(); server?.close();
      rmSync(temp, { recursive: true, force: true });
