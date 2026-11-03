@@ -1419,6 +1419,12 @@ var normalize = (path) => (path ?? "").replace(/\/+$/, "");
 function isWorkspaceBotChat(agent, directory, botId, context = "workspace") {
   return normalize(agent.cwd) === normalize(directory) && (agent.labels?.[CHAT_CONTEXT_LABEL] ?? "workspace") === context && (agent.labels?.[BOT_LABEL] === botId || botId === "vibing-general" && !agent.labels?.[BOT_LABEL]);
 }
+function scopeBotChats(agents, scope, botId) {
+  if (!scope.directory) return [...agents];
+  if (!scope.isLocal) return [];
+  const directory = scope.directory;
+  return agents.filter((agent) => isWorkspaceBotChat(agent, directory, botId, scope.chatContext));
+}
 async function botsProjectId(api, root) {
   const { projects } = await api.projects.list();
   const existing = projects.find((project) => normalize(project.projectRootPath) === normalize(root));
@@ -1495,6 +1501,42 @@ async function resolveDefaultModel(api, provider) {
   const model = defaultModelId(entry?.models ?? []);
   if (!model) throw new Error(`${provider} has no models available. Pick a model in the bot's settings.`);
   return model;
+}
+
+// shared/delete-chats.ts
+var DELETE_CHATS_CONCURRENCY = 4;
+async function deleteChats(ids, remove, concurrency = DELETE_CHATS_CONCURRENCY) {
+  const outcomes = /* @__PURE__ */ new Map();
+  let next = 0;
+  const worker = async () => {
+    while (next < ids.length) {
+      const id = ids[next++];
+      try {
+        await remove(id);
+        outcomes.set(id, null);
+      } catch (error) {
+        outcomes.set(id, { error });
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(concurrency, 1), ids.length) }, worker));
+  const result = { deleted: [], failed: [] };
+  for (const id of ids) {
+    const outcome = outcomes.get(id);
+    if (outcome) result.failed.push({ id, error: outcome.error });
+    else result.deleted.push(id);
+  }
+  return result;
+}
+function deleteAllChatsMessage(botName, count, running) {
+  const base = count === 1 ? `Delete the 1 chat of "${botName}"? This permanently removes it and can't be undone.` : `Delete all ${count} chats of "${botName}"? This permanently removes them and can't be undone.`;
+  if (running === 0) return base;
+  return `${base}
+
+${running === 1 ? "1 is still running" : `${running} are still running`} and will be stopped.`;
+}
+function pinsWithout(pins, deleted) {
+  return pins.filter((pin) => !deleted.has(pin.chatId));
 }
 
 // shared/activity.ts
@@ -4611,6 +4653,7 @@ function botMenuEntries(actions) {
     { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId },
     { kind: "separator" },
     { label: bot.archived ? "Unarchive bot" : "Archive bot", icon: bot.archived ? "ArchiveRestore" : "Archive", onSelect: actions.onToggleArchive },
+    { label: "Delete all chats", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDeleteAllChats },
     { label: "Delete bot", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDelete }
   );
   return entries;
@@ -4785,7 +4828,7 @@ function botChatsQuery(host2, botId) {
       } while (cursor);
       return agents.filter((agent) => !agent.archivedAt).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
     },
-    select: (agents) => !available ? [] : directory ? agents.filter((agent) => isWorkspaceBotChat(agent, directory, botId, host2.chatContext)) : agents
+    select: (agents) => !available ? [] : scopeBotChats(agents, { directory, isLocal: host2.isLocal, chatContext: host2.chatContext }, botId)
   });
 }
 function useBotChats(host2, botId) {
@@ -14314,6 +14357,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
         onCopyId: () => copy(bot.id, "Bot ID copied"),
         onSaveAsPreset: () => void flush().then(() => commit((values) => ({ ...values, presets: [...values.presets ?? [], presetFromBot(values.bots.find((entry) => entry.id === bot.id) ?? bot)] }))).then((saved) => saved && toast.show(`Saved ${bot.name} as a preset. It's under New bot.`, { variant: "success" })),
         onToggleArchive: () => void updateBot(bot.id, { archived: !bot.archived }),
+        onDeleteAllChats: () => deleteAllChats(bot),
         onDelete: async () => {
           const confirmed = await confirmDialog({
             title: "Delete bot?",
@@ -14422,6 +14466,53 @@ Its chats stay on the host and remain in Paseo's history.`,
       destructive: true
     });
     if (confirmed) await removeChat(bot, chat, context, "delete");
+  };
+  const deleteAllChats = async (bot) => {
+    const botHost = resolveHost2(bot.hostId);
+    const query = botChatsQuery(botHost, bot.id);
+    const api = botHost.api;
+    if (!api || !query.enabled) {
+      toast.error("Host is not connected");
+      return;
+    }
+    let chats;
+    try {
+      chats = query.select(await queryClient.fetchQuery({ queryKey: query.queryKey, queryFn: query.queryFn, staleTime: 0 }));
+    } catch (error) {
+      toast.error(`Couldn't list chats: ${errorText(error)}`);
+      return;
+    }
+    if (!chats.length) {
+      toast.show(`${bot.name} has no chats to delete`);
+      return;
+    }
+    const running = chats.filter((chat) => chat.status === "running" || chat.status === "initializing").length;
+    const confirmed = await confirmDialog({
+      title: "Delete all chats?",
+      message: deleteAllChatsMessage(bot.name, chats.length, running),
+      confirmLabel: "Delete all",
+      cancelLabel: "Cancel",
+      destructive: true
+    });
+    if (!confirmed) return;
+    const result = await deleteChats(
+      chats.map((chat) => chat.id),
+      async (id) => {
+        const ref = api.agents.ref(id);
+        if (!ref.delete) throw new Error("this Paseo host can't delete chats");
+        await ref.delete();
+      }
+    );
+    const deleted = new Set(result.deleted);
+    const open = selectionRef.current;
+    if (open?.botId === bot.id && open.chatId && deleted.has(open.chatId)) setSelection({ botId: bot.id, chatId: null });
+    if (deleted.size) updateUi((current2) => ({ ...current2, pinnedChats: pinsWithout(current2.pinnedChats, deleted) }));
+    await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key] });
+    if (result.failed.length) {
+      toast.error(`Deleted ${deleted.size} of ${chats.length} chats. ${result.failed.length} failed: ${errorText(result.failed[0].error)}`);
+    } else {
+      toast.show(deleted.size === 1 ? "Deleted 1 chat" : `Deleted ${deleted.size} chats`, { variant: "success" });
+    }
   };
   const openDisplayMenu = (anchor) => {
     menu.open({
