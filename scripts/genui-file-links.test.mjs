@@ -15,6 +15,13 @@ const parsed = ts.createSourceFile(
   true,
   ts.ScriptKind.JS,
 );
+// esbuild numbers the helpers it inlines (jsx13, useCallback3...) per bundle, and a plugin update
+// renumbers them, so stand in for every number instead of the ones one release happened to use.
+function numbered(base, value) {
+  const names = { [base]: value };
+  for (let i = 0; i < 100; i += 1) names[`${base}${i}`] = value;
+  return names;
+}
 function functionSource(name) {
   const fn = parsed.statements.find(
     (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
@@ -116,9 +123,9 @@ test("timeline file actions use the owning agent cwd and preserve the line", () 
       assert.equal(id, "agent");
       return select({ cwd: "/workspace" });
     },
-    useCallback3: (fn) => fn,
+    ...numbered("useCallback", (fn) => fn),
     openWorkspaceFile: (...args) => opened.push(args),
-    jsx13: (type, props) => ({ type, props }),
+    ...numbered("jsx", (type, props) => ({ type, props })),
     SpecBlockView: "spec",
   });
   vm.runInContext(functionSource("TimelineBlockItem"), context);
@@ -141,17 +148,17 @@ test("File uses one press target and opens files on web", () => {
     }),
     text: String,
     finiteNumber: (x) => (typeof x === "number" ? x : null),
-    Platform3: { OS: "web" },
-    Pressable2: "button",
-    View4: "div",
+    ...numbered("Platform", { OS: "web" }),
+    ...numbered("Pressable", "button"),
+    ...numbered("View", "div"),
     RNText: "text",
     PaseoIcon: "icon",
-    StyleSheet4: { hairlineWidth: 1 },
-    jsx4: node,
-    jsxs3: node,
-    React4: {
+    ...numbered("StyleSheet", { hairlineWidth: 1 }),
+    ...numbered("jsx", node),
+    ...numbered("jsxs", node),
+    ...numbered("React", {
       createElement: (type, props, children) => node(type, { ...props, children }),
-    },
+    }),
   });
   vm.runInContext(functionSource("File"), context);
   const file = context.File({ props: { path: "/workspace/a.ts", line: 42 } });
