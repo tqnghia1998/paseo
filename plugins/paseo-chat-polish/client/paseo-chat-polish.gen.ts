@@ -143,7 +143,7 @@ var ADMONITION = `${MD} .enrm-admonition`;
 var LANG = '[data-paseo-markdown-language]:not([data-paseo-markdown-language=""])';
 var SLASH = '[data-testid="composer-autocomplete-popover"]';
 var SLASH_GLIDE_MS = 140;
-var CHIP = ':is([data-testid="combined-model-selector"], [data-testid="agent-thinking-selector"], [data-testid="mode-control"])';
+var CHIP = ':is([data-testid="combined-model-selector"], [data-testid="agent-thinking-selector"], [data-testid="mode-control"]):not([data-testid="agent-controls-settings-list"] *)';
 var PERMISSION = '[data-cp-part="permission"]';
 var PLAN = '[data-testid="permission-plan-card"]';
 var CTX = '[data-cp-part="context"]';
