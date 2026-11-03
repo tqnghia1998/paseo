@@ -61,7 +61,13 @@ test("built output compiles and starts every listed built-in", async () => {
     },
   });
   try {
-    for (const plugin of new BuiltinPluginLoader(packagedRoot).entries()) {
+    // The loader hands out the same descriptors (including `isolated`) it starts in production.
+    const plugins = [];
+    await new BuiltinPluginLoader(packagedRoot).load(async (plugin) => {
+      plugins.push(plugin);
+    });
+    assert.ok(plugins.length > 0, "the loader must list at least one built-in");
+    for (const plugin of plugins) {
       const { id, directory } = plugin;
       assert.equal((await readPluginManifest(directory)).id, id);
       const bundles = await compilePlugin({
