@@ -527,7 +527,7 @@ index 7533cb6..24c41b7 100644
    if (bucket === "running") {
      const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..3f3b817 100644
+index ebc4ed2..29089f8 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
 @@ -1,32 +1,36 @@
@@ -556,7 +556,7 @@ index ebc4ed2..3f3b817 100644
  import { chatTranscript } from "../shared/transcript";
  import { ensureBotHomeRpc, mountRpc, exportBotRpc, importBotRpc, importTeamRpc, systemPromptRpc } from "../shared/rpc";
  import { botFromPreset, newBot } from "../shared/templates";
-+import { applyVibingDefaults, DEFAULT_BOT_ID, preferredDefaultBotId } from "../shared/vibing-defaults";
++import { applyVibingDefaults, DEFAULT_BOT_ID, fallbackDefaultBotId, preferredDefaultBotId } from "../shared/vibing-defaults";
  import { AvatarTheme } from "./Avatar";
 -import { botMenuEntries, chatMenuEntries, ExportDialog, NewBotDialog, RenameDialog } from "./BotDialogs";
 +import { botMenuEntries, chatMenuEntries, ExportDialog, NewBotDialog, RenameDialog, type ExportTarget } from "./BotDialogs";
@@ -633,7 +633,7 @@ index ebc4ed2..3f3b817 100644
    const [drafts, setDrafts] = useState<Record<string, Bot>>({});
    // List state (collapsed groups, pins, order, display options) applies at once and saves behind.
    const [uiOverride, setUiOverride] = useState<BotListUi | null>(null);
-@@ -222,9 +231,62 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -222,9 +231,63 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    // "New bot" from the Command Center opens a fresh Bots screen; only that one consumes it.
    useEffect(() => {
      const intent = takeIntent();
@@ -641,18 +641,19 @@ index ebc4ed2..3f3b817 100644
 +    if (intent?.kind === "new-bot") setCreating("new");
    }, []);
  
-+  // Vibing's defaults: Codex (the reserved default) and Claude bots, and a minimum-width list.
++  // Vibing's defaults: Codex and Claude bots (once, so deleting either sticks), and a minimum-width list.
 +  const seedingDefaults = useRef(false);
-+  // The bot a workspace opens on: Codex, or Claude when Codex can't run here. Undefined
-+  // while providers are still probed, for at most DEFAULT_BOT_WAIT_MS.
++  // The bot a workspace opens on: Codex, or Claude when Codex can't run here or was deleted.
++  // Undefined while providers are still probed, for at most DEFAULT_BOT_WAIT_MS.
 +  const [defaultBotWaitOver, setDefaultBotWaitOver] = useState(false);
 +  useEffect(() => {
 +    const timer = setTimeout(() => setDefaultBotWaitOver(true), DEFAULT_BOT_WAIT_MS);
 +    return () => clearTimeout(timer);
 +  }, []);
++  const readyBots = settings.status === "ready" ? settings.values.bots : [];
 +  const defaultBotId =
-+    preferredDefaultBotId(settings.status === "ready" ? settings.values.bots : [], localProviders.data, host.id) ??
-+    (defaultBotWaitOver ? DEFAULT_BOT_ID : undefined);
++    preferredDefaultBotId(readyBots, localProviders.data, host.id) ??
++    (defaultBotWaitOver ? fallbackDefaultBotId(readyBots, host.id) : undefined);
 +  const defaultBotRef = useRef(defaultBotId ?? DEFAULT_BOT_ID);
 +  defaultBotRef.current = defaultBotId ?? DEFAULT_BOT_ID;
 +  // The workspace opens on DEFAULT_BOT_ID before providers are known; move an untouched
@@ -697,7 +698,7 @@ index ebc4ed2..3f3b817 100644
    if (settings.status !== "ready") {
      return (
        <View style={{ flex: 1, padding: 24, gap: 12, backgroundColor: colors.surface0, justifyContent: settings.status === "loading" ? "center" : "flex-start", alignItems: settings.status === "loading" ? "center" : "stretch" }}>
-@@ -269,12 +331,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -269,12 +332,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    const select = (next: Selection) => {
      setSelection(next);
      setTeamMap(false);
@@ -732,7 +733,7 @@ index ebc4ed2..3f3b817 100644
    const openPanel = (bot: Bot, section: SectionId | null) => {
      if (selection?.botId !== bot.id) select({ botId: bot.id, chatId: null });
      setPanel({ open: true, section });
-@@ -366,7 +449,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -366,7 +450,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
  
    const openBotMenu = (bot: Bot, anchor: LayoutRectangle, source: MenuSource) => {
      const botHost = resolveHost(bot.hostId);
@@ -741,7 +742,7 @@ index ebc4ed2..3f3b817 100644
      const workspaceId = chats.find((chat) => chat.workspaceId)?.workspaceId;
      const openWorkspace = navigation?.openWorkspace;
      menu.open({
-@@ -376,20 +459,21 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -376,20 +460,21 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        title: "Bot actions",
        entries: botMenuEntries({
          bot,
@@ -765,7 +766,7 @@ index ebc4ed2..3f3b817 100644
          onDelete: async () => {
            const confirmed = await confirmDialog({
              title: "Delete bot?",
-@@ -459,26 +543,106 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -459,26 +544,106 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            updateUi((current) =>
              context.pinned ? unpin(current) : { ...current, pinnedChats: [...current.pinnedChats, { botId: bot.id, chatId: chat.id }] },
            ),
@@ -887,7 +888,7 @@ index ebc4ed2..3f3b817 100644
    const openDisplayMenu = (anchor: LayoutRectangle) => {
      menu.open({
        anchor,
-@@ -518,6 +682,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -518,6 +683,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        touch={layout.compact || layout.platform !== "web"}
        splash={layout.compact}
        bottomInset={bottomInset}
@@ -895,7 +896,7 @@ index ebc4ed2..3f3b817 100644
        onToggle={(botId) =>
          updateUi((current) => ({
            ...current,
-@@ -527,9 +692,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -527,9 +693,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        onTogglePinnedSection={() => updateUi((current) => ({ ...current, pinnedCollapsed: !current.pinnedCollapsed }))}
        onShowArchived={() => updateUi((current) => ({ ...current, showArchived: true }))}
        onSelect={select}
@@ -909,7 +910,7 @@ index ebc4ed2..3f3b817 100644
        onDisplayMenu={openDisplayMenu}
        onEditTeam={setEditingTeam}
        onTeamMap={() => setTeamMap(true)}
-@@ -537,7 +705,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -537,7 +706,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    );
  
    const tabProps = openTab
@@ -918,7 +919,7 @@ index ebc4ed2..3f3b817 100644
      : null;
  
    const pane = teamMap ? (
-@@ -558,11 +726,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -558,11 +727,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : selectedBot && selection ? (
        <SelectedChat
@@ -932,7 +933,7 @@ index ebc4ed2..3f3b817 100644
          localHost={localHost}
          panelOpen={panel.open}
          layout={layout}
-@@ -571,6 +740,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -571,6 +741,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          onBack={layout.compact ? () => setSelection(null) : undefined}
          onBotMenu={(anchor) => (anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot))}
          onTogglePanel={() => setPanel({ open: !panel.open, section: panel.section })}
@@ -941,7 +942,7 @@ index ebc4ed2..3f3b817 100644
          onStarted={(chatId) => setSelection({ botId: selectedBot.id, chatId })}
        />
      ) : (
-@@ -599,7 +770,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -599,7 +771,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            setPanelVersion((version) => version + 1);
            toast.show("Restored. Undo it from History if needed.", { variant: "success" });
          }}
@@ -950,12 +951,12 @@ index ebc4ed2..3f3b817 100644
          onOpenChat={(chatId) => {
            select({ botId: selectedBot.id, chatId });
            // On phones the panel covers the chat.
-@@ -621,13 +792,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -621,13 +793,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : null;
  
-+  // Waiting for the default bots and the default choice keeps the workspace from restoring onto Codex first.
-+  const localBotIds = allBots.some(bot => bot.id === DEFAULT_BOT_ID) && defaultBotId && !applyVibingDefaults(settings.values)
++  // Waiting for the bots and the default choice keeps the workspace from restoring onto Codex first.
++  const localBotIds = settings.status === "ready" && defaultBotId && !applyVibingDefaults(settings.values)
 +    ? allBots.filter(bot => !bot.hostId || bot.hostId === host.id).map(bot => bot.id)
 +    : undefined;
 +  const workspaceHeader = WorkspaceBridge ? <WorkspaceBridge localBotIds={localBotIds} selectedAgentId={selection?.chatId} selectedDraftId={selection?.draftId} botId={selection?.botId === DEFAULT_BOT_ID && !selection.chatId && !selection.draftId ? (defaultBotId ?? DEFAULT_BOT_ID) : (selection?.botId ?? defaultBotRef.current)} onActivate={activateWorkspaceChat} /> : null;
@@ -972,7 +973,7 @@ index ebc4ed2..3f3b817 100644
      {/* The host gives plugin surfaces no keyboard handling; lift everything above the keyboard. */}
      <View
        style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}
-@@ -684,6 +862,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -684,6 +863,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        {creating ? (
          <NewBotDialog
            colors={colors}
@@ -980,7 +981,7 @@ index ebc4ed2..3f3b817 100644
            onClose={() => setCreating(false)}
            presets={settings.status === "ready" ? (settings.values.presets ?? []) : []}
            onCreate={(start) => {
-@@ -694,13 +873,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -694,13 +874,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            }}
            onImport={async (json) => {
              const { bots, teams } = await importTeam({ json });
@@ -997,7 +998,7 @@ index ebc4ed2..3f3b817 100644
              }
            }}
          />
-@@ -721,17 +901,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -721,17 +902,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          />
        ) : null}
  
@@ -1031,7 +1032,7 @@ index ebc4ed2..3f3b817 100644
    localHost: LocalHost;
    panelOpen: boolean;
    layout: PluginSurfaceProps["layout"];
-@@ -743,9 +936,12 @@ interface SelectedChatProps {
+@@ -743,9 +937,12 @@ interface SelectedChatProps {
    onStarted(chatId: string): void;
  }
  
@@ -1046,7 +1047,7 @@ index ebc4ed2..3f3b817 100644
    const ensureHome = useRpc(ensureBotHomeRpc);
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
-@@ -754,15 +950,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -754,15 +951,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
  
    const start = async (message: OutgoingMessage) => {
      if (!host.api) throw new Error(`${host.label} is offline.`);
@@ -1069,7 +1070,7 @@ index ebc4ed2..3f3b817 100644
        library,
        ...(host.isLocal ? { agentId } : {}),
        plugin,
-@@ -773,13 +974,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -773,13 +975,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        attachments: message.attachments,
        clientMessageId: message.messageId,
      });
@@ -1093,7 +1094,7 @@ index ebc4ed2..3f3b817 100644
      const api = host.api;
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
-@@ -799,8 +1008,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -799,8 +1009,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
      // Runs once for the selection that carries the prompt.
    }, [host.api]);
  
@@ -1111,7 +1112,7 @@ index ebc4ed2..3f3b817 100644
        colors={colors}
        bot={bot}
        host={host}
-@@ -815,6 +1033,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -815,6 +1034,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        onTogglePanel={onTogglePanel}
        onStart={start}
        onOpenChat={onStarted}
@@ -2152,22 +2153,26 @@ index 0ffd98e..420e450 100644
 +}
 diff --git a/shared/vibing-defaults.ts b/shared/vibing-defaults.ts
 new file mode 100644
-index 0000000..2c9a978
+index 0000000..c453875
 --- /dev/null
 +++ b/shared/vibing-defaults.ts
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,133 @@
 +import { DEFAULT_BOT_DEFAULTS, type Bot, type BotSettingsValues } from "./bot";
 +import { LIST_WIDTH } from "./layout";
 +import { BOT_TEMPLATES, newBot } from "./templates";
 +
-+/** The reserved default bot: chats without a bot label belong to it, and selection falls back to it. */
++/**
++ * The default bot: chats without a bot label belong to it, and a workspace opens on it.
++ * It's created once per home like Claude, so deleting it sticks.
++ */
 +export const DEFAULT_BOT_ID = "vibing-general";
 +export const CLAUDE_BOT_ID = "vibing-claude";
 +/**
 + * Bumped when Vibing's defaults change; each home is migrated once per version.
 + * 1: Codex and Claude default bots. 2: the bot list opens at its minimum width.
++ * 3: a default bot whose name another bot already uses gets a distinct name.
 + */
-+export const VIBING_DEFAULTS_VERSION = 2;
++export const VIBING_DEFAULTS_VERSION = 3;
 +/** The list width every home was saved with before version 2. */
 +const OLD_LIST_WIDTH = 320;
 +
@@ -2189,33 +2194,60 @@ index 0000000..2c9a978
 +  };
 +}
 +
-+/** Version 1: Codex (the reserved default) and Claude; an untouched General bot becomes Codex. */
++/** Version 1: Codex (the default) and Claude; an untouched General bot becomes Codex. */
 +function seedDefaultBots(values: BotSettingsValues, migrating: boolean): Bot[] {
++  if (!migrating) return values.bots;
 +  let bots = values.bots;
 +  const current = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
 +  if (!current) {
 +    bots = [defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values), ...bots];
-+  } else if (migrating && current.name === "General") {
++  } else if (current.name === "General") {
 +    const codex = defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values);
 +    const converted = { ...current, name: codex.name, provider: codex.provider, model: codex.model, modeId: codex.modeId, thinkingOptionId: codex.thinkingOptionId };
 +    bots = bots.map((bot) => (bot.id === DEFAULT_BOT_ID ? converted : bot));
 +  }
-+  if (migrating && !bots.some((bot) => bot.id === CLAUDE_BOT_ID)) {
++  if (!bots.some((bot) => bot.id === CLAUDE_BOT_ID)) {
 +    const at = bots.findIndex((bot) => bot.id === DEFAULT_BOT_ID) + 1;
 +    bots = [...bots.slice(0, at), defaultBot(CLAUDE_BOT_ID, "Claude", "claude", values), ...bots.slice(at)];
 +  }
 +  return bots;
 +}
 +
++const DEFAULT_BOT_NAMES: readonly (readonly [string, string])[] = [
++  [DEFAULT_BOT_ID, "Codex"],
++  [CLAUDE_BOT_ID, "Claude"],
++];
++const nameKey = (name: string) => name.trim().toLowerCase();
++
 +/**
-+ * Applies Vibing's defaults to the Bots settings. The default Codex bot is recreated
-+ * whenever it's missing; every other step runs once per home, so later choices stick:
-+ * deleting Claude, renaming General, or dragging the list to any width. Returns null
-+ * when nothing changes.
++ * Version 3: a default bot still under its seeded name, when another bot already has that
++ * name (one the user made before the defaults arrived), becomes "Codex (default)" or
++ * "Claude (default)", so the sidebar never shows two bots with the same name. A name the
++ * user picked for the default bot is left alone.
++ */
++function distinctDefaultNames(bots: Bot[]): Bot[] {
++  let result = bots;
++  for (const [id, seededName] of DEFAULT_BOT_NAMES) {
++    const bot = result.find((entry) => entry.id === id);
++    if (!bot || nameKey(bot.name) !== nameKey(seededName)) continue;
++    const taken = new Set(result.filter((entry) => entry.id !== id).map((entry) => nameKey(entry.name)));
++    if (!taken.has(nameKey(seededName))) continue;
++    let name = `${seededName} (default)`;
++    for (let n = 2; taken.has(nameKey(name)); n++) name = `${seededName} (default ${n})`;
++    result = result.map((entry) => (entry.id === id ? { ...entry, name } : entry));
++  }
++  return result;
++}
++
++/**
++ * Applies Vibing's defaults to the Bots settings. Every step runs once per home, so later
++ * choices stick: deleting Codex or Claude, renaming General, or dragging the list to any
++ * width. Returns null when nothing changes.
 + */
 +export function applyVibingDefaults(values: BotSettingsValues): BotSettingsValues | null {
 +  const from = values.vibingDefaults ?? 0;
-+  const bots = seedDefaultBots(values, from < 1);
++  const seeded = seedDefaultBots(values, from < 1);
++  const bots = from < 3 ? distinctDefaultNames(seeded) : seeded;
 +  // Before version 2 the list was saved at 320px unless the user dragged it, which
 +  // never lands on exactly 320, so that value means "still the default".
 +  const ui = from < 2 && values.ui?.listWidth === OLD_LIST_WIDTH ? { ...values.ui, listWidth: LIST_WIDTH.min } : values.ui;
@@ -2224,19 +2256,30 @@ index 0000000..2c9a978
 +}
 +
 +/**
++ * The bot a workspace falls back to when it can't wait for the preferred one: Codex,
++ * else Claude, else the first bot on this host. Undefined when this host has no bots.
++ */
++export function fallbackDefaultBotId(bots: readonly Bot[], hostId?: string): string | undefined {
++  const local = bots.filter((bot) => !bot.hostId || bot.hostId === hostId);
++  return (local.find((bot) => bot.id === DEFAULT_BOT_ID) ?? local.find((bot) => bot.id === CLAUDE_BOT_ID) ?? local[0])?.id;
++}
++
++/**
 + * The bot a workspace opens on: Codex, unless its provider can't run here (not installed
 + * or failing) and the Claude bot's can. Undefined while that's still unknown, so callers
 + * wait instead of opening Codex and switching. Each bot's own provider decides, so a
-+ * user's provider change is respected.
++ * user's provider change is respected. Without Codex it's Claude, and without both the
++ * first bot on this host.
 + */
 +export function preferredDefaultBotId(
 +  bots: readonly Bot[],
 +  providers: readonly { provider: string; status: string }[] | undefined,
 +  hostId?: string,
 +): string | undefined {
-+  const codex = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
-+  // Before the default bots are seeded there is nothing to choose between yet.
-+  if (!providers || !codex) return undefined;
++  // Before the bots load there is nothing to choose between yet.
++  if (!providers || bots.length === 0) return undefined;
++  const codex = bots.find((bot) => bot.id === DEFAULT_BOT_ID && (!bot.hostId || bot.hostId === hostId));
++  if (!codex) return fallbackDefaultBotId(bots, hostId);
 +  const statusOf = (bot: Bot) => providers.find((entry) => entry.provider === bot.provider)?.status ?? "unavailable";
 +  const status = statusOf(codex);
 +  if (status === "ready") return DEFAULT_BOT_ID;
@@ -3009,15 +3052,15 @@ index 367000b..2b80bea 100644
    it("rejects an unknown sort", () => {
 diff --git a/tests/vibing-defaults.test.ts b/tests/vibing-defaults.test.ts
 new file mode 100644
-index 0000000..c3a1fde
+index 0000000..9cc8d33
 --- /dev/null
 +++ b/tests/vibing-defaults.test.ts
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,170 @@
 +import { describe, expect, it } from "vitest";
 +import type { BotSettingsValues } from "../shared/bot";
 +import { DEFAULT_BOT_LIST_UI } from "../shared/bot";
 +import { LIST_WIDTH } from "../shared/layout";
-+import { applyVibingDefaults, CLAUDE_BOT_ID, DEFAULT_BOT_ID, preferredDefaultBotId } from "../shared/vibing-defaults";
++import { applyVibingDefaults, CLAUDE_BOT_ID, DEFAULT_BOT_ID, fallbackDefaultBotId, preferredDefaultBotId } from "../shared/vibing-defaults";
 +import { makeBot } from "./helpers";
 +
 +const empty = (): BotSettingsValues => ({ bots: [], history: [] });
@@ -3058,11 +3101,49 @@ index 0000000..c3a1fde
 +    expect(seeded.bots[1]?.id).toBe(CLAUDE_BOT_ID);
 +  });
 +
-+  it("recreates the reserved default bot but not a Claude bot the user deleted", () => {
++  it("doesn't recreate a Codex or Claude bot the user deleted", () => {
 +    const seeded = applyVibingDefaults(empty())!;
-+    const withoutBoth = { ...seeded, bots: [] };
++    const mine = makeBot({ id: "bot-mine", name: "Mine" });
 +
-+    expect(applyVibingDefaults(withoutBoth)!.bots.map(({ id }) => id)).toEqual([DEFAULT_BOT_ID]);
++    expect(applyVibingDefaults({ ...seeded, bots: [] })).toBeNull();
++    expect(applyVibingDefaults({ ...seeded, bots: [mine] })).toBeNull();
++  });
++
++  it("names a new home's default bots apart from bots the user already has", () => {
++    const own = makeBot({ id: "bot-own", name: "Codex" });
++    const seeded = applyVibingDefaults({ ...empty(), bots: [own, makeBot({ id: "bot-c", name: "claude" })] })!;
++
++    expect(seeded.bots.map(({ id, name }) => [id, name])).toEqual([
++      [DEFAULT_BOT_ID, "Codex (default)"],
++      [CLAUDE_BOT_ID, "Claude (default)"],
++      ["bot-own", "Codex"],
++      ["bot-c", "claude"],
++    ]);
++  });
++
++  it("renames a default bot that shares its name with the user's bot once, on upgrade", () => {
++    const seeded = applyVibingDefaults(empty())!;
++    const clash = {
++      ...seeded,
++      vibingDefaults: 2,
++      bots: [...seeded.bots, makeBot({ id: "bot-own", name: "Codex" }), makeBot({ id: "bot-taken", name: "Codex (default)" })],
++    };
++    const fixed = applyVibingDefaults(clash)!;
++
++    expect(fixed.bots.find((bot) => bot.id === DEFAULT_BOT_ID)?.name).toBe("Codex (default 2)");
++    expect(fixed.bots.find((bot) => bot.id === CLAUDE_BOT_ID)?.name).toBe("Claude");
++    expect(fixed.bots.find((bot) => bot.id === "bot-own")?.name).toBe("Codex");
++    expect(applyVibingDefaults(fixed)).toBeNull();
++    // A later clash is the user's own doing, so it's left alone.
++    expect(applyVibingDefaults({ ...fixed, bots: [...fixed.bots, makeBot({ id: "bot-new", name: "Claude" })] })).toBeNull();
++  });
++
++  it("leaves a default bot the user renamed alone on upgrade", () => {
++    const seeded = applyVibingDefaults(empty())!;
++    const bots = seeded.bots.map((bot) => (bot.id === DEFAULT_BOT_ID ? { ...bot, name: "Mine" } : bot));
++    const upgraded = applyVibingDefaults({ ...seeded, vibingDefaults: 2, bots: [...bots, makeBot({ id: "bot-own", name: "Mine" })] })!;
++
++    expect(upgraded.bots.find((bot) => bot.id === DEFAULT_BOT_ID)?.name).toBe("Mine");
 +  });
 +
 +  it("opens the bot list at its minimum width", () => {
@@ -3122,6 +3203,26 @@ index 0000000..c3a1fde
 +  it("skips a Claude bot that lives on another host", () => {
 +    const remote = bots.map((bot) => (bot.id === CLAUDE_BOT_ID ? { ...bot, hostId: "other" } : bot));
 +    expect(preferredDefaultBotId(remote, providers("unavailable"), "local")).toBe(DEFAULT_BOT_ID);
++  });
++
++  it("opens on Claude, then the first bot here, when Codex was deleted", () => {
++    const withoutCodex = bots.filter((bot) => bot.id !== DEFAULT_BOT_ID);
++    const mine = makeBot({ id: "bot-mine", name: "Mine" });
++    expect(preferredDefaultBotId([...withoutCodex, mine], providers("ready", "unavailable"))).toBe(CLAUDE_BOT_ID);
++    expect(preferredDefaultBotId([mine], providers("ready"))).toBe("bot-mine");
++    expect(preferredDefaultBotId([{ ...mine, hostId: "other" }], providers("ready"), "local")).toBeUndefined();
++  });
++});
++
++describe("fallbackDefaultBotId", () => {
++  const [codex, claude] = applyVibingDefaults({ bots: [], history: [] })!.bots;
++  const mine = makeBot({ id: "bot-mine", name: "Mine" });
++
++  it("prefers Codex, then Claude, then the first bot on this host", () => {
++    expect(fallbackDefaultBotId([mine, claude!, codex!])).toBe(DEFAULT_BOT_ID);
++    expect(fallbackDefaultBotId([mine, claude!])).toBe(CLAUDE_BOT_ID);
++    expect(fallbackDefaultBotId([{ ...mine, hostId: "other" }, makeBot({ id: "bot-here", name: "Here" })], "local")).toBe("bot-here");
++    expect(fallbackDefaultBotId([])).toBeUndefined();
 +  });
 +});
 +
