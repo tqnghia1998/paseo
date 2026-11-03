@@ -60,10 +60,13 @@ to one worktree per frame and to the host's native chat.
   there instead of the bot's folder. Chats carry a `paseo-bots.context` label so Live Design
   conversations stay separate from workspace ones while sharing bot configuration
   (`shared/chat.ts`). The default Codex bot also lists the workspace's pre-Bots conversations.
-- **Default bots and list width.** Codex (the reserved default, `vibing-general`) and Claude are
-  seeded per home (`shared/vibing-defaults.ts`); an untouched General bot from older homes becomes
-  Codex once. A workspace opens on Codex, or on Claude when the Codex bot's provider can't run
-  there (not installed or failing) and Claude's can (`preferredDefaultBotId`); restore waits for
+- **Default bots and list width.** Codex (the default, `vibing-general`) and Claude are
+  seeded once per home (`shared/vibing-defaults.ts`), so deleting either sticks; an untouched
+  General bot from older homes becomes Codex once. Version 3 renames an untouched default bot to
+  "Codex (default)" or "Claude (default)" once when another bot already has its name. A
+  workspace opens on Codex, or on Claude when the Codex bot's provider can't run there (not
+  installed or failing) and Claude's can, or when Codex was deleted (`preferredDefaultBotId`,
+  then `fallbackDefaultBotId`: Claude, else the first local bot); restore waits for
   provider probes for up to 15 seconds. The bot list opens at its 200px minimum; a list still at the old 320px default is
   narrowed once, and a dragged width is kept. The sidebar footer's New bot is an icon button
   with a tooltip, like the buttons beside it, so the footer fits that width.
