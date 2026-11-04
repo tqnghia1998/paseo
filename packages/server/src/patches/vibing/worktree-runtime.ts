@@ -10,8 +10,8 @@ import { getRunningWorktreePaths } from "./worktree-activity.js";
 
 interface WorktreeServices {
   agentManager: Pick<AgentManager, "listAgents" | "closeAgent" | "flush" | "deleteAgentState">;
-  agentStorage: Pick<AgentStorage, "list" | "beginDelete" | "remove">;
-  workspaceRegistry: Pick<WorkspaceRegistry, "list">;
+  agentStorage: Pick<AgentStorage, "listAll" | "beginDelete" | "remove">;
+  workspaceRegistry: Pick<WorkspaceRegistry, "listAll">;
   archiveWorkspace: (workspaceId: string, requestId: string) => Promise<unknown>;
 }
 
@@ -25,9 +25,9 @@ async function isMissingPath(target: string): Promise<boolean> {
 }
 
 export async function pruneMissingWorktreeAgents(
-  agentStorage: Pick<AgentStorage, "list" | "remove">,
+  agentStorage: Pick<AgentStorage, "listAll" | "remove">,
 ): Promise<number> {
-  const agents = await agentStorage.list();
+  const agents = await agentStorage.listAll();
   const missing = await Promise.all(agents.map((agent) => isMissingPath(agent.cwd)));
   const missingAgentIds = agents.filter((_, index) => missing[index]).map((agent) => agent.id);
   await Promise.all(missingAgentIds.map((agentId) => agentStorage.remove(agentId)));
@@ -35,9 +35,11 @@ export async function pruneMissingWorktreeAgents(
 }
 
 export async function archiveMissingWorkspaces(
-  workspaceRegistry: Pick<WorkspaceRegistry, "list" | "archive">,
+  workspaceRegistry: Pick<WorkspaceRegistry, "listAll" | "archive">,
 ): Promise<void> {
-  const workspaces = (await workspaceRegistry.list()).filter((workspace) => !workspace.archivedAt);
+  const workspaces = (await workspaceRegistry.listAll()).filter(
+    (workspace) => !workspace.archivedAt,
+  );
   const missing = await Promise.all(
     workspaces.map((workspace) => isMissingPath(workspace.worktreeRoot ?? workspace.cwd)),
   );
@@ -58,7 +60,7 @@ export function createWorktreeCleanup(services: WorktreeServices) {
     const roots = [...new Set(paths.map((targetPath) => path.resolve(targetPath)))];
     const isInDeletedWorktree = (candidatePath: string) =>
       roots.some((root) => isRealpathInsideRoot(root, candidatePath));
-    const workspaces = (await workspaceRegistry.list()).filter(
+    const workspaces = (await workspaceRegistry.listAll()).filter(
       (workspace) =>
         !workspace.archivedAt && isInDeletedWorktree(workspace.worktreeRoot ?? workspace.cwd),
     );
@@ -67,7 +69,7 @@ export function createWorktreeCleanup(services: WorktreeServices) {
         .listAgents()
         .filter((agent) => isInDeletedWorktree(agent.cwd))
         .map((agent) => agent.id),
-      ...(await agentStorage.list())
+      ...(await agentStorage.listAll())
         .filter((agent) => isInDeletedWorktree(agent.cwd))
         .map((agent) => agent.id),
     ]);
@@ -100,7 +102,7 @@ interface WorktreeStopServices {
     flush(): Promise<void>;
   };
   workspaceRegistry: {
-    list(): Promise<
+    listAll(): Promise<
       Array<{
         workspaceId: string;
         cwd: string;
@@ -125,7 +127,7 @@ export function createWorktreeStop(services: WorktreeStopServices) {
   return async (paths: string[]): Promise<void> => {
     const roots = [...new Set(paths.map((root) => path.resolve(root)))];
     const owns = (cwd: string) => roots.some((root) => isRealpathInsideRoot(root, cwd));
-    const workspaces = (await services.workspaceRegistry.list()).filter(
+    const workspaces = (await services.workspaceRegistry.listAll()).filter(
       (workspace) => !workspace.archivedAt && owns(workspace.worktreeRoot ?? workspace.cwd),
     );
     await Promise.all(
@@ -168,7 +170,7 @@ interface WorktreeRoutesInput {
   token: string | undefined;
   logger: Logger;
   agentManager: Pick<AgentManager, "listAgents">;
-  workspaceRegistry: Pick<WorkspaceRegistry, "list">;
+  workspaceRegistry: Pick<WorkspaceRegistry, "listAll">;
   cleanupWorktrees: (paths: string[]) => Promise<void>;
   stopWorktrees: (paths: string[]) => Promise<void>;
 }
@@ -225,7 +227,7 @@ export function registerWorktreeRoutes(input: WorktreeRoutesInput): void {
     }
     void (async () => {
       try {
-        const workspaces = await workspaceRegistry.list();
+        const workspaces = await workspaceRegistry.listAll();
         res.json({ runningPaths: getRunningWorktreePaths(agentManager.listAgents(), workspaces) });
       } catch (error) {
         next(error);

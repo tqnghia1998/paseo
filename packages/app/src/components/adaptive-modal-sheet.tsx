@@ -683,7 +683,10 @@ export function AdaptiveModalSheet({
   const isPanelActive = useRetainedPanelActive();
   const rendersWebPortal = shouldRenderWeb && isPanelActive;
   const overlayPanelActive = !isWeb || isMobile || isPanelActive;
-  const modalLayer = useGlobalOverlayLayer("modal", (visible || shouldRenderWeb) && overlayPanelActive);
+  const modalLayer = useGlobalOverlayLayer(
+    "modal",
+    (visible || shouldRenderWeb) && overlayPanelActive,
+  );
   const handleDismiss = useCallback(() => {
     handleSheetDismiss();
     onDismiss?.();
