@@ -3,7 +3,7 @@ import type { AgentStorage } from "../../server/agent/agent-storage.js";
 import type { PersistedWorkspaceRecord } from "../../server/workspace-registry.js";
 
 interface WorkspaceActivityInput {
-  agentStorage: Pick<AgentStorage, "list">;
+  agentStorage: Pick<AgentStorage, "listAll">;
   agentManager: Pick<AgentManager, "listAgents">;
 }
 export async function getRecentWorkspaceAgentActivity(
@@ -22,7 +22,7 @@ export async function getRecentWorkspaceAgentActivity(
       activity.set(workspaceId, new Date(time));
     }
   };
-  for (const record of await agentStorage.list()) {
+  for (const record of await agentStorage.listAll()) {
     consider(record.workspaceId, record.lastActivityAt ?? record.updatedAt);
   }
   for (const agent of agentManager.listAgents()) {
