@@ -19,9 +19,12 @@ export const communityPluginIds = [
   "paseo-doc-viewer",
   "shell-yeah",
   "paseo-recap",
-  "paseo-quick-prompts",
   "genui",
 ];
+
+// Addons Vibing no longer ships. The copy Vibing installed is dropped once on the next start; a copy
+// installed from elsewhere stays. (Beautiful Chat is retired separately above: it has a replacement.)
+const REMOVED_PLUGINS = ["paseo-quick-prompts"];
 
 // Chat Polish replaced Beautiful Chat as the bundled chat restyler. The Beautiful Chat copy Vibing
 // installed is swapped for Chat Polish once, keeping its enabled state; one installed from elsewhere stays.
@@ -44,6 +47,7 @@ export function prepareCommunityPlugins({
   readPersistedConfig,
   savePersistedConfig,
 }) {
+  removeRetiredPlugins({ home, readPersistedConfig, savePersistedConfig });
   if (!existsSync(sourceRoot)) return;
   updateInstalledPlugins({ home, sourceRoot, readPersistedConfig });
   const marker = path.join(home, ".vibing-community-plugins.json");
@@ -107,7 +111,9 @@ function updateInstalledPlugins({ home, sourceRoot, readPersistedConfig }) {
     }
   }
   if (!outdated.length) return;
-  const { plugins = {} } = readPersistedConfig(home, { defaultsIfMissing: true });
+  const { plugins = {} } = readPersistedConfig(home, {
+    defaultsIfMissing: true,
+  });
   for (const { id, source, directory, bundle } of outdated) {
     const entry = plugins[id];
     const owned =
@@ -201,6 +207,37 @@ function fingerprint(root) {
   };
   visit("");
   return hash.digest("hex");
+}
+
+/** Drops config entries (and folders) for addons Vibing stopped shipping, when Vibing installed them. */
+function removeRetiredPlugins({ home, readPersistedConfig, savePersistedConfig }) {
+  const installedRoot = path.join(home, "installed-plugins");
+  const owned = REMOVED_PLUGINS.filter((id) => existsSync(path.join(installedRoot, id)));
+  if (!owned.length) return;
+  try {
+    const config = readPersistedConfig(home, { defaultsIfMissing: true });
+    const plugins = { ...config.plugins };
+    const dropped = [];
+    for (const id of owned) {
+      const directory = path.join(installedRoot, id);
+      const entry = plugins[id];
+      // Only the copy Vibing installed: its entry points at that exact folder, or there is no entry.
+      const ours =
+        !entry ||
+        (entry.source === "directory" &&
+          typeof entry.path === "string" &&
+          path.resolve(entry.path) === path.resolve(directory));
+      if (!ours) continue;
+      delete plugins[id];
+      dropped.push(directory);
+    }
+    if (!dropped.length) return;
+    savePersistedConfig(home, { ...config, plugins });
+    // The config no longer points at them, so a crash here leaves only unused folders.
+    for (const directory of dropped) rmSync(directory, { recursive: true, force: true });
+  } catch (error) {
+    console.warn("[Paseo] Couldn't remove a retired community plugin:", error);
+  }
 }
 
 /** Removes the Vibing-installed Beautiful Chat entry and returns it, or undefined when there is none. */
