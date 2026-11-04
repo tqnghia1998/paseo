@@ -13,6 +13,8 @@ export interface BotUsageCard {
   /** The share left in the window, 0-100. */
   percent: number;
   percentText: string;
+  /** The share without wording, "23%", for the compact ring. */
+  percentShort: string;
   tone: UsageTone;
   /** "$294 of $1,300", short enough for the 200px sidebar; empty without an amount. */
   detail: string;
@@ -57,7 +59,11 @@ function resolveCard(entry: UsageReportEntry, t: TFunction): BotUsageCard | null
       : undefined;
   const detail =
     spending?.remaining != null && spending.limit != null
-      ? `${shortAmount(spending.remaining, spending.unit, locale)} of ${shortAmount(spending.limit, spending.unit, locale)}`
+      ? `${shortAmount(
+          spending.remaining,
+          spending.unit,
+          locale,
+        )} of ${shortAmount(spending.limit, spending.unit, locale)}`
       : "";
   const title = entry.sourceLabel;
   const percentText = formatDisplayPct(percent, "remaining", undefined, t);
@@ -67,6 +73,7 @@ function resolveCard(entry: UsageReportEntry, t: TFunction): BotUsageCard | null
     title,
     percent,
     percentText,
+    percentShort: `${Math.round(percent)}%`,
     tone: windowTone(window),
     detail,
     label: `${title}: ${[percentText, detail].filter(Boolean).join(", ")}`,
