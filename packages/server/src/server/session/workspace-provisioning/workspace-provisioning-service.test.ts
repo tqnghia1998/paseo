@@ -350,7 +350,7 @@ test("coalesces concurrent opens from separate sessions for the same directory",
   ]);
 
   expect(second.workspaceId).toBe(first.workspaceId);
-  expect(await workspaceRegistry.list()).toHaveLength(1);
+  expect(await workspaceRegistry.listAll()).toHaveLength(1);
 });
 
 test("re-opening Windows-equivalent workspace cwd spellings reuses the active and archived record", async () => {

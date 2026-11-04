@@ -41,13 +41,26 @@ const enterpriseCodex = entry("codex", "Codex", {
       unit: "usd",
       tone: "warning",
     },
-    { id: "spending_remaining", label: "Remaining allowance", remaining: 294.9, unit: "usd" },
+    {
+      id: "spending_remaining",
+      label: "Remaining allowance",
+      remaining: 294.9,
+      unit: "usd",
+    },
   ],
 } as UsageReportEntry["report"]);
 
 const claude = entry("claude", "Claude", {
   status: "available",
-  windows: [{ id: "five_hour", label: "Session", shortLabel: "5h", usedPct: 10, resetsAt: null }],
+  windows: [
+    {
+      id: "five_hour",
+      label: "Session",
+      shortLabel: "5h",
+      usedPct: 10,
+      resetsAt: null,
+    },
+  ],
   balances: [],
 } as UsageReportEntry["report"]);
 
@@ -58,6 +71,7 @@ it("shows how much of the Codex budget is left in whole dollars, short enough fo
     title: "Codex",
     percent: 23,
     percentText: "23% left",
+    percentShort: "23%",
     tone: "warning",
     detail: "$294 of $1,300",
     label: "Codex: 23% left, $294 of $1,300",
@@ -113,11 +127,24 @@ it("shows separate Codex and AIS Switch quotas without duplicating the shared AI
         resetsAt: null,
       },
     ],
-    balances: [{ id: "spending", label: "Monthly AQP", remaining: 381, limit: 1000, unit: "usd" }],
+    balances: [
+      {
+        id: "spending",
+        label: "Monthly AQP",
+        remaining: 381,
+        limit: 1000,
+        unit: "usd",
+      },
+    ],
   } as UsageReportEntry["report"]);
   expect(resolveBotUsageCards([ais, claude, enterpriseCodex])).toMatchObject([
     { id: "codex/account", title: "Codex", detail: "$294 of $1,300" },
-    { id: "ais-switch/account", title: "AIS Switch", percent: 38.1, detail: "$381 of $1,000" },
+    {
+      id: "ais-switch/account",
+      title: "AIS Switch",
+      percent: 38.1,
+      detail: "$381 of $1,000",
+    },
   ]);
   expect(resolveBotUsageCards([ais])).toMatchObject([{ title: "AIS Switch" }]);
   expect(resolveBotUsageCards([])).toEqual([]);

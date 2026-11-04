@@ -4,17 +4,19 @@ import { Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { PressHighlight } from "@/components/ui/press-highlight";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { queryClient } from "@/data/query-client";
 import { useUsageHostId } from "@/usage/hosts";
 import { useUsageHostReports } from "@/usage/queries";
-import { UsageMeter } from "@/usage/meter";
 import { UsageSidebarRoot, useOpenSidebarUsage } from "@/usage/sidebar-item";
 import { UsageSourceIcon } from "@/usage/source-icon";
 import { resolveBotUsageCards } from "./bot-usage";
+import { BotUsageRing } from "./bot-usage-ring";
 
 /**
- * The Bots sidebar's usage card, handed to the plugin like the native chat. Plugin surfaces have
- * their own query cache, so it reads the app's usage reports through the app's client.
+ * The Bots sidebar's usage summary, handed to the plugin like the native chat: one row with a
+ * ring per source so two accounts fit the 200px sidebar. Plugin surfaces have their own query
+ * cache, so it reads the app's usage reports through the app's client.
  */
 export function BotUsageCard() {
   return (
@@ -35,44 +37,55 @@ function BotUsageCardContent() {
   const openUsage = useOpenSidebarUsage();
   const reports = useUsageHostReports(useUsageHostId());
   const cards = useMemo(() => resolveBotUsageCards(reports, t), [reports, t]);
+  if (cards.length === 0) return null;
   return (
-    <>
+    <View style={styles.row} testID="bots-sidebar-usage-row">
       {cards.map((card) => (
-        <PressHighlight
-          key={card.id}
-          onPress={openUsage}
-          accessibilityRole="button"
-          accessibilityLabel={card.label}
-          style={cardStyle}
-          highlightStyle={styles.cardPressed}
-          testID="bots-sidebar-usage"
-        >
-          <View style={styles.header}>
-            <UsageSourceIcon svg={card.icon} size={14} />
-            <Text style={styles.title} numberOfLines={1}>
-              {card.title}
+        <Tooltip key={card.id} delayDuration={150}>
+          <TooltipTrigger asChild>
+            <PressHighlight
+              onPress={openUsage}
+              accessibilityRole="button"
+              accessibilityLabel={card.label}
+              style={cardStyle}
+              highlightStyle={styles.cardPressed}
+              testID="bots-sidebar-usage"
+            >
+              <BotUsageRing percent={card.percent} tone={card.tone}>
+                <UsageSourceIcon svg={card.icon} size={14} />
+              </BotUsageRing>
+              <Text style={styles.percent} numberOfLines={1}>
+                {card.percentShort}
+              </Text>
+            </PressHighlight>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <Text style={styles.tooltipTitle}>{card.title}</Text>
+            <Text style={styles.tooltipDetail}>
+              {[card.percentText, card.detail].filter(Boolean).join(" · ")}
             </Text>
-            <Text style={styles.percent}>{card.percentText}</Text>
-          </View>
-          <UsageMeter percent={card.percent} tone={card.tone} style={styles.meter} />
-          {card.detail ? (
-            <Text style={styles.detail} numberOfLines={1}>
-              {card.detail}
-            </Text>
-          ) : null}
-        </PressHighlight>
+          </TooltipContent>
+        </Tooltip>
       ))}
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
-  card: {
+  row: {
+    flexDirection: "row",
+    gap: theme.spacing[2],
     marginHorizontal: theme.spacing[2],
     marginBottom: theme.spacing[2],
+  },
+  card: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
     paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    gap: theme.spacing[1.5],
+    paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
     backgroundColor: theme.colors.surface1,
   },
@@ -82,27 +95,16 @@ const styles = StyleSheet.create((theme) => ({
   cardPressed: {
     backgroundColor: theme.colors.surface2,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1.5],
-  },
-  title: {
-    flex: 1,
-    minWidth: 0,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-  },
   percent: {
-    flexShrink: 0,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontVariant: ["tabular-nums"],
   },
-  meter: {
-    height: 4,
+  tooltipTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
   },
-  detail: {
+  tooltipDetail: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontVariant: ["tabular-nums"],
