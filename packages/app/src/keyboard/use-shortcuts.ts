@@ -57,7 +57,10 @@ export function useKeyboardShortcuts({
   const resetModifiers = useKeyboardShortcutsStore((s) => s.resetModifiers);
   const { overrides } = useKeyboardShortcutOverrides();
   const bindings = useMemo(
-    () => buildEffectiveBindings(overrides).filter((binding) => isEmbeddedShortcutAllowed(binding.action)),
+    () =>
+      buildEffectiveBindings(overrides).filter((binding) =>
+        isEmbeddedShortcutAllowed(binding.action),
+      ),
     [overrides],
   );
   const isMac = getShortcutOs() === "mac";

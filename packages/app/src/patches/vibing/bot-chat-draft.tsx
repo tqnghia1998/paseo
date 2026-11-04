@@ -12,12 +12,12 @@ import type { MessagePayload } from "@/composer/types";
 import type { NativeBotChatProps } from "./bot-chat-types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import { ComposerImportPill } from "@/composer/draft/import-pill";
-import { COMPOSER_PILL_CLEARANCE } from "@/composer/pill-styles";
+import { COMPOSER_PILL_CLEARANCE, COMPOSER_PILL_MIN_HEIGHT } from "@/composer/pill-styles";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 
-import { PluginComposerPills, useHasPluginComposerPills } from "@/plugins";
+import { PluginComposerPills } from "@/plugins";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { botChatDraftId } from "./bot-chat-scope";
 import { FormPreferencesScopeContext } from "@/hooks/use-form-preferences";
@@ -51,7 +51,6 @@ function BotChatDraft(
   },
 ) {
   const { serverId, cwd, onStart, importLabels, onImported, draftId } = props;
-  const hasPluginPills = useHasPluginComposerPills(serverId, props.workspaceId ?? "", draftId);
   const compact = useIsCompactFormFactor();
   const draftAttachmentScopeKey = useDraftWorkspaceAttachmentScopeKey(draftId);
   const attachmentScopeKeys = useMemo(() => [draftAttachmentScopeKey], [draftAttachmentScopeKey]);
@@ -127,7 +126,7 @@ function BotChatDraft(
           {input.composerState?.hasUserModifiedAgentSettings ? (
             <Text style={styles.runtimeHint}>Applies to this chat and delegated team members.</Text>
           ) : null}
-          {(canImport || hasPluginPills) && !submitting && !fullscreen ? (
+          {!submitting && !fullscreen ? (
             <View style={styles.importPillRow}>
               <DraftPillContent>
                 {canImport ? (
@@ -223,6 +222,7 @@ const styles = StyleSheet.create((theme) => ({
     },
   },
   importPillContent: {
+    minHeight: COMPOSER_PILL_MIN_HEIGHT,
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
