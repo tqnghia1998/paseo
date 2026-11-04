@@ -52,7 +52,6 @@ vi.mock("@/composer", async () => {
   };
 });
 vi.mock("@/plugins", () => ({
-  useHasPluginComposerPills: () => true,
   PluginComposerPills: ({ agentId }: { agentId: string }) => (
     <div data-testid="draft-prompts">{agentId}</div>
   ),

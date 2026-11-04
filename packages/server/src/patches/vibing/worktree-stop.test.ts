@@ -20,7 +20,7 @@ function setup() {
       flush: vi.fn(async () => {}),
     },
     workspaceRegistry: {
-      list: async () => [
+      listAll: async () => [
         {
           workspaceId: "one",
           cwd: "/repo/one",
@@ -54,7 +54,7 @@ describe("worktree stop", () => {
       mkdirSync(real);
       symlinkSync(real, alias, process.platform === "win32" ? "junction" : "dir");
       const { services, stop } = setup();
-      services.workspaceRegistry.list = async () => [
+      services.workspaceRegistry.listAll = async () => [
         { workspaceId: "one", cwd: alias, worktreeRoot: real, archivedAt: null },
       ];
       await stop([alias]);
