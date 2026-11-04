@@ -6,20 +6,19 @@ is the per-plugin reference and the upgrade procedure.
 
 ## What ships
 
-| Plugin                                            | Source and pin                                                                                              | Version       | Ships as                   | Modified                                        |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------- | -------------------------- | ----------------------------------------------- |
-| Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `39a7000`                                         | 0.2.0         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch`      |
-| Claude usage (`claude-usage-source`)              | Upstream Paseo                                                                                              | follows Paseo | Built in                   | No                                              |
-| Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                              | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                     |
-| AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                                  | —             | Built in                   | Fork-owned                                      |
-| Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                                  | —             | Built in                   | Fork-owned                                      |
-| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `f7e6677`                       | 0.8.0         | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch`   |
-| Annotations (`annotations`)                       | [neunzig-zehn/paseo-annotations](https://github.com/neunzig-zehn/paseo-annotations) `b921586`               | 0.1.0         | Community install          | One line: `scripts/annotations-vibing.patch`    |
-| Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `1c2dac6`                       | 0.3.2         | Community install          | Yes: `scripts/genui-vibing.patch`               |
-| Quick Prompts (`paseo-quick-prompts`)             | [kingsleydon/paseo-plugins](https://github.com/kingsleydon/paseo-plugins) `plugins/quick-prompts` `ceb91be` | 0.2.0         | Community install          | Yes: `scripts/paseo-quick-prompts-vibing.patch` |
-| Recap (`paseo-recap`)                             | [kingsleydon/paseo-plugins](https://github.com/kingsleydon/paseo-plugins) `plugins/recap` `ceb91be`         | 0.2.5         | Community install          | Small: `scripts/paseo-recap-vibing.patch`       |
-| PDF and Office viewer (`paseo-doc-viewer`)        | [nkwib/paseo-doc-viewer](https://github.com/nkwib/paseo-doc-viewer) `0f39c81`                               | 0.7.0         | Community install          | No (npm dependencies inlined)                   |
-| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `aa56a35`      | 1.3.1         | Community install          | No                                              |
+| Plugin                                            | Source and pin                                                                                         | Version       | Ships as                   | Modified                                      |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------- | -------------------------- | --------------------------------------------- |
+| Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `39a7000`                                    | 0.2.0         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch`    |
+| Claude usage (`claude-usage-source`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                            |
+| Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
+| AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
+| Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
+| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `f7e6677`                  | 0.8.0         | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
+| Annotations (`annotations`)                       | [neunzig-zehn/paseo-annotations](https://github.com/neunzig-zehn/paseo-annotations) `b921586`          | 0.1.0         | Community install          | One line: `scripts/annotations-vibing.patch`  |
+| Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `1c2dac6`                  | 0.3.2         | Community install          | Yes: `scripts/genui-vibing.patch`             |
+| Recap (`paseo-recap`)                             | [kingsleydon/paseo-plugins](https://github.com/kingsleydon/paseo-plugins) `plugins/recap` `ceb91be`    | 0.2.5         | Community install          | Small: `scripts/paseo-recap-vibing.patch`     |
+| PDF and Office viewer (`paseo-doc-viewer`)        | [nkwib/paseo-doc-viewer](https://github.com/nkwib/paseo-doc-viewer) `0f39c81`                          | 0.7.0         | Community install          | No (npm dependencies inlined)                 |
+| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `aa56a35` | 1.3.1         | Community install          | No                                            |
 
 - **Built in:** listed in `builtinPlugins` (`packages/server/src/server/plugins/builtin/index.ts`);
   the bundler copies them beside `server.mjs` and the daemon always loads them.
@@ -139,12 +138,6 @@ File cards use one press target and always open through the host's `openFile`, o
 embedded workspace and Live Design chats open worktree files in Vibing's VS Code with their line
 numbers, instead of an anchor that opens a Paseo file tab. Regressions:
 `node --test scripts/genui-file-links.test.mjs`.
-
-### Quick Prompts (`scripts/paseo-quick-prompts-vibing.patch`)
-
-One menu by default that opens on desktop hover; pressing a row sends the prompt and Insert is
-its only trailing action (this relies on the fork's plugin menu row `onPress`). Covered by
-`client/pills.test.ts`.
 
 ### Recap (`scripts/paseo-recap-vibing.patch`)
 

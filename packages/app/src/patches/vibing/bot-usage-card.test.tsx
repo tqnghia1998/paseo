@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { UsageReportEntry } from "@/usage/types";
 
@@ -37,16 +37,26 @@ const codex = {
         resetsAt: null,
       },
     ],
-    balances: [{ id: "spending", label: "Spending", remaining: 294, limit: 1300, unit: "usd" }],
+    balances: [
+      {
+        id: "spending",
+        label: "Spending",
+        remaining: 294,
+        limit: 1300,
+        unit: "usd",
+      },
+    ],
   },
 } as unknown as UsageReportEntry;
 
-it("shows the Codex usage card and opens Usage when pressed", () => {
+it("shows the Codex usage as a ring and opens Usage when pressed", () => {
   fake.reports = [codex];
   render(<BotUsageCard />);
-  expect(screen.getByText("Codex")).toBeTruthy();
-  expect(screen.getByText("23% left")).toBeTruthy();
-  expect(screen.getByText("$294 of $1,300")).toBeTruthy();
+  expect(screen.getByLabelText("Codex: 23% left, $294 of $1,300")).toBeTruthy();
+  expect(screen.getByText("23%")).toBeTruthy();
+  // Dollars appear only in the hover tooltip, not on the card.
+  expect(screen.queryByText("$294")).toBeNull();
+  expect(screen.getAllByTestId("bots-sidebar-usage-ring")).toHaveLength(1);
   expect(screen.queryByText("Usage modal")).toBeNull();
   act(() => fireEvent.click(screen.getByTestId("bots-sidebar-usage")));
   expect(screen.getByText("Usage modal")).toBeTruthy();
@@ -55,9 +65,10 @@ it("shows the Codex usage card and opens Usage when pressed", () => {
 it("renders nothing without Codex usage", () => {
   const { container } = render(<BotUsageCard />);
   expect(container.textContent).toBe("");
+  expect(screen.queryByTestId("bots-sidebar-usage-row")).toBeNull();
 });
 
-it("shows AIS Switch alongside Codex and opens the same Usage view", () => {
+it("puts Codex and AIS Switch in one row and opens the same Usage view", () => {
   const ais = {
     ...codex,
     id: "ais-switch/account",
@@ -66,8 +77,20 @@ it("shows AIS Switch alongside Codex and opens the same Usage view", () => {
   };
   fake.reports = [codex, ais];
   render(<BotUsageCard />);
-  expect(screen.getByText("Codex")).toBeTruthy();
-  expect(screen.getByText("AIS Switch")).toBeTruthy();
-  act(() => fireEvent.click(screen.getAllByTestId("bots-sidebar-usage")[1]!));
+  const row = screen.getByTestId("bots-sidebar-usage-row");
+  const items = screen.getAllByTestId("bots-sidebar-usage");
+  expect(items).toHaveLength(2);
+  expect(items.every((item) => row.contains(item))).toBe(true);
+  expect(screen.getByLabelText("Codex: 23% left, $294 of $1,300")).toBeTruthy();
+  expect(screen.getByLabelText("AIS Switch: 23% left, $294 of $1,300")).toBeTruthy();
+  act(() => fireEvent.click(items[1]!));
   expect(screen.getByText("Usage modal")).toBeTruthy();
+});
+
+it("spells out the full usage in a tooltip on hover", async () => {
+  fake.reports = [codex];
+  render(<BotUsageCard />);
+  expect(screen.queryByText("23% left · $294 of $1,300")).toBeNull();
+  fireEvent.mouseEnter(screen.getByTestId("bots-sidebar-usage"));
+  await waitFor(() => expect(screen.getByText("23% left · $294 of $1,300")).toBeTruthy());
 });
