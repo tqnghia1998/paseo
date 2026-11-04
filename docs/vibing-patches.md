@@ -75,8 +75,10 @@ and remove controls. They are not reserved built-in IDs. Offline source copies l
 beside the bundle in `community-plugins/`.
 
 Besides Chat Polish (`paseo-chat-polish`) and Annotations, the addons are PDF and Office viewer
-(`paseo-doc-viewer`), Shell Yeah (`shell-yeah`), Recap (`paseo-recap`), Quick prompts
-(`paseo-quick-prompts`) and Generative UI (`genui`). Fold Turns (`completed-turns`) is
+(`paseo-doc-viewer`), Shell Yeah (`shell-yeah`), Recap (`paseo-recap`) and Generative UI
+(`genui`). Quick Prompts (`paseo-quick-prompts`) was retired: it is no longer bundled, and the next
+start removes the copy Vibing installed (a copy installed from elsewhere stays). Prompt templates
+live in the Vibing host's Insert Prompt menu instead. Fold Turns (`completed-turns`) is
 deliberately not shipped: Chat Polish already merges the steps between replies into one row.
 Bots chats use the native agent panel, so their slash commands, composer pills,
 attachment sources and timeline renderers apply there. Addon workspace panels open
@@ -87,10 +89,6 @@ the `claude`, `codex` or `opencode` CLIs on the daemon's `PATH`;
 `scripts/paseo-recap-vibing.patch` makes its automatic Claude choice the CLI's `haiku`
 alias, which honors `ANTHROPIC_DEFAULT_HAIKU_MODEL`, because the company gateway maps
 the newest Haiku to an older model that rejects its reasoning-effort setting.
-
-Quick Prompts uses one menu by default, opens on desktop hover, sends from the row,
-and inserts from its sole trailing action. `paseo-quick-prompts-vibing.patch` owns these
-choices and the draft-agent integration, so regenerating the addon keeps them.
 
 Generative UI file cards use a single press target. In embedded workspace and Live Design chats,
 `genui-vibing.patch` sends worktree-relative paths and line numbers through the existing
@@ -335,9 +333,8 @@ Plugin menu `actions` rows accept an optional row-level `onPress` declared in
 `view.tsx` renders such a row as a pressable menu item whose trailing icon actions
 stop propagation so they never trigger the row. Pending or disabled buttons and
 disabled rows or actions run nothing; rows without `onPress` stay upstream labels.
-Quick Prompts (`scripts/paseo-quick-prompts-vibing.patch`) depends on it as its only
-Send path, keeping Insert as the trailing action. Keep `model.test.ts`, the patch's
-`pills.test.ts` and the Vibing bundle guard.
+It no longer has a bundled consumer (Quick Prompts was its only one), but the behavior is
+kept and covered by `model.test.ts` and the Vibing bundle guard.
 
 Some fixes need the upstream execution path: active/archived Codex import
 pagination, terminal output event mapping, optional wait/protocol fields, Pi turn
