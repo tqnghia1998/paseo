@@ -892,7 +892,7 @@ function shouldShowWorkspaceScreenHeader(input: {
   isFocusModeEnabled: boolean;
   isMobile: boolean;
 }): boolean {
-  return !isEmbeddedChatOnly && (!input.isFocusModeEnabled || input.isMobile);
+  return !input.isFocusModeEnabled || input.isMobile;
 }
 
 /**
@@ -1045,7 +1045,6 @@ function DesktopCenterColumnChrome({
   );
 }
 
-// eslint-disable-next-line complexity -- embedded focus activation keeps the host-specific policy local to this route.
 function WorkspaceScreenContent({
   serverId,
   workspaceId,
@@ -1706,15 +1705,14 @@ function WorkspaceScreenContent({
         return;
       }
       const target = createWorkspaceFileTabTarget(normalizedLocation);
-      const tabId =
-        !isFocusModeEnabled && parentTabId
-          ? revealWorkspaceChildTab(persistenceKey, target, parentTabId, FOCUSED_PANE_PLACEMENT)
-          : openWorkspaceTabFocused(persistenceKey, target, FOCUSED_PANE_PLACEMENT);
+      const tabId = parentTabId
+        ? revealWorkspaceChildTab(persistenceKey, target, parentTabId, FOCUSED_PANE_PLACEMENT)
+        : openWorkspaceTabFocused(persistenceKey, target, FOCUSED_PANE_PLACEMENT);
       if (tabId) {
         navigateToTabId(tabId);
       }
     },
-    [isFocusModeEnabled, navigateToTabId, openWorkspaceTabFocused, revealWorkspaceChildTab, persistenceKey],
+    [navigateToTabId, openWorkspaceTabFocused, revealWorkspaceChildTab, persistenceKey],
   );
 
   const handleOpenPreferredAssistantFile = useCallback(
@@ -1732,11 +1730,10 @@ function WorkspaceScreenContent({
         target: createWorkspaceFileTabTarget(location),
         source: "chatFiles",
         preferences: openInSidePane,
-        isFocusModeEnabled,
-        parentTabId: isFocusModeEnabled ? undefined : input.parentTabId,
+        parentTabId: input.parentTabId,
       });
     },
-    [isFocusModeEnabled, openInSidePane, persistenceKey],
+    [openInSidePane, persistenceKey],
   );
 
   const handleOpenWorkspaceFileFromPane = useStableEvent(function handleOpenWorkspaceFileFromPane({
@@ -1865,9 +1862,12 @@ function WorkspaceScreenContent({
 
   const handleCreateNewTab = useCallback(
     (input?: { paneId?: string }) => {
-      openWorkspaceDraftTab({ paneId: input?.paneId });
+      if (!persistenceKey) {
+        return;
+      }
+      createWorkspaceTab(persistenceKey, { kind: "new_tab" }, paneLocalPlacement(input?.paneId));
     },
-    [openWorkspaceDraftTab],
+    [createWorkspaceTab, persistenceKey],
   );
 
   const launchWorkspaceTab = useCallback(
@@ -3861,7 +3861,6 @@ function WorkspaceScreenContent({
           serverId={normalizedServerId}
           cwd={workspaceDirectory}
           workspaceId={normalizedWorkspaceId}
-          allowShowAllDirectories={!isEmbeddedFocusMode}
           onClose={closeImportSheet}
           onImportedAgent={handleImportedAgent}
           onImported={navigateToImportedAgent}
@@ -4064,7 +4063,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   tab: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 0,
+    paddingVertical: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
     flexDirection: "row",
     alignItems: "center",
