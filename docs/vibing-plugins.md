@@ -13,9 +13,9 @@ is the per-plugin reference and the upgrade procedure.
 | Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
 | AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
 | Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
-| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `f7e6677`                  | 0.8.0         | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
+| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `41395d5`                  | 0.9.1         | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
 | Annotations (`annotations`)                       | [neunzig-zehn/paseo-annotations](https://github.com/neunzig-zehn/paseo-annotations) `b921586`          | 0.1.0         | Community install          | One line: `scripts/annotations-vibing.patch`  |
-| Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `1c2dac6`                  | 0.3.2         | Community install          | Yes: `scripts/genui-vibing.patch`             |
+| Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`             |
 | Recap (`paseo-recap`)                             | [kingsleydon/paseo-plugins](https://github.com/kingsleydon/paseo-plugins) `plugins/recap` `ceb91be`    | 0.2.5         | Community install          | Small: `scripts/paseo-recap-vibing.patch`     |
 | PDF and Office viewer (`paseo-doc-viewer`)        | [nkwib/paseo-doc-viewer](https://github.com/nkwib/paseo-doc-viewer) `0f39c81`                          | 0.7.0         | Community install          | No (npm dependencies inlined)                 |
 | Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `aa56a35` | 1.3.1         | Community install          | No                                            |
@@ -68,7 +68,7 @@ to one worktree per frame and to the host's native chat.
   then `fallbackDefaultBotId`: Claude, else the first local bot); restore waits for
   provider probes for up to 15 seconds. The bot list opens at its 200px minimum; a list still at the old 320px default is
   narrowed once, and a dragged width is kept. The sidebar footer's New bot is an icon button
-  with a tooltip, like the buttons beside it, so the footer fits that width.
+  with a tooltip, like the buttons beside it, so the footer fits that width. Bot, chat and team-tab labels use 13px interface text to keep the sidebar compact.
 - **Delete and rename chats.** Rows get a Delete icon before the kebab (confirm, then
   permanent delete through the host handle's `delete()`); the chat menu leads with Rename
   (`rename()`, capped at Paseo's 200-character title limit). Removing the open chat selects the
