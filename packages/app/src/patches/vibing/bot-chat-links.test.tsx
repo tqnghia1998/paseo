@@ -39,7 +39,6 @@ vi.mock("expo-router", async () => ({
   ...(await vi.importActual("expo-router/build/react-navigation/core/useIsFocused")),
 }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock("./bot-usage-card", () => ({ BotUsageCard: () => null }));
 vi.mock("./bot-workspace", () => ({ BotWorkspaceBridge: () => null }));
 vi.mock("./workspace-boundary", () => ({
   getEmbeddedWorkspace: () => null,
