@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { TextInput } from "react-native";
 import type { EditingTextInputHandle, EditingTextInputProps } from "./types";
 

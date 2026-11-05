@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import React, { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import {
   useSidebarWorkspacesList,
   type SidebarProjectEntry,

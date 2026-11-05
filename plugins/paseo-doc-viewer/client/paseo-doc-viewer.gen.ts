@@ -1490,7 +1490,7 @@ function statusIcon(theme, status) {
   const pill = STATUS_PILL[status];
   return { name: pill.icon, color: theme.colors[pill.tone] };
 }
-function StatusPill({ theme, styles, status, label = "full" }) {
+function StatusPill({ theme, status, label = "full" }) {
   const pill = STATUS_PILL[status];
   const color = theme.colors[pill.tone];
   const text = label === "full" ? pill.label : label === "short" ? pill.short : null;

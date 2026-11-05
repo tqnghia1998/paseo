@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import invariant from "tiny-invariant";
 import { buildDiffDocumentModel, retainReusableModels, reviewGeometryKey } from "./model";
 import type {

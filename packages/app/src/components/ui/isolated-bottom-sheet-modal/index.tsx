@@ -3,7 +3,6 @@ import {
   type BottomSheetModalProps,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
-import React from "react";
 import {
   forwardRef,
   useCallback,
@@ -13,6 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { useDismissibleOverlay } from "@/components/ui/overlay-dismissal";
 import type { ElementRef, ReactNode } from "react";
 import { systemBackPress } from "./back-press";
