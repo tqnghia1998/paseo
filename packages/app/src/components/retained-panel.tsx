@@ -1,4 +1,4 @@
-import React, { createContext, memo, type ReactNode, useContext } from "react";
+import { createContext, memo, type ReactNode, useContext } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 const RetainedPanelActiveContext = createContext(true);

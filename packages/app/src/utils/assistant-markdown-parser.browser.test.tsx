@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EnrichedMarkdownText } from "react-native-enriched-markdown";
 import { afterEach, expect, it, vi } from "vitest";

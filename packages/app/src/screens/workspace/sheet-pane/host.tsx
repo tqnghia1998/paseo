@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, type ReactNode } from "react";
+import { createContext, useCallback, useContext, type ReactNode } from "react";
 import invariant from "tiny-invariant";
 import { NavigationContext, NavigationRouteContext } from "expo-router/react-navigation";
 import { useAssistantFileLinkEnvironmentBridge } from "@/assistant-file-links";

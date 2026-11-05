@@ -114,7 +114,7 @@ function useWorkspaceAttachmentBinding({
   const activeWorkspaceAttachments = useMemo(
     () =>
       workspaceAttachments.filter(
-        (attachment, index) => !suppressedKeys.includes(workspaceAttachmentKeys[index] ?? ""),
+        (_attachment, index) => !suppressedKeys.includes(workspaceAttachmentKeys[index] ?? ""),
       ),
     [suppressedKeys, workspaceAttachmentKeys, workspaceAttachments],
   );

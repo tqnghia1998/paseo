@@ -1,0 +1,30 @@
+diff --git a/shell-yeah/client/run-row.tsx b/shell-yeah/client/run-row.tsx
+index 2a2f6ea..767d736 100644
+--- a/shell-yeah/client/run-row.tsx
++++ b/shell-yeah/client/run-row.tsx
+@@ -3,11 +3,11 @@ import { Icon, copyText, useToast } from "@getpaseo/plugin/client/ui";
+ import React, { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { Animated, Easing, Platform, Pressable, Text, TextInput, View, type LayoutChangeEvent } from "react-native";
+ import { terminalKeys, type KeyPress } from "../shared/keys.ts";
+-import { basename, errorMessage } from "../shared/text.ts";
++import { errorMessage } from "../shared/text.ts";
+ import { LIMITS } from "../shared/limits.ts";
+ import { plainText, type RunRow } from "../shared/row.ts";
+ import { dismiss, fullOutput, input, send, start, stop, tail } from "../shared/rpc.ts";
+-import { agentName, capitalize, describe, formatDuration, pastRow, pastRunView, statusText, switcher, type Action, type NoteIcon, type Presentation, type RunInView } from "../shared/view.ts";
++import { agentName, describe, formatDuration, pastRow, pastRunView, statusText, switcher, type Action, type NoteIcon, type Presentation, type RunInView } from "../shared/view.ts";
+ import { useResolvedRun, useRunUi } from "./live.ts";
+ import { OutputWell } from "./output.tsx";
+ import { makePalette, mix, withAlpha, type ThemeColors } from "./palette.ts";
+diff --git a/shell-yeah/client/run-window.tsx b/shell-yeah/client/run-window.tsx
+index e970c76..05d5596 100644
+--- a/shell-yeah/client/run-window.tsx
++++ b/shell-yeah/client/run-window.tsx
+@@ -1,6 +1,6 @@
+ import { useAgent, useRpc, type PluginButtonContentProps } from "@getpaseo/plugin/client";
+ import { Icon, TextInput, useToast } from "@getpaseo/plugin/client/ui";
+-import React, { useEffect, useMemo, useRef, useState } from "react";
++import { useEffect, useMemo, useRef, useState } from "react";
+ import { Pressable, Text, View, type TextInput as NativeTextInput } from "react-native";
+ import { LIMITS } from "../shared/limits.ts";
+ import { start, suggest } from "../shared/rpc.ts";

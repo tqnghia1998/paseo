@@ -3,7 +3,6 @@ import {
   type BottomSheetModalProps,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
-import React from "react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import type { ElementRef, ReactNode } from "react";
 import { systemBackPress } from "./back-press";

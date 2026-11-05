@@ -527,7 +527,6 @@ function ControlledAgentControls({
   const availableWidthRef = useRef(0);
 
   const providerAnchorRef = useRef<View>(null);
-  const _modelAnchorRef = useRef<View>(null);
   const thinkingAnchorRef = useRef<View>(null);
 
   const canSelectProvider = Boolean(

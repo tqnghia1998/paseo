@@ -4,7 +4,7 @@ import {
   PluginRpcProvider,
   PluginTranslationProvider,
 } from "@getpaseo/plugin/client/host";
-import React, { type ReactNode } from "react";
+import { type ReactNode } from "react";
 import type { InstalledPlugin } from "./types";
 
 /** Every plugin surface renders under its installation: one query cache, one Paseo client, RPCs. */

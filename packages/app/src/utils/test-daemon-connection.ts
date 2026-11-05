@@ -118,7 +118,6 @@ export function getConnectionAuthFailureReason(error: unknown): DaemonAuthFailur
 }
 
 function resolveConnectionCredentials(
-  connection: HostConnection,
   options:
     | { password?: string; localCredential?: DaemonClientConfig["localCredential"] }
     | undefined,
@@ -159,7 +158,7 @@ export async function buildClientConfig(
     suppressSendErrors: true,
     webSocketFactory: createAppWebSocketFactory(),
     reconnect: { enabled: false },
-    ...resolveConnectionCredentials(connection, options),
+    ...resolveConnectionCredentials(options),
     ...(options.capabilities ? { capabilities: options.capabilities } : {}),
     ...(options.trace ? { trace: options.trace } : {}),
     createPluginClientBundleStore: options.createPluginClientBundleStore,

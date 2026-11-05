@@ -3,7 +3,6 @@ import { usePaseo, useRpc } from "@getpaseo/plugin/client";
 import { defineRpc } from "@getpaseo/plugin";
 import type { PaseoApi } from "@getpaseo/client";
 import { QueryClient } from "@tanstack/react-query";
-import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { z } from "zod";

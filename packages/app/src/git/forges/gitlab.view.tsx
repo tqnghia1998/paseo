@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { CircleCheck, ExternalLink } from "lucide-react-native";

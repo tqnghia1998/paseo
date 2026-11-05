@@ -5,7 +5,6 @@ import {
   controlSizingForLayout,
   mapLayout,
   TOUCH_TARGET,
-  type ControlSizing,
   type LayoutValue,
   type SizingValue,
 } from "./control-sizing";

@@ -26,6 +26,7 @@ const plugins = [
     id: "paseo-doc-viewer",
     repository: "nkwib/paseo-doc-viewer",
     revision: "0f39c81883aef30711e0c5bce4fb2d41a544de0d",
+    patch: "paseo-doc-viewer-vibing.patch",
     bundleDependencies: true,
     assets: ["NOTICE"],
   },
@@ -34,6 +35,7 @@ const plugins = [
     repository: "stevecastaneda/paseo-plugins",
     directory: "shell-yeah",
     revision: "aa56a356cf1b3b658776c31dd238b9bea758322d",
+    patch: "shell-yeah-vibing.patch",
   },
   {
     id: "paseo-recap",
