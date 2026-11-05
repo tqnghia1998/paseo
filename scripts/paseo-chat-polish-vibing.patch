@@ -1,8 +1,29 @@
+diff --git a/client/dashboard/nav.tsx b/client/dashboard/nav.tsx
+index 294e5fa..db68df4 100644
+--- a/client/dashboard/nav.tsx
++++ b/client/dashboard/nav.tsx
+@@ -44,8 +44,6 @@ export function RestyleCard({ theme, prefs, onChange }: { theme: PluginTheme; pr
+  * Update runs `paseo plugin update`, which installs it and restarts the plugin, so the dashboard reloads on the new code.
+  */
+ function UpdateCard({ theme }: { theme: PluginTheme }) {
+-  const s = useStyles(theme);
+-  const c = theme.colors;
+   const check = useRpc(checkUpdate);
+   const apply = useRpc(applyUpdate);
+   const [status, setStatus] = useState<UpdateStatus>();
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index b762da6..96cfe35 100644
+index b762da6..91e314f 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
-@@ -85,10 +85,11 @@ ${LOADERS}
+@@ -23,7 +23,6 @@ ${[4, 5, 3, 0, 2, 1].map((step, i) => `${DOT}:nth-child(${i + 1}) { animation-de
+ // and each loader draws with the dots it needs (or the overlay's ::before). Sizes scale the whole box.
+ // The dashboard's loader tiles carry their own overlay ([data-cp-loader][data-cp-tile="name"]) so each tile animates whatever is chosen globally.
+ const L = (name: string) => `:is(:root[data-cp-rt-loader="${name}"] [data-cp-loader]:not([data-cp-tile]), [data-cp-loader][data-cp-tile="${name}"])`;
+-const RING = [0, 1, 2, 3, 4, 5, 6, 7];
+ const LOADERS = `
+ ${WORKING_BOX} { position: relative; }
+ :root[data-cp-rt-loader-size="m"] ${WORKING_BOX} { transform: scale(1.15); }
+@@ -85,10 +84,11 @@ ${LOADERS}
  [data-cp-part="queued"] > div:last-child > * * { background-color: transparent !important; }
  [data-cp-part="queued"] > div:last-child > *:hover { background-color: var(--cp-control) !important; }
  [data-cp-part="queued"] > div:last-child svg { width: 14px !important; height: 14px !important; }
@@ -17,7 +38,7 @@ index b762da6..96cfe35 100644
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]) { opacity: 0.45 !important; }
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]):hover { background-color: transparent !important; }
  
-@@ -249,7 +250,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
+@@ -249,7 +249,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
  ${PLAN} > div:last-child { padding: 10px 16px 12px !important; border-top: 1px solid var(--cp-rule) !important; }
  
  [data-testid^="chat-outline-tick-"][aria-selected="true"] > div { background-color: var(--cp-accent) !important; }
@@ -26,7 +47,7 @@ index b762da6..96cfe35 100644
  [data-cp-part="outline-preview"] * { font-size: 13px !important; }
  /* Between ticks, a copy of the last preview glides to the hovered tick until Paseo's next one takes over (ghostOutlinePreview). */
  [data-testid="chat-outline-preview"][data-cp-ghost] { pointer-events: none; animation: none !important; transition: transform 100ms cubic-bezier(0.33, 1, 0.68, 1), opacity 100ms ease-out !important; }
-@@ -298,13 +299,27 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
+@@ -298,13 +298,27 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
  ${USAGE} > div:nth-child(4) { margin-top: -6px !important; }
  `;
  

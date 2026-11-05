@@ -44,7 +44,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
 import invariant from "tiny-invariant";
@@ -242,7 +241,6 @@ const NO_SHEETS: readonly SheetTab[] = [];
 const WORKSPACE_FLOATING_PANEL_PORTAL_HOST_PREFIX = "workspace-floating-panels";
 const EMPTY_UI_TABS: WorkspaceTab[] = [];
 const EMPTY_WORKSPACE_SCRIPTS: WorkspaceDescriptor["scripts"] = [];
-const EMPTY_PINNED_AGENT_IDS = new Set<string>();
 const EMPTY_SET = new Set<string>();
 
 function getWorkspaceSetupStatus(workspace: WorkspaceDescriptor | null | undefined) {
@@ -1056,7 +1054,6 @@ function WorkspaceScreenContent({
   isRouteFocused,
 }: WorkspaceScreenContentProps) {
   const { t } = useTranslation();
-  const _insets = useSafeAreaInsets();
   const workspaceActionsInBar =
     resolveWorkspaceActionPlacement(useWindowLayout()) === "vertical-bar";
   const toast = useToast();
@@ -1405,14 +1402,6 @@ function WorkspaceScreenContent({
   const paneFocusSuppressedRef = useRef(false);
   const resizeWorkspaceSplit = useWorkspaceLayoutStore((state) => state.resizeSplit);
   const reorderWorkspaceTabsInPane = useWorkspaceLayoutStore((state) => state.reorderTabsInPane);
-  const _pinnedAgentIds = useWorkspaceLayoutStore((state) =>
-    persistenceKey
-      ? (state.pinnedAgentIdsByWorkspace[persistenceKey] ?? EMPTY_PINNED_AGENT_IDS)
-      : EMPTY_PINNED_AGENT_IDS,
-  );
-  const _hiddenAgentIds = useWorkspaceLayoutStore((state) =>
-    persistenceKey ? (state.hiddenAgentIdsByWorkspace[persistenceKey] ?? EMPTY_SET) : EMPTY_SET,
-  );
   const pendingByDraftId = useCreateFlowStore((state) => state.pendingByDraftId);
   const { closingTabIds, closeTab } = useCloseTabs();
   const closeWorkspaceTabWithCleanup = useCallback(

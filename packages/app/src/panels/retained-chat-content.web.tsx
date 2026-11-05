@@ -1,4 +1,4 @@
-import React, { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Freeze } from "react-freeze";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 

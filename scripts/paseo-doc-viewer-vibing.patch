@@ -1,0 +1,73 @@
+diff --git a/client/review-screen.tsx b/client/review-screen.tsx
+index 3417488..96ce0b9 100644
+--- a/client/review-screen.tsx
++++ b/client/review-screen.tsx
+@@ -7,7 +7,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
+ import { errorText } from "../shared/errors";
+ import { REVIEW_MAX_NOTE_CHARS } from "../shared/limits";
+ import { docOpenRpc, viewerStateReadRpc } from "../shared/rpc";
+-import { baseName, humanSize } from "./format";
++import { humanSize } from "./format";
+ import { documentQueryOptions, viewerMarksQueryKey } from "./queries";
+ import { pageImageKey, reviewDrafts, reviewScope, type ReviewNote, useReviewDraft } from "./review-draft";
+ import { formatReview, noteRevisionStatus, type PinLabel } from "./review-message";
+diff --git a/client/ui.tsx b/client/ui.tsx
+index 3f6cf79..f0d2dac 100644
+--- a/client/ui.tsx
++++ b/client/ui.tsx
+@@ -239,7 +239,7 @@ export function statusIcon(theme: PluginTheme, status: PillStatus): { name: stri
+ // Review status as an icon and label on a tint of the status color. The tint is the color itself
+ // at low opacity, since the theme has no tinted tokens. The label stays in the foreground color:
+ // 12 px text in the status colors falls under 4.5:1 on several built-in themes.
+-export function StatusPill({ theme, styles, status, label = "full" }: ChromeProps & {
++export function StatusPill({ theme, status, label = "full" }: ChromeProps & {
+   status: PillStatus; label?: "full" | "short" | "none";
+ }) {
+   const pill = STATUS_PILL[status];
+diff --git a/server/xlsx.ts b/server/xlsx.ts
+index 44e0e8a..d0933ee 100644
+--- a/server/xlsx.ts
++++ b/server/xlsx.ts
+@@ -160,16 +160,6 @@ async function* scan(chunks: AsyncIterable<Buffer>, tokens: Tokens): AsyncGenera
+   yield* drain(true);
+ }
+
+-const TOKEN_START = /<(?:c|row|si)[\s>/]|<\/sheetData/g;
+-
+-function resumePoint(pending: string): number {
+-  let start = -1;
+-  for (const match of pending.matchAll(TOKEN_START)) start = match.index;
+-  if (start >= 0) return start;
+-  const tail = pending.lastIndexOf("<");
+-  return tail >= 0 && !pending.includes(">", tail) ? tail : pending.length;
+-}
+-
+ // The zero-based column of a reference like "AB12", or -1 when it has no letters or lies past
+ // Excel's last column (XFD): larger values are not safe integers in responses.
+ function columnIndex(reference: string): number {
+diff --git a/test/r7-docx-memory.test.ts b/test/r7-docx-memory.test.ts
+index 8f6cffe..84b32cc 100644
+--- a/test/r7-docx-memory.test.ts
++++ b/test/r7-docx-memory.test.ts
+@@ -7,7 +7,7 @@ import { promisify } from "node:util";
+ import { build } from "esbuild";
+ import mammoth from "mammoth";
+ import { afterEach, describe, expect, it, vi } from "vitest";
+-import { convertDocx, docxBlocks, docxImage, streamDocx, type DocxModel, type SourceBlock } from "../server/docx";
++import { convertDocx, docxBlocks, docxImage, streamDocx, type DocxModel } from "../server/docx";
+ import { openDocument, readBlocks } from "../server/documents";
+ import { readZipIndex } from "../server/zip";
+ import { blankGrayPng } from "./fixtures/generators.ts";
+diff --git a/test/sheet-cells.test.ts b/test/sheet-cells.test.ts
+index 1a7f68d..28ee911 100644
+--- a/test/sheet-cells.test.ts
++++ b/test/sheet-cells.test.ts
+@@ -98,7 +98,7 @@ describe("doc.rows returns structured cell metadata on request", () => {
+   it("counts metadata against the response budget", async () => {
+     const big = "x".repeat(2000);
+     const rows = Array.from({ length: 200 }, (_, r) =>
+-      `<row r="${r + 1}">${Array.from({ length: 50 }, (_, c) => `<c t="inlineStr"><is><t>${big}</t></is></c>`).join("")}</row>`).join("");
++      `<row r="${r + 1}">${Array.from({ length: 50 }, () => `<c t="inlineStr"><is><t>${big}</t></is></c>`).join("")}</row>`).join("");
+     const ref = { root: workspace({ "big.xlsx": rawZip(xlsxEntries([{ name: "B", xml: worksheetXml(rows) }])) }), path: "big.xlsx" };
+     const window = await readRows(ref, { sheet: 0, rowOffset: 0, columnOffset: 0, detail: true });
+     expect(window.nextRowOffset).toBe(window.rows.length);

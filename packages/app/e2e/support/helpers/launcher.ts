@@ -132,7 +132,7 @@ export async function waitForTabWithTitle(
  * Returns elapsed milliseconds.
  */
 export async function measureTileTransition(
-  page: Page,
+  _page: Page,
   clickAction: () => Promise<void>,
   successLocator: ReturnType<Page["locator"]>,
   timeout = 5_000,

@@ -1432,28 +1432,28 @@ var Lexer = defineClass(
       this.advance();
       const quasis = [];
       const parts = [];
-      let text4 = "";
+      let text2 = "";
       for (; ; ) {
         const c = this.src[this.i];
         if (c === void 0) {
           this.diagnostics.report(pos, "unterminated template: close it with `");
-          quasis.push(text4);
+          quasis.push(text2);
           return { ...pos, t: "tpl", quasis, parts };
         }
         if (c === "`") {
           this.advance();
-          quasis.push(text4);
+          quasis.push(text2);
           return { ...pos, t: "tpl", quasis, parts };
         }
         if (c === "\\") {
-          text4 += this.escape() ?? "";
+          text2 += this.escape() ?? "";
         } else if (c === "$" && this.src[this.i + 1] === "{") {
           this.advance(2);
-          quasis.push(text4);
-          text4 = "";
+          quasis.push(text2);
+          text2 = "";
           parts.push(this.run(true));
         } else {
-          text4 += c;
+          text2 += c;
           this.advance();
         }
       }
@@ -2069,10 +2069,10 @@ function snippetRangeError(from, to) {
   if (from !== null && to !== null && from > to) return `\`from\` (${from}) is after \`to\` (${to})`;
   return null;
 }
-function snippetLines(text4, from, to) {
+function snippetLines(text2, from, to) {
   const rangeError = snippetRangeError(from, to);
   if (rangeError !== null) return { code: null, error: rangeError };
-  const lines = text4.split(/\r?\n/);
+  const lines = text2.split(/\r?\n/);
   if (lines[lines.length - 1] === "") lines.pop();
   if (lines.length === 0) return { code: null, error: "the file is empty" };
   const start = from ?? 1;
@@ -2881,11 +2881,11 @@ function truthy(value) {
 function finite(value) {
   return Number.isFinite(value) ? value : null;
 }
-function checkString(text4, pos) {
-  if (text4.length > MAX_STRING_LENGTH) {
+function checkString(text2, pos) {
+  if (text2.length > MAX_STRING_LENGTH) {
     throw new RuntimeError(pos, `text longer than ${MAX_STRING_LENGTH} characters`);
   }
-  return text4;
+  return text2;
 }
 function checkLength(list2, pos) {
   if (list2.length > LIMITS.listLength) {
@@ -2971,11 +2971,11 @@ var Interpreter = defineClass(
         case "literal":
           return expr.value;
         case "template": {
-          let text4 = expr.quasis[0];
+          let text2 = expr.quasis[0];
           expr.parts.forEach((part, index) => {
-            text4 += toText(this.expr(part, scope), part.pos) + expr.quasis[index + 1];
+            text2 += toText(this.expr(part, scope), part.pos) + expr.quasis[index + 1];
           });
-          return checkString(text4, expr.pos);
+          return checkString(text2, expr.pos);
         }
         case "state":
           return Object.hasOwn(this.state, expr.name) ? this.state[expr.name] : null;
@@ -3261,8 +3261,8 @@ var Interpreter = defineClass(
         } else if (isNode(item)) {
           out.push(item);
         } else if (isAction(item) && item.type !== "set") {
-          const text4 = item.type === "openUrl" ? `Open ${new URL(item.url).host}` : item.type === "copy" ? "Copy" : item.text;
-          out.push(this.node("Button", `${key}.${out.length}`, { label: text4, action: [item], variant: null, icon: null }, pos));
+          const text2 = item.type === "openUrl" ? `Open ${new URL(item.url).host}` : item.type === "copy" ? "Copy" : item.text;
+          out.push(this.node("Button", `${key}.${out.length}`, { label: text2, action: [item], variant: null, icon: null }, pos));
         } else {
           throw new RuntimeError(pos, `${label5} must be components or text, got ${describe2(item)}`);
         }
@@ -3296,17 +3296,17 @@ var Interpreter = defineClass(
       if (value === null || typeof value === "object") {
         throw new RuntimeError(first3.pos, `${call.name} needs text, got ${describe2(value)}`);
       }
-      const text4 = String(value);
+      const text2 = String(value);
       switch (call.name) {
         case "Send":
-          return { kind: "action", type: "send", text: text4 };
+          return { kind: "action", type: "send", text: text2 };
         case "Copy":
-          return { kind: "action", type: "copy", text: text4 };
+          return { kind: "action", type: "copy", text: text2 };
         case "Queue":
-          return { kind: "action", type: "queue", text: text4 };
+          return { kind: "action", type: "queue", text: text2 };
         case "OpenUrl":
-          if (!/^https?:\/\//i.test(text4)) throw new RuntimeError(first3.pos, "OpenUrl needs an http:// or https:// URL");
-          return { kind: "action", type: "openUrl", url: text4 };
+          if (!/^https?:\/\//i.test(text2)) throw new RuntimeError(first3.pos, "OpenUrl needs an http:// or https:// URL");
+          return { kind: "action", type: "openUrl", url: text2 };
       }
       throw new RuntimeError(call.pos, `unknown action \`${call.name}\``);
     },
@@ -3714,8 +3714,8 @@ function pick(item, keys) {
 function strings(value) {
   const items = Array.isArray(value) ? value : value === void 0 ? [] : [value];
   return items.flatMap((item) => {
-    const text4 = str(item) ?? pick(record(item) ?? {}, ["text", "title", "name", "issue", "detail", "message"]);
-    return text4 === null ? [] : [text4];
+    const text2 = str(item) ?? pick(record(item) ?? {}, ["text", "title", "name", "issue", "detail", "message"]);
+    return text2 === null ? [] : [text2];
   });
 }
 var STATUS_WORDS = (() => {
@@ -3797,8 +3797,8 @@ function readEvidence(value) {
     if (line === null && IMAGE_EXTENSION.test(location.path)) return [{ kind: "image", src: location.path, label: label5 }];
     return [{ kind: "file", path: location.path, line, endLine: end !== null && line !== null && end >= line ? end : null, label: label5 }];
   }
-  const text4 = pick(item, ["text", "output", "excerpt", "value", "summary"]);
-  return text4 === null ? [] : [{ kind: "text", text: text4, label: label5 }];
+  const text2 = pick(item, ["text", "output", "excerpt", "value", "summary"]);
+  return text2 === null ? [] : [{ kind: "text", text: text2, label: label5 }];
 }
 var NAME_KEYS = ["name", "criterion", "title", "requirement", "check", "label", "item"];
 var STATUS_KEYS = ["status", "state", "result", "outcome"];
@@ -3938,7 +3938,7 @@ function findSource(value) {
   const statedVerdict = pick(object, ["verdict", "decision"]);
   const limitations = strings(object.limitations ?? object.caveats);
   const wrapper = { ...base, columns: object.columns, title, ownerComplete, statedVerdict, limitations };
-  const blockers = strings(object.blockers).map((text4) => ({ name: text4, status: "blocked" }));
+  const blockers = strings(object.blockers).map((text2) => ({ name: text2, status: "blocked" }));
   for (const key of LIST_KEYS) {
     const items = object[key];
     if (Array.isArray(items)) return { ...wrapper, items: [...items, ...blockers] };
@@ -4216,11 +4216,11 @@ function readMeta(entry) {
   const out = [];
   const seen = /* @__PURE__ */ new Set();
   const add = (key, value) => {
-    const text4 = scalarText(value);
+    const text2 = scalarText(value);
     const id = metaKey(key);
-    if (text4 === null || id === "" || seen.has(id)) return;
+    if (text2 === null || id === "" || seen.has(id)) return;
     seen.add(id);
-    out.push([key.trim(), text4]);
+    out.push([key.trim(), text2]);
   };
   if (entry.meta !== void 0 && isPlainObject(entry.meta)) for (const [key, value] of Object.entries(entry.meta)) add(key, value);
   for (const [key, value] of Object.entries(entry)) if (!Object.hasOwn(ENTRY_KEYS, key)) add(key, value);
@@ -4409,24 +4409,24 @@ function first(fields, keys, read) {
 }
 function speakerName(value) {
   if (value === null) return null;
-  const text4 = String(value).trim();
-  if (text4 === "") return null;
-  return /^\d+$/.test(text4) || /^[A-Z]$/.test(text4) ? `Speaker ${text4}` : text4;
+  const text2 = String(value).trim();
+  if (text2 === "") return null;
+  return /^\d+$/.test(text2) || /^[A-Z]$/.test(text2) ? `Speaker ${text2}` : text2;
 }
 function rawWord(item, inherited) {
   if (typeof item === "string") {
-    const text5 = item.trim();
-    return text5 === "" ? null : { text: text5, start: null, end: null, speaker: inherited, confidence: null };
+    const text3 = item.trim();
+    return text3 === "" ? null : { text: text3, start: null, end: null, speaker: inherited, confidence: null };
   }
   const fields = objectFields(item);
   if (fields === null) return null;
-  const text4 = first(fields, TEXT_KEYS, str2)?.trim() ?? "";
-  if (text4 === "") return null;
+  const text2 = first(fields, TEXT_KEYS, str2)?.trim() ?? "";
+  if (text2 === "") return null;
   const start = num(fields.start) ?? num(fields.start_time) ?? num(fields.from);
   const end = num(fields.end) ?? num(fields.end_time) ?? num(fields.to);
   const confidence = first(fields, CONFIDENCE_KEYS, num);
   return {
-    text: text4,
+    text: text2,
     start,
     end,
     speaker: speakerName(first(fields, SPEAKER_KEYS, str2)) ?? inherited,
@@ -4458,8 +4458,8 @@ function timedWords(raws, unit) {
   });
   return { words, untimed };
 }
-function segmentWords(text4, start, end, speaker) {
-  const pieces2 = text4.split(/\s+/).filter((piece) => piece !== "");
+function segmentWords(text2, start, end, speaker) {
+  const pieces2 = text2.split(/\s+/).filter((piece) => piece !== "");
   if (start === null || end === null || !(end >= start) || start < 0) {
     return pieces2.map((piece) => ({ text: piece, start: null, end: null, timing: "none", window: null, speaker, confidence: null }));
   }
@@ -4479,13 +4479,13 @@ function bestTiming(words) {
   return "none";
 }
 var CUE_TIME = /^\s*((?:\d+:)?\d{1,2}:\d{2}[.,]\d{1,3})\s*-->\s*((?:\d+:)?\d{1,2}:\d{2}[.,]\d{1,3})/;
-function cueSeconds(text4) {
-  const parts = text4.replace(",", ".").split(":").map(Number);
+function cueSeconds(text2) {
+  const parts = text2.replace(",", ".").split(":").map(Number);
   return parts.reduce((sum2, part) => sum2 * 60 + part, 0);
 }
-function subtitleWords(text4) {
+function subtitleWords(text2) {
   const words = [];
-  const lines = text4.split(/\r?\n/);
+  const lines = text2.split(/\r?\n/);
   for (let index = 0; index < lines.length; index++) {
     const match = CUE_TIME.exec(lines[index]);
     if (match === null) continue;
@@ -4516,16 +4516,16 @@ function whisperCpp(fields, list2) {
     const built = [];
     for (const token of tokens) {
       const item = objectFields(token);
-      const text5 = item === null ? null : str2(item.text);
-      if (item === null || text5 === null || /^\[_[A-Z]+_?.*\]$/.test(text5.trim()) || text5.trim() === "") continue;
+      const text3 = item === null ? null : str2(item.text);
+      if (item === null || text3 === null || /^\[_[A-Z]+_?.*\]$/.test(text3.trim()) || text3.trim() === "") continue;
       const tokenOffsets = objectFields(item.offsets);
       const start = tokenOffsets === null ? null : num(tokenOffsets.from);
       const end = tokenOffsets === null ? null : num(tokenOffsets.to);
       const p = num(item.p);
       const current = built[built.length - 1];
-      if (current === void 0 || /^\s/.test(text5)) built.push({ text: text5.trim(), start, end, p: p === null ? [] : [p] });
+      if (current === void 0 || /^\s/.test(text3)) built.push({ text: text3.trim(), start, end, p: p === null ? [] : [p] });
       else {
-        current.text += text5;
+        current.text += text3;
         current.end = end ?? current.end;
         if (p !== null) current.p.push(p);
       }
@@ -4545,9 +4545,9 @@ function whisperCpp(fields, list2) {
       }
       continue;
     }
-    const text4 = str2(segment.text) ?? "";
+    const text2 = str2(segment.text) ?? "";
     const speaker = speakerName(str2(segment.speaker));
-    words.push(...segmentWords(text4, from === null ? null : from / 1e3, to === null ? null : to / 1e3, speaker));
+    words.push(...segmentWords(text2, from === null ? null : from / 1e3, to === null ? null : to / 1e3, speaker));
   }
   const params = objectFields(fields.params);
   const model = params === null ? null : str2(params.model);
@@ -4612,9 +4612,9 @@ function wordList(list2, unit) {
   const { words, untimed } = timedWords(raws, unit);
   return { words, source: "words", detail: null, name: null, untimed };
 }
-function textContent(text4) {
-  if (text4.split(/\r?\n/, 40).some((line) => CUE_TIME.test(line))) return { words: subtitleWords(text4), source: "subtitles", detail: null, name: null, untimed: 0 };
-  const words = text4.replace(/^WEBVTT.*$/m, "").split(/\s+/).filter((piece) => piece !== "").map((piece) => ({ text: piece, start: null, end: null, timing: "none", window: null, speaker: null, confidence: null }));
+function textContent(text2) {
+  if (text2.split(/\r?\n/, 40).some((line) => CUE_TIME.test(line))) return { words: subtitleWords(text2), source: "subtitles", detail: null, name: null, untimed: 0 };
+  const words = text2.replace(/^WEBVTT.*$/m, "").split(/\s+/).filter((piece) => piece !== "").map((piece) => ({ text: piece, start: null, end: null, timing: "none", window: null, speaker: null, confidence: null }));
   return { words, source: "text", detail: null, name: null, untimed: 0 };
 }
 function content(value, unit) {
@@ -4727,8 +4727,8 @@ function numberKind(word) {
   if (Object.hasOwn(SCALES, word)) return "scale";
   return null;
 }
-function pieces(text4) {
-  return text4.normalize("NFKC").toLowerCase().replace(/[\u2018\u2019\u02bc]/g, "'").replace(/(\d),(?=\d{3}\b)/g, "$1").replace(/(\d):(?=\d{2}\b)/g, "$1").replace(/(\d)\s*%/g, "$1 percent").replace(/&/g, " and ").replace(/'/g, "").replace(/(\d)\.(?=\d)/g, "$1\0").replace(/[^\p{L}\p{N}\p{M}\u0000]+/gu, " ").replace(/\u0000/g, ".").split(" ").filter((piece) => piece !== "");
+function pieces(text2) {
+  return text2.normalize("NFKC").toLowerCase().replace(/[\u2018\u2019\u02bc]/g, "'").replace(/(\d),(?=\d{3}\b)/g, "$1").replace(/(\d):(?=\d{2}\b)/g, "$1").replace(/(\d)\s*%/g, "$1 percent").replace(/&/g, " and ").replace(/'/g, "").replace(/(\d)\.(?=\d)/g, "$1\0").replace(/[^\p{L}\p{N}\p{M}\u0000]+/gu, " ").replace(/\u0000/g, ".").split(" ").filter((piece) => piece !== "");
 }
 function spokenNumber(list2, at2) {
   const group = numberGroup(list2, at2);
@@ -4817,14 +4817,14 @@ function numberGroup(list2, at2) {
   if (last === null) return null;
   return { value: total + current, next: index, ordinal, scaled };
 }
-function digitKey(text4) {
-  const ordinal = /^(\d+)(st|nd|rd|th)$/.exec(text4);
-  return ordinal === null ? text4 : `${Number(ordinal[1])}th`;
+function digitKey(text2) {
+  const ordinal = /^(\d+)(st|nd|rd|th)$/.exec(text2);
+  return ordinal === null ? text2 : `${Number(ordinal[1])}th`;
 }
 function tokenize2(words) {
   const list2 = [];
   words.forEach((word, index2) => {
-    for (const text4 of pieces(word.text)) list2.push({ text: text4, word: index2 });
+    for (const text2 of pieces(word.text)) list2.push({ text: text2, word: index2 });
   });
   const tokens = [];
   let index = 0;
@@ -5216,13 +5216,13 @@ function readContext(value) {
   if (fields === null) return null;
   const context = {};
   for (const [key, item] of Object.entries(fields)) {
-    const text4 = typeof item === "boolean" ? item ? "yes" : "no" : label2(item);
-    if (key.trim() !== "" && text4 !== "") context[key.trim()] = text4;
+    const text2 = typeof item === "boolean" ? item ? "yes" : "no" : label2(item);
+    if (key.trim() !== "" && text2 !== "") context[key.trim()] = text2;
   }
   return Object.keys(context).length === 0 ? null : context;
 }
 function sameCondition(a, b) {
-  const normal = (text4) => text4.trim().toLowerCase().replace(/\s+/g, " ");
+  const normal = (text2) => text2.trim().toLowerCase().replace(/\s+/g, " ");
   return normal(a) === normal(b);
 }
 function mergeContexts(...contexts) {
@@ -5277,7 +5277,7 @@ function readSide(value) {
   };
 }
 function labels(value) {
-  if (Array.isArray(value)) return value.map(label2).filter((text4) => text4 !== "");
+  if (Array.isArray(value)) return value.map(label2).filter((text2) => text2 !== "");
   const one = label2(value);
   return one === "" ? [] : one.split(/\s*,\s*/);
 }
@@ -5746,11 +5746,11 @@ function duLine(line) {
   const factor = DU_SUFFIX[(match[2] ?? "").toLowerCase()];
   return { bytes: amount * factor, path: match[3] };
 }
-function readDu(text4) {
+function readDu(text2) {
   const root = draft("");
   let ignored = 0;
   let lines = 0;
-  for (const raw of text4.split(/\r?\n/)) {
+  for (const raw of text2.split(/\r?\n/)) {
     if (raw.trim() === "") continue;
     const parsed = duLine(raw);
     const parts = parsed === null ? [] : pathSegments(parsed.path);
@@ -6123,8 +6123,8 @@ function readTrace(events) {
       if (fn !== "") parts.push(fn);
       if (url !== "") parts.push(url);
     }
-    const text4 = parts.filter((part) => part !== "").join(" \xB7 ");
-    return text4 === "" ? null : text4;
+    const text2 = parts.filter((part) => part !== "").join(" \xB7 ");
+    return text2 === "" ? null : text2;
   };
   for (const event of events) {
     const fields = objectFields(event);
@@ -6235,8 +6235,8 @@ function count(value) {
 function listOf(value) {
   return Array.isArray(value) ? value : [];
 }
-function plainLines(text4) {
-  return text4.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "").split(/\r?\n/);
+function plainLines(text2) {
+  return text2.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "").split(/\r?\n/);
 }
 function reportPath(raw) {
   let path = raw.trim();
@@ -6333,10 +6333,10 @@ function fromIstanbul(object) {
   }
   return { format: "istanbul", unit: "lines", total: istanbulMetrics(fieldsOf(object.total)), files };
 }
-function isLcov(text4) {
-  return /^SF:/m.test(text4) && /^end_of_record/m.test(text4);
+function isLcov(text2) {
+  return /^SF:/m.test(text2) && /^end_of_record/m.test(text2);
 }
-function fromLcov(text4) {
+function fromLcov(text2) {
   const files = [];
   let path = null;
   let hits = /* @__PURE__ */ new Map();
@@ -6344,7 +6344,7 @@ function fromLcov(text4) {
   let functionHits = /* @__PURE__ */ new Map();
   let branches = { total: 0, covered: 0 };
   const ratio = (covered, total) => total === null ? null : { covered: Math.min(covered ?? 0, total), total };
-  for (const raw of plainLines(text4)) {
+  for (const raw of plainLines(text2)) {
     const line = raw.trim();
     const colon = line.indexOf(":");
     const tag = colon === -1 ? line : line.slice(0, colon);
@@ -6456,12 +6456,12 @@ function fromCoveragePy(object) {
   return { format: "coverage.py", unit: "lines", total: given === null ? totals(files) : pyMetrics(given), files };
 }
 var GO_BLOCK = /^(.+):(\d+)\.(\d+),(\d+)\.(\d+) (\d+) (\d+)$/;
-function isGoProfile(text4) {
-  return /^mode: (?:set|count|atomic)\s*$/m.test(text4);
+function isGoProfile(text2) {
+  return /^mode: (?:set|count|atomic)\s*$/m.test(text2);
 }
-function fromGo(text4) {
+function fromGo(text2) {
   const blocks = /* @__PURE__ */ new Map();
-  for (const raw of plainLines(text4)) {
+  for (const raw of plainLines(text2)) {
     const match = GO_BLOCK.exec(raw.trim());
     if (match === null) continue;
     const [, file, startLine, startColumn, endLine, endColumn, statements, hits] = match;
@@ -6640,8 +6640,8 @@ function finding(fields) {
     ...fields
   };
 }
-function looksLikePatch(text4) {
-  return /^@@ -\d/m.test(text4) || /^--- /m.test(text4) && /^\+\+\+ /m.test(text4) || /^diff --git /m.test(text4);
+function looksLikePatch(text2) {
+  return /^@@ -\d/m.test(text2) || /^--- /m.test(text2) && /^\+\+\+ /m.test(text2) || /^diff --git /m.test(text2);
 }
 function splitLocation(raw) {
   const match = /^(.+?)(?::(\d+)(?::(\d+))?|\((\d+),(\d+)\))$/.exec(raw.trim());
@@ -6743,9 +6743,9 @@ function eslintEdit(fix) {
   const range = listOf(fix?.range);
   const start = count(range[0]);
   const end = count(range[1]);
-  const text4 = fix?.text;
-  if (start === null || end === null || end < start || typeof text4 !== "string") return null;
-  return { start: { offset: start }, end: { offset: end }, text: text4 };
+  const text2 = fix?.text;
+  if (start === null || end === null || end < start || typeof text2 !== "string") return null;
+  return { start: { offset: start }, end: { offset: end }, text: text2 };
 }
 function fromEslint(results, docs) {
   const findings = [];
@@ -6796,12 +6796,12 @@ function patchFix(source, path, edits) {
 }
 function sarifText(message, rule) {
   if (message === null) return null;
-  let text4 = str3(message.text) ?? str3(message.markdown);
+  let text2 = str3(message.text) ?? str3(message.markdown);
   const id = str3(message.id);
-  if (text4 === null && id !== null) text4 = str3(fieldsOf(fieldsOf(rule?.messageStrings)?.[id])?.text);
-  if (text4 === null) return null;
+  if (text2 === null && id !== null) text2 = str3(fieldsOf(fieldsOf(rule?.messageStrings)?.[id])?.text);
+  if (text2 === null) return null;
   const args = listOf(message.arguments);
-  return text4.replace(/\{(\d+)\}/g, (whole, index) => str3(args[Number(index)]) ?? whole).replace(/\[([^\]]+)\]\(\d+\)/g, "$1");
+  return text2.replace(/\{(\d+)\}/g, (whole, index) => str3(args[Number(index)]) ?? whole).replace(/\[([^\]]+)\]\(\d+\)/g, "$1");
 }
 function sarifUri(location, run) {
   if (location === null) return null;
@@ -6818,11 +6818,11 @@ function sarifUri(location, run) {
   }
   return reportPath(uri.startsWith("file://") ? uri : safeDecode(uri));
 }
-function safeDecode(text4) {
+function safeDecode(text2) {
   try {
-    return decodeURIComponent(text4);
+    return decodeURIComponent(text2);
   } catch {
-    return text4;
+    return text2;
   }
 }
 function sarifRange(region) {
@@ -6880,9 +6880,9 @@ function fromSarif(log) {
       const ruleId = str3(result.ruleId) ?? str3(fieldsOf(result.rule)?.id);
       const ruleIndex = count(result.ruleIndex) ?? count(fieldsOf(result.rule)?.index);
       const rule = (ruleId === null ? null : byId.get(ruleId)) ?? (ruleIndex === null ? null : rules[ruleIndex]) ?? null;
-      const text4 = sarifText(fieldsOf(result.message), rule);
+      const text2 = sarifText(fieldsOf(result.message), rule);
       const shortDescription = str3(fieldsOf(rule?.shortDescription)?.text);
-      const fullTitle = text4 ?? shortDescription ?? ruleId;
+      const fullTitle = text2 ?? shortDescription ?? ruleId;
       if (fullTitle === null) continue;
       const [titleLine, ...rest] = fullTitle.trim().split("\n");
       const scoreText = str3(fieldsOf(result.properties)?.["security-severity"]) ?? str3(fieldsOf(rule?.properties)?.["security-severity"]);
@@ -6923,11 +6923,11 @@ function fromSarif(log) {
 var TSC_LOCATED = /^(.+?)(?:\((\d+),(\d+)\): | ?:(\d+):(\d+) - )(error|warning|message) (TS\d+): ?(.*)$/;
 var TSC_GLOBAL = /^(error|warning|message) (TS\d+): ?(.*)$/;
 var TSC_NOISE = /^\s*\d+\s{2,}|^\s*~+\s*$|^Found \d+ errors?\b|^\s*$/;
-function isTscText(text4) {
-  if (text4.trim() === "") return true;
-  return plainLines(text4).some((line) => TSC_LOCATED.test(line) || TSC_GLOBAL.test(line));
+function isTscText(text2) {
+  if (text2.trim() === "") return true;
+  return plainLines(text2).some((line) => TSC_LOCATED.test(line) || TSC_GLOBAL.test(line));
 }
-function fromTsc(text4) {
+function fromTsc(text2) {
   const findings = [];
   let current = null;
   const flush = () => {
@@ -6936,7 +6936,7 @@ function fromTsc(text4) {
     findings.push(detail === "" ? current.finding : { ...current.finding, detail, detailIsText: true });
     current = null;
   };
-  for (const line of plainLines(text4)) {
+  for (const line of plainLines(text2)) {
     const located = TSC_LOCATED.exec(line);
     const global = located === null ? TSC_GLOBAL.exec(line) : null;
     if (located !== null) {
@@ -7127,8 +7127,8 @@ function textList(value) {
   const items = typeof value === "string" ? [value] : listOf(value);
   return items.flatMap((item) => {
     const fields = fieldsOf(item);
-    const text4 = fields === null ? str3(item) : str3(fields.path) ?? str3(fields.file) ?? str3(fields.url) ?? str3(fields.text) ?? str3(fields.description) ?? str3(fields.name);
-    return text4 === null ? [] : [text4.trim()];
+    const text2 = fields === null ? str3(item) : str3(fields.path) ?? str3(fields.file) ?? str3(fields.url) ?? str3(fields.text) ?? str3(fields.description) ?? str3(fields.name);
+    return text2 === null ? [] : [text2.trim()];
   });
 }
 function reviewOf(object) {
@@ -7284,8 +7284,8 @@ function editsPatch(source, path, edits) {
 }
 
 // shared/core/dependencies.ts
-function parseVersion(text4) {
-  const match = /^\s*[v=]?(\d+(?:\.\d+)*)(?:[-.]?([0-9a-z][0-9a-z.-]*))?(?:\+[0-9a-z.-]+)?\s*$/i.exec(text4);
+function parseVersion(text2) {
+  const match = /^\s*[v=]?(\d+(?:\.\d+)*)(?:[-.]?([0-9a-z][0-9a-z.-]*))?(?:\+[0-9a-z.-]+)?\s*$/i.exec(text2);
   if (match === null) return null;
   const rest = (match[2] ?? "").toLowerCase();
   return { release: match[1].split(".").map(Number), pre: /^post\d*/.test(rest) ? "" : rest, post: /^post\d*/.test(rest) };
@@ -7470,9 +7470,9 @@ function fromAdvisories(report) {
     if (patched !== null) entry.patched.add(patched);
     for (const finding2 of Array.isArray(fields.findings) ? fields.findings : []) {
       for (const path of Array.isArray(fieldsOf2(finding2)?.paths) ? fieldsOf2(finding2).paths : []) {
-        const text4 = str4(path);
-        if (text4 === null) continue;
-        const hops = text4.split(">").filter((hop) => hop !== "" && hop !== ".");
+        const text2 = str4(path);
+        if (text2 === null) continue;
+        const hops = text2.split(">").filter((hop) => hop !== "" && hop !== ".");
         if (hops.length <= 1) entry.direct = true;
         else entry.paths.add(hops.slice(0, -1).join(" \u203A "));
       }
@@ -7497,8 +7497,8 @@ function fromAdvisories(report) {
   return { vulnerable, severities: severityTotals(fieldsOf2(metadata?.vulnerabilities)), scanned: scannedCount(metadata) };
 }
 function webLink(value) {
-  const text4 = str4(value);
-  return text4 !== null && /^https?:\/\/\S+$/i.test(text4) ? text4 : null;
+  const text2 = str4(value);
+  return text2 !== null && /^https?:\/\/\S+$/i.test(text2) ? text2 : null;
 }
 function severityTotals(fields) {
   if (fields === null) return null;
@@ -7621,13 +7621,13 @@ function str5(value) {
   return null;
 }
 function webUrl(value) {
-  const text4 = str5(value);
-  return text4 !== null && /^https?:\/\/\S+$/i.test(text4) ? text4 : null;
+  const text2 = str5(value);
+  return text2 !== null && /^https?:\/\/\S+$/i.test(text2) ? text2 : null;
 }
 function timestamp(value) {
-  const text4 = str5(value);
-  if (text4 === null) return null;
-  const ms = Date.parse(text4);
+  const text2 = str5(value);
+  if (text2 === null) return null;
+  const ms = Date.parse(text2);
   return Number.isFinite(ms) && ms > 0 ? ms : null;
 }
 var STATUS_WORDS3 = {
@@ -7712,24 +7712,24 @@ function byAttention(items) {
 function parseDuration(value) {
   if (typeof value === "number") return Number.isFinite(value) && value >= 0 ? value * 1e3 : null;
   if (typeof value !== "string") return null;
-  const text4 = value.trim().toLowerCase();
-  if (text4 === "") return null;
-  const clock = /^(?:(\d+):)?(\d{1,2}):(\d{2})(?:\.(\d+))?$/.exec(text4);
+  const text2 = value.trim().toLowerCase();
+  if (text2 === "") return null;
+  const clock = /^(?:(\d+):)?(\d{1,2}):(\d{2})(?:\.(\d+))?$/.exec(text2);
   if (clock !== null) {
     const [, h, m, s] = clock;
     return ((Number(h ?? 0) * 60 + Number(m)) * 60 + Number(s)) * 1e3;
   }
-  if (/^\d+(\.\d+)?$/.test(text4)) return Number(text4) * 1e3;
+  if (/^\d+(\.\d+)?$/.test(text2)) return Number(text2) * 1e3;
   const unit = /(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)\b/g;
   let total = 0;
   let matched = "";
-  for (const match of text4.matchAll(unit)) {
+  for (const match of text2.matchAll(unit)) {
     const amount = Number(match[1]);
     const word = match[2];
     total += word.startsWith("ms") || word.startsWith("milli") ? amount : word.startsWith("s") ? amount * 1e3 : word.startsWith("m") ? amount * 6e4 : amount * 36e5;
     matched += match[0];
   }
-  return matched !== "" && matched.replace(/\s/g, "").length === text4.replace(/[\s,]/g, "").length ? total : null;
+  return matched !== "" && matched.replace(/\s/g, "").length === text2.replace(/[\s,]/g, "").length ? total : null;
 }
 function formatElapsed(ms) {
   if (!(ms > 0)) return "0s";
@@ -8565,10 +8565,10 @@ function formatDuration(ms) {
 }
 var ESCAPE = /(?:\x1b\[|\x9b)([0-?]*)[ -/]*([@-~])|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-Z\\-_]?/g;
 var BASIC = ["dim", "red", "green", "yellow", "blue", "magenta", "cyan", null];
-function stripAnsi(text4) {
-  return text4.includes("\x1B") || text4.includes("\x9B") ? text4.replace(ESCAPE, "") : text4;
+function stripAnsi(text2) {
+  return text2.includes("\x1B") || text2.includes("\x9B") ? text2.replace(ESCAPE, "") : text2;
 }
-function ansiSegments(text4) {
+function ansiSegments(text2) {
   const segments = [];
   let color = null;
   let bold = false;
@@ -8577,7 +8577,7 @@ function ansiSegments(text4) {
   let last = 0;
   const push = (end) => {
     if (end > last) {
-      const piece = text4.slice(last, end);
+      const piece = text2.slice(last, end);
       const style = { color: color ?? (dim ? "dim" : null), bold, inverse };
       const previous = segments[segments.length - 1];
       if (previous !== void 0 && previous.color === style.color && previous.bold === bold && previous.inverse === inverse) {
@@ -8587,7 +8587,7 @@ function ansiSegments(text4) {
       }
     }
   };
-  for (const match of text4.matchAll(ESCAPE)) {
+  for (const match of text2.matchAll(ESCAPE)) {
     push(match.index);
     last = match.index + match[0].length;
     if (match[2] !== "m") continue;
@@ -8617,12 +8617,12 @@ function ansiSegments(text4) {
       }
     }
   }
-  push(text4.length);
+  push(text2.length);
   return segments;
 }
-function ansiLines(text4) {
+function ansiLines(text2) {
   const lines = [[]];
-  for (const segment of ansiSegments(text4)) {
+  for (const segment of ansiSegments(text2)) {
     const parts = segment.text.split("\n");
     parts.forEach((part, index) => {
       if (index > 0) lines.push([]);
@@ -8682,11 +8682,11 @@ function firstAppFrame(lines) {
   }
   return null;
 }
-function decodeURIComponentSafe(text4) {
+function decodeURIComponentSafe(text2) {
   try {
-    return decodeURIComponent(text4);
+    return decodeURIComponent(text2);
   } catch {
-    return text4;
+    return text2;
   }
 }
 
@@ -8749,33 +8749,33 @@ var LOGCAT_LEVEL = /^(?:\d+\s+\d+\s+)?([VDIWEFA])[/ ][^\s:]*(?:\s*\(\s*\d+\))?:/
 var KLOG_LEVEL = /^([IWEF])\d{4} \d{2}:\d{2}:\d{2}\.\d+/;
 var ERROR_START = /^(?:Uncaught\s+)?(?:[\w$.]*(?:Error|Exception)(?:\s\[[\w-]+\])?(?::\s|$)|Traceback \(most recent call last\):|panic: |FAIL\b|FAILED\b|npm (?:ERR!|error)\s|\s*[×✗✕✘❌]\s)/;
 var WARN_START = /^(?:npm (?:WARN|warn)\s|\s*⚠\s|(?:\(node:\d+\) )?\[?[\w]*Warning\]?:\s)/;
-function textLevel(text4) {
-  const json = text4.trimStart().startsWith("{") ? JSON_LEVEL.exec(text4) : null;
+function textLevel(text2) {
+  const json = text2.trimStart().startsWith("{") ? JSON_LEVEL.exec(text2) : null;
   if (json !== null) return levelOf(json[1]);
-  const logfmt = LOGFMT_LEVEL.exec(text4);
+  const logfmt = LOGFMT_LEVEL.exec(text2);
   if (logfmt !== null) return levelOf(logfmt[2]);
-  const syslog = /^<(\d{1,3})>/.exec(text4);
+  const syslog = /^<(\d{1,3})>/.exec(text2);
   if (syslog !== null) return levelOf(Number(syslog[1]) % 8);
-  const klog = KLOG_LEVEL.exec(text4);
+  const klog = KLOG_LEVEL.exec(text2);
   if (klog !== null) return LEVEL_WORDS[klog[1].toLowerCase()];
-  const logcat = LOGCAT_LEVEL.exec(text4);
+  const logcat = LOGCAT_LEVEL.exec(text2);
   if (logcat !== null) return LEVEL_WORDS[logcat[1].toLowerCase()];
-  if (ERROR_START.test(text4)) return "error";
-  if (WARN_START.test(text4)) return "warn";
-  const head = text4.slice(0, 64);
+  if (ERROR_START.test(text2)) return "error";
+  if (WARN_START.test(text2)) return "warn";
+  const head = text2.slice(0, 64);
   const bracket = BRACKET_LEVEL.exec(head);
   if (bracket !== null && (bracket[1].length > 1 || /[A-Z]/.test(bracket[1]))) return levelOf(bracket[1]);
   const upper = UPPER_LEVEL.exec(head);
   if (upper !== null) return levelOf(upper[1]);
-  const compiler = COMPILER_LEVEL.exec(text4);
+  const compiler = COMPILER_LEVEL.exec(text2);
   if (compiler !== null) return compiler[1] === "warning" ? "warn" : "error";
-  const leading = /^(Error|Fatal|Panic|Warning|Warn|Info|Debug|Trace)\b:?\s/.exec(text4);
+  const leading = /^(Error|Fatal|Panic|Warning|Warn|Info|Debug|Trace)\b:?\s/.exec(text2);
   if (leading !== null) return levelOf(leading[1]);
   return null;
 }
 var STAMP = /^\[?(?:\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:[.,]\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2}|\sUTC)?|\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?|[A-Z][a-z]{2} [ \d]\d \d{2}:\d{2}:\d{2}(?:\.\d+)?|\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?)\]?(?=\s|$)/;
-function stampLength(text4) {
-  return STAMP.exec(text4)?.[0].length ?? 0;
+function stampLength(text2) {
+  return STAMP.exec(text2)?.[0].length ?? 0;
 }
 var LINKS = new RegExp(
   [
@@ -8788,9 +8788,9 @@ var LINKS = new RegExp(
   ].join("|"),
   "g"
 );
-function findLinks(text4) {
+function findLinks(text2) {
   const links = [];
-  for (const match of text4.matchAll(LINKS)) {
+  for (const match of text2.matchAll(LINKS)) {
     const group = match[1] !== void 0 ? 1 : match[4] !== void 0 ? 4 : 7;
     const line = Number(match[group + 1]);
     if (!Number.isSafeInteger(line) || line < 1) continue;
@@ -8894,11 +8894,11 @@ function fromRecords(items) {
     const [head, ...wrapped] = body.replace(/\s+$/, "").split("\n");
     const prefix = stamp === "" ? "" : `${stamp} `;
     const tail = fields.length === 0 ? "" : `${head === "" ? "" : "  "}${fields.join(" ")}`;
-    const text4 = `${prefix}${head}${tail}`.replace(CONTROL, "");
+    const text2 = `${prefix}${head}${tail}`.replace(CONTROL, "");
     const quiet = [];
     if (stamp !== "") quiet.push([0, stamp.length]);
-    if (tail !== "") quiet.push([text4.length - tail.length, text4.length]);
-    lines.push(makeLine(lines.length + 1, text4, null, level, false, quiet, stamp.length));
+    if (tail !== "") quiet.push([text2.length - tail.length, text2.length]);
+    lines.push(makeLine(lines.length + 1, text2, null, level, false, quiet, stamp.length));
     for (const extra of [...wrapped, ...continuation]) {
       const plain = extra.replace(CONTROL, "");
       lines.push(makeLine(lines.length + 1, plain, null, level, true, [], 0));
@@ -8914,8 +8914,8 @@ function formatStamp(ms, oneDay) {
   const clock = `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}.${pad(date.getUTCMilliseconds(), 3)}`;
   return oneDay ? clock : `${date.toISOString().slice(0, 10)} ${clock}`;
 }
-function makeLine(number, text4, segments, level, continued, quiet, stamp) {
-  return { number, text: text4, segments, level, continued, quiet, stamp, links: findLinks(text4) };
+function makeLine(number, text2, segments, level, continued, quiet, stamp) {
+  return { number, text: text2, segments, level, continued, quiet, stamp, links: findLinks(text2) };
 }
 function lastDraw(line) {
   const trimmed = line.endsWith("\r") ? line.slice(0, -1) : line;
@@ -8958,14 +8958,14 @@ function fromText(input) {
     }
   }
   const stamps = texts.map(stampLength);
-  const own = texts.map((text4, index) => text4.trim() === "" ? null : textLevel(text4.slice(stamps[index]).trimStart()));
-  const filled = texts.filter((text4) => text4.trim() !== "").length;
+  const own = texts.map((text2, index) => text2.trim() === "" ? null : textLevel(text2.slice(stamps[index]).trimStart()));
+  const filled = texts.filter((text2) => text2.trim() !== "").length;
   const timestamped = filled > 0 && stamps.filter((stamp) => stamp > 0).length >= filled * 0.5;
   const leveled = !timestamped && filled > 0 && own.filter((level) => level !== null).length >= filled * 0.5;
   const counts = emptyCounts2();
   const lines = [];
   let entryLevel = null;
-  texts.forEach((text4, index) => {
+  texts.forEach((text2, index) => {
     const stamp = stamps[index];
     const continued = lines.length > 0 && (timestamped ? stamp === 0 : leveled && own[index] === null);
     let level;
@@ -8975,7 +8975,7 @@ function fromText(input) {
       if (level !== null) counts[level]++;
       entryLevel = level;
     }
-    lines.push(makeLine(index + 1, text4, styled === null ? null : segments[index], level, continued, stamp > 0 ? [[0, stamp]] : [], stamp));
+    lines.push(makeLine(index + 1, text2, styled === null ? null : segments[index], level, continued, stamp > 0 ? [[0, stamp]] : [], stamp));
   });
   return { lines, format: "text", counts, context: [], dropped, utc: false };
 }
@@ -8986,8 +8986,8 @@ function section(header, relation, depth, indent = 0) {
   const { type, message } = splitHeader(header);
   return { type, message, frames: [], omitted: 0, fields: [], relation, depth, indent, braces: false };
 }
-function splitHeader(text4) {
-  const trimmed = text4.trim();
+function splitHeader(text2) {
+  const trimmed = text2.trim();
   const match = /^((?:[A-Za-z_$][\w$]*[.:/]{1,2})*[A-Za-z_$][\w$]*(?: ?\[[\w-]+\])?)(?::(?:\s+|$)([\s\S]*))?$/.exec(trimmed);
   if (match !== null && (match[2] !== void 0 || /(?:Error|Exception|Throwable|Panic|Warning|Interrupt|Exit)$/.test(match[1]))) {
     return { type: match[1], message: (match[2] ?? "").trim() };
@@ -8998,8 +8998,8 @@ function appendMessage(target, line) {
   target.message = target.message === "" ? line : `${target.message}
 ${line}`;
 }
-function frame(text4, fn, location, app, source = null) {
-  return { text: text4.trim(), fn: fn === null || fn.trim() === "" ? null : fn.trim(), location, app, source };
+function frame(text2, fn, location, app, source = null) {
+  return { text: text2.trim(), fn: fn === null || fn.trim() === "" ? null : fn.trim(), location, app, source };
 }
 function readTrace2(value) {
   if (value !== void 0 && value !== null && typeof value === "object" && !Array.isArray(value)) {
@@ -9008,14 +9008,14 @@ function readTrace2(value) {
     if (parsed === null) return { ok: false, error: SHAPE_HINT7 };
     return { ok: true, trace: finish(parsed.parsed, parsed.raw) };
   }
-  const text4 = Array.isArray(value) ? value.every((line) => typeof line === "string") ? value.join("\n") : null : typeof value === "string" ? value : null;
-  if (text4 === null) return { ok: false, error: SHAPE_HINT7 };
-  const raw = clean(text4);
+  const text2 = Array.isArray(value) ? value.every((line) => typeof line === "string") ? value.join("\n") : null : typeof value === "string" ? value : null;
+  if (text2 === null) return { ok: false, error: SHAPE_HINT7 };
+  const raw = clean(text2);
   if (raw === "") return { ok: false, error: "The trace is empty" };
   return { ok: true, trace: finish(parse2(raw), raw) };
 }
-function clean(text4) {
-  return stripAnsi(text4).replace(/\r\n?/g, "\n").replace(/^(?:[ \t]*\n)+/, "").trimEnd();
+function clean(text2) {
+  return stripAnsi(text2).replace(/\r\n?/g, "\n").replace(/^(?:[ \t]*\n)+/, "").trimEnd();
 }
 function finish(parsed, raw) {
   const sections = parsed.sections.filter((s, index) => index === 0 || s.type !== "" || s.message !== "" || s.frames.length > 0).map(({ type, message, frames, omitted, fields, relation, depth }) => ({ type, message, frames, omitted, fields, relation, depth }));
@@ -9036,20 +9036,20 @@ function fromObject(record3, relation, depth, level) {
   const stack = fieldText(field(record3, ["stack", "stacktrace", "traceback", "backtrace"]));
   if (name === "" && message === "" && stack === null) return null;
   const header = name === "" ? message : message === "" ? name : `${name}: ${message}`;
-  let text4 = clean(stack ?? header);
+  let text2 = clean(stack ?? header);
   if (stack !== null) {
-    const first3 = text4.split("\n", 1)[0].trim();
-    const framesOnly = first3 === "" || stackFrame(first3) !== null || /^at\s|@/.test(first3) || /^\s/.test(text4);
-    if (framesOnly && header !== "" && !(message !== "" && first3.includes(message.split("\n", 1)[0]))) text4 = `${header}
-${text4}`;
+    const first3 = text2.split("\n", 1)[0].trim();
+    const framesOnly = first3 === "" || stackFrame(first3) !== null || /^at\s|@/.test(first3) || /^\s/.test(text2);
+    if (framesOnly && header !== "" && !(message !== "" && first3.includes(message.split("\n", 1)[0]))) text2 = `${header}
+${text2}`;
   }
-  const parsed = parse2(text4);
+  const parsed = parse2(text2);
   const sections = parsed.sections;
   if (sections.length > 0) {
     sections[0].relation = relation;
     for (const each of sections) each.depth += depth;
   }
-  let raw = text4;
+  let raw = text2;
   if (level < 8) {
     const cause = field(record3, ["cause"]);
     if (cause !== void 0 && isPlainObject(cause)) {
@@ -9082,23 +9082,23 @@ var DOTNET = /^\s*at \S.*\) in \S.*:line \d+\s*$|^\s*---> \S|^Unhandled exceptio
 var JAVA = /^\s*at [\w$.<>/-]+\((?:[\w$.-]+\.(?:java|kt|kts|scala|groovy|clj)(?::\d+)?|Native Method|Unknown Source)\)\s*$/m;
 var RUBY = /^\S+?:\d+:in [`'].*?': [\s\S]*?\([\w:]+\)\s*$|^\s+from \S+?:\d+:in [`']/m;
 var SWIFT = /^\S+?\.swift:\d+: Fatal error: /m;
-function parse2(text4) {
-  if (PYTHON.test(text4)) return parsePython(text4);
-  if (GO.test(text4) && /\.go:\d+/.test(text4)) return parseGo(text4);
-  if (RUST.test(text4)) return parseRust(text4);
-  if (DOTNET.test(text4)) return parseDotnet(text4);
-  if (JAVA.test(text4)) return parseJava(text4);
-  if (RUBY.test(text4)) return parseRuby(text4);
-  if (SWIFT.test(text4)) return parseSwift(text4);
-  return parseJavaScript(text4);
+function parse2(text2) {
+  if (PYTHON.test(text2)) return parsePython(text2);
+  if (GO.test(text2) && /\.go:\d+/.test(text2)) return parseGo(text2);
+  if (RUST.test(text2)) return parseRust(text2);
+  if (DOTNET.test(text2)) return parseDotnet(text2);
+  if (JAVA.test(text2)) return parseJava(text2);
+  if (RUBY.test(text2)) return parseRuby(text2);
+  if (SWIFT.test(text2)) return parseSwift(text2);
+  return parseJavaScript(text2);
 }
 var V8_FRAME = /^at\s+(?:(.+?)\s+\((.*)\)|(.+))$/;
 var AT_SIGN_FRAME = /^([^\s@]*)@(\S.*?)$/;
 var RUNTIME_NOTE = /^(?:Node\.js|Deno|Bun) v\d[\w.-]*$/;
 var OMITTED = /^\.\.\. (\d+) lines? matching cause stack trace \.\.\.$/;
 var PROPERTY = /^((?:[\w$]+|'[^']*'|"[^"]*"|\[[\w$.]+\])):\s(.*?),?$/;
-function parseJavaScript(text4) {
-  const lines = text4.split("\n");
+function parseJavaScript(text2) {
+  const lines = text2.split("\n");
   const sections = [];
   const notes = [];
   const lists = [];
@@ -9205,16 +9205,16 @@ function parseJavaScript(text4) {
     if (location !== null) target.frames.push(frame(trimmed, null, location, location.app));
   }
   const hasV8 = sections.some((s) => s.frames.some((f) => f.text.startsWith("at ")));
-  return { language: browser || hasV8 ? "javascript" : "text", sections: sections.length > 0 ? sections : [section(text4, null, 0)], notes, reversed: false };
+  return { language: browser || hasV8 ? "javascript" : "text", sections: sections.length > 0 ? sections : [section(text2, null, 0)], notes, reversed: false };
 }
 var PYTHON_FRAME = /^(\s*)File "([^"]+)", line (\d+)(?:, in (.+))?$/;
 var PYTHON_CHAIN = {
   "The above exception was the direct cause of the following exception:": "cause",
   "During handling of the above exception, another exception occurred:": "context"
 };
-function parsePython(text4) {
+function parsePython(text2) {
   const chunks = [{ lines: [], joined: null }];
-  for (const line of text4.split("\n")) {
+  for (const line of text2.split("\n")) {
     const relation = PYTHON_CHAIN[line.trim()];
     if (relation !== void 0) chunks.push({ lines: [], joined: relation });
     else chunks[chunks.length - 1].lines.push(line);
@@ -9259,8 +9259,8 @@ function parsePython(text4) {
   }
   return { language: "python", sections, notes: [], reversed: true };
 }
-function parseGo(text4) {
-  const lines = text4.split("\n");
+function parseGo(text2) {
+  const lines = text2.split("\n");
   const notes = [];
   const head = lines.findIndex((line) => GO.test(line));
   const match = /^(panic|fatal error): ([\s\S]*)$/.exec(lines[head]);
@@ -9299,8 +9299,8 @@ function parseGo(text4) {
 }
 var RUST_HEAD = /^thread '([^']*)'(?: \(\d+\))? panicked at (?:'([\s\S]*?)', )?(\S+?:\d+:\d+):?\s*$/;
 var RUST_RUNTIME = /^(?:<?(?:std|core|alloc|test|tokio|futures)::|<[^>]*\b(?:std|core|alloc)::|__rustc::|rust_begin_unwind|__rust_|_?start$|__libc_start|start_thread|_?main$|<unknown>$)/;
-function parseRust(text4) {
-  const lines = text4.split("\n");
+function parseRust(text2) {
+  const lines = text2.split("\n");
   const notes = [];
   const head = lines.findIndex((line) => RUST.test(line));
   const match = RUST_HEAD.exec(lines[head]);
@@ -9335,10 +9335,10 @@ function parseRust(text4) {
 }
 var DOTNET_FRAME = /^at\s+(.+?)(?:\s+in\s+(.+):line\s+(\d+))?$/;
 var DOTNET_RUNTIME = /^(?:System|Microsoft|Xunit|NUnit|Internal)\./;
-function parseDotnet(text4) {
+function parseDotnet(text2) {
   const sections = [];
   const open = [];
-  for (const line of text4.split("\n")) {
+  for (const line of text2.split("\n")) {
     const trimmed = line.trim();
     if (trimmed === "" || /^--- End of stack trace from previous location/.test(trimmed)) continue;
     if (/^--- End of inner exception stack trace ---$/.test(trimmed)) {
@@ -9369,10 +9369,10 @@ function parseDotnet(text4) {
   return { language: "dotnet", sections, notes: [], reversed: false };
 }
 var JVM_AT = /^at\s+([\w$.<>/-]+)\((.*)\)$/;
-function parseJava(text4) {
+function parseJava(text2) {
   const sections = [];
   const notes = [];
-  for (const line of text4.split("\n")) {
+  for (const line of text2.split("\n")) {
     const trimmed = line.trim();
     if (trimmed === "") continue;
     const tabs = /^\t*/.exec(line)[0].length;
@@ -9409,8 +9409,8 @@ function parseJava(text4) {
   return { language: "java", sections, notes, reversed: false };
 }
 var RUBY_FRAME = /^(?:from\s+)?(.+?):(\d+):in [`'](.*?)'(?::\s([\s\S]*))?$/;
-function parseRuby(text4) {
-  const lines = text4.split("\n");
+function parseRuby(text2) {
+  const lines = text2.split("\n");
   let made = null;
   for (const line of lines) {
     const trimmed = line.trim();
@@ -9432,10 +9432,10 @@ function parseRuby(text4) {
   }
   return { language: "ruby", sections: made === null ? [] : [made], notes: [], reversed: false };
 }
-function parseSwift(text4) {
+function parseSwift(text2) {
   const sections = [];
   const notes = [];
-  for (const line of text4.split("\n")) {
+  for (const line of text2.split("\n")) {
     const match = /^(\S+?\.swift):(\d+): Fatal error: (.*)$/.exec(line.trim());
     if (match === null) {
       if (line.trim() !== "" && sections.length === 0) notes.push(line.trim());
@@ -9751,8 +9751,8 @@ function readBoard(items, columns) {
   const named = Array.isArray(columns) ? [...new Set(columns.map(boardStatus).filter((status) => status !== NO_STATUS))] : [];
   for (const column of Array.isArray(columns) ? columns : []) {
     const status = boardStatus(column);
-    const text4 = str8(column);
-    if (text4 !== null && !given.has(status)) given.set(status, text4);
+    const text2 = str8(column);
+    if (text2 !== null && !given.has(status)) given.set(status, text2);
   }
   const byStatus = /* @__PURE__ */ new Map();
   for (const card of cards) {
@@ -10174,8 +10174,8 @@ function shortValue(key, value) {
 }
 function factText(value) {
   if (typeof value === "boolean") return value ? "yes" : "no";
-  const text4 = str9(value);
-  if (text4 !== null) return text4;
+  const text2 = str9(value);
+  if (text2 !== null) return text2;
   if (value === void 0 || value === null || typeof value !== "object") return null;
   try {
     return JSON.stringify(value);
@@ -10208,13 +10208,13 @@ function rawFacts(value) {
   const seen = /* @__PURE__ */ new Set();
   for (const [given, raw] of pairs) {
     if (out.length >= MAX_FACTS) break;
-    const text4 = factText(raw);
-    if (text4 === null) continue;
+    const text2 = factText(raw);
+    if (text2 === null) continue;
     const alias = KEY_ALIASES[given.toLowerCase().replace(/[\s_.-]+/g, "")];
     const key = alias ?? given.trim();
     if (key === "" || seen.has(key)) continue;
     seen.add(key);
-    out.push({ key, label: alias === void 0 ? key : KEY_LABEL[key] ?? key, value: text4 });
+    out.push({ key, label: alias === void 0 ? key : KEY_LABEL[key] ?? key, value: text2 });
   }
   const rank2 = (key) => {
     const index = KEY_ORDER.indexOf(key);
@@ -10224,19 +10224,19 @@ function rawFacts(value) {
 }
 var IMAGE_EXTENSION2 = /\.(png|jpe?g|gif|webp|avif|heic)(\?.*)?$/i;
 function evidenceOf(raw, label5 = null) {
-  const text4 = raw.trim();
-  if (/^https?:\/\/\S+$/i.test(text4)) {
-    return IMAGE_EXTENSION2.test(text4) && /^https:/i.test(text4) ? { kind: "image", src: text4, label: label5 } : { kind: "url", url: text4, label: label5 };
+  const text2 = raw.trim();
+  if (/^https?:\/\/\S+$/i.test(text2)) {
+    return IMAGE_EXTENSION2.test(text2) && /^https:/i.test(text2) ? { kind: "image", src: text2, label: label5 } : { kind: "url", url: text2, label: label5 };
   }
-  const pathLike = !/\s/.test(text4) && (/^(\/|\.{1,2}\/|~\/|\$[A-Z_]+)/.test(text4) || text4.includes("/") || /\.[a-z0-9]{1,6}(:\d+)?$/i.test(text4));
+  const pathLike = !/\s/.test(text2) && (/^(\/|\.{1,2}\/|~\/|\$[A-Z_]+)/.test(text2) || text2.includes("/") || /\.[a-z0-9]{1,6}(:\d+)?$/i.test(text2));
   if (pathLike) {
-    const located = /^(.*?):(\d+)(?::\d+)?$/.exec(text4);
-    const path = located === null ? text4 : located[1];
+    const located = /^(.*?):(\d+)(?::\d+)?$/.exec(text2);
+    const path = located === null ? text2 : located[1];
     const line = located === null ? null : Number(located[2]);
     if (IMAGE_EXTENSION2.test(path)) return { kind: "image", src: path, label: label5 };
     return { kind: "file", path, line, label: label5 };
   }
-  return { kind: "text", text: text4, label: label5 };
+  return { kind: "text", text: text2, label: label5 };
 }
 function evidenceItem(value) {
   if (typeof value === "string") return value.trim() === "" ? null : evidenceOf(value);
@@ -10257,8 +10257,8 @@ function evidenceItem(value) {
     if (read.kind === "file") return { ...read, line: line ?? read.line };
     return read;
   }
-  const text4 = str9(fields.text ?? fields.note ?? fields.output ?? fields.message);
-  return text4 === null ? null : { kind: "text", text: text4, label: label5 };
+  const text2 = str9(fields.text ?? fields.note ?? fields.output ?? fields.message);
+  return text2 === null ? null : { kind: "text", text: text2, label: label5 };
 }
 function evidenceList(fields) {
   const out = [];
@@ -10654,11 +10654,11 @@ function findFences(lines) {
 // shared/segment.ts
 var GENUI_BLOCK_KIND = "genui-block";
 var GENUI_TEXT_KIND = "genui-text";
-function segmentMessage(text4, phase) {
-  const lines = text4.split("\n");
+function segmentMessage(text2, _phase) {
+  const lines = text2.split("\n");
   const allFences = findFences(lines);
   const uiFences = allFences.filter((fence) => fence.language === "ui" || fence.language === "app");
-  if (uiFences.length === 0) return [{ kind: "text", text: text4 }];
+  if (uiFences.length === 0) return [{ kind: "text", text: text2 }];
   const segments = [];
   let cursor = 0;
   let fenceIndex = 0;
@@ -10683,8 +10683,8 @@ function segmentMessage(text4, phase) {
   }
   return segments;
 }
-function splitTimelineMessage(text4, phase, messageId) {
-  const segments = segmentMessage(text4, phase);
+function splitTimelineMessage(text2, phase, messageId) {
+  const segments = segmentMessage(text2, phase);
   if (!segments.some((segment) => segment.kind === "fence")) return void 0;
   const items = [];
   segments.forEach((segment) => {
@@ -12043,9 +12043,9 @@ function intraword(pieces2, index) {
   const after = pieces2[index + 1] ?? "";
   return WORD_CHAR.test(before.slice(-1)) || WORD_CHAR.test(after.slice(0, 1));
 }
-function parseInline(text4) {
+function parseInline(text2) {
   const out = [];
-  const pieces2 = text4.split(INLINE);
+  const pieces2 = text2.split(INLINE);
   for (const [index, piece] of pieces2.entries()) {
     if (piece.length === 0) continue;
     if (piece.startsWith("_") && piece.endsWith("_") && intraword(pieces2, index)) {
@@ -12080,8 +12080,8 @@ function parseMarkdown(source) {
   const lines = source.split("\n");
   let paragraph = [];
   const flush = () => {
-    const text4 = paragraph.join(" ").trim();
-    if (text4.length > 0) blocks.push({ kind: "paragraph", content: parseInline(text4) });
+    const text2 = paragraph.join(" ").trim();
+    if (text2.length > 0) blocks.push({ kind: "paragraph", content: parseInline(text2) });
     paragraph = [];
   };
   for (let index = 0; index < lines.length; index += 1) {
@@ -12154,16 +12154,16 @@ function parseMarkdown(source) {
 // client/markdown.tsx
 import { Fragment, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 function MarkdownText({
-  text: text4,
+  text: text2,
   theme,
   compact = false,
   color
 }) {
-  const blocks = useMemo2(() => parseMarkdown(text4), [text4]);
+  const blocks = useMemo2(() => parseMarkdown(text2), [text2]);
   return /* @__PURE__ */ jsx2(View2, { style: { gap: compact ? 6 : 8 }, children: blocks.map((block, index) => /* @__PURE__ */ jsx2(BlockView, { block, theme, color }, index)) });
 }
-function InlineMarkdown({ text: text4, theme }) {
-  const content2 = useMemo2(() => parseInline(text4), [text4]);
+function InlineMarkdown({ text: text2, theme }) {
+  const content2 = useMemo2(() => parseInline(text2), [text2]);
   return /* @__PURE__ */ jsx2(Spans, { content: content2, theme });
 }
 function BlockView({
@@ -12834,7 +12834,7 @@ function Other({ props }) {
       }
     );
   }
-  const text4 = draft4.trim();
+  const text2 = draft4.trim();
   return /* @__PURE__ */ jsxs3(View4, { style: { width: "100%", gap: 6 }, children: [
     /* @__PURE__ */ jsx4(
       TextInput,
@@ -12865,10 +12865,10 @@ function Other({ props }) {
           label: "Send",
           primary: true,
           onPress: () => {
-            if (text4 === "") return;
+            if (text2 === "") return;
             setQueued2(id, null);
             setOpen(false);
-            void run([{ kind: "action", type: "send", text: text4 }]);
+            void run([{ kind: "action", type: "send", text: text2 }]);
           }
         }
       ),
@@ -12877,7 +12877,7 @@ function Other({ props }) {
         {
           label: "Add to reply",
           onPress: () => {
-            setQueued2(id, text4 === "" ? null : text4);
+            setQueued2(id, text2 === "" ? null : text2);
             setOpen(false);
           }
         }
@@ -15257,7 +15257,7 @@ function Json({ props }) {
 
 // client/components/diagram.tsx
 import { Icon as Icon5, Modal as Modal3, ScrollView as SheetScrollView } from "@getpaseo/plugin/client/react-native";
-import React8, { useMemo as useMemo5, useState as useState8 } from "react";
+import React2, { useMemo as useMemo5, useState as useState8 } from "react";
 import { Pressable as Pressable6, ScrollView as ScrollView4, StyleSheet as StyleSheet8, Text as Text8, View as View8 } from "react-native";
 
 // shared/diagram/flowchart.ts
@@ -15289,19 +15289,19 @@ function stripQuotes(value) {
   return (quoted ? quoted[1] : trimmed).replace(/<br\s*\/?>/gi, "\n").trim();
 }
 function parseNodeExpression(raw) {
-  const text4 = raw.trim();
-  if (text4.length === 0) return null;
+  const text2 = raw.trim();
+  if (text2.length === 0) return null;
   for (const { open, close, shape } of OPENERS) {
-    const start = text4.indexOf(open);
+    const start = text2.indexOf(open);
     if (start <= 0) continue;
-    if (!text4.endsWith(close)) continue;
-    const id = text4.slice(0, start).trim();
+    if (!text2.endsWith(close)) continue;
+    const id = text2.slice(0, start).trim();
     if (!/^[\w.-]+$/.test(id)) continue;
-    const label5 = stripQuotes(text4.slice(start + open.length, text4.length - close.length));
+    const label5 = stripQuotes(text2.slice(start + open.length, text2.length - close.length));
     return { id, label: label5.length > 0 ? label5 : id, shape };
   }
-  if (!/^[\w.-]+$/.test(text4)) return null;
-  return { id: text4, label: text4, shape: "rect" };
+  if (!/^[\w.-]+$/.test(text2)) return null;
+  return { id: text2, label: text2, shape: "rect" };
 }
 function splitChain(line) {
   const parts = [];
@@ -16107,7 +16107,7 @@ function SequenceView({
   const box = layoutSequence(diagram.participants, diagram.events.length);
   const centerById = new Map(box.columns.map((col) => [col.id, col.centerX]));
   return /* @__PURE__ */ jsxs7(View8, { style: { width: size.width, height: size.height }, children: [
-    box.columns.map((col) => /* @__PURE__ */ jsxs7(React8.Fragment, { children: [
+    box.columns.map((col) => /* @__PURE__ */ jsxs7(React2.Fragment, { children: [
       /* @__PURE__ */ jsx8(
         View8,
         {
@@ -16188,7 +16188,7 @@ function SequenceView({
 
 // client/components/inputs.tsx
 import { Icon as Icon6, TextInput as TextInput3 } from "@getpaseo/plugin/client/react-native";
-import React9, { useState as useState9 } from "react";
+import React3, { useState as useState9 } from "react";
 import { Pressable as Pressable7, ScrollView as ScrollView5, StyleSheet as StyleSheet9, Text as Text9, View as View9 } from "react-native";
 
 // shared/logic/choose-logic.ts
@@ -17160,7 +17160,7 @@ function Button({ props }) {
   );
 }
 function ButtonGroup({ buttons }) {
-  return /* @__PURE__ */ jsx9(View9, { style: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }, children: buttons.map((b) => /* @__PURE__ */ jsx9(React9.Fragment, { children: b.element }, b.key)) });
+  return /* @__PURE__ */ jsx9(View9, { style: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }, children: buttons.map((b) => /* @__PURE__ */ jsx9(React3.Fragment, { children: b.element }, b.key)) });
 }
 function Form({ props }) {
   const { theme, run, answer: answer2 } = useUiRuntime();
@@ -19381,16 +19381,16 @@ function write(agentId, next) {
   writeStorage(storageKey(agentId), JSON.stringify(next));
   notify();
 }
-function setQueued(agentId, id, text4) {
+function setQueued(agentId, id, text2) {
   const current = queueOf(agentId);
   const without = current.filter((item) => item.id !== id);
   const index = current.findIndex((item) => item.id === id);
-  if (text4 === null) {
+  if (text2 === null) {
     if (index !== -1) write(agentId, without);
     return;
   }
   const next = [...without];
-  next.splice(index === -1 ? next.length : index, 0, { id, text: text4 });
+  next.splice(index === -1 ? next.length : index, 0, { id, text: text2 });
   write(agentId, next);
 }
 function clearQueue(agentId) {
@@ -19471,7 +19471,7 @@ function LiveUi({
   const queue = useReplyQueue(queueAgent);
   const queuePrefix = blockKey ?? stateKey;
   const setQueued2 = useCallback3(
-    (id, text4) => setQueued(queueAgent, `${queuePrefix}:${id}`, text4),
+    (id, text2) => setQueued(queueAgent, `${queuePrefix}:${id}`, text2),
     [queueAgent, queuePrefix]
   );
   const runAction = useCallback3(
@@ -19845,8 +19845,8 @@ function TimelineBlockItem({
   const { language, code, complete, fenceIndex, messageId } = item.data;
   const stateKey = `paseo.genui:${agentId}:${messageId ?? timestamp2.getTime()}:${fenceIndex}`;
   const send = useCallback3(
-    async (text4) => {
-      await paseo.agents.ref(agentId).send(text4);
+    async (text2) => {
+      await paseo.agents.ref(agentId).send(text2);
     },
     [paseo, agentId]
   );
@@ -19870,9 +19870,7 @@ function TimelineBlockItem({
   );
 }
 function TimelineTextItem({
-  item,
-  theme,
-  layout
+  item
 }) {
   const revealed = useRevealedText(item.data.text, item.data.phase ?? "complete");
   return /* @__PURE__ */ jsx14(View14, { testID: "assistant-message", children: /* @__PURE__ */ jsx14(Markdown, { children: revealed }) });
@@ -20279,7 +20277,7 @@ function GalleryExampleCard({
 }
 
 // client/queue-pill.tsx
-import { Icon as Icon11 } from "@getpaseo/plugin/client/react-native";
+import { Icon as Icon10 } from "@getpaseo/plugin/client/react-native";
 import { Pressable as Pressable14, StyleSheet as StyleSheet16, Text as Text16, View as View16 } from "react-native";
 import { jsx as jsx16, jsxs as jsxs15 } from "react/jsx-runtime";
 function registerQueuePills(client) {
@@ -20320,7 +20318,7 @@ function registerQueuePills(client) {
           icon: "MessageSquare",
           behavior: {
             kind: "popover",
-            Content: (props) => /* @__PURE__ */ jsx16(QueuePopover, { ...props, send: (text4) => client.paseo.agents.ref(agentId).send(text4) })
+            Content: (props) => /* @__PURE__ */ jsx16(QueuePopover, { ...props, send: (text2) => client.paseo.agents.ref(agentId).send(text2) })
           }
         }
       })
@@ -20346,7 +20344,7 @@ function QueuePopover({
   return /* @__PURE__ */ jsxs15(View16, { style: { gap: 8, padding: 12, maxWidth: 420 }, children: [
     queue.map((item) => /* @__PURE__ */ jsxs15(View16, { style: { flexDirection: "row", gap: 8, alignItems: "flex-start" }, children: [
       /* @__PURE__ */ jsx16(Text16, { style: { color: theme.colors.foreground, fontSize: 12.5, flex: 1 }, children: item.text }),
-      /* @__PURE__ */ jsx16(Pressable14, { accessibilityRole: "button", accessibilityLabel: "Remove", onPress: () => setQueued(agentId, item.id, null), children: /* @__PURE__ */ jsx16(Icon11, { name: "Trash2", size: 13, color: theme.colors.foregroundMuted }) })
+      /* @__PURE__ */ jsx16(Pressable14, { accessibilityRole: "button", accessibilityLabel: "Remove", onPress: () => setQueued(agentId, item.id, null), children: /* @__PURE__ */ jsx16(Icon10, { name: "Trash2", size: 13, color: theme.colors.foregroundMuted }) })
     ] }, item.id)),
     /* @__PURE__ */ jsxs15(View16, { style: { flexDirection: "row", gap: 8, paddingTop: 4 }, children: [
       /* @__PURE__ */ jsx16(
@@ -20354,9 +20352,9 @@ function QueuePopover({
         {
           accessibilityRole: "button",
           onPress: () => {
-            const text4 = composeReply(queueOf(agentId).map((item) => item.text), null);
-            if (text4 === "") return;
-            void send(text4).then(() => clearQueue(agentId));
+            const text2 = composeReply(queueOf(agentId).map((item) => item.text), null);
+            if (text2 === "") return;
+            void send(text2).then(() => clearQueue(agentId));
             close();
           },
           style: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: theme.colors.accent },
@@ -20389,7 +20387,7 @@ function QueuePopover({
 // client/settings.tsx
 import { useSettings } from "@getpaseo/plugin/client";
 import { SettingsAction, SettingsCard, SettingsInput, SettingsSection, SettingsSwitch } from "@getpaseo/plugin/client/ui";
-import React16 from "react";
+import React4 from "react";
 import { Text as Text17, View as View17 } from "react-native";
 
 // shared/settings.ts
@@ -20410,7 +20408,7 @@ var genuiSettings = defineSettings({
 import { jsx as jsx17, jsxs as jsxs16 } from "react/jsx-runtime";
 function GenUiSettingsScreen({ theme }) {
   const settings = useSettings(genuiSettings);
-  const [folders, setFolders] = React16.useState(null);
+  const [folders, setFolders] = React4.useState(null);
   if (settings.status === "loading") {
     return /* @__PURE__ */ jsx17(View17, { style: { padding: 16 }, children: /* @__PURE__ */ jsx17(Text17, { style: { color: theme.colors.foregroundMuted, fontSize: 13 }, children: "Loading settings\u2026" }) });
   }

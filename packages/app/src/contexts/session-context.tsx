@@ -25,7 +25,6 @@ import {
 } from "@getpaseo/protocol/agent-attention-notification";
 
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { AgentPermissionResponse } from "@getpaseo/protocol/agent-types";
 import { getHostRuntimeStore, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useVoiceAudioEngineOptional, useVoiceRuntimeOptional } from "@/contexts/voice-context";
 import type { AudioPlaybackSource } from "@/audio";
@@ -45,8 +44,6 @@ import {
 } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey } from "@/utils/agent-snapshots";
 import { useToast } from "@/contexts/toast-context";
-import { toErrorMessage } from "@/utils/error-messages";
-import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
 import { resyncProviderSubagents, useProviderSubagentStore } from "@/subagents/provider-store";
 
@@ -223,7 +220,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const focusedTerminalId = useSessionStore(
     (state) => state.sessions[serverId]?.focusedTerminalId ?? null,
   );
-  const _sessionStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attentionNotifiedRef = useRef<Map<string, number>>(new Map());
   const appStateRef = useRef(AppState.currentState);
   const viewedTimelineSyncRef = useRef<ViewedTimelineOwner | null>(null);
@@ -697,119 +693,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     voiceRuntime,
     voiceAudioEngine,
   ]);
-
-  const _cancelAgentRun = useCallback(
-    (agentId: string) => {
-      if (!client) {
-        console.warn("[Session] cancelAgent skipped: daemon unavailable");
-        return;
-      }
-      void client.cancelAgent(agentId).catch((error) => {
-        console.error("[Session] Failed to cancel agent:", error);
-      });
-    },
-    [client],
-  );
-
-  const _deleteAgent = useCallback(
-    (agentId: string) => {
-      if (!client) {
-        console.warn("[Session] deleteAgent skipped: daemon unavailable");
-        return;
-      }
-      void client.deleteAgent(agentId).catch((error) => {
-        console.error("[Session] Failed to delete agent:", error);
-      });
-    },
-    [client],
-  );
-
-  const _archiveAgent = useCallback(
-    (agentId: string) => {
-      if (!client) {
-        console.warn("[Session] archiveAgent skipped: daemon unavailable");
-        return;
-      }
-      void client.archiveAgent(agentId).catch((error) => {
-        console.error("[Session] Failed to archive agent:", error);
-      });
-    },
-    [client],
-  );
-
-  const _restartServer = useCallback(
-    (reason?: string) => {
-      if (!client) {
-        console.warn("[Session] restartServer skipped: daemon unavailable");
-        return;
-      }
-      void client.restartServer(reason).catch((error) => {
-        console.error("[Session] Failed to restart server:", error);
-      });
-    },
-    [client],
-  );
-
-  const _setAgentMode = useCallback(
-    (agentId: string, modeId: string) => {
-      if (!client) {
-        console.warn("[Session] setAgentMode skipped: daemon unavailable");
-        return;
-      }
-      void client
-        .setAgentMode(agentId, modeId)
-        .then((notice) => showProviderNoticeToast(toast, notice))
-        .catch((error) => {
-          console.error("[Session] Failed to set agent mode:", error);
-          toast.error(toErrorMessage(error));
-        });
-    },
-    [client, toast],
-  );
-
-  const _setAgentModel = useCallback(
-    (agentId: string, modelId: string | null) => {
-      if (!client) {
-        console.warn("[Session] setAgentModel skipped: daemon unavailable");
-        return;
-      }
-      void client.setAgentModel(agentId, modelId).catch((error) => {
-        console.error("[Session] Failed to set agent model:", error);
-        toast.error(toErrorMessage(error));
-      });
-    },
-    [client, toast],
-  );
-
-  const _setAgentThinkingOption = useCallback(
-    (agentId: string, thinkingOptionId: string | null) => {
-      if (!client) {
-        console.warn("[Session] setAgentThinkingOption skipped: daemon unavailable");
-        return;
-      }
-      void client
-        .setAgentThinkingOption(agentId, thinkingOptionId)
-        .then((notice) => showProviderNoticeToast(toast, notice))
-        .catch((error) => {
-          console.error("[Session] Failed to set agent thinking option:", error);
-          toast.error(toErrorMessage(error));
-        });
-    },
-    [client, toast],
-  );
-
-  const _respondToPermission = useCallback(
-    (agentId: string, requestId: string, response: AgentPermissionResponse) => {
-      if (!client) {
-        console.warn("[Session] respondToPermission skipped: daemon unavailable");
-        return;
-      }
-      void client.respondToPermission(agentId, requestId, response).catch((error) => {
-        console.error("[Session] Failed to respond to permission:", error);
-      });
-    },
-    [client],
-  );
 
   return children;
 }

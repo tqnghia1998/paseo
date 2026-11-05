@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { JsonValue } from "@getpaseo/protocol/agent-types";

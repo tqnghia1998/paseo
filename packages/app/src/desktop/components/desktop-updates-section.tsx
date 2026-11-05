@@ -1,5 +1,5 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import React, { type ReactElement, useCallback, useMemo, useState } from "react";
+import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";

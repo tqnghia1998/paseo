@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React, { type ReactNode, type ComponentProps } from "react";
+import { type ReactNode, type ComponentProps } from "react";
 import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 import type { Composer } from "@/composer";
 import type { MessagePayload } from "@/composer/types";

@@ -186,14 +186,6 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function hashForLog(value: string): string {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
-  }
-  return `h_${Math.abs(hash).toString(16)}`;
-}
-
 /** A daemon identity that negotiated protected relay security. */
 export interface RelaySecurityPin {
   serverId: string;
@@ -733,7 +725,6 @@ export class HostRuntimeController {
   private switchCandidateConnectionId: string | null = null;
   private switchCandidateHitCount = 0;
   private clientIdPromise: Promise<string> | null = null;
-  private clientIdHash: string | null = null;
   private switchRequestVersion = 0;
   private probeRequestVersion = 0;
   private probeCycleInFlight: Promise<void> | null = null;
@@ -1571,10 +1562,7 @@ export class HostRuntimeController {
 
   private resolveClientId(): Promise<string> {
     if (!this.clientIdPromise) {
-      this.clientIdPromise = this.deps.getClientId().then((value) => {
-        this.clientIdHash = hashForLog(value);
-        return value;
-      });
+      this.clientIdPromise = this.deps.getClientId();
     }
     return this.clientIdPromise;
   }
