@@ -1,4 +1,4 @@
-import React, { useMemo, type ReactElement } from "react";
+import { useMemo, type ReactElement } from "react";
 import { Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useHardwareKeyboardPresent } from "@/keyboard";

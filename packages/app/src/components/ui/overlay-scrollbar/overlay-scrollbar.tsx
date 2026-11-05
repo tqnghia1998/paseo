@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View, type PressableStateCallbackType, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { WEB_SCROLLBAR_RESTING_OPACITY, WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";

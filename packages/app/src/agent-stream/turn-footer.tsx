@@ -1,4 +1,4 @@
-import React, { memo, useCallback, type ReactNode } from "react";
+import { memo, useCallback, type ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";

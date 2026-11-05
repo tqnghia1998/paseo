@@ -174,7 +174,7 @@ async function runCheckoutAction({
   await promise;
 }
 
-export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()((set, get) => ({
+export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()((_set, get) => ({
   statusByCheckout: {},
 
   getStatus: ({ serverId, cwd, actionId }) => {

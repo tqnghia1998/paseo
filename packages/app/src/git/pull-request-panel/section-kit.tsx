@@ -1,4 +1,5 @@
-import React, { useMemo, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
+
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { CountedCheckPresentation } from "@/git/check-presentation";

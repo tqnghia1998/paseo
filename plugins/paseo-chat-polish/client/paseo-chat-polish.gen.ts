@@ -5055,8 +5055,6 @@ function RestyleCard({ theme, prefs: prefs2, onChange }) {
   ] });
 }
 function UpdateCard({ theme }) {
-  const s = useStyles(theme);
-  const c = theme.colors;
   const check = useRpc2(checkUpdate);
   const apply = useRpc2(applyUpdate);
   const [status, setStatus] = useState4();
@@ -5064,7 +5062,7 @@ function UpdateCard({ theme }) {
   const [error, setError] = useState4();
   useEffect4(() => {
     let live = true;
-    check({}).then((s2) => live && setStatus(s2), () => {
+    check({}).then((s) => live && setStatus(s), () => {
     });
     return () => void (live = false);
   }, [check]);

@@ -7,7 +7,6 @@ import {
   type MutableRefObject,
   type ReactNode,
 } from "react";
-import React from "react";
 import type { ToastApi } from "@/components/toast-host";
 import type { OpenFileDisposition } from "@/workspace/file-open";
 import type { InlinePathTarget } from "./parse";

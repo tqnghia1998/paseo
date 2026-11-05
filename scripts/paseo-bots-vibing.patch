@@ -1430,7 +1430,7 @@ index 215e3f6..afd9c38 100644
          <SettingsRow label="Chats" hint={loading ? "Loading..." : `${list.length} open${working ? `, ${working} working now` : ""}`} />
          <SettingsRow label="Tokens" hint={loading ? "Loading..." : `${input.toLocaleString()} in · ${output.toLocaleString()} out`} />
 diff --git a/client/panel/RoutinesSection.tsx b/client/panel/RoutinesSection.tsx
-index 1320722..2f2ee63 100644
+index 1320722..811ee49 100644
 --- a/client/panel/RoutinesSection.tsx
 +++ b/client/panel/RoutinesSection.tsx
 @@ -71,6 +71,7 @@ function runTime(at: Date, now: Date): string {
@@ -1458,6 +1458,22 @@ index 1320722..2f2ee63 100644
      .sort((a, b) => Date.parse(b.run.startedAt) - Date.parse(a.run.startedAt))
      .slice(0, RECENT);
  
+@@ -348,7 +350,7 @@ function RoutineForm({ colors, bot, host, routine, onCancel, onSubmit }: Routine
+               }}
+             />
+             {hook ? (
+-              <WebhookRows colors={colors} routineId={id} />
++              <WebhookRows routineId={id} />
+             ) : once ? (
+               <InputField colors={colors}
+                 key="once"
+@@ -399,5 +401,5 @@ function RoutineForm({ colors, bot, host, routine, onCancel, onSubmit }: Routine
+ /** The routine's webhook URL with Copy, and New URL to stop the old one working. */
+-function WebhookRows({ colors, routineId }: { colors: Colors; routineId: string }) {
++function WebhookRows({ routineId }: { routineId: string }) {
+   const webhook = useRpc(routineWebhookRpc);
+   const toast = useToast();
+   const queryClient = useQueryClient();
 diff --git a/client/paseo.ts b/client/paseo.ts
 index 8600f6d..1ba3ca7 100644
 --- a/client/paseo.ts
@@ -2905,12 +2921,11 @@ index 86b113a..eccaeea 100644
      const { RoutineScheduler } = await import("../server/scheduler");
 diff --git a/tests/sharing-dialogs.test.tsx b/tests/sharing-dialogs.test.tsx
 new file mode 100644
-index 0000000..b539707
+index 0000000..b60a15d
 --- /dev/null
 +++ b/tests/sharing-dialogs.test.tsx
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,129 @@
 +// @vitest-environment jsdom
-+import React from "react";
 +import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 +import { afterEach, expect, it, vi } from "vitest";
 +
@@ -3114,10 +3129,10 @@ index 367000b..2b80bea 100644
    it("rejects an unknown sort", () => {
 diff --git a/tests/vibing-defaults.test.ts b/tests/vibing-defaults.test.ts
 new file mode 100644
-index 0000000..85203ac
+index 0000000..cb4e02d
 --- /dev/null
 +++ b/tests/vibing-defaults.test.ts
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,204 @@
 +import { describe, expect, it } from "vitest";
 +import type { BotSettingsValues } from "../shared/bot";
 +import { DEFAULT_BOT_LIST_UI } from "../shared/bot";
@@ -3322,4 +3337,3 @@ index 0000000..85203ac
 +    expect(fallbackDefaultBotId([])).toBeUndefined();
 +  });
 +});
-+

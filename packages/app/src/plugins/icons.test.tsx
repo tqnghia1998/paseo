@@ -1,5 +1,5 @@
 import { Settings } from "lucide-react-native";
-import React, { isValidElement, type ReactElement, type ReactNode } from "react";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { SvgXml } from "react-native-svg";
 import { describe, expect, it } from "vitest";
 import type { PluginIconProps } from "@getpaseo/plugin";

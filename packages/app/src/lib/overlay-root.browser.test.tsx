@@ -1,6 +1,6 @@
 import { useGlobalOverlayLayer } from "./overlay-root";
 import { useOverlayRegistration } from "@/keyboard";
-import React, { type RefCallback } from "react";
+import { type RefCallback } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

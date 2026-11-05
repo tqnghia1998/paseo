@@ -1,7 +1,7 @@
 import { PluginClientStateProvider } from "@getpaseo/plugin/client/host";
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
 import type { PluginTheme } from "@getpaseo/plugin";
-import React, { type ComponentType, useMemo } from "react";
+import { type ComponentType, useMemo } from "react";
 import { Text } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
