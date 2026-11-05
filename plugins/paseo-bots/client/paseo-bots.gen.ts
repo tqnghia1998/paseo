@@ -13641,7 +13641,7 @@ function RoutineForm({ colors: colors2, bot, host: host2, routine, onCancel, onS
           }
         }
       ),
-      hook ? /* @__PURE__ */ jsx47(WebhookRows, { colors: colors2, routineId: id }) : once ? /* @__PURE__ */ jsx47(
+      hook ? /* @__PURE__ */ jsx47(WebhookRows, { routineId: id }) : once ? /* @__PURE__ */ jsx47(
         InputField,
         {
           colors: colors2,
@@ -13684,7 +13684,7 @@ function RoutineForm({ colors: colors2, bot, host: host2, routine, onCancel, onS
     ] })
   ] }) });
 }
-function WebhookRows({ colors: colors2, routineId }) {
+function WebhookRows({ routineId }) {
   const webhook = useRpc19(routineWebhookRpc);
   const toast = useToast16();
   const queryClient = useQueryClient10();

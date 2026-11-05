@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState, useMemo, useCallback, type ReactNode } from "react";
+import { useId, useRef, useState, useMemo, useCallback, type ReactNode } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Composer } from "@/composer";

@@ -1,7 +1,18 @@
 diff --git a/client/components/content.tsx b/client/components/content.tsx
-index 4db4af2..ac4e747 100644
+index 4db4af2..18e8fbd 100644
 --- a/client/components/content.tsx
 +++ b/client/components/content.tsx
+@@ -1,8 +1,8 @@
+ import { Icon as PaseoIcon, Modal, copyText, useToast } from "@getpaseo/plugin/client/react-native";
+ import { ImageLightbox } from "./image-lightbox";
+ import { ExternalLink } from "@getpaseo/plugin/client/ui";
+-import React, { useContext, useEffect, useState } from "react";
+-import { Image as RNImage, Platform, Pressable, StyleSheet, Text as RNText, View } from "react-native";
++import { useContext, useEffect, useState } from "react";
++import { Image as RNImage, Pressable, StyleSheet, Text as RNText, View } from "react-native";
+ import { keyValuePairs } from "../../shared/logic/content-model";
+ import { parseListRows } from "../../shared/logic/explain-logic";
+ import { resolveIconName } from "../../shared/logic/icons";
 @@ -342,12 +342,11 @@ export function File({ props }: { props: Props }) {
    const line = finiteNumber(props.line);
    const label = line !== null ? `${filePath}:${Math.round(line)}` : filePath;
@@ -41,18 +52,155 @@ index 4db4af2..ac4e747 100644
  }
  
  export function Entity({ props }: { props: Props }) {
+diff --git a/client/components/data.tsx b/client/components/data.tsx
+index cf01abd..b1b25df 100644
+--- a/client/components/data.tsx
++++ b/client/components/data.tsx
+@@ -1,6 +1,6 @@
+ import { Icon, copyText, useToast } from "@getpaseo/plugin/client/react-native";
+ import { InlineMarkdown } from "../markdown";
+-import React, { useMemo, useState } from "react";
++import { useMemo, useState } from "react";
+ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+ import { calendarLayout, calendarStats, dayLabel, readDays } from "../../shared/logic/calendarMath";
+ import { percentages, pieSlices } from "../../shared/logic/chartMath";
+diff --git a/client/components/dev.tsx b/client/components/dev.tsx
+index 883e88a..49f8cb6 100644
+--- a/client/components/dev.tsx
++++ b/client/components/dev.tsx
+@@ -1,7 +1,7 @@
+ import { Icon, TextInput, copyText as copyToClipboard, useToast } from "@getpaseo/plugin/client/react-native";
+ import { ExternalLink } from "@getpaseo/plugin/client/ui";
+ import { InlineMarkdown } from "../markdown";
+-import React, { useMemo, useState } from "react";
++import { useMemo, useState } from "react";
+ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+ import { formatRatio, readBenchmark } from "../../shared/core/benchmark";
+ import {
+@@ -34,7 +34,7 @@ import {
+   sizeText,
+   visibleRows as visibleJsonRows,
+ } from "../../shared/logic/json-logic";
+-import { finiteNumber, optionalText, text, type Props } from "../../shared/logic/values";
++import { finiteNumber, optionalText, type Props } from "../../shared/logic/values";
+ import { ErrorLine } from "../node-renderer";
+ import { propsKey, toneColor, usePersistedState, useUiRuntime } from "../runtime";
+ import { useItemFeedback } from "./feedback";
+diff --git a/client/components/image-lightbox.tsx b/client/components/image-lightbox.tsx
+index e23b807..dcf8fb3 100644
+--- a/client/components/image-lightbox.tsx
++++ b/client/components/image-lightbox.tsx
+@@ -1,4 +1,4 @@
+-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
++import { useEffect, useLayoutEffect, useRef, useState } from "react";
+ import {
+   Image,
+   Modal,
+diff --git a/client/components/inputs.tsx b/client/components/inputs.tsx
+index 2b0bbf7..2f59112 100644
+--- a/client/components/inputs.tsx
++++ b/client/components/inputs.tsx
+@@ -3,7 +3,7 @@ import { InlineMarkdown } from "../markdown";
+ import React, { useState } from "react";
+ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+ import { formMessage } from "../../shared/core/form";
+-import type { Action, Scalar, UiNode, Value } from "../../shared/core/types";
++import type { Action, UiNode, Value } from "../../shared/core/types";
+ import {
+   blankRow,
+   cardOptions,
+diff --git a/client/components/layout.tsx b/client/components/layout.tsx
+index 529ce1b..cbe10ba 100644
+--- a/client/components/layout.tsx
++++ b/client/components/layout.tsx
+@@ -1,5 +1,5 @@
+ import { Icon } from "@getpaseo/plugin/client/react-native";
+-import React, { useContext, useState } from "react";
++import { useContext, useState } from "react";
+ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+ import { finiteNumber, list, nodes, optionalText, text, type Props } from "../../shared/logic/values";
+ import { isButtonLike, RenderNode, RenderNodes } from "../node-renderer";
+diff --git a/client/components/media.tsx b/client/components/media.tsx
+index 46abf4b..04b75a0 100644
+--- a/client/components/media.tsx
++++ b/client/components/media.tsx
+@@ -1,6 +1,5 @@
+-import { Icon } from "@getpaseo/plugin/client/react-native";
+ import { ExternalLink } from "@getpaseo/plugin/client/ui";
+-import React, { useEffect, useMemo, useState } from "react";
++import { useEffect, useMemo, useState } from "react";
+ import { Image as RNImage, Pressable, StyleSheet, Text, View } from "react-native";
+ import { fitView, project, tileZoom, toScreen, visibleTiles, zoomAround } from "../../shared/logic/mapMath";
+ import { hotspotPoints, imageRef } from "../../shared/logic/references-model";
+diff --git a/client/components/project.tsx b/client/components/project.tsx
+index f7f06af..d1faeb8 100644
+--- a/client/components/project.tsx
++++ b/client/components/project.tsx
+@@ -1,6 +1,6 @@
+ import { Icon } from "@getpaseo/plugin/client/react-native";
+ import { ExternalLink } from "@getpaseo/plugin/client/ui";
+-import React, { useEffect, useMemo, useState } from "react";
++import { useEffect, useMemo, useState } from "react";
+ import { Pressable, StyleSheet, Text, View } from "react-native";
+ import { acceptanceVerdict, checkLabel, readAcceptance, verdictLine } from "../../shared/core/acceptance";
+ import { readCompare } from "../../shared/core/compare";
+diff --git a/client/components/widgets.tsx b/client/components/widgets.tsx
+index eb3875b..ecd34d4 100644
+--- a/client/components/widgets.tsx
++++ b/client/components/widgets.tsx
+@@ -1,5 +1,5 @@
+ import { ExternalLink } from "@getpaseo/plugin/client/ui";
+-import React, { useEffect, useMemo, useState } from "react";
++import { useEffect, useMemo, useState } from "react";
+ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+ import { hasOwnNumber } from "../../shared/logic/reply";
+ import { useItemFeedback } from "./feedback";
+@@ -35,7 +35,7 @@ import {
+   ROADMAP_STATUS_LABEL,
+ } from "../../shared/core/tracking";
+ import { parseSteps } from "../../shared/logic/explain-logic";
+-import { finiteNumber, optionalText, text, type Props } from "../../shared/logic/values";
++import { finiteNumber, optionalText, type Props } from "../../shared/logic/values";
+ import {
+   countdownSeconds,
+   elapsedMs,
+diff --git a/client/gallery.tsx b/client/gallery.tsx
+index 7aa5ced..bc91efc 100644
+--- a/client/gallery.tsx
++++ b/client/gallery.tsx
+@@ -5,9 +5,9 @@ import {
+   type PluginSidebarItemProps,
+   type PluginWorkspacePanelProps,
+ } from "@getpaseo/plugin/client";
+-import { Icon, TextInput, useToast } from "@getpaseo/plugin/client/react-native";
++import { TextInput, useToast } from "@getpaseo/plugin/client/react-native";
+ import { SidebarRow } from "@getpaseo/plugin/client/ui";
+-import React, { useCallback, useEffect, useMemo, useState } from "react";
++import { useCallback, useEffect, useMemo, useState } from "react";
+ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+ import { COMPONENTS, componentSignature, type ComponentGroup, type ComponentName } from "../shared/core/catalog";
+
 diff --git a/client/live-ui.tsx b/client/live-ui.tsx
-index 3c12393..42cbf70 100644
+index 3c12393..1530bb5 100644
 --- a/client/live-ui.tsx
 +++ b/client/live-ui.tsx
-@@ -1,5 +1,5 @@
+@@ -1,13 +1,12 @@
  import type { PluginTheme } from "@getpaseo/plugin";
 -import { openExternalUrl, usePaseo, type PluginTimelineItemProps } from "@getpaseo/plugin/client";
 +import { openExternalUrl, useAgent, usePaseo, type PluginTimelineItemProps } from "@getpaseo/plugin/client";
  import { Icon, copyText, useRevealedText, useToast } from "@getpaseo/plugin/client/react-native";
  import { Markdown } from "@getpaseo/plugin/client/ui";
- import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-@@ -509,6 +509,11 @@ export function TimelineBlockItem({
+-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { Pressable, StyleSheet, Text, View } from "react-native";
+ import {
+   collectLoads,
+   compileStreaming,
+-  dataKey,
+   evaluate,
+   initialState,
+   type LoadedData,
+@@ -509,6 +508,11 @@ export function TimelineBlockItem({
    playAudio: UiRuntime["playAudio"];
  }) {
    const paseo = usePaseo();
@@ -64,7 +212,7 @@ index 3c12393..42cbf70 100644
    const { language, code, complete, fenceIndex, messageId } = item.data;
    const stateKey = `paseo.genui:${agentId}:${messageId ?? timestamp.getTime()}:${fenceIndex}`;
  
-@@ -530,7 +535,7 @@ export function TimelineBlockItem({
+@@ -530,7 +534,7 @@ export function TimelineBlockItem({
        stateKey={stateKey}
        scope={{ agentId }}
        send={send}
@@ -73,6 +221,49 @@ index 3c12393..42cbf70 100644
        playAudio={playAudio}
        theme={theme}
        compact={layout.compact}
+@@ -541,8 +545,6 @@ export function TimelineBlockItem({
+
+ export function TimelineTextItem({
+   item,
+-  theme,
+-  layout,
+ }: PluginTimelineItemProps<GenUiTextData>) {
+   const revealed = useRevealedText(item.data.text, item.data.phase ?? "complete");
+   // Paseo's own renderer and testID give this text the host's links, selection and copy, and plugin styles such as Chat Polish.
+diff --git a/client/markdown.tsx b/client/markdown.tsx
+index 49f7cc1..0b1c343 100644
+--- a/client/markdown.tsx
++++ b/client/markdown.tsx
+@@ -1,6 +1,6 @@
+ import type { PluginTheme } from "@getpaseo/plugin";
+ import { openExternalUrl } from "@getpaseo/plugin/client";
+-import React, { useMemo } from "react";
++import { useMemo } from "react";
+ import { StyleSheet, Text, View } from "react-native";
+ import { parseInline, parseMarkdown, type Block, type Inline } from "../shared/diagram/markdown";
+
+diff --git a/client/node-renderer.tsx b/client/node-renderer.tsx
+index 70a1ec2..1c62215 100644
+--- a/client/node-renderer.tsx
++++ b/client/node-renderer.tsx
+@@ -1,4 +1,4 @@
+-import React, { Component, type ComponentClass, type ComponentType, type ReactNode } from "react";
++import { Component, type ComponentClass, type ComponentType, type ReactNode } from "react";
+ import { StyleSheet, Text, View } from "react-native";
+ import type { ComponentName } from "../shared/core/catalog";
+ import { defineClass } from "../shared/core/define-class";
+diff --git a/client/queue-pill.tsx b/client/queue-pill.tsx
+index d8585a3..02bc3d8 100644
+--- a/client/queue-pill.tsx
++++ b/client/queue-pill.tsx
+@@ -3,7 +3,6 @@
+ import type { PluginClientContext } from "@getpaseo/plugin/client";
+ import type { PluginButtonContentProps, PluginButtonRegistration } from "@getpaseo/plugin/client";
+ import { Icon } from "@getpaseo/plugin/client/react-native";
+-import React from "react";
+ import { Pressable, StyleSheet, Text, View } from "react-native";
+ import { composeReply } from "../shared/logic/reply";
+ import { clearQueue, knownQueueAgents, queueOf, setQueued, subscribeQueues, useReplyQueue } from "./reply-queue";
 diff --git a/client/web.ts b/client/web.ts
 index 9118c79..fc52035 100644
 --- a/client/web.ts
@@ -124,3 +315,16 @@ index 9118c79..fc52035 100644
    if (!win?.location || !win.history || !win.dispatchEvent || !web?.PopStateEvent) return false;
    if (!path.startsWith("/")) return false;
    const match = /^\/h\/[^/]+\/workspace\/[^/]+/.exec(win.location.pathname);
+diff --git a/shared/segment.ts b/shared/segment.ts
+index 43b2867..4e1ae0f 100644
+--- a/shared/segment.ts
++++ b/shared/segment.ts
+@@ -14,7 +14,7 @@ export type MessageSegment =
+       readonly fenceIndex: number;
+     };
+
+-export function segmentMessage(text: string, phase: "streaming" | "complete"): MessageSegment[] {
++export function segmentMessage(text: string, _phase: "streaming" | "complete"): MessageSegment[] {
+   const lines = text.split("\n");
+   const allFences = findFences(lines);
+   const uiFences = allFences.filter((fence) => fence.language === "ui" || fence.language === "app");

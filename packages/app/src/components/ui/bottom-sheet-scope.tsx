@@ -1,4 +1,4 @@
-import React, {
+import {
   createContext,
   useContext,
   useMemo,
@@ -6,6 +6,7 @@ import React, {
   type ReactNode,
 } from "react";
 import type { GestureType } from "react-native-gesture-handler";
+
 
 /**
  * Ref for a drag gesture inside the sheet's content, set through the gesture's `withRef`. Keep it

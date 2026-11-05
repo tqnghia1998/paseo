@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useRef, type ReactNode } from "react";
+import { memo, useCallback, useRef, type ReactNode } from "react";
 import { ScrollView } from "react-native";
 import { Wrench } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";

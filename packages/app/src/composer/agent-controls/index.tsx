@@ -463,6 +463,7 @@ function ControlledAgentControls({
   const densityRef = useRef<ComposerControlDensity>(initialDensity);
   const availableWidthRef = useRef(0);
 
+
   const canSelectModel = Boolean(onSelectModel);
   const canSelectThinking = Boolean(
     onSelectThinkingOption && thinkingOptions && thinkingOptions.length > 0,

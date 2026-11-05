@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useRef } from "react";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { createControlGeometry } from "@/components/ui/control-geometry";
 import {

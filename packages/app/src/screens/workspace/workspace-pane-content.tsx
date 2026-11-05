@@ -1,5 +1,5 @@
 import { ComposerEditingScope } from "@/composer/editing-session";
-import React, { useMemo, type ComponentType } from "react";
+import { useMemo, type ComponentType } from "react";
 import invariant from "tiny-invariant";
 import {
   createPaneFocusContextValue,
