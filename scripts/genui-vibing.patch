@@ -1,8 +1,8 @@
 diff --git a/client/components/content.tsx b/client/components/content.tsx
-index 8c0371b..464fad1 100644
+index 4db4af2..ac4e747 100644
 --- a/client/components/content.tsx
 +++ b/client/components/content.tsx
-@@ -334,12 +334,11 @@ export function File({ props }: { props: Props }) {
+@@ -342,12 +342,11 @@ export function File({ props }: { props: Props }) {
    const line = finiteNumber(props.line);
    const label = line !== null ? `${filePath}:${Math.round(line)}` : filePath;
  
@@ -17,7 +17,7 @@ index 8c0371b..464fad1 100644
        }}
        style={{
          alignSelf: "flex-start",
-@@ -360,23 +359,6 @@ export function File({ props }: { props: Props }) {
+@@ -368,23 +367,6 @@ export function File({ props }: { props: Props }) {
        </RNText>
      </Pressable>
    );
@@ -42,7 +42,7 @@ index 8c0371b..464fad1 100644
  
  export function Entity({ props }: { props: Props }) {
 diff --git a/client/live-ui.tsx b/client/live-ui.tsx
-index 93098a2..a84d913 100644
+index 3c12393..42cbf70 100644
 --- a/client/live-ui.tsx
 +++ b/client/live-ui.tsx
 @@ -1,5 +1,5 @@
@@ -52,7 +52,7 @@ index 93098a2..a84d913 100644
  import { Icon, copyText, useRevealedText, useToast } from "@getpaseo/plugin/client/react-native";
  import { Markdown } from "@getpaseo/plugin/client/ui";
  import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-@@ -485,6 +485,11 @@ export function TimelineBlockItem({
+@@ -509,6 +509,11 @@ export function TimelineBlockItem({
    playAudio: UiRuntime["playAudio"];
  }) {
    const paseo = usePaseo();
@@ -64,7 +64,7 @@ index 93098a2..a84d913 100644
    const { language, code, complete, fenceIndex, messageId } = item.data;
    const stateKey = `paseo.genui:${agentId}:${messageId ?? timestamp.getTime()}:${fenceIndex}`;
  
-@@ -506,7 +511,7 @@ export function TimelineBlockItem({
+@@ -530,7 +535,7 @@ export function TimelineBlockItem({
        stateKey={stateKey}
        scope={{ agentId }}
        send={send}

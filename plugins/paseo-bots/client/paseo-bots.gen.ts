@@ -5104,7 +5104,7 @@ function GhostButton({ colors: colors2, icon, label, onPress }) {
       }),
       children: [
         /* @__PURE__ */ jsx6(Icon4, { name: icon, size: 14, color: tint }),
-        /* @__PURE__ */ jsx6(Text5, { style: { fontSize: ui(14), color: tint }, children: label })
+        /* @__PURE__ */ jsx6(Text5, { style: { fontSize: ui(13), color: tint }, children: label })
       ]
     }
   );
@@ -5251,7 +5251,7 @@ function BotRow({ colors: colors2, tokens, bot, lead, touch, isOpen, aggregate, 
             /* @__PURE__ */ jsx6(Avatar, { avatar: bot.avatar, size: 16 }),
             aggregate ? /* @__PURE__ */ jsx6(StatusBadge2, { colors: colors2, tokens, bucket: aggregate, backdrop }) : null
           ] }) }),
-          /* @__PURE__ */ jsxs5(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: colors2.foregroundMuted, opacity: bot.archived ? 0.6 : 1 }, children: [
+          /* @__PURE__ */ jsxs5(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(13), color: colors2.foregroundMuted, opacity: bot.archived ? 0.6 : 1 }, children: [
             bot.name,
             hostLabel ? ` \xB7 ${hostLabel} offline` : ""
           ] }),
@@ -5338,7 +5338,7 @@ var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selec
           ] }) }) : /* @__PURE__ */ jsx6(ChatStatusSlot, { colors: colors2, tokens, bucket }),
           /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, minWidth: 0 }, children: [
             /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "flex-start", gap: 8 }, children: [
-              /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(14), fontWeight: "400", lineHeight: 20, color: colors2.foreground, opacity: hovered ? 1 : 0.76 }, children: title }),
+              /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(13), fontWeight: "400", lineHeight: 20, color: colors2.foreground, opacity: hovered ? 1 : 0.76 }, children: title }),
               touch ? /* @__PURE__ */ jsx6(View6, { style: { width: 40, height: 20 } }) : null
             ] }),
             hoisted ? /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { fontSize: ui(12), lineHeight: 16, color: colors2.foregroundMuted }, children: bot.name }) : null
@@ -5382,7 +5382,7 @@ function NewChatGhostRow({ colors: colors2, tokens, selected, onPress }) {
       ],
       children: ({ pressed }) => /* @__PURE__ */ jsxs5(Fragment4, { children: [
         /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }, children: /* @__PURE__ */ jsx6(Icon4, { name: "Plus", size: 14, color: hovered || pressed || selected ? colors2.foreground : colors2.foregroundMuted }) }),
-        /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered || pressed || selected ? colors2.foreground : colors2.foregroundMuted }, children: "New chat" })
+        /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(13), color: hovered || pressed || selected ? colors2.foreground : colors2.foregroundMuted }, children: "New chat" })
       ] })
     }
   );
@@ -5415,7 +5415,7 @@ function ShowMoreRow({ colors: colors2, expanded, onPress }) {
       ],
       children: ({ pressed }) => /* @__PURE__ */ jsxs5(Fragment4, { children: [
         /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }, children: /* @__PURE__ */ jsx6(Icon4, { name: expanded ? "ChevronUp" : "ChevronDown", size: 14, color: hovered || pressed ? colors2.foreground : colors2.foregroundMuted }) }),
-        /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered || pressed ? colors2.foreground : colors2.foregroundMuted }, children: label })
+        /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { minWidth: 0, flexShrink: 1, fontSize: ui(13), color: hovered || pressed ? colors2.foreground : colors2.foregroundMuted }, children: label })
       ] })
     }
   );
@@ -12195,7 +12195,7 @@ function TabChip({ colors: colors2, tab, bucket, active, onPress, onMenu }) {
       ],
       children: [
         /* @__PURE__ */ jsx37(View37, { style: { width: 16, height: 16, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx37(TabIcon, { colors: colors2, tab, highlighted, bucket, backdrop: background }) }),
-        /* @__PURE__ */ jsx37(Text29, { numberOfLines: 1, style: { flexShrink: 1, minWidth: 0, fontSize: ui(14), color: highlighted ? colors2.foreground : colors2.foregroundMuted }, children: label })
+        /* @__PURE__ */ jsx37(Text29, { numberOfLines: 1, style: { flexShrink: 1, minWidth: 0, fontSize: ui(13), color: highlighted ? colors2.foreground : colors2.foregroundMuted }, children: label })
       ]
     }
   );
@@ -12226,7 +12226,7 @@ function TeamTabSwitcher({ colors: colors2, tabs, openTab, onTab, onNewTeam, res
       children: [
         /* @__PURE__ */ jsxs35(View37, { style: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 4 }, children: [
           /* @__PURE__ */ jsx37(View37, { style: { flexShrink: 0 }, children: /* @__PURE__ */ jsx37(TabIcon, { colors: colors2, tab: openTab, highlighted: true, bucket: buckets[openTab.id], backdrop: colors2.surface0 }) }),
-          /* @__PURE__ */ jsx37(Text29, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(14), color: colors2.foreground }, children: tabLabel(openTab) })
+          /* @__PURE__ */ jsx37(Text29, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(13), color: colors2.foreground }, children: tabLabel(openTab) })
         ] }),
         /* @__PURE__ */ jsx37(Icon19, { name: "ChevronDown", size: 14, color: colors2.foregroundMuted })
       ]
