@@ -1,8 +1,8 @@
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index a186d56..3976ff4 100644
+index b762da6..96cfe35 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
-@@ -82,10 +82,11 @@ ${LOADERS}
+@@ -85,10 +85,11 @@ ${LOADERS}
  [data-cp-part="queued"] > div:last-child > * * { background-color: transparent !important; }
  [data-cp-part="queued"] > div:last-child > *:hover { background-color: var(--cp-control) !important; }
  [data-cp-part="queued"] > div:last-child svg { width: 14px !important; height: 14px !important; }
@@ -17,7 +17,7 @@ index a186d56..3976ff4 100644
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]) { opacity: 0.45 !important; }
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]):hover { background-color: transparent !important; }
  
-@@ -233,7 +234,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
+@@ -249,7 +250,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
  ${PLAN} > div:last-child { padding: 10px 16px 12px !important; border-top: 1px solid var(--cp-rule) !important; }
  
  [data-testid^="chat-outline-tick-"][aria-selected="true"] > div { background-color: var(--cp-accent) !important; }
@@ -26,7 +26,7 @@ index a186d56..3976ff4 100644
  [data-cp-part="outline-preview"] * { font-size: 13px !important; }
  /* Between ticks, a copy of the last preview glides to the hovered tick until Paseo's next one takes over (ghostOutlinePreview). */
  [data-testid="chat-outline-preview"][data-cp-ghost] { pointer-events: none; animation: none !important; transition: transform 100ms cubic-bezier(0.33, 1, 0.68, 1), opacity 100ms ease-out !important; }
-@@ -282,13 +283,27 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
+@@ -298,13 +299,27 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
  ${USAGE} > div:nth-child(4) { margin-top: -6px !important; }
  `;
  
@@ -56,7 +56,7 @@ index a186d56..3976ff4 100644
  :is([data-cp-set="field"], [data-cp-set="area"]):focus-within { border-color: var(--cp-accent, var(--colors-accent)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-accent, var(--colors-accent)) 25%, transparent) !important; }
  /* The field draws focus; an input inside a wrapper field stays see-through. */
 diff --git a/client/web/selectors.ts b/client/web/selectors.ts
-index ed50550..ec1b988 100644
+index ae261dd..a8e5807 100644
 --- a/client/web/selectors.ts
 +++ b/client/web/selectors.ts
 @@ -29,7 +29,8 @@ export const ADMONITION = `${MD} .enrm-admonition`;
@@ -69,12 +69,28 @@ index ed50550..ec1b988 100644
  export const PERMISSION = '[data-cp-part="permission"]';
  export const PLAN = '[data-testid="permission-plan-card"]';
  export const CTX = '[data-cp-part="context"]';
+diff --git a/index.server.ts b/index.server.ts
+index 28e9004..cb48876 100644
+--- a/index.server.ts
++++ b/index.server.ts
+@@ -35,7 +35,10 @@ export default function contribute(server: PluginServerContext) {
+   server.handle(storedPage, readStoredPage);
+   server.handle(browserStatus, shellStatus);
+   server.handle(installBrowser, () => (void installHeadlessShell(), shellStatus()));
+-  server.handle(removeBrowser, () => removeHeadlessShell().then(shellStatus));
++  server.handle(removeBrowser, async () => {
++    await removeHeadlessShell();
++    return shellStatus();
++  });
+   if (staleShell()) void installHeadlessShell();
+   server.before("agent.create", async ({ request }, { paseo }) => {
+     // Off by default, so unreadable prefs mean off; internal agents (commit and PR messages) never draw.
 diff --git a/test/web.test.mjs b/test/web.test.mjs
-index e421195..118b360 100644
+index 791fe32..24a515b 100644
 --- a/test/web.test.mjs
 +++ b/test/web.test.mjs
-@@ -20,7 +20,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
-     const bundle = String.raw`Object.defineProperty(a,"mermaidRuntimeHtml",{get:function(){return o}});const o='<!doctype html>\n<p class="x" title=\'y\'>\x3c!-- __PASEO_MERMAID_RUNTIME_RECEIVE__ \\x41 \u0041 \u{1F600} \v \/ --\x3e</p>';`;
+@@ -21,7 +21,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
+ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{value:!0}),e.AttachmentLightbox=function(h){const u={a:{b:1}},x=[1,2];return null};var t=r(d[0])},4021,[1008,472]);`;
      const mermaidDoc = "<!doctype html>\n<p class=\"x\" title='y'><!-- __PASEO_MERMAID_RUNTIME_RECEIVE__ \\x41 A \u{1F600} \v / --></p>";
      const html = `<!doctype html><html><head><title>pending</title><script type="text/plain" src="/bundle.js"></script></head><body><img src="/hold" hidden>
 -      <div data-testid="settings-detail-pane"></div>
@@ -86,10 +102,10 @@ index e421195..118b360 100644
        <div data-testid="context-window-details" style="position:absolute;border:1px solid black;border-radius:12px;background:white"><div><span>Context</span><span>35% used</span></div><div data-testid="usage-report-test" style="height:180px">Usage</div></div>
        <div data-testid="assistant-message"><div data-paseo-markdown-tag="blockquote"><span id="marker">[!NO</span></div></div>
        <div><div data-testid="permission-request-deny" style="color:#888"><div><span>Deny</span></div></div><div data-testid="permission-request-action-always" style="color:#888"><div><span>Allow always</span></div></div><div data-testid="permission-request-action-once" style="color:#eee"><div><span>Allow once</span></div></div></div>
-@@ -60,6 +64,43 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
-           localStorage.removeItem('chat-polish:context-card-heights');
-           const first = prompts(); const web = load('web');
+@@ -63,6 +67,43 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
            const restyle = web.restyleNative(() => true); const clamp = web.clampUserMessages(() => true);
+           window.__r = (id) => (id === 4021 ? { AttachmentLightbox: function Lightbox() {} } : {});
+           checks.paseoLightboxFromBundle = (await web.loadPaseoLightbox())?.name === 'Lightbox';
 +          // Embedded Bots does not mount DashboardItem, so setNativeColors never runs.
 +          const queued = document.createElement('div'); queued.style.display = 'flex';
 +          queued.innerHTML = '<div style="color:#eeeeee">Queued prompt</div><div><button aria-label="Edit queued message"><svg stroke="#000"><path d="M0 0L10 10"/></svg></button><button><svg stroke="#000"><path d="M0 0L10 10"/></svg></button></div>';
@@ -130,12 +146,12 @@ index e421195..118b360 100644
            checks.mermaidDocFromBundle = (await web.loadMermaidDoc()) === new TextDecoder().decode(Uint8Array.from(atob("${Buffer.from(mermaidDoc).toString("base64")}"), (ch) => ch.charCodeAt(0)));
            await wait(); checks.observerSettles = !capped;
            // Paseo 0.14 wraps a prompt's rows and text in a message preview that clamps long prompts itself.
-@@ -213,7 +254,7 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
+@@ -251,7 +292,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
      assert.equal(report.error, undefined, report.error);
      assert.deepEqual(report.errors, []);
      for (const [check, passed] of Object.entries(report.checks)) assert.equal(passed, true, check);
--    assert.equal(Object.keys(report.checks).length, 21);
-+    assert.equal(Object.keys(report.checks).length, 30);
+-    assert.equal(Object.keys(report.checks).length, 26);
++    assert.equal(Object.keys(report.checks).length, 35);
    } finally {
      server?.closeAllConnections(); server?.close();
      rmSync(temp, { recursive: true, force: true });
