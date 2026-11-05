@@ -4,7 +4,15 @@ import type {
   SessionOutboundMessage,
 } from "@getpaseo/protocol/messages";
 import { DaemonConnectionError, type DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import { create } from "zustand";
+import { create, type StateCreator } from "zustand";
+import { persist } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { z } from "zod";
+import {
+  createTrackDismissalStorage,
+  type TrackDismissalStorage,
+  type TrackDismissals,
+} from "./track-dismissal-storage";
 import { applyStreamEvent } from "@/types/stream";
 import {
   processTimelineResponse,
@@ -168,191 +176,264 @@ function settleTimeline(
   };
 }
 
-export const useProviderSubagentStore = create<ProviderSubagentState>((set) => ({
-  descriptors: new Map(),
-  timelines: new Map(),
-  hiddenFromTrack: new Set(),
-  trackedParents: new Set(),
-  trackParent(serverId, parentAgentId) {
-    set((state) => {
-      const prefix = parentPrefix(serverId, parentAgentId);
-      if (state.trackedParents.has(prefix)) return state;
-      return { trackedParents: new Set(state.trackedParents).add(prefix) };
-    });
-  },
-  hideFromTrack(serverId, parentAgentId, subagentIds) {
-    set((state) => {
-      const hiddenFromTrack = new Set(state.hiddenFromTrack);
-      for (const subagentId of subagentIds) {
-        const key = providerSubagentKey(serverId, parentAgentId, subagentId);
-        if (state.descriptors.get(key)?.status !== "running") hiddenFromTrack.add(key);
-      }
-      return { hiddenFromTrack };
-    });
-  },
-  replaceList(serverId, parentAgentId, subagents) {
-    set((state) => {
-      const prefix = parentPrefix(serverId, parentAgentId);
-      const descriptors = new Map(
-        [...state.descriptors].filter(([key]) => !key.startsWith(prefix)),
-      );
-      const hiddenFromTrack = new Set(state.hiddenFromTrack);
-      for (const subagent of subagents) {
-        const key = providerSubagentKey(serverId, parentAgentId, subagent.id);
-        descriptors.set(key, subagent);
-        if (subagent.status === "running") {
-          hiddenFromTrack.delete(key);
-        }
-      }
-      const retainedKeys = new Set(descriptors.keys());
-      const timelines = new Map(
-        [...state.timelines].filter(([key]) => !key.startsWith(prefix) || retainedKeys.has(key)),
-      );
-      for (const subagent of subagents) {
-        const key = providerSubagentKey(serverId, parentAgentId, subagent.id);
-        const current = timelines.get(key);
-        const previous = state.descriptors.get(key);
-        if (current && previous?.status !== subagent.status) {
-          timelines.set(key, settleTimeline(current, subagent));
-        }
-      }
-      return { descriptors, timelines, hiddenFromTrack };
-    });
-  },
-  applyUpdate(serverId, payload) {
-    set((state) => {
-      if (payload.kind === "upsert") {
-        const key = providerSubagentKey(
-          serverId,
-          payload.subagent.parentAgentId,
-          payload.subagent.id,
-        );
-        const descriptors = new Map(state.descriptors);
+const providerSubagentState =
+  (
+    onRunning: (key: string) => void,
+    onDismissed: (key: string) => void,
+  ): StateCreator<ProviderSubagentState> =>
+  (set) => ({
+    descriptors: new Map(),
+    timelines: new Map(),
+    hiddenFromTrack: new Set(),
+    trackedParents: new Set(),
+    trackParent(serverId, parentAgentId) {
+      set((state) => {
+        const prefix = parentPrefix(serverId, parentAgentId);
+        if (state.trackedParents.has(prefix)) return state;
+        return { trackedParents: new Set(state.trackedParents).add(prefix) };
+      });
+    },
+    hideFromTrack(serverId, parentAgentId, subagentIds) {
+      set((state) => {
         const hiddenFromTrack = new Set(state.hiddenFromTrack);
-        const previous = descriptors.get(key);
-        descriptors.set(key, payload.subagent);
-        if (payload.subagent.status === "running") {
-          hiddenFromTrack.delete(key);
+        for (const subagentId of subagentIds) {
+          const key = providerSubagentKey(serverId, parentAgentId, subagentId);
+          if (state.descriptors.get(key)?.status !== "running") {
+            hiddenFromTrack.add(key);
+            onDismissed(key);
+          }
         }
-        let timelines = state.timelines;
-        const current = state.timelines.get(key);
-        if (current && previous?.status !== payload.subagent.status) {
-          timelines = new Map(state.timelines);
-          timelines.set(key, settleTimeline(current, payload.subagent));
+        return { hiddenFromTrack };
+      });
+    },
+    replaceList(serverId, parentAgentId, subagents) {
+      set((state) => {
+        const prefix = parentPrefix(serverId, parentAgentId);
+        const descriptors = new Map(
+          [...state.descriptors].filter(([key]) => !key.startsWith(prefix)),
+        );
+        let hiddenFromTrack = state.hiddenFromTrack;
+        for (const subagent of subagents) {
+          const key = providerSubagentKey(serverId, parentAgentId, subagent.id);
+          descriptors.set(key, subagent);
+          if (subagent.status === "running" && state.descriptors.get(key)?.status !== "running")
+            onRunning(key);
+          if (subagent.status === "running" && hiddenFromTrack.has(key)) {
+            hiddenFromTrack = new Set(hiddenFromTrack);
+            hiddenFromTrack.delete(key);
+          }
+        }
+        const retainedKeys = new Set(descriptors.keys());
+        const timelines = new Map(
+          [...state.timelines].filter(([key]) => !key.startsWith(prefix) || retainedKeys.has(key)),
+        );
+        for (const subagent of subagents) {
+          const key = providerSubagentKey(serverId, parentAgentId, subagent.id);
+          const current = timelines.get(key);
+          const previous = state.descriptors.get(key);
+          if (current && previous?.status !== subagent.status) {
+            timelines.set(key, settleTimeline(current, subagent));
+          }
         }
         return { descriptors, timelines, hiddenFromTrack };
-      }
-      if (payload.kind === "remove") {
+      });
+    },
+    applyUpdate(serverId, payload) {
+      set((state) => {
+        if (payload.kind === "upsert") {
+          const key = providerSubagentKey(
+            serverId,
+            payload.subagent.parentAgentId,
+            payload.subagent.id,
+          );
+          const descriptors = new Map(state.descriptors);
+          let hiddenFromTrack = state.hiddenFromTrack;
+          const previous = descriptors.get(key);
+          descriptors.set(key, payload.subagent);
+          if (payload.subagent.status === "running" && previous?.status !== "running")
+            onRunning(key);
+          if (payload.subagent.status === "running" && hiddenFromTrack.has(key)) {
+            hiddenFromTrack = new Set(hiddenFromTrack);
+            hiddenFromTrack.delete(key);
+          }
+          let timelines = state.timelines;
+          const current = state.timelines.get(key);
+          if (current && previous?.status !== payload.subagent.status) {
+            timelines = new Map(state.timelines);
+            timelines.set(key, settleTimeline(current, payload.subagent));
+          }
+          return { descriptors, timelines, hiddenFromTrack };
+        }
+        if (payload.kind === "remove") {
+          const key = providerSubagentKey(serverId, payload.parentAgentId, payload.subagentId);
+          const descriptors = new Map(state.descriptors);
+          descriptors.delete(key);
+          const timelines = new Map(state.timelines);
+          timelines.delete(key);
+          return { descriptors, timelines };
+        }
         const key = providerSubagentKey(serverId, payload.parentAgentId, payload.subagentId);
-        const descriptors = new Map(state.descriptors);
-        descriptors.delete(key);
+        const existing = state.timelines.get(key);
+        if (existing?.epoch && existing.epoch !== payload.epoch) {
+          return state;
+        }
+        const current = existing ?? EMPTY_TIMELINE;
+        if (payload.seq <= current.lastSeq) {
+          return state;
+        }
+        const next = processAgentStreamEvent({
+          currentTail: current.tail,
+          currentHead: current.head,
+          currentCursor: current.cursor,
+          hasAuthoritativeBaseline: current.cursor !== undefined,
+          event: { type: "timeline", provider: payload.provider, item: payload.item },
+          timestamp: new Date(payload.timestamp),
+          seq: payload.seq,
+          epoch: payload.epoch,
+        });
         const timelines = new Map(state.timelines);
-        timelines.delete(key);
-        return { descriptors, timelines };
-      }
-      const key = providerSubagentKey(serverId, payload.parentAgentId, payload.subagentId);
-      const existing = state.timelines.get(key);
-      if (existing?.epoch && existing.epoch !== payload.epoch) {
-        return state;
-      }
-      const current = existing ?? EMPTY_TIMELINE;
-      if (payload.seq <= current.lastSeq) {
-        return state;
-      }
-      const next = processAgentStreamEvent({
-        currentTail: current.tail,
-        currentHead: current.head,
-        currentCursor: current.cursor,
-        hasAuthoritativeBaseline: current.cursor !== undefined,
-        event: { type: "timeline", provider: payload.provider, item: payload.item },
-        timestamp: new Date(payload.timestamp),
-        seq: payload.seq,
-        epoch: payload.epoch,
+        timelines.set(
+          key,
+          settleTimeline(
+            {
+              tail: next.tail,
+              head: next.head,
+              epoch: payload.epoch,
+              lastSeq: payload.seq,
+              cursor: next.cursor ?? current.cursor,
+              hasOlder: current.hasOlder,
+              needsRefresh:
+                current.needsRefresh ||
+                next.sideEffects.some((effect) => effect.type === "catch_up"),
+            },
+            state.descriptors.get(key),
+          ),
+        );
+        return { timelines };
       });
-      const timelines = new Map(state.timelines);
-      timelines.set(
-        key,
-        settleTimeline(
-          {
-            tail: next.tail,
-            head: next.head,
-            epoch: payload.epoch,
-            lastSeq: payload.seq,
-            cursor: next.cursor ?? current.cursor,
-            hasOlder: current.hasOlder,
-            needsRefresh:
-              current.needsRefresh || next.sideEffects.some((effect) => effect.type === "catch_up"),
+    },
+    replaceTimeline(serverId, payload) {
+      const provider = payload.provider;
+      if (!provider) {
+        return;
+      }
+      set((state) => {
+        const key = providerSubagentKey(serverId, payload.parentAgentId, payload.subagentId);
+        const existing = state.timelines.get(key);
+        const current = existing ?? EMPTY_TIMELINE;
+        // Normalize optional wire metadata at the child timeline boundary. Legacy
+        // notices are complete singleton items; history always comes from a projected host.
+        const entries = payload.rows.map((row) => ({
+          ...row,
+          provider,
+          seqStart: row.seqStart ?? row.seq,
+          seqEnd: row.seqEnd ?? row.seq,
+        }));
+        const result = processTimelineResponse({
+          payload: {
+            ...payload,
+            agentId: payload.subagentId,
+            projection: "projected",
+            startCursor:
+              payload.startCursor ??
+              (entries.length
+                ? { seq: Math.min(...entries.map((entry) => entry.seqStart)) }
+                : null),
+            endCursor:
+              payload.endCursor ??
+              (entries.length ? { seq: Math.max(...entries.map((entry) => entry.seqEnd)) } : null),
+            entries,
           },
-          state.descriptors.get(key),
-        ),
-      );
-      return { timelines };
-    });
-  },
-  replaceTimeline(serverId, payload) {
-    const provider = payload.provider;
-    if (!provider) {
-      return;
-    }
-    set((state) => {
-      const key = providerSubagentKey(serverId, payload.parentAgentId, payload.subagentId);
-      const existing = state.timelines.get(key);
-      const current = existing ?? EMPTY_TIMELINE;
-      // Normalize optional wire metadata at the child timeline boundary. Legacy
-      // notices are complete singleton items; history always comes from a projected host.
-      const entries = payload.rows.map((row) => ({
-        ...row,
-        provider,
-        seqStart: row.seqStart ?? row.seq,
-        seqEnd: row.seqEnd ?? row.seq,
-      }));
-      const result = processTimelineResponse({
-        payload: {
-          ...payload,
-          agentId: payload.subagentId,
-          projection: "projected",
-          startCursor:
-            payload.startCursor ??
-            (entries.length ? { seq: Math.min(...entries.map((entry) => entry.seqStart)) } : null),
-          endCursor:
-            payload.endCursor ??
-            (entries.length ? { seq: Math.max(...entries.map((entry) => entry.seqEnd)) } : null),
-          entries,
+          currentTail: current.tail,
+          currentHead: current.head,
+          currentCursor: current.cursor,
+          isInitializing: current.cursor === undefined,
+          hasActiveInitDeferred: current.cursor === undefined,
+          initRequestDirection: "tail",
+          sendingClientMessageIds: [],
+        });
+        const timelines = new Map(state.timelines);
+        timelines.set(
+          key,
+          settleTimeline(
+            {
+              tail: result.tail,
+              head: result.head,
+              epoch: payload.epoch,
+              lastSeq:
+                payload.reset || current.epoch !== payload.epoch
+                  ? (result.cursor?.endSeq ?? 0)
+                  : Math.max(current.lastSeq, result.cursor?.endSeq ?? 0),
+              cursor: result.cursor ?? undefined,
+              hasOlder:
+                result.older === "unchanged" ? current.hasOlder : result.older === "available",
+              needsRefresh:
+                result.sideEffects.some((effect) => effect.type === "catch_up") &&
+                (payload.hasNewer || current.lastSeq > (result.cursor?.endSeq ?? 0)),
+            },
+            state.descriptors.get(key),
+          ),
+        );
+        return { timelines };
+      });
+    },
+  });
+
+const HiddenSubagentsSchema = z.strictObject({ hiddenFromTrack: z.array(z.string()) });
+type HiddenSubagents = TrackDismissals;
+
+export function createProviderSubagentStore(storage: TrackDismissalStorage = AsyncStorage) {
+  let previousHidden: Set<string> | undefined;
+  let persisted: HiddenSubagents;
+  let hydrated = false;
+  const resumedDuringHydration = new Set<string>();
+  const dismissalStorage = createTrackDismissalStorage(storage);
+  const onRunning = (key: string) => {
+    if (!hydrated) resumedDuringHydration.add(key);
+    void dismissalStorage.reveal(key);
+  };
+  const store = create<ProviderSubagentState>()(
+    persist(
+      providerSubagentState(onRunning, (key) => resumedDuringHydration.delete(key)),
+      {
+        name: "provider-subagent-track-dismissals",
+        skipHydration: true,
+        storage: dismissalStorage,
+        partialize: (state): HiddenSubagents => {
+          // Streaming updates must not rewrite unchanged dismissals on every event.
+          if (previousHidden !== state.hiddenFromTrack) {
+            previousHidden = state.hiddenFromTrack;
+            persisted = { hiddenFromTrack: [...state.hiddenFromTrack] };
+          }
+          return persisted;
         },
-        currentTail: current.tail,
-        currentHead: current.head,
-        currentCursor: current.cursor,
-        isInitializing: current.cursor === undefined,
-        hasActiveInitDeferred: current.cursor === undefined,
-        initRequestDirection: "tail",
-        sendingClientMessageIds: [],
-      });
-      const timelines = new Map(state.timelines);
-      timelines.set(
-        key,
-        settleTimeline(
-          {
-            tail: result.tail,
-            head: result.head,
-            epoch: payload.epoch,
-            lastSeq:
-              payload.reset || current.epoch !== payload.epoch
-                ? (result.cursor?.endSeq ?? 0)
-                : Math.max(current.lastSeq, result.cursor?.endSeq ?? 0),
-            cursor: result.cursor ?? undefined,
-            hasOlder:
-              result.older === "unchanged" ? current.hasOlder : result.older === "available",
-            needsRefresh:
-              result.sideEffects.some((effect) => effect.type === "catch_up") &&
-              (payload.hasNewer || current.lastSeq > (result.cursor?.endSeq ?? 0)),
-          },
-          state.descriptors.get(key),
-        ),
-      );
-      return { timelines };
-    });
-  },
-}));
+        merge: (saved, current) => {
+          const parsed = HiddenSubagentsSchema.safeParse(saved);
+          const hiddenFromTrack = new Set([
+            ...(parsed.success ? parsed.data.hiddenFromTrack : []),
+            ...current.hiddenFromTrack,
+          ]);
+          // A child may already have resumed while asynchronous storage was loading.
+          for (const [key, descriptor] of current.descriptors) {
+            if (descriptor.status === "running") hiddenFromTrack.delete(key);
+          }
+          for (const key of resumedDuringHydration) hiddenFromTrack.delete(key);
+          return { ...current, hiddenFromTrack };
+        },
+      },
+    ),
+  );
+  // Save the merged result too: a child can resume or be dismissed during hydration.
+  void Promise.resolve(store.persist.rehydrate()).then(() => {
+    hydrated = true;
+    resumedDuringHydration.clear();
+    if (store.persist.hasHydrated()) store.setState({});
+    return undefined;
+  });
+  return store;
+}
+
+export const useProviderSubagentStore = createProviderSubagentStore();
 
 /** Owns child history bootstrap and recovery while a pane observes the child. */
 export async function loadOlderProviderSubagentTimeline({

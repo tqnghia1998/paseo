@@ -234,7 +234,7 @@ index 9d97c7f..7dc6b33 100644
      </Modal>
    );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 7533cb6..24c41b7 100644
+index 7533cb6..aa853f2 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
 @@ -1,7 +1,7 @@
@@ -407,6 +407,15 @@ index 7533cb6..24c41b7 100644
          noSelect,
        ]}
      >
+@@ -232,7 +243,7 @@ function GhostButton({ colors, icon, label, onPress }: { colors: Colors; icon: s
+       })}
+     >
+       <Icon name={icon} size={14} color={tint} />
+-      <Text style={{ fontSize: ui(14), color: tint }}>{label}</Text>
++      <Text style={{ fontSize: ui(13), color: tint }}>{label}</Text>
+     </Pressable>
+   );
+ }
 @@ -272,11 +283,12 @@ function PinnedSection(props: PinnedProps) {
    );
  }
@@ -458,6 +467,15 @@ index 7533cb6..24c41b7 100644
              />
            ))}
            {ordered.length > SIDEBAR_GROUP_LIMIT ? <ShowMoreRow colors={colors} expanded={expanded} onPress={() => setExpanded(!expanded)} /> : null}
+@@ -398,7 +413,7 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
+             </View>
+           )}
+         </View>
+-        <Text numberOfLines={1} style={{ minWidth: 0, flexShrink: 1, fontSize: ui(14), color: colors.foregroundMuted, opacity: bot.archived ? 0.6 : 1 }}>
++        <Text numberOfLines={1} style={{ minWidth: 0, flexShrink: 1, fontSize: ui(13), color: colors.foregroundMuted, opacity: bot.archived ? 0.6 : 1 }}>
+           {bot.name}
+           {hostLabel ? ` · ${hostLabel} offline` : ""}
+         </Text>
 @@ -452,10 +467,11 @@ interface ChatRowProps {
    hoisted?: boolean;
    onPress(): void;
@@ -471,7 +489,12 @@ index 7533cb6..24c41b7 100644
    const [hovered, setHovered] = useState(false);
    const kebabRef = useRef<View>(null);
    const bucket = chatBucket(chat);
-@@ -508,7 +524,7 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -504,11 +520,11 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+         )}
+         <View style={{ flex: 1, minWidth: 0 }}>
+           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+-            <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: ui(14), fontWeight: "400", lineHeight: 20, color: colors.foreground, opacity: hovered ? 1 : 0.76 }}>
++            <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: ui(13), fontWeight: "400", lineHeight: 20, color: colors.foreground, opacity: hovered ? 1 : 0.76 }}>
                {title}
              </Text>
              {/* On touch the kebab stays, so its space is reserved; on desktop it overlays the title's tail. */}
@@ -492,6 +515,24 @@ index 7533cb6..24c41b7 100644
              <KebabButton colors={colors} buttonRef={kebabRef} label="Chat actions" onPress={() => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab"))} />
            </View>
          </View>
+@@ -561,7 +578,7 @@ function NewChatGhostRow({ colors, tokens, selected, onPress }: { colors: Colors
+           <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+             <Icon name="Plus" size={14} color={hovered || pressed || selected ? colors.foreground : colors.foregroundMuted} />
+           </View>
+-          <Text numberOfLines={1} style={{ minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered || pressed || selected ? colors.foreground : colors.foregroundMuted }}>
++          <Text numberOfLines={1} style={{ minWidth: 0, flexShrink: 1, fontSize: ui(13), color: hovered || pressed || selected ? colors.foreground : colors.foregroundMuted }}>
+             New chat
+           </Text>
+         </>
+@@ -602,7 +619,7 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+           <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+             <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={hovered || pressed ? colors.foreground : colors.foregroundMuted} />
+           </View>
+-          <Text numberOfLines={1} style={{ minWidth: 0, flexShrink: 1, fontSize: ui(14), color: hovered || pressed ? colors.foreground : colors.foregroundMuted }}>
++          <Text numberOfLines={1} style={{ minWidth: 0, flexShrink: 1, fontSize: ui(13), color: hovered || pressed ? colors.foreground : colors.foregroundMuted }}>
+             {label}
+           </Text>
+         </>
 @@ -611,6 +628,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
    );
  }
@@ -1431,7 +1472,7 @@ index 8600f6d..1ba3ca7 100644
  export type PaseoAgentSendOptions = NonNullable<Parameters<PaseoAgentHandle["send"]>[1]>;
  export type PaseoAgentPermissionResponse = Parameters<PaseoAgentHandle["respondToPermission"]>[0]["response"];
 diff --git a/client/teams/TeamTabs.tsx b/client/teams/TeamTabs.tsx
-index cbd8ce5..a2927d4 100644
+index cbd8ce5..ec218cd 100644
 --- a/client/teams/TeamTabs.tsx
 +++ b/client/teams/TeamTabs.tsx
 @@ -4,11 +4,15 @@ import { useRef } from "react";
@@ -1511,15 +1552,18 @@ index cbd8ce5..a2927d4 100644
        accessibilityState={{ selected: active }}
        {...tooltip(label, "bottom", { delay: 400 })}
        onPress={onPress}
-@@ -80,7 +96,7 @@ function TabChip({ colors, tab, active, onPress, onMenu }: { colors: Colors; tab
+@@ -80,9 +96,9 @@ function TabChip({ colors, tab, active, onPress, onMenu }: { colors: Colors; tab
        ]}
      >
        <View style={{ width: 16, height: 16, flexShrink: 0, alignItems: "center", justifyContent: "center" }}>
 -        <TabIcon colors={colors} tab={tab} highlighted={highlighted} />
 +        <TabIcon colors={colors} tab={tab} highlighted={highlighted} bucket={bucket} backdrop={background} />
        </View>
-       <Text numberOfLines={1} style={{ flexShrink: 1, minWidth: 0, fontSize: ui(14), color: highlighted ? colors.foreground : colors.foregroundMuted }}>
+-      <Text numberOfLines={1} style={{ flexShrink: 1, minWidth: 0, fontSize: ui(14), color: highlighted ? colors.foreground : colors.foregroundMuted }}>
++      <Text numberOfLines={1} style={{ flexShrink: 1, minWidth: 0, fontSize: ui(13), color: highlighted ? colors.foreground : colors.foregroundMuted }}>
          {label}
+       </Text>
+     </Pressable>
 @@ -90,8 +106,9 @@ function TabChip({ colors, tab, active, onPress, onMenu }: { colors: Colors; tab
  }
  
@@ -1540,15 +1584,18 @@ index cbd8ce5..a2927d4 100644
            { kind: "separator" as const },
            { label: "New team", icon: "Plus", onSelect: onNewTeam },
          ],
-@@ -116,7 +133,7 @@ export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam }: Tea
+@@ -116,9 +133,9 @@ export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam }: Tea
        >
          <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 4 }}>
            <View style={{ flexShrink: 0 }}>
 -            <TabIcon colors={colors} tab={openTab} highlighted />
 +            <TabIcon colors={colors} tab={openTab} highlighted bucket={buckets[openTab.id]} backdrop={colors.surface0} />
            </View>
-           <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: ui(14), color: colors.foreground }}>
+-          <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: ui(14), color: colors.foreground }}>
++          <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: ui(13), color: colors.foreground }}>
              {tabLabel(openTab)}
+           </Text>
+         </View>
 diff --git a/client/teams/tabChats.ts b/client/teams/tabChats.ts
 new file mode 100644
 index 0000000..ad544ef
