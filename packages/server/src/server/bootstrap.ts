@@ -236,6 +236,7 @@ import {
   pruneMissingWorktreeAgents,
   registerWorktreeRoutes,
 } from "../patches/vibing/worktree-runtime.js";
+import { registerUsageSummaryRoute } from "../patches/vibing/usage-summary.js";
 import { configureGitProcessPolicy } from "../utils/run-git-command.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
@@ -1332,6 +1333,13 @@ export async function createPaseoDaemon(
     agentStorage,
     workspaceRegistry,
     archiveWorkspace: archiveWorkspaceByIdExternal,
+  });
+  registerUsageSummaryRoute({
+    app,
+    token: config.worktreeCleanupToken,
+    logger,
+    isEnabled: () => daemonConfigStore.get().usage?.enabled !== false,
+    listUsageReports: () => pluginRuntime.listUsageReports(),
   });
   registerWorktreeRoutes({
     app,

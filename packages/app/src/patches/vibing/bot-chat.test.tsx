@@ -45,7 +45,6 @@ vi.mock("expo-router", async () => ({
   useRouter: () => ({ push: vi.fn() }),
   ...(await vi.importActual("expo-router/build/react-navigation/core/useIsFocused")),
 }));
-vi.mock("./bot-usage-card", () => ({ BotUsageCard: () => null }));
 vi.mock("@/composer/editing-session", () => ({
   useComposerEditingEnvironmentBridge: () => (node: ReactNode) => node,
 }));
@@ -127,7 +126,6 @@ vi.mock("@/stores/session-store", () => ({
     }),
 }));
 import { NativeBotChat, embeddedBotChatProps } from "./bot-chat";
-import { BotUsageCard } from "./bot-usage-card";
 
 // Expo Router owns a different navigation context from @react-navigation/native.
 const navigation = {
@@ -205,12 +203,12 @@ it("provides the workspace sheet host required by existing chats and subagent tr
   );
 });
 
-it("only supplies the native chat and sidebar usage slots to Bots", () => {
+it("only supplies the native chat slots to Bots, without a sidebar usage footer", () => {
   expect(embeddedBotChatProps("paseo-bots")).toMatchObject({
     nativeChat: NativeBotChat,
     botWorkspace: { id: "", directory: "" },
-    sidebarFooter: BotUsageCard,
   });
+  expect(embeddedBotChatProps("paseo-bots")).not.toHaveProperty("sidebarFooter");
   expect(embeddedBotChatProps("mermaid")).toEqual({});
 });
 

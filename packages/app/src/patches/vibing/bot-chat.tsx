@@ -36,7 +36,6 @@ import {
 } from "./bot-chat-panels";
 import { registerEmbeddedTargetOpener } from "./embedded-targets";
 import { openFileInHost } from "./host-file-open";
-import { BotUsageCard } from "./bot-usage-card";
 import type { NativeBotChatProps } from "./bot-chat-types";
 import { botChatDraftId } from "./bot-chat-scope";
 import { SheetPaneHostProvider, type SheetPaneHost } from "@/screens/workspace/sheet-pane/host";
@@ -59,7 +58,6 @@ export function embeddedBotChatProps(pluginId: string) {
       ...(isEmbeddedLiveDesignMessaging ? { chatContext: "live-design" as const } : {}),
     },
     workspaceBridge: BotWorkspaceBridge,
-    sidebarFooter: BotUsageCard,
   };
 }
 
