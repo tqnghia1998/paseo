@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createInstance } from "i18next";
 import { I18nextProvider } from "react-i18next";

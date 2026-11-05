@@ -1,13 +1,63 @@
 diff --git a/client/web.ts b/client/web.ts
-index e539772..00304aa 100644
+index e539772..e856fa6 100644
 --- a/client/web.ts
 +++ b/client/web.ts
-@@ -112,7 +112,7 @@ export function collapseParent(node: unknown): void {
+@@ -12,7 +12,6 @@ import {
+   isVisible,
+   isWebDom,
+   openAgentTab,
+-  readSendBehavior,
+   web,
+   type DomElement,
+ } from "./web/dom";
+@@ -110,9 +109,9 @@ export function collapseParent(node: unknown): void {
+   element.parentElement?.style.setProperty("display", "none");
+ }
 
- /** Settings → Sending → Default send where the app stores it; its default elsewhere. */
+-/** Settings → Sending → Default send where the app stores it; its default elsewhere. */
++/** Annotations are queued until the current turn ends. */
  export function defaultSendBehavior(): SendBehavior {
 -  return Platform.OS === "web" && isWebDom() ? readSendBehavior() : "steer";
 +  return "queue";
  }
 
  /** Focuses the agent's composer once its tab is showing, or gives up quietly. */
+diff --git a/client/web/dom.ts b/client/web/dom.ts
+index a4468fb..9314619 100644
+--- a/client/web/dom.ts
++++ b/client/web/dom.ts
+@@ -49,8 +49,6 @@ const CODE_LANGUAGE_ATTRIBUTE = "data-paseo-markdown-language";
+ const CODE_SURFACE = "[data-pmono]";
+ /** The app opens an agent's tab when a web notification is clicked. */
+ const OPEN_AGENT_EVENT = "paseo:web-notification-click";
+-/** Where the app keeps Settings; the legacy key predates the current one. */
+-const APP_SETTINGS_KEYS = ["@paseo:app-settings", "@paseo:settings"];
+
+ // ---------------------------------------------------------------------------
+ // Declarations
+@@ -344,25 +342,6 @@ export function openAgentTab(target: { serverId: string; workspaceId: string; ag
+   );
+ }
+
+-/** Settings → Sending → Default send, as the composer reads it. */
+-export function readSendBehavior(): "interrupt" | "steer" | "queue" {
+-  for (const key of APP_SETTINGS_KEYS) {
+-    try {
+-      const raw = web.localStorage.getItem(key);
+-      if (raw === null) continue;
+-      const settings: unknown = JSON.parse(raw);
+-      const value =
+-        settings && typeof settings === "object" && "sendBehavior" in settings
+-          ? settings.sendBehavior
+-          : undefined;
+-      return value === "interrupt" || value === "queue" ? value : "steer";
+-    } catch {
+-      // Unreadable settings fall through to the app's own default.
+-    }
+-  }
+-  return "steer";
+-}
+-
+ export interface PassageSource {
+   /** Markdown when the host could serialize the selection, rendered text otherwise. */
+   quote: string;

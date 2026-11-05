@@ -1,5 +1,5 @@
 import type { WorkspaceCompactHeaderActions } from "./adaptive-workspace-chrome";
-import React, { useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";

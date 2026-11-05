@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useState, type RefObject } from "react";
+import { useCallback, useLayoutEffect, useState, type RefObject } from "react";
 import { OverlayScrollbar, type OverlayScrollbarMetrics } from "./overlay-scrollbar";
 
 export function DomOverlayScrollbar({

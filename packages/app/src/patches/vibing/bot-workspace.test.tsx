@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React, { type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({

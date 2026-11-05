@@ -11,6 +11,7 @@ import {
 import React, { useMemo, type ReactNode } from "react";
 import { createPluginClientStateSource } from "./client-state/source";
 import { pluginComposersSource } from "./composer-items/source";
+
 import type { InstalledPlugin } from "./types";
 
 /**

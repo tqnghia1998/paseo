@@ -21,7 +21,7 @@ export function dragStateInitial<T>(): DragState<T> {
   return { activeId: null, dragItems: null, dropped: null };
 }
 
-export function dragStateReducer<T>(state: DragState<T>, action: DragAction<T>): DragState<T> {
+export function dragStateReducer<T>(_state: DragState<T>, action: DragAction<T>): DragState<T> {
   switch (action.type) {
     case "start":
       return { activeId: action.id, dragItems: action.items, dropped: null };
