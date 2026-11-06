@@ -99,8 +99,7 @@ Bots and the palette remain built-ins because embedded navigation depends on the
 The Bots sidebar has no usage cards. Space App Vibing draws the Codex and AIS Switch
 allowances in its own tool rail from `GET /api/usage/summary` (loopback, host token,
 the one-minute report cache): the spending allowance, else the source's first limit,
-as percent left, tone and spending balance. The Bots patch keeps its optional
-`sidebarFooter` slot without a consumer.
+as percent left, tone and spending balance. The Bots patch has no sidebar footer slot.
 The built-in list also keeps the Claude, Codex and AIS Switch usage sources; the other
 upstream provider and usage-source plugins stay in `plugins/` for their tests, and
 the bundler copies only listed built-ins.
