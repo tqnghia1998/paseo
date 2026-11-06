@@ -10853,7 +10853,7 @@ function Header({ colors: colors2, title, subtitle, hostBadge, compact: compact2
   const menuButton = useRef13(null);
   const openMenu = () => void measureAnchor(menuButton).then(onMenu);
   const separator = /* @__PURE__ */ jsx26(Text24, { style: { fontSize: ui(12), color: tokens.foregroundExtraMuted }, children: " \xB7 " });
-  return /* @__PURE__ */ jsxs25(View26, { style: { height: compact2 ? 56 : 36, flexDirection: "row", alignItems: "center", gap: compact2 ? 4 : 8, paddingHorizontal: compact2 ? 4 : 12, borderBottomWidth: 1, borderBottomColor: colors2.border, backgroundColor: colors2.surface0 }, children: [
+  return /* @__PURE__ */ jsxs25(View26, { style: { height: compact2 ? 56 : 40, flexDirection: "row", alignItems: "center", gap: compact2 ? 4 : 8, paddingHorizontal: compact2 ? 4 : 12, borderBottomWidth: 1, borderBottomColor: colors2.border, backgroundColor: colors2.surface0 }, children: [
     onBack ? /* @__PURE__ */ jsx26(
       Pressable17,
       {
@@ -11855,7 +11855,7 @@ function TeamMap({
   const loose = live.filter((bot) => !teamed.has(bot.id));
   const card = (bot, lead = false) => /* @__PURE__ */ jsx34(BotCard, { colors: colors2, bot, lead, localHost, onPress: () => onOpenBot(bot) }, bot.id);
   return /* @__PURE__ */ jsxs32(View34, { style: { flex: 1, backgroundColor: colors2.surface0 }, children: [
-    /* @__PURE__ */ jsxs32(View34, { style: { height: compact2 ? 56 : 36, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: compact2 ? 4 : 12, borderBottomWidth: 1, borderBottomColor: colors2.border }, children: [
+    /* @__PURE__ */ jsxs32(View34, { style: { height: compact2 ? 56 : 40, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: compact2 ? 4 : 12, borderBottomWidth: 1, borderBottomColor: colors2.border }, children: [
       onBack ? /* @__PURE__ */ jsx34(Pressable19, { accessibilityRole: "button", accessibilityLabel: "Back to bots", ...tooltip("Back to bots", "bottom"), onPress: onBack, style: ({ pressed }) => ({ padding: 12, borderRadius: 8, backgroundColor: pressed ? tokens.interactionHighlight : "transparent" }), children: /* @__PURE__ */ jsx34(Icon18, { name: "ArrowLeft", size: 20, color: colors2.foregroundMuted }) }) : null,
       /* @__PURE__ */ jsx34(Text28, { style: { fontSize: ui(14), fontWeight: "300", color: colors2.foreground }, children: "Team map" }),
       compact2 ? null : /* @__PURE__ */ jsx34(Text28, { style: { fontSize: ui(14), color: colors2.foregroundMuted }, children: "Your bots, their teams and who leads them" }),
@@ -12156,7 +12156,7 @@ function TabIcon({ colors: colors2, tab, highlighted, bucket, backdrop }) {
 function TeamTabsRow({ colors: colors2, tabs, openTab, onTab, onTeamMenu, onNewTeam, resolveHost: resolveHost2 }) {
   const add = useHover();
   const buckets = useTabBuckets(tabs, resolveHost2);
-  return /* @__PURE__ */ jsxs35(View37, { accessibilityRole: "tablist", style: { height: 36, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors2.border, backgroundColor: colors2.surface0 }, children: [
+  return /* @__PURE__ */ jsxs35(View37, { accessibilityRole: "tablist", style: { height: 40, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors2.border, backgroundColor: colors2.surface0 }, children: [
     /* @__PURE__ */ jsx37(ScrollView8, { horizontal: true, showsHorizontalScrollIndicator: false, style: { flexGrow: 0, flexShrink: 1 }, contentContainerStyle: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }, children: tabs.map((tab) => /* @__PURE__ */ jsx37(TabChip, { colors: colors2, tab, bucket: buckets[tab.id], active: tab.id === openTab.id, onPress: () => onTab(tab.id), onMenu: tab.group ? (anchor) => onTeamMenu(tab.group, anchor) : void 0 }, tab.id)) }),
     /* @__PURE__ */ jsx37(View37, { style: { paddingHorizontal: 4 }, children: /* @__PURE__ */ jsx37(
       Pressable21,
@@ -13859,7 +13859,7 @@ function PanelHeader({ colors: colors2, compact: compact2, title, onBack, onClos
     View44,
     {
       style: {
-        height: compact2 ? 56 : 36,
+        height: compact2 ? 56 : 40,
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
