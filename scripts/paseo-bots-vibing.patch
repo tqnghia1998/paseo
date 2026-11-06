@@ -1133,7 +1133,7 @@ index ebc4ed2..72a6b45 100644
    );
  }
 diff --git a/client/ChatPane.tsx b/client/ChatPane.tsx
-index 7d1bf84..c6e4f82 100644
+index 7d1bf84..3004cf2 100644
 --- a/client/ChatPane.tsx
 +++ b/client/ChatPane.tsx
 @@ -3,8 +3,8 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
@@ -1215,6 +1215,15 @@ index 7d1bf84..c6e4f82 100644
      </View>
    );
  }
+@@ -113,7 +125,7 @@ function Header({ colors, title, subtitle, hostBadge, compact, panelOpen, onBack
+   const openMenu = () => void measureAnchor(menuButton).then(onMenu);
+   const separator = <Text style={{ fontSize: ui(12), color: tokens.foregroundExtraMuted }}> · </Text>;
+   return (
+-    <View style={{ height: compact ? 56 : 36, flexDirection: "row", alignItems: "center", gap: compact ? 4 : 8, paddingHorizontal: compact ? 4 : 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface0 }}>
++    <View style={{ height: compact ? 56 : 40, flexDirection: "row", alignItems: "center", gap: compact ? 4 : 8, paddingHorizontal: compact ? 4 : 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface0 }}>
+       {onBack ? (
+         <Pressable
+           accessibilityRole="button"
 diff --git a/client/NativeChat.ts b/client/NativeChat.ts
 new file mode 100644
 index 0000000..1f1bc75
@@ -1386,6 +1395,19 @@ index ee24cd8..c0cf7b4 100644
        <SettingsCard>
          <SettingsSelect
            label="Folder"
+diff --git a/client/panel/BotPanel.tsx b/client/panel/BotPanel.tsx
+index 8938e61..544aaae 100644
+--- a/client/panel/BotPanel.tsx
++++ b/client/panel/BotPanel.tsx
+@@ -248,7 +248,7 @@ function PanelHeader({ colors, compact, title, onBack, onClose }: { colors: Colo
+   return (
+     <View
+       style={{
+-        height: compact ? 56 : 36,
++        height: compact ? 56 : 40,
+         flexDirection: "row",
+         alignItems: "center",
+         gap: 8,
 diff --git a/client/panel/OverviewSections.tsx b/client/panel/OverviewSections.tsx
 index 215e3f6..afd9c38 100644
 --- a/client/panel/OverviewSections.tsx
@@ -1459,8 +1481,21 @@ index 8600f6d..1ba3ca7 100644
  export type PaseoAgent = Exclude<Parameters<PaseoApi["agents"]["ref"]>[0], string>;
  export type PaseoAgentSendOptions = NonNullable<Parameters<PaseoAgentHandle["send"]>[1]>;
  export type PaseoAgentPermissionResponse = Parameters<PaseoAgentHandle["respondToPermission"]>[0]["response"];
+diff --git a/client/teams/TeamMap.tsx b/client/teams/TeamMap.tsx
+index e3621c0..5ffb57b 100644
+--- a/client/teams/TeamMap.tsx
++++ b/client/teams/TeamMap.tsx
+@@ -51,7 +51,7 @@ export function TeamMap({
+ 
+   return (
+     <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
+-      <View style={{ height: compact ? 56 : 36, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: compact ? 4 : 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
++      <View style={{ height: compact ? 56 : 40, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: compact ? 4 : 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+         {onBack ? (
+           <Pressable accessibilityRole="button" accessibilityLabel="Back to bots" {...tooltip("Back to bots", "bottom")} onPress={onBack} style={({ pressed }) => ({ padding: 12, borderRadius: 8, backgroundColor: pressed ? tokens.interactionHighlight : "transparent" })}>
+             <Icon name="ArrowLeft" size={20} color={colors.foregroundMuted} />
 diff --git a/client/teams/TeamTabs.tsx b/client/teams/TeamTabs.tsx
-index cbd8ce5..ec218cd 100644
+index cbd8ce5..6e5457e 100644
 --- a/client/teams/TeamTabs.tsx
 +++ b/client/teams/TeamTabs.tsx
 @@ -4,11 +4,15 @@ import { useRef } from "react";
@@ -1508,13 +1543,15 @@ index cbd8ce5..ec218cd 100644
 +  );
  }
  
- /** The desktop row: 36 high over a divider, 28pt chips 96 to 160 wide, then an inline + for a new team. */
+-/** The desktop row: 36 high over a divider, 28pt chips 96 to 160 wide, then an inline + for a new team. */
 -export function TeamTabsRow({ colors, tabs, openTab, onTab, onTeamMenu, onNewTeam }: TeamTabsProps) {
++/** The desktop row: 40 high over a divider (matching Vibing's vertical feature panel header), 28pt chips 96 to 160 wide, then an inline + for a new team. */
 +export function TeamTabsRow({ colors, tabs, openTab, onTab, onTeamMenu, onNewTeam, resolveHost }: TeamTabsProps) {
    const add = useHover();
 +  const buckets = useTabBuckets(tabs, resolveHost);
    return (
-     <View accessibilityRole="tablist" style={{ height: 36, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface0 }}>
+-    <View accessibilityRole="tablist" style={{ height: 36, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface0 }}>
++    <View accessibilityRole="tablist" style={{ height: 40, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface0 }}>
        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }}>
          {tabs.map((tab) => (
 -          <TabChip key={tab.id} colors={colors} tab={tab} active={tab.id === openTab.id} onPress={() => onTab(tab.id)} onMenu={tab.group ? (anchor) => onTeamMenu(tab.group!, anchor) : undefined} />
