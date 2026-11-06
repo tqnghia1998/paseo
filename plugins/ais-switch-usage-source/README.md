@@ -16,7 +16,8 @@ with the saved `CQP_SESSION` cookie, `X-CQP-Auth: 1`, and a JSON body containing
 `usage`, and `balance` are USD. Preserve those reported amounts; do not estimate
 cost from local requests. The service does not supply a reset timestamp.
 
-Implementation uses native usage-source registration and existing sidebar card styles,
+Implementation uses native usage-source registration (Paseo's Usage window and Vibing's
+tool rail read its reports),
 Node filesystem/crypto/HTTPS APIs, strict Zod input/response schemas, and no new dependencies.
 Credentials and keys remain on the daemon, never in usage account inputs, reports or logs.
 Requests stay on the fixed gateway origin and do not follow redirects. Use system CA
