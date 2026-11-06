@@ -34,7 +34,7 @@ const plugins = [
     id: "shell-yeah",
     repository: "stevecastaneda/paseo-plugins",
     directory: "shell-yeah",
-    revision: "aa56a356cf1b3b658776c31dd238b9bea758322d",
+    revision: "af07fc9218fb1b8cdd2b77cdd0cb506dccb76bd8",
     patch: "shell-yeah-vibing.patch",
   },
   {

@@ -1,11 +1,11 @@
 diff --git a/shell-yeah/client/run-row.tsx b/shell-yeah/client/run-row.tsx
-index 2a2f6ea..767d736 100644
+index f8ceef2..54a6f72 100644
 --- a/shell-yeah/client/run-row.tsx
 +++ b/shell-yeah/client/run-row.tsx
 @@ -3,11 +3,11 @@ import { Icon, copyText, useToast } from "@getpaseo/plugin/client/ui";
  import React, { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
  import { Animated, Easing, Platform, Pressable, Text, TextInput, View, type LayoutChangeEvent } from "react-native";
- import { terminalKeys, type KeyPress } from "../shared/keys.ts";
+ import { pastedKeys, terminalKeys, type KeyPress } from "../shared/keys.ts";
 -import { basename, errorMessage } from "../shared/text.ts";
 +import { errorMessage } from "../shared/text.ts";
  import { LIMITS } from "../shared/limits.ts";
@@ -15,7 +15,7 @@ index 2a2f6ea..767d736 100644
 +import { agentName, describe, formatDuration, pastRow, pastRunView, statusText, switcher, type Action, type NoteIcon, type Presentation, type RunInView } from "../shared/view.ts";
  import { useResolvedRun, useRunUi } from "./live.ts";
  import { OutputWell } from "./output.tsx";
- import { makePalette, mix, withAlpha, type ThemeColors } from "./palette.ts";
+ import { PasteButton } from "./paste.tsx";
 diff --git a/shell-yeah/client/run-window.tsx b/shell-yeah/client/run-window.tsx
 index e970c76..05d5596 100644
 --- a/shell-yeah/client/run-window.tsx
