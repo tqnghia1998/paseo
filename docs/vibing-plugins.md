@@ -87,6 +87,10 @@ to one worktree per frame and to the host's native chat.
   Other bots), then one per team. Tabs remember their last opened chat per workspace and chat
   context (`client/teams/tabChats.ts`), fall back to the tab's most recently active chat, and
   carry the most urgent status of their chats as a badge (`tabStatus.ts`, `shared/groups.ts`).
+- **Header height.** On desktop the team tab bar (`client/teams/TeamTabs.tsx`), the chat header
+  (`ChatPane.tsx`), the bot settings panel header (`panel/BotPanel.tsx`) and the team map header
+  (`teams/TeamMap.tsx`) are 40px instead of 36px, matching Vibing's vertical feature panel
+  header; the compact (phone) headers stay 56px.
 - **Per-conversation runtime choice.** A chat's provider, model, mode and thinking choice is
   frozen for that conversation and passed to the chats it delegates to, without rewriting the
   bot's saved defaults (`botForChat`, `delegatedAgentSettings`, `server/chats.ts`).
