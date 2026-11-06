@@ -18,7 +18,7 @@ is the per-plugin reference and the upgrade procedure.
 | Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`                |
 | Recap (`paseo-recap`)                             | [kingsleydon/paseo-plugins](https://github.com/kingsleydon/paseo-plugins) `plugins/recap` `ceb91be`    | 0.2.5         | Community install          | Small: `scripts/paseo-recap-vibing.patch`        |
 | PDF and Office viewer (`paseo-doc-viewer`)        | [nkwib/paseo-doc-viewer](https://github.com/nkwib/paseo-doc-viewer) `0f39c81`                          | 0.7.0         | Community install          | Cleanup: `scripts/paseo-doc-viewer-vibing.patch` |
-| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `aa56a35` | 1.3.1         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`       |
+| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `af07fc9` | 1.4.0         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`       |
 
 - **Built in:** listed in `builtinPlugins` (`packages/server/src/server/plugins/builtin/index.ts`);
   the bundler copies them beside `server.mjs` and the daemon always loads them.
