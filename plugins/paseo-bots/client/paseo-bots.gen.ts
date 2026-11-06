@@ -4970,7 +4970,7 @@ function botChatOrder(chats, listUi, botId) {
   return [...pinned, ...rest.map((chat) => chat.id)];
 }
 function BotSidebar(props) {
-  const { colors: colors2, bots, openTab, ui: listUi, hiddenArchivedCount, bottomInset, footerSlot: FooterSlot, onNewBot, onShowArchived, onTeamMap, onEditTeam } = props;
+  const { colors: colors2, bots, openTab, ui: listUi, hiddenArchivedCount, bottomInset, onNewBot, onShowArchived, onTeamMap, onEditTeam } = props;
   const tokens = nativeTokens(colors2);
   const shown = openTab?.bots ?? bots;
   const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
@@ -4980,7 +4980,6 @@ function BotSidebar(props) {
   if (props.splash && bots.length === 0 && hiddenArchivedCount === 0 && pins.length === 0 && !openTab) {
     return /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, paddingBottom: bottomInset, backgroundColor: tokens.surfaceSidebar }, children: [
       /* @__PURE__ */ jsx6(Splash, { colors: colors2, background: tokens.surfaceSidebar }),
-      FooterSlot ? /* @__PURE__ */ jsx6(FooterSlot, {}) : null,
       /* @__PURE__ */ jsx6(Footer, { colors: colors2, onNewBot, onImportBot: props.onImportBot, onExportAllBots: props.onExportAllBots, onTeamMap })
     ] });
   }
@@ -5008,7 +5007,6 @@ function BotSidebar(props) {
         ]
       }
     ),
-    FooterSlot ? /* @__PURE__ */ jsx6(FooterSlot, {}) : null,
     /* @__PURE__ */ jsx6(Footer, { colors: colors2, onNewBot, onImportBot: props.onImportBot, onExportAllBots: props.onExportAllBots, onTeamMap })
   ] });
 }
@@ -14071,7 +14069,7 @@ function BotsSurface(props) {
   if (props.botWorkspace && !props.botWorkspace.directory) return /* @__PURE__ */ jsx49(View45, { children: /* @__PURE__ */ jsx49(Text33, { children: "Opening workspace\u2026" }) });
   return /* @__PURE__ */ jsx49(MenuProvider, { colors: colors2, compact: props.layout.compact, children: /* @__PURE__ */ jsx49(AvatarTheme, { dark: nativeTokens(colors2).dark, children: /* @__PURE__ */ jsx49(BotsSurfaceContent, { ...props }) }) });
 }
-function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat, botWorkspace, workspaceBridge: WorkspaceBridge, sidebarFooter }) {
+function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat, botWorkspace, workspaceBridge: WorkspaceBridge }) {
   const { colors: colors2 } = theme;
   const { settings, latest, commit } = useBotSettings();
   const toast = useToast17();
@@ -14586,7 +14584,6 @@ Its chats stay on the host and remain in Paseo's history.`,
       touch: layout.compact || layout.platform !== "web",
       splash: layout.compact,
       bottomInset,
-      footerSlot: sidebarFooter,
       onToggle: (botId) => updateUi((current2) => ({
         ...current2,
         collapsed: current2.collapsed.includes(botId) ? current2.collapsed.filter((id) => id !== botId) : [...current2.collapsed, botId]

@@ -52,7 +52,7 @@ Bots is the agent interface of every embedded Vibing workspace, so most of the p
 to one worktree per frame and to the host's native chat.
 
 - **Native chat slot.** `client/NativeChat.ts` and `ChatPane.tsx` accept an optional host-owned
-  chat UI (`nativeChat`, `botWorkspace`, `workspaceBridge`, `sidebarFooter` props). Hosts without
+  chat UI (`nativeChat`, `botWorkspace`, `workspaceBridge` props). Hosts without
   it keep the plugin's own chat UI.
 - **Worktree-scoped chats.** In an embedded workspace, chat lists, overview counts and routine
   runs show only that workspace's chats (`client/data.ts`, panel sections), and new chats start
@@ -96,8 +96,6 @@ to one worktree per frame and to the host's native chat.
   bot's placement.
 - **Sharing.** Export downloads the same portable JSON the import dialog accepts
   (`client/web.ts`), and the 50-bot/50-team caps on team export and import are removed.
-- **Sidebar footer slot.** Host content (Vibing's Codex and AIS Switch usage cards) renders
-  above the sidebar footer.
 
 Tests: `tests/bots.test.ts`, `groups.test.ts`, `scheduler.test.ts`, `sidebar.test.ts`,
 `presets.test.ts`, `sharing-*.test.ts(x)`, `chat-menu.test.ts` in the patched checkout.
@@ -107,7 +105,8 @@ reports two unhandled errors that are not failures.
 ### Codex usage (in place, `plugins/codex-usage-source/`)
 
 Reports Codex Enterprise spending allowances in Usage, in the unit the API gives (dollars or
-credits, never converted), with their reset time. The Bots sidebar card shows that allowance.
+credits, never converted), with their reset time. Vibing's tool rail shows that allowance
+through `GET /api/usage/summary`.
 It is edited in place because upstream ships it in this repository; keep it on every rebase.
 
 ### AIS Switch usage and the theme (fork-owned)
