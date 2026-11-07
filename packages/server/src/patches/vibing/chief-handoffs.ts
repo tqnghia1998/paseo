@@ -24,7 +24,7 @@ export const StartFeatureTaskInput = z
     appId: Identity,
     workspaceId: Identity,
     bot: z.string().trim().min(1).max(100),
-    kind: z.enum(["review-merge-request", "implement"]),
+    kind: z.enum(["review-merge-request", "implement", "commit"]),
     resolutionId: z.string().uuid().optional(),
     instruction: z.string().min(1).max(4000),
   })
@@ -78,7 +78,8 @@ function reference(mergeRequest: Pick<ChiefMergeRequest, "provider" | "number">)
 export function buildFeatureTaskMessage(
   input:
     | { kind: "review-merge-request"; mergeRequest: ChiefMergeRequest; instruction: string }
-    | { kind: "implement"; instruction: string },
+    | { kind: "implement"; instruction: string }
+    | { kind: "commit"; instruction: string },
 ): { prompt: string; titleSuffix: string } {
   const quote = `The user's own words, quoted verbatim:\n${fenced(input.instruction.trim())}`;
   if (input.kind === "implement") {
@@ -87,6 +88,16 @@ export function buildFeatureTaskMessage(
       titleSuffix: short.length > 60 ? `${short.slice(0, 59).trimEnd()}…` : short,
       prompt: [
         "Chief, the user's app-wide manager, is handing you a request from the user. Do the work in this workspace and report back in this chat.",
+        quote,
+      ].join("\n\n"),
+    };
+  }
+  if (input.kind === "commit") {
+    return {
+      titleSuffix: "Commit",
+      prompt: [
+        "Chief, the user's app-wide manager, is handing you a request to commit the changes in this workspace.",
+        "Look at `git status` and the diff, group the changes sensibly, write each commit message in this repository's own style (read recent `git log` first) and commit. Do not push, amend or rewrite published history, or discard anything unless the user asks for that in this chat. Report what you committed.",
         quote,
       ].join("\n\n"),
     };
@@ -229,7 +240,10 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
           mergeRequest,
           instruction: request.instruction,
         })
-      : buildFeatureTaskMessage({ kind: "implement", instruction: request.instruction });
+      : buildFeatureTaskMessage({
+          kind: request.kind === "commit" ? "commit" : "implement",
+          instruction: request.instruction,
+        });
     if (deps.chiefId() !== chiefId) throw new Error("Chief is not connected");
     const { chatId } = await deps.startChat({
       agentId: request.requestId,
