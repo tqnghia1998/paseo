@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSessionStore } from "@/stores/session-store";
 import { useEmbeddedWorkspace, getEmbeddedWorkspaceDirectory } from "./workspace-boundary";
 import { useEmbeddedPromptActivation } from "./host-prompts";
+import { useEmbeddedChatOpen, type OpenChatVerdict } from "./host-chat-open";
 import { useEmbeddedLiveDesignActivation } from "./live-design";
 import { getEmbeddedHostOrigin, subscribeToHostMessages } from "./host-messages";
 import { isEmbeddedLiveDesignMessaging } from "./focus-mode";
@@ -200,6 +201,28 @@ export function BotWorkspaceBridge({
       }
     }
   }, [pendingRestore, directory, selectedAgentId, selectedDraftId, bound, botId, localBotIds]);
+  // Chief's handoff Open button: a started chat in this worktree's ordinary chat context.
+  const evaluateOpenChat = useCallback(
+    (agentId: string): OpenChatVerdict => {
+      if (isEmbeddedLiveDesignMessaging) return "reject";
+      if (!bound || !directory || !restoreReady || !localBotIds) return "wait";
+      const session = useSessionStore.getState().sessions[bound.serverId];
+      const agent = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId);
+      if (!agent) return "wait";
+      return agent.cwd === directory &&
+        isBotChatContext(agent) &&
+        !agent.archivedAt &&
+        localBotIds.includes(agent.labels?.["paseo-bots.bot"] ?? "vibing-general")
+        ? "open"
+        : "reject";
+    },
+    [bound, directory, restoreReady, localBotIds],
+  );
+  useEmbeddedChatOpen({
+    enabled: Boolean(bound),
+    evaluate: evaluateOpenChat,
+    open: activateConversation,
+  });
   useEmbeddedPromptActivation({ enabled: Boolean(bound), activateConversation });
   useEmbeddedLiveDesignActivation({
     enabled: Boolean(bound) && isEmbeddedLiveDesignMessaging,

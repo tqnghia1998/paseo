@@ -60,6 +60,26 @@ base provider's options unless it sets its own options record.
 See the [SDK provider options guide](../public-docs/sdk/provider-options.md) for
 per-agent examples and provider-specific keys.
 
+For a Claude session limited to an embedding host's configured MCP servers, set
+`providerOptions.restrictToConfiguredMcp` to `true`. This disables built-in tools,
+filesystem settings, implicit Paseo tools, and create/open configuration hooks
+for that session. Only the saved MCP configuration is passed to Claude, with
+strict MCP configuration and any exact preapprovals from `toolPolicy`.
+Configured MCP servers must enforce their own operation permissions; selecting
+this option does not make an arbitrary server safe.
+
+The restriction remains set across session reloads, including attempted generic
+option overrides. Replacing its MCP servers or tool grants requires a new
+host-authorized session binding. Provider defaults requesting the restriction
+are captured into the session before hooks run. Other provider families reject
+this Claude-specific mode rather than keeping their native tools enabled.
+
+Restricted sessions retain allowlisted connection/model environment values from
+the user's Claude settings, with explicit runtime values taking precedence.
+They do not import settings-based tools, hooks, arbitrary environment variables,
+or project configuration. Project command execution belongs in a separately
+constrained host tool; it is not available through this Claude session.
+
 ---
 
 ## Table of Contents

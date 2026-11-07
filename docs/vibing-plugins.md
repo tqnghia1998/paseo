@@ -98,11 +98,19 @@ to one worktree per frame and to the host's native chat.
   too, in the same chat context, so the other bot's chat is listed beside it and its permission
   prompts can be answered (`server/tools/bots.ts`). Bots' own folders and routines keep the target
   bot's placement.
+- **Managed Chief.** `vibing-chief` is a reserved, host-managed persona: ordinary launches,
+  routines and relay tools reject it (`assertOrdinaryBot`). The daemon-only broker
+  (`server/chief.ts`, `bots.chief.prepare|call|handoff`, bridge-token gated) serves Chief's
+  memory, reviewed skills and read-only Bot tools (no `check_chat`), and starts Chief's
+  feature handoffs as ordinary chats in the feature workspace (`handoff`). A handoff chat
+  may still use `ask_bot` (`mayAsk` exempts `asked-by: vibing-chief`). See
+  [Vibing Chief](./vibing-patches.md#vibing-chief).
 - **Sharing.** Export downloads the same portable JSON the import dialog accepts
   (`client/web.ts`), and the 50-bot/50-team caps on team export and import are removed.
 
-Tests: `tests/bots.test.ts`, `groups.test.ts`, `scheduler.test.ts`, `sidebar.test.ts`,
-`presets.test.ts`, `sharing-*.test.ts(x)`, `chat-menu.test.ts` in the patched checkout.
+Tests: `tests/bots.test.ts`, `chief.test.ts`, `groups.test.ts`, `scheduler.test.ts`,
+`sidebar.test.ts`, `presets.test.ts`, `sharing-*.test.ts(x)`, `chat-menu.test.ts` in the
+patched checkout.
 `sharing-dialogs.test.tsx` needs jsdom, which the checkout does not install, so `vitest run`
 reports two unhandled errors that are not failures.
 
