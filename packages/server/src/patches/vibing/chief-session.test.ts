@@ -240,7 +240,8 @@ test("the persona knows the app-window commands and that changed commands need a
   expect(CHIEF_PERSONA).toContain("POST /api/ui/command");
   expect(CHIEF_PERSONA).toMatch(/never claim it is closed/);
   // Saving a changed start command is no longer a routine change.
-  expect(CHIEF_PERSONA).toContain("Changing the install or start command");
+  expect(CHIEF_PERSONA).toContain("replaces all of it");
+  expect(CHIEF_PERSONA).toContain("send every field back");
   expect(CHIEF_PERSONA).not.toContain("saving a start command, starting");
 });
 
