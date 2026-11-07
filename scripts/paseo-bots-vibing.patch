@@ -1,8 +1,12 @@
 diff --git a/client/BotDialogs.tsx b/client/BotDialogs.tsx
-index 9d97c7f..7dc6b33 100644
+index 9d97c7f..55c9dfc 100644
 --- a/client/BotDialogs.tsx
 +++ b/client/BotDialogs.tsx
-@@ -4,14 +4,15 @@ import { Icon, Modal, TextInput, copyText, useToast } from "@getpaseo/plugin/cli
+@@ -1,17 +1,19 @@
++import { CHIEF_BOT_ID } from "../shared/vibing-defaults";
+ import type { PluginTheme } from "@getpaseo/plugin";
+ import { useRpc } from "@getpaseo/plugin/client";
+ import { Icon, Modal, TextInput, copyText, useToast } from "@getpaseo/plugin/client/react-native";
  import { SettingsAction, SettingsCard, SettingsSection, SettingsSwitch } from "@getpaseo/plugin/client/ui";
  import { useEffect, useState } from "react";
  import { Pressable, Text, View } from "react-native";
@@ -22,7 +26,7 @@ index 9d97c7f..7dc6b33 100644
  
  type Colors = PluginTheme["colors"];
  
-@@ -23,19 +24,38 @@ export function NewBotDialog({
+@@ -23,19 +25,38 @@ export function NewBotDialog({
    onClose,
    onCreate,
    onImport,
@@ -63,7 +67,7 @@ index 9d97c7f..7dc6b33 100644
          <SettingsSection title="Start from">
            <SettingsCard>
              <StartRow colors={colors} label="Blank bot" hint="Set everything up yourself in the settings panel." onPress={() => onCreate()} />
-@@ -53,34 +73,40 @@ export function NewBotDialog({
+@@ -53,34 +74,40 @@ export function NewBotDialog({
              </SettingsCard>
            </SettingsSection>
          ) : null}
@@ -109,7 +113,7 @@ index 9d97c7f..7dc6b33 100644
        </Modal.Content>
      </Modal>
    );
-@@ -135,6 +161,7 @@ interface RenameDialogProps {
+@@ -135,6 +162,7 @@ interface RenameDialogProps {
    initialValue: string;
    placeholder?: string;
    submitLabel?: string;
@@ -117,7 +121,7 @@ index 9d97c7f..7dc6b33 100644
    onClose(): void;
    onSubmit(value: string): Promise<void> | void;
  }
-@@ -143,7 +170,7 @@ interface RenameDialogProps {
+@@ -143,7 +171,7 @@ interface RenameDialogProps {
   * Paseo's AdaptiveRenameModal (components/rename-modal.tsx): the current name selected
   * in one input, the error inline, Cancel and Rename side by side. It stays open on errors.
   */
@@ -126,7 +130,7 @@ index 9d97c7f..7dc6b33 100644
    const [draft, setDraft] = useState(initialValue);
    const [error, setError] = useState<string | null>(null);
    const [pending, setPending] = useState(false);
-@@ -182,6 +209,7 @@ export function RenameDialog({ colors, title, initialValue, placeholder, submitL
+@@ -182,6 +210,7 @@ export function RenameDialog({ colors, title, initialValue, placeholder, submitL
                setError(null);
              }}
              placeholder={placeholder}
@@ -134,7 +138,7 @@ index 9d97c7f..7dc6b33 100644
              placeholderTextColor={colors.foregroundMuted}
              autoFocus
              selectTextOnFocus
-@@ -257,6 +285,8 @@ export interface BotMenuActions {
+@@ -257,6 +286,8 @@ export interface BotMenuActions {
    onCopyId(): void;
    onSaveAsPreset(): void;
    onToggleArchive(): void;
@@ -143,7 +147,19 @@ index 9d97c7f..7dc6b33 100644
    onDelete(): Promise<void>;
  }
  
-@@ -278,6 +308,7 @@ export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
+@@ -264,6 +295,11 @@ export interface BotMenuActions {
+ export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
+   const { bot } = actions;
+   const entries: MenuEntry[] = [{ label: "Open bot settings", icon: "Settings", onSelect: actions.onOpenSettings }];
++  if (bot.id === CHIEF_BOT_ID) return [
++    ...entries,
++    { label: "Rename bot", icon: "Pencil", onSelect: actions.onRename },
++    { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId },
++  ];
+   if (actions.onOpenInPaseo) entries.push({ label: "Open in Paseo", icon: "ExternalLink", onSelect: actions.onOpenInPaseo });
+   entries.push({ label: bot.pinned ? "Unpin" : "Pin to top", icon: bot.pinned ? "PinOff" : "Pin", onSelect: actions.onTogglePin });
+   if (actions.onMoveUp || actions.onMoveDown) {
+@@ -278,6 +314,7 @@ export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
      { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId },
      { kind: "separator" },
      { label: bot.archived ? "Unarchive bot" : "Archive bot", icon: bot.archived ? "ArchiveRestore" : "Archive", onSelect: actions.onToggleArchive },
@@ -151,7 +167,7 @@ index 9d97c7f..7dc6b33 100644
      { label: "Delete bot", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDelete },
    );
    return entries;
-@@ -289,6 +320,7 @@ export interface ChatMenuActions {
+@@ -289,6 +326,7 @@ export interface ChatMenuActions {
    onCopyId(): void;
    onCopyTranscript(): Promise<void>;
    onTogglePin(): void;
@@ -159,7 +175,7 @@ index 9d97c7f..7dc6b33 100644
    /** Present in manual order; undefined at an edge. `null` hides the pair (pinned chats, activity order). */
    move: { up?: () => void; down?: () => void } | null;
    onOpenInPaseo?: () => void;
-@@ -298,6 +330,7 @@ export interface ChatMenuActions {
+@@ -298,6 +336,7 @@ export interface ChatMenuActions {
  /** The chat menu, after Paseo's workspace menu (sidebar/sidebar-workspace-menu.tsx). */
  export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
    const entries: MenuEntry[] = [
@@ -167,7 +183,7 @@ index 9d97c7f..7dc6b33 100644
      { label: "Copy path", icon: "Copy", onSelect: actions.onCopyPath },
      { label: "Copy chat ID", icon: "Copy", onSelect: actions.onCopyId },
      { label: "Copy transcript", icon: "FileText", pendingLabel: "Copying...", onSelect: actions.onCopyTranscript },
-@@ -314,25 +347,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
+@@ -314,25 +353,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
  
  // ------------------------------------------------------------------ export
  
@@ -203,7 +219,7 @@ index 9d97c7f..7dc6b33 100644
          <SettingsCard>
            <SettingsSwitch
              label="Include memory"
-@@ -340,17 +379,24 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
+@@ -340,17 +385,24 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
              value={includeMemory}
              onValueChange={setIncludeMemory}
            />
@@ -234,10 +250,15 @@ index 9d97c7f..7dc6b33 100644
      </Modal>
    );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 7533cb6..2cbb4a5 100644
+index 7533cb6..344466c 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
-@@ -13,7 +13,7 @@ import { openLibrary } from "./navigation";
+@@ -1,3 +1,4 @@
++import { CHIEF_BOT_ID } from "../shared/vibing-defaults";
+ import type { PluginTheme } from "@getpaseo/plugin";
+ import type { PaseoAgent } from "./paseo";
+ import { Icon, ScrollView } from "@getpaseo/plugin/client/react-native";
+@@ -13,7 +14,7 @@ import { openLibrary } from "./navigation";
  import { nativeTokens, useHover, type NativeTokens } from "./native";
  import { Splash } from "./Splash";
  import { ui } from "./typography";
@@ -246,7 +267,7 @@ index 7533cb6..2cbb4a5 100644
  import { tooltip } from "./ui/Tooltip";
  
  // Paseo's sidebar, reproduced from components/left-sidebar.tsx, sidebar-workspace-list.tsx
-@@ -27,6 +27,8 @@ export interface Selection {
+@@ -27,6 +28,8 @@ export interface Selection {
    chatId: string | null;
    /** First message to send straight away when starting a new chat. */
    prompt?: string;
@@ -255,7 +276,7 @@ index 7533cb6..2cbb4a5 100644
  }
  
  export type MenuSource = "kebab" | "context";
-@@ -35,6 +37,8 @@ export interface ChatMenuContext {
+@@ -35,6 +38,8 @@ export interface ChatMenuContext {
    /** Every unpinned chat of the bot in list order, for Move up / Move down. */
    siblings: string[];
    pinned: boolean;
@@ -264,7 +285,7 @@ index 7533cb6..2cbb4a5 100644
  }
  
  interface BotSidebarProps {
-@@ -58,8 +62,11 @@ interface BotSidebarProps {
+@@ -58,8 +63,11 @@ interface BotSidebarProps {
    onShowArchived(): void;
    onSelect(selection: Selection): void;
    onNewBot(): void;
@@ -276,7 +297,7 @@ index 7533cb6..2cbb4a5 100644
    onDisplayMenu(anchor: LayoutRectangle): void;
    onEditTeam(group: BotGroup): void;
    onTeamMap(): void;
-@@ -69,6 +76,15 @@ const noSelect = { userSelect: "none" } as object;
+@@ -69,19 +77,28 @@ const noSelect = { userSelect: "none" } as object;
  /** Paseo hardcodes the project chevron colour (project-leading-visual.tsx). */
  const CHEVRON_COLOR = "#9ca3af";
  
@@ -292,7 +313,13 @@ index 7533cb6..2cbb4a5 100644
  export function BotSidebar(props: BotSidebarProps) {
    const { colors, bots, openTab, ui: listUi, hiddenArchivedCount, bottomInset, onNewBot, onShowArchived, onTeamMap, onEditTeam } = props;
    const tokens = nativeTokens(colors);
-@@ -81,7 +97,7 @@ export function BotSidebar(props: BotSidebarProps) {
+   const shown = openTab?.bots ?? bots;
+   const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
+   const listedBots = new Map(shown.map((bot) => [bot.id, bot]));
+-  const pins = listUi.pinnedChats.filter((pin) => listedBots.has(pin.botId));
++  const pins = listUi.pinnedChats.filter((pin) => pin.botId !== CHIEF_BOT_ID && listedBots.has(pin.botId));
+   const leadId = openTab?.group?.leadId ?? null;
+   if (props.splash && bots.length === 0 && hiddenArchivedCount === 0 && pins.length === 0 && !openTab) {
      return (
        <View style={{ flex: 1, paddingBottom: bottomInset, backgroundColor: tokens.surfaceSidebar }}>
          <Splash colors={colors} background={tokens.surfaceSidebar} />
@@ -301,7 +328,7 @@ index 7533cb6..2cbb4a5 100644
        </View>
      );
    }
-@@ -113,7 +129,7 @@ export function BotSidebar(props: BotSidebarProps) {
+@@ -113,7 +130,7 @@ export function BotSidebar(props: BotSidebarProps) {
            )
          ) : null}
        </ScrollView>
@@ -310,7 +337,7 @@ index 7533cb6..2cbb4a5 100644
      </View>
    );
  }
-@@ -141,36 +157,24 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
+@@ -141,36 +158,24 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
    );
  }
  
@@ -363,7 +390,7 @@ index 7533cb6..2cbb4a5 100644
        <FooterIconButton colors={colors} icon="Network" label="Team map" onPress={onTeamMap} />
        <FooterIconButton colors={colors} icon="Blocks" label="Skills & Tools" onPress={() => openLibrary()} />
      </View>
-@@ -178,17 +182,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
+@@ -178,17 +183,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
  }
  
  /** The sidebar footer's trailing icon buttons (Paseo's host, import and settings buttons): 32 box, 16pt icon. */
@@ -386,7 +413,7 @@ index 7533cb6..2cbb4a5 100644
          noSelect,
        ]}
      >
-@@ -232,7 +239,7 @@ function GhostButton({ colors, icon, label, onPress }: { colors: Colors; icon: s
+@@ -232,7 +240,7 @@ function GhostButton({ colors, icon, label, onPress }: { colors: Colors; icon: s
        })}
      >
        <Icon name={icon} size={14} color={tint} />
@@ -395,7 +422,7 @@ index 7533cb6..2cbb4a5 100644
      </Pressable>
    );
  }
-@@ -272,11 +279,12 @@ function PinnedSection(props: PinnedProps) {
+@@ -272,11 +280,12 @@ function PinnedSection(props: PinnedProps) {
    );
  }
  
@@ -409,7 +436,7 @@ index 7533cb6..2cbb4a5 100644
    return (
      <ChatRow
        colors={colors}
-@@ -287,7 +295,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -287,7 +296,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
        touch={touch}
        selected={selection?.botId === bot.id && selection.chatId === chat.id}
        onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -419,7 +446,7 @@ index 7533cb6..2cbb4a5 100644
      />
    );
  }
-@@ -297,7 +306,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -297,7 +307,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
  type GroupProps = BotSidebarProps & { bot: Bot; tokens: NativeTokens; pinnedIds: ReadonlySet<string>; /** The team's Chief of Staff. */ lead?: boolean };
  
  function BotGroup(props: GroupProps) {
@@ -428,7 +455,7 @@ index 7533cb6..2cbb4a5 100644
    const host = useBotHost(bot.hostId, localHost);
    const chats = useBotChats(host, bot.id);
    const [expanded, setExpanded] = useState(false);
-@@ -308,6 +317,7 @@ function BotGroup(props: GroupProps) {
+@@ -308,13 +318,16 @@ function BotGroup(props: GroupProps) {
    const unpinned = (chats.data ?? []).filter((chat) => !pinnedIds.has(chat.id));
    const ordered = orderChats(unpinned, listUi.chatSort, listUi.chatOrder[bot.id]);
    const siblings = ordered.map((chat) => chat.id);
@@ -436,7 +463,17 @@ index 7533cb6..2cbb4a5 100644
    const visible = expanded ? ordered : ordered.slice(0, SIDEBAR_GROUP_LIMIT);
    const loading = !!host.api && chats.isLoading;
    // Collapsed rows carry their chats' most urgent status; open ones leave it to the rows.
-@@ -330,7 +340,8 @@ function BotGroup(props: GroupProps) {
+   const aggregate = isOpen ? null : aggregateBuckets(unpinned.map(chatBucket));
+ 
+   let children: ReactNode = null;
+-  if (isOpen) {
++  if (isOpen && bot.id === CHIEF_BOT_ID) {
++    children = <GhostButton colors={colors} icon="Settings" label="Chief personalization" onPress={() => onSelect({ botId: bot.id, chatId: null })} />;
++  } else if (isOpen) {
+     if (loading) children = <SkeletonRows colors={colors} />;
+     else if (ordered.length > 0 || draftSelected) {
+       children = (
+@@ -330,7 +343,8 @@ function BotGroup(props: GroupProps) {
                touch={touch}
                selected={botSelected && selection?.chatId === chat.id}
                onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -446,7 +483,7 @@ index 7533cb6..2cbb4a5 100644
              />
            ))}
            {ordered.length > SIDEBAR_GROUP_LIMIT ? <ShowMoreRow colors={colors} expanded={expanded} onPress={() => setExpanded(!expanded)} /> : null}
-@@ -398,7 +409,7 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
+@@ -398,14 +412,14 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
              </View>
            )}
          </View>
@@ -455,7 +492,24 @@ index 7533cb6..2cbb4a5 100644
            {bot.name}
            {hostLabel ? ` · ${hostLabel} offline` : ""}
          </Text>
-@@ -452,10 +463,11 @@ interface ChatRowProps {
+         {lead ? <Icon name="Crown" size={12} color={colors.foregroundMuted} /> : null}
+       </View>
+       <View style={{ flexDirection: "row", alignItems: "center", gap: 2, flexShrink: 0, marginRight: -6 }}>
+-        <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: actionsVisible ? 1 : 0 }} pointerEvents={actionsVisible ? "auto" : "none"}>
++        {bot.id !== CHIEF_BOT_ID ? <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: actionsVisible ? 1 : 0 }} pointerEvents={actionsVisible ? "auto" : "none"}>
+           <Pressable
+             accessibilityRole="button"
+             accessibilityLabel={`New chat with ${bot.name}`}
+@@ -424,7 +438,7 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
+           >
+             {({ pressed: down }) => <Icon name="Plus" size={15} color={plus.hovered || down ? colors.foreground : colors.foregroundMuted} />}
+           </Pressable>
+-        </View>
++        </View> : null}
+         <View style={{ opacity: actionsVisible ? 1 : 0 }} pointerEvents={actionsVisible ? "auto" : "none"}>
+           <KebabButton
+             colors={colors}
+@@ -452,10 +466,11 @@ interface ChatRowProps {
    hoisted?: boolean;
    onPress(): void;
    onMenu(anchor: LayoutRectangle, source: MenuSource): void;
@@ -468,7 +522,7 @@ index 7533cb6..2cbb4a5 100644
    const [hovered, setHovered] = useState(false);
    const kebabRef = useRef<View>(null);
    const bucket = chatBucket(chat);
-@@ -504,11 +516,11 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -504,11 +519,11 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
          )}
          <View style={{ flex: 1, minWidth: 0 }}>
            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
@@ -482,7 +536,7 @@ index 7533cb6..2cbb4a5 100644
            </View>
            {hoisted ? (
              <Text numberOfLines={1} style={{ fontSize: ui(12), lineHeight: 16, color: colors.foregroundMuted }}>
-@@ -520,8 +532,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -520,8 +535,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
        {showKebab ? (
          <View style={{ position: "absolute", top: 8, right: 12, flexDirection: "row" }}>
            {/* A short scrim in the row's colour hides the title's tail under the kebab, as native does. */}
@@ -494,7 +548,7 @@ index 7533cb6..2cbb4a5 100644
              <KebabButton colors={colors} buttonRef={kebabRef} label="Chat actions" onPress={() => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab"))} />
            </View>
          </View>
-@@ -561,7 +574,7 @@ function NewChatGhostRow({ colors, tokens, selected, onPress }: { colors: Colors
+@@ -561,7 +577,7 @@ function NewChatGhostRow({ colors, tokens, selected, onPress }: { colors: Colors
            <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
              <Icon name="Plus" size={14} color={hovered || pressed || selected ? colors.foreground : colors.foregroundMuted} />
            </View>
@@ -503,7 +557,7 @@ index 7533cb6..2cbb4a5 100644
              New chat
            </Text>
          </>
-@@ -602,7 +615,7 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -602,7 +618,7 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
            <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
              <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={hovered || pressed ? colors.foreground : colors.foregroundMuted} />
            </View>
@@ -512,7 +566,7 @@ index 7533cb6..2cbb4a5 100644
              {label}
            </Text>
          </>
-@@ -611,6 +624,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -611,6 +627,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
    );
  }
  
@@ -537,7 +591,7 @@ index 7533cb6..2cbb4a5 100644
  /**
   * Kebab triggers. Chat rows use Paseo's workspace trigger (padding 2, radius 4, pulled
   * onto the rail with marginRight -7); bot rows use the 24pt project kebab (`box`).
-@@ -688,7 +719,7 @@ const BADGE_SIZE = 12;
+@@ -688,7 +722,7 @@ const BADGE_SIZE = 12;
  const BADGE_OFFSET = -4;
  const RING_FRAME = 14;
  
@@ -547,10 +601,12 @@ index 7533cb6..2cbb4a5 100644
    if (bucket === "running") {
      const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..72a6b45 100644
+index ebc4ed2..bde6cb9 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
-@@ -1,32 +1,36 @@
+@@ -1,32 +1,38 @@
++import { CHIEF_LAUNCHER_GUIDANCE, chiefPersonalizationPatch, exportableBots } from "../shared/managed-chief-ui";
++import { CHIEF_BOT_ID, managedChiefBot } from "../shared/vibing-defaults";
 +import type { NativeChatSlot } from "./NativeChat";
  import type { PluginTheme } from "@getpaseo/plugin";
 -import type { PaseoAgent } from "./paseo";
@@ -594,7 +650,7 @@ index ebc4ed2..72a6b45 100644
  import { TeamTabsRow, TeamTabSwitcher } from "./teams/TeamTabs";
  import { ResizeHandle, SlideOver } from "./ui/Columns";
  import { fitColumns } from "../shared/layout";
-@@ -43,6 +47,9 @@ import { ui, useTypeScale } from "./typography";
+@@ -43,6 +49,9 @@ import { ui, useTypeScale } from "./typography";
  
  type Colors = PluginTheme["colors"];
  
@@ -604,7 +660,7 @@ index ebc4ed2..72a6b45 100644
  const SETUP_PROMPT =
    "Let's set you up. Interview me one short question at a time about what I want from you, how I like to work, and what you should never do. " +
    "Then propose standing instructions for yourself and a starting MEMORY.md. Write the memory file once I confirm, and give me the instructions to paste into your Soul settings.";
-@@ -50,9 +57,10 @@ const SETUP_PROMPT =
+@@ -50,9 +59,10 @@ const SETUP_PROMPT =
  /** Autosave delay after the last edit in the settings panel. */
  const SAVE_DELAY_MS = 600;
  
@@ -616,7 +672,7 @@ index ebc4ed2..72a6b45 100644
    return (
      <MenuProvider colors={colors} compact={props.layout.compact}>
        <AvatarTheme dark={nativeTokens(colors).dark}>
-@@ -63,30 +71,31 @@ export function BotsSurface(props: PluginSurfaceProps) {
+@@ -63,30 +73,31 @@ export function BotsSurface(props: PluginSurfaceProps) {
  }
  
  
@@ -653,7 +709,23 @@ index ebc4ed2..72a6b45 100644
    const [drafts, setDrafts] = useState<Record<string, Bot>>({});
    // List state (collapsed groups, pins, order, display options) applies at once and saves behind.
    const [uiOverride, setUiOverride] = useState<BotListUi | null>(null);
-@@ -222,9 +231,63 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -132,6 +143,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+   };
+ 
+   const patchBot = (botId: string, patch: Partial<Bot>) => {
++    patch = chiefPersonalizationPatch(botId, patch);
+     setDrafts((current) => {
+       const base = current[botId] ?? (latest.current.status === "ready" ? latest.current.values.bots.find((bot) => bot.id === botId) : undefined);
+       return base ? { ...current, [botId]: { ...base, ...patch, updatedAt: new Date().toISOString() } } : current;
+@@ -155,6 +167,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+ 
+   /** Applies a patch to the saved bot and to any unsaved draft of it, so autosave can't undo it. */
+   const updateBot = (botId: string, patch: Partial<Bot>, recordHistory = false) => {
++    patch = chiefPersonalizationPatch(botId, patch);
+     setDrafts((current) => (current[botId] ? { ...current, [botId]: { ...current[botId], ...patch } } : current));
+     return commit((values) => {
+       const previous = values.bots.find((entry) => entry.id === botId);
+@@ -222,9 +235,63 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    // "New bot" from the Command Center opens a fresh Bots screen; only that one consumes it.
    useEffect(() => {
      const intent = takeIntent();
@@ -718,7 +790,16 @@ index ebc4ed2..72a6b45 100644
    if (settings.status !== "ready") {
      return (
        <View style={{ flex: 1, padding: 24, gap: 12, backgroundColor: colors.surface0, justifyContent: settings.status === "loading" ? "center" : "flex-start", alignItems: settings.status === "loading" ? "center" : "stretch" }}>
-@@ -269,12 +332,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -252,7 +319,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+     setDragWidths({});
+     updateUi((current) => ({ ...current, [key]: Math.round(width) }));
+   };
+-  const allBots = settings.values.bots.map((bot) => drafts[bot.id] ?? bot);
++  const allBots = settings.values.bots.map((bot) => { const value = drafts[bot.id] ?? bot; return value.id === CHIEF_BOT_ID ? managedChiefBot(value) : value; });
+   const library = settings.values.library ?? EMPTY_LIBRARY;
+   const groups = settings.values.groups ?? [];
+   const listed = allBots
+@@ -269,12 +336,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    const select = (next: Selection) => {
      setSelection(next);
      setTeamMap(false);
@@ -753,7 +834,7 @@ index ebc4ed2..72a6b45 100644
    const openPanel = (bot: Bot, section: SectionId | null) => {
      if (selection?.botId !== bot.id) select({ botId: bot.id, chatId: null });
      setPanel({ open: true, section });
-@@ -366,7 +450,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -366,7 +454,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
  
    const openBotMenu = (bot: Bot, anchor: LayoutRectangle, source: MenuSource) => {
      const botHost = resolveHost(bot.hostId);
@@ -762,7 +843,7 @@ index ebc4ed2..72a6b45 100644
      const workspaceId = chats.find((chat) => chat.workspaceId)?.workspaceId;
      const openWorkspace = navigation?.openWorkspace;
      menu.open({
-@@ -376,20 +460,21 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -376,20 +464,21 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        title: "Bot actions",
        entries: botMenuEntries({
          bot,
@@ -786,7 +867,7 @@ index ebc4ed2..72a6b45 100644
          onDelete: async () => {
            const confirmed = await confirmDialog({
              title: "Delete bot?",
-@@ -459,26 +544,106 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -459,26 +548,106 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            updateUi((current) =>
              context.pinned ? unpin(current) : { ...current, pinnedChats: [...current.pinnedChats, { botId: bot.id, chatId: chat.id }] },
            ),
@@ -908,21 +989,21 @@ index ebc4ed2..72a6b45 100644
    const openDisplayMenu = (anchor: LayoutRectangle) => {
      menu.open({
        anchor,
-@@ -527,9 +692,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -527,9 +696,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        onTogglePinnedSection={() => updateUi((current) => ({ ...current, pinnedCollapsed: !current.pinnedCollapsed }))}
        onShowArchived={() => updateUi((current) => ({ ...current, showArchived: true }))}
        onSelect={select}
 -      onNewBot={() => setCreating(true)}
 +      onNewBot={() => setCreating("new")}
 +      onImportBot={() => setCreating("import")}
-+      onExportAllBots={allBots.length ? () => setExporting({ kind: "all", bots: allBots, groups }) : undefined}
++      onExportAllBots={exportableBots(allBots).length ? () => setExporting({ kind: "all", bots: exportableBots(allBots), groups }) : undefined}
        onBotMenu={openBotMenu}
        onChatMenu={openChatMenu}
 +      onDeleteChat={(bot, chat, context) => void deleteChat(bot, chat, context)}
        onDisplayMenu={openDisplayMenu}
        onEditTeam={setEditingTeam}
        onTeamMap={() => setTeamMap(true)}
-@@ -537,7 +705,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -537,7 +709,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    );
  
    const tabProps = openTab
@@ -931,8 +1012,16 @@ index ebc4ed2..72a6b45 100644
      : null;
  
    const pane = teamMap ? (
-@@ -558,11 +726,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -556,13 +728,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+         setPanel({ open: true, section: "overview" });
+       }}
      />
++  ) : selectedBot?.id === CHIEF_BOT_ID ? (
++    <View style={{ flex: 1, padding: 24, gap: 16, backgroundColor: colors.surface0 }}>
++      <Text style={{ color: colors.foreground, fontSize: ui(16) }}>{selectedBot.name}</Text>
++      <Text style={{ color: colors.foregroundMuted, fontSize: ui(14) }}>{CHIEF_LAUNCHER_GUIDANCE}</Text>
++      <SettingsAction label="Chief personalization" actionLabel="Open settings" onPress={() => setPanel({ open: true, section: null })} />
++    </View>
    ) : selectedBot && selection ? (
        <SelectedChat
 -        key={`${selectedBot.id}:${selection.chatId ?? "new"}`}
@@ -945,7 +1034,7 @@ index ebc4ed2..72a6b45 100644
          localHost={localHost}
          panelOpen={panel.open}
          layout={layout}
-@@ -571,6 +740,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -571,6 +750,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          onBack={layout.compact ? () => setSelection(null) : undefined}
          onBotMenu={(anchor) => (anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot))}
          onTogglePanel={() => setPanel({ open: !panel.open, section: panel.section })}
@@ -954,7 +1043,7 @@ index ebc4ed2..72a6b45 100644
          onStarted={(chatId) => setSelection({ botId: selectedBot.id, chatId })}
        />
      ) : (
-@@ -599,7 +770,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -599,7 +780,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            setPanelVersion((version) => version + 1);
            toast.show("Restored. Undo it from History if needed.", { variant: "success" });
          }}
@@ -963,13 +1052,13 @@ index ebc4ed2..72a6b45 100644
          onOpenChat={(chatId) => {
            select({ botId: selectedBot.id, chatId });
            // On phones the panel covers the chat.
-@@ -621,13 +792,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -621,13 +802,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : null;
  
 +  // Waiting for the bots and the default choice keeps the workspace from restoring onto Codex first.
 +  const localBotIds = settings.status === "ready" && defaultBotId && !applyVibingDefaults(settings.values)
-+    ? allBots.filter(bot => !bot.hostId || bot.hostId === host.id).map(bot => bot.id)
++    ? allBots.filter(bot => bot.id !== CHIEF_BOT_ID && (!bot.hostId || bot.hostId === host.id)).map(bot => bot.id)
 +    : undefined;
 +  const workspaceHeader = WorkspaceBridge ? <WorkspaceBridge localBotIds={localBotIds} selectedAgentId={selection?.chatId} selectedDraftId={selection?.draftId} botId={selection?.botId === DEFAULT_BOT_ID && !selection.chatId && !selection.draftId ? (defaultBotId ?? DEFAULT_BOT_ID) : (selection?.botId ?? defaultBotRef.current)} onActivate={activateWorkspaceChat} /> : null;
 +
@@ -985,7 +1074,7 @@ index ebc4ed2..72a6b45 100644
      {/* The host gives plugin surfaces no keyboard handling; lift everything above the keyboard. */}
      <View
        style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}
-@@ -684,6 +862,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -684,6 +872,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        {creating ? (
          <NewBotDialog
            colors={colors}
@@ -993,7 +1082,7 @@ index ebc4ed2..72a6b45 100644
            onClose={() => setCreating(false)}
            presets={settings.status === "ready" ? (settings.values.presets ?? []) : []}
            onCreate={(start) => {
-@@ -694,13 +873,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -694,13 +883,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            }}
            onImport={async (json) => {
              const { bots, teams } = await importTeam({ json });
@@ -1010,7 +1099,7 @@ index ebc4ed2..72a6b45 100644
              }
            }}
          />
-@@ -721,17 +901,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -721,17 +911,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          />
        ) : null}
  
@@ -1044,7 +1133,7 @@ index ebc4ed2..72a6b45 100644
    localHost: LocalHost;
    panelOpen: boolean;
    layout: PluginSurfaceProps["layout"];
-@@ -743,9 +936,12 @@ interface SelectedChatProps {
+@@ -743,9 +946,12 @@ interface SelectedChatProps {
    onStarted(chatId: string): void;
  }
  
@@ -1059,7 +1148,7 @@ index ebc4ed2..72a6b45 100644
    const ensureHome = useRpc(ensureBotHomeRpc);
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
-@@ -754,15 +950,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -754,15 +960,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
  
    const start = async (message: OutgoingMessage) => {
      if (!host.api) throw new Error(`${host.label} is offline.`);
@@ -1082,7 +1171,7 @@ index ebc4ed2..72a6b45 100644
        library,
        ...(host.isLocal ? { agentId } : {}),
        plugin,
-@@ -773,13 +974,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -773,13 +984,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        attachments: message.attachments,
        clientMessageId: message.messageId,
      });
@@ -1106,7 +1195,7 @@ index ebc4ed2..72a6b45 100644
      const api = host.api;
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
-@@ -799,8 +1008,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -799,8 +1018,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
      // Runs once for the selection that carries the prompt.
    }, [host.api]);
  
@@ -1124,7 +1213,7 @@ index ebc4ed2..72a6b45 100644
        colors={colors}
        bot={bot}
        host={host}
-@@ -815,6 +1033,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -815,6 +1043,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        onTogglePanel={onTogglePanel}
        onStart={start}
        onOpenChat={onStarted}
@@ -1382,6 +1471,33 @@ index ea7654d..d8dbb97 100644
  /** Refetches chat lists shortly after any agent update, so chats routines start show up too. */
  export function useChatInvalidation() {
    const paseo = usePaseo();
+diff --git a/client/library/LibraryView.tsx b/client/library/LibraryView.tsx
+index 2b79473..1c571f7 100644
+--- a/client/library/LibraryView.tsx
++++ b/client/library/LibraryView.tsx
+@@ -1,3 +1,4 @@
++import { exportableBots } from "../../shared/managed-chief-ui";
+ import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
+ import { openExternalUrl, useRpc } from "@getpaseo/plugin/client";
+ import { ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
+@@ -228,7 +229,7 @@ export function LibraryView({ colors, layout, values, commit, target, onTarget:
+       key={`mcp:${server.id}`}
+       colors={colors}
+       server={server}
+-      bots={bots}
++      bots={exportableBots(bots)}
+       otherNames={library.mcpServers.filter((entry) => entry.id !== server.id).map((entry) => entry.name)}
+       showTitle={showTitle}
+       onPatch={(patch) => patchServer(server.id, patch)}
+@@ -241,7 +242,7 @@ export function LibraryView({ colors, layout, values, commit, target, onTarget:
+       colors={colors}
+       app={app}
+       accounts={appAccountsFor}
+-      bots={bots}
++      bots={exportableBots(bots)}
+       showTitle={showTitle}
+       onToggleBot={(bot, on) => toggleApp(app.slug, bot, on)}
+       onDisconnected={() => setTarget(compact ? null : { kind: "apps" })}
 diff --git a/client/panel/AgentSections.tsx b/client/panel/AgentSections.tsx
 index ee24cd8..c0cf7b4 100644
 --- a/client/panel/AgentSections.tsx
@@ -1396,10 +1512,80 @@ index ee24cd8..c0cf7b4 100644
          <SettingsSelect
            label="Folder"
 diff --git a/client/panel/BotPanel.tsx b/client/panel/BotPanel.tsx
-index 8938e61..544aaae 100644
+index 8938e61..b07f74a 100644
 --- a/client/panel/BotPanel.tsx
 +++ b/client/panel/BotPanel.tsx
-@@ -248,7 +248,7 @@ function PanelHeader({ colors, compact, title, onBack, onClose }: { colors: Colo
+@@ -1,3 +1,5 @@
++import { botSectionAllowed, CHIEF_LAUNCHER_GUIDANCE } from "../../shared/managed-chief-ui";
++import { CHIEF_BOT_ID } from "../../shared/vibing-defaults";
+ import type { PluginTheme } from "@getpaseo/plugin";
+ import { Icon, Modal, ScrollView } from "@getpaseo/plugin/client/react-native";
+ import { useState, type ReactNode } from "react";
+@@ -69,7 +71,6 @@ const GROUPS: { label: string; sections: SectionEntry[] }[] = [
+   },
+ ];
+ 
+-const SECTIONS = GROUPS.flatMap((group) => group.sections);
+ 
+ export interface PanelProps {
+   colors: Colors;
+@@ -108,8 +109,18 @@ export function BotPanel(props: BotPanelProps) {
+   const compact = useCompact(props.compact);
+   const [query, setQuery] = useState("");
+   const host = useBotHost(bot.hostId, localHost);
+-  const problems = botProblems(bot, host.isLocal);
+-  const open = section ? SECTIONS.find((entry) => entry.id === section && !entry.modal) : undefined;
++  const problems = bot.id === CHIEF_BOT_ID ? [] : botProblems(bot, host.isLocal);
++  const groups = GROUPS.map(group => ({
++    ...group,
++    sections: group.sections.filter(entry => botSectionAllowed(bot.id, entry.id)).map(entry => {
++      if (bot.id !== CHIEF_BOT_ID) return entry;
++      if (entry.id === "identity") return { ...entry, rows: ["Avatar", "Colour", "Shape", "Image URL", "Name"], keywords: "picture color face upload generate" };
++      if (entry.id === "overview") return { ...entry, rows: ["App-wide Chief launcher"], keywords: "managed personalization" };
++      return entry;
++    }),
++  })).filter(group => group.sections.length > 0);
++  const sections = groups.flatMap(group => group.sections);
++  const open = section ? sections.find((entry) => entry.id === section && !entry.modal) : undefined;
+   const [sheet, setSheet] = useState<SectionEntry | null>(null);
+   const choose = (entry: SectionEntry) => (entry.modal ? setSheet(entry) : onSection(entry.id));
+ 
+@@ -126,7 +137,7 @@ export function BotPanel(props: BotPanelProps) {
+ 
+   const needle = query.trim().toLowerCase();
+   const matches = needle
+-    ? SECTIONS.flatMap((entry) => {
++    ? sections.flatMap((entry) => {
+         const rows = entry.rows.filter((row) => row.toLowerCase().includes(needle));
+         const hit = rows.length > 0 || `${entry.label} ${entry.keywords}`.toLowerCase().includes(needle);
+         return hit ? [{ entry, rows }] : [];
+@@ -138,6 +149,7 @@ export function BotPanel(props: BotPanelProps) {
+       <PanelHeader colors={colors} compact={compact} title={bot.name || "Untitled bot"} onClose={onClose} />
+       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 24 + bottomInset }}>
+         <View style={{ paddingHorizontal: 8, paddingTop: 8, gap: 8 }}>
++          {bot.id === CHIEF_BOT_ID ? <Alert colors={colors} description={CHIEF_LAUNCHER_GUIDANCE} /> : null}
+           <SearchField colors={colors} value={query} onChangeText={setQuery} placeholder="Search settings" />
+           {problems.length > 0 ? <Alert colors={colors} variant="warning" title="Needs attention" description={problems} /> : null}
+         </View>
+@@ -151,7 +163,7 @@ export function BotPanel(props: BotPanelProps) {
+             ) : null}
+           </View>
+         ) : (
+-          GROUPS.map((group) => (
++          groups.map((group) => (
+             <View key={group.label} style={{ paddingVertical: 8, paddingHorizontal: 8, gap: 2 }}>
+               <Text style={{ fontSize: ui(14), color: nativeTokens(colors).foregroundExtraMuted, paddingHorizontal: 8, paddingVertical: 4 }}>{group.label}</Text>
+               {group.sections.map((entry) => (
+@@ -171,6 +183,8 @@ export function BotPanel(props: BotPanelProps) {
+ }
+ 
+ function renderSection(id: SectionId, props: PanelProps): ReactNode {
++  if (!botSectionAllowed(props.bot.id, id)) return null;
++  if (props.bot.id === CHIEF_BOT_ID && id === "overview") return <Alert colors={props.colors} description={CHIEF_LAUNCHER_GUIDANCE} />;
+   switch (id) {
+     case "overview":
+       return <OverviewSection {...props} />;
+@@ -248,7 +262,7 @@ function PanelHeader({ colors, compact, title, onBack, onClose }: { colors: Colo
    return (
      <View
        style={{
@@ -1408,6 +1594,35 @@ index 8938e61..544aaae 100644
          flexDirection: "row",
          alignItems: "center",
          gap: 8,
+diff --git a/client/panel/IdentitySection.tsx b/client/panel/IdentitySection.tsx
+index 4ff6ea2..1049303 100644
+--- a/client/panel/IdentitySection.tsx
++++ b/client/panel/IdentitySection.tsx
+@@ -1,3 +1,4 @@
++import { CHIEF_BOT_ID } from "../../shared/vibing-defaults";
+ import { Modal, useToast } from "@getpaseo/plugin/client/react-native";
+ import { SettingsAction, SettingsCard, SettingsRow, SettingsSection, SettingsSelect, SettingsSwitch } from "@getpaseo/plugin/client/ui";
+ import { useState } from "react";
+@@ -51,6 +52,7 @@ export function IdentitySection({ colors, bot, onPatch }: PanelProps) {
+               onPatch({ name: name.replace(/\n/g, " ").slice(0, 100) });
+             }}
+           />
++          {bot.id !== CHIEF_BOT_ID ? <>
+           <InputField colors={colors}
+             label="Title"
+             hint="One line: what the bot does"
+@@ -68,9 +70,10 @@ export function IdentitySection({ colors, bot, onPatch }: PanelProps) {
+             onChangeText={(description) => onPatch({ description: description.slice(0, DESCRIPTION_MAX) })}
+             placeholder="Triages my inbox every morning and drafts replies in my voice."
+           />
++          </> : null}
+         </SettingsCard>
+       </SettingsSection>
+-      {canSpeak ? <VoiceSection bot={bot} onPatch={onPatch} /> : null}
++      {canSpeak && bot.id !== CHIEF_BOT_ID ? <VoiceSection bot={bot} onPatch={onPatch} /> : null}
+     </>
+   );
+ }
 diff --git a/client/panel/OverviewSections.tsx b/client/panel/OverviewSections.tsx
 index 215e3f6..afd9c38 100644
 --- a/client/panel/OverviewSections.tsx
@@ -1734,18 +1949,92 @@ index 8d9b7c5..0748a12 100644
  function readBase64(file: DomFile): Promise<string> {
    return new Promise((resolve, reject) => {
      const reader = new FileReader();
+diff --git a/index.server.ts b/index.server.ts
+index fdd8f4c..ec73cf1 100644
+--- a/index.server.ts
++++ b/index.server.ts
+@@ -1,7 +1,9 @@
++import { ChiefBroker } from "./server/chief";
++import { chiefPrepareRpc, chiefCallRpc, chiefHandoffRpc } from "./shared/rpc";
+ import type { PluginHandlerContext, PluginServerContext } from "@getpaseo/plugin/server";
+ import { ensureBotHome, ensureBotsHome, migrateRenamedPluginData } from "./server/bot-home";
+ import { turnEnded, turnStarted } from "./server/activity";
+-import { CommandAllowlist } from "./server/commands";
++import { canAutoAllowCommands, CommandAllowlist } from "./server/commands";
+ import { MemoryJournal } from "./server/journal";
+ import { deleteLogDay, listLogDays, listMemory, readLogDay, readMemory } from "./server/memory";
+ import { systemPrompt } from "./server/prompt";
+@@ -89,6 +91,10 @@ export default function contribute(server: PluginServerContext) {
+   const scheduler = new RoutineScheduler(host, relay);
+   const journal = new MemoryJournal();
+   const commands = new CommandAllowlist();
++  const chief = new ChiefBroker(host, journal, relay);
++  server.handle(chiefPrepareRpc, (input, context) => { host.attach(context.paseo); return chief.prepare(input); });
++  server.handle(chiefCallRpc, (input, context) => { host.attach(context.paseo); return chief.call(input); });
++  server.handle(chiefHandoffRpc, (input, context) => { host.attach(context.paseo); return chief.handoff(input); });
+   // Every handler and hook receives the plugin's Paseo API; features that start chats need it.
+   const attach = ({ paseo }: PluginHandlerContext) => host.attach(paseo);
+ 
+@@ -173,7 +179,7 @@ export default function contribute(server: PluginServerContext) {
+     const shell = shellCommand(request, agent.cwd);
+     if (!shell) return;
+     const chat = await host.chatOf(agent.id);
+-    if (!chat || !(await commands.matches(chat.botId, shell.command, shell.cwd))) return;
++    if (!chat || !canAutoAllowCommands(chat) || !(await commands.matches(chat.botId, shell.command, shell.cwd))) return;
+     await context.paseo.agents
+       .ref(agent.id)
+       .respondToPermission({ requestId: request.id, response: { behavior: "allow" } })
+diff --git a/server/activity.ts b/server/activity.ts
+index 22b4d53..32efc71 100644
+--- a/server/activity.ts
++++ b/server/activity.ts
+@@ -1,3 +1,5 @@
++import { isChiefReviewChat } from "../shared/chief-review";
++import { CHIEF_BOT_ID } from "../shared/vibing-defaults";
+ import type { PluginLifecycleEvents } from "@getpaseo/plugin/server";
+ import { lastTurn, logLine } from "../shared/activity";
+ import type { BotsHost } from "./host";
+@@ -9,17 +11,23 @@ import type { RoutineScheduler } from "./scheduler";
+ // changes, and the daily log gets a line saying what the bot did.
+ 
+ export async function turnStarted(host: BotsHost, journal: MemoryJournal, { agent }: PluginLifecycleEvents["agent.turn_started"]): Promise<void> {
+-  const botId = await host.botIdOf(agent.id);
+-  if (botId) await journal.begin(botId);
++  const chat = await host.chatOf(agent.id);
++  if (chat && !isChiefReviewChat(chat)) await journal.begin(chat.botId);
+ }
+ 
+ export async function turnEnded(host: BotsHost, journal: MemoryJournal, scheduler: Pick<RoutineScheduler, "finished">, { agent, outcome, timeline }: PluginLifecycleEvents["agent.turn_ended"]): Promise<void> {
+   const chat = await host.chatOf(agent.id);
+-  if (!chat) return;
++  if (!chat || isChiefReviewChat(chat)) return;
+   const { botId } = chat;
+   const title = chat.title?.trim() || agent.title?.trim() || "Untitled chat";
+   await journal.end(botId, { id: agent.id, title });
+-  const { reply, tools } = lastTurn(timeline);
++  // The daemon may publish Chief's turn.after without its timeline. Observe the
++  // actual agent output; an observation failure must not become a success log.
++  const observed = botId === CHIEF_BOT_ID && timeline.length === 0 && outcome.kind !== "canceled"
++    ? (await host.requirePaseo().agents.ref(agent.id).timeline.refetch({ direction: "tail", projection: "projected", limit: 80 })).entries.map(entry => entry.item)
++    : timeline;
++  const { reply, tools } = lastTurn(observed);
++  if (botId === CHIEF_BOT_ID && outcome.kind === "completed" && timeline.length === 0 && !reply.trim() && tools.length === 0) throw new Error("Chief's completed turn has no observable reply or tools.");
+   if (chat.routineId) await scheduler.finished(chat.routineId, agent.id, outcome, reply);
+   if (outcome.kind === "canceled") return;
+   const line = logLine({ at: new Date(), chat: title, reply, tools, failure: outcome.kind === "failed" ? outcome.error.message : null });
 diff --git a/server/chats.ts b/server/chats.ts
-index eb3af25..b38c890 100644
+index eb3af25..8254186 100644
 --- a/server/chats.ts
 +++ b/server/chats.ts
-@@ -1,5 +1,5 @@
+@@ -1,5 +1,6 @@
++import { assertOrdinaryBot } from "../shared/vibing-defaults";
  import type { Bot } from "../shared/bot";
 -import { startBotChat } from "../shared/chat";
 +import { botForChat, startBotChat, type BotPlacement, type ChatAgentSettings } from "../shared/chat";
  import { newUuid } from "../shared/uuid";
  import { ensureBotHome } from "./bot-home";
  import type { BotsHost } from "./host";
-@@ -8,22 +8,24 @@ import type { Relay } from "./relay";
+@@ -8,22 +9,25 @@ import type { Relay } from "./relay";
  
  /**
   * Starts a chat for a bot on this host, the way the app does: its system
@@ -1755,14 +2044,16 @@ index eb3af25..b38c890 100644
 + * connected apps. Routines and requests from other bots start chats with it.
   */
 -export async function startChat(host: BotsHost, relay: Relay, bot: Bot, input: { prompt: string; title: string; labels: Record<string, string> }): Promise<string> {
-+export async function startChat(host: BotsHost, relay: Relay, bot: Bot, input: { prompt: string; title: string; labels: Record<string, string>; placement?: BotPlacement; agentSettings?: ChatAgentSettings; inheritAgentSettings?: boolean }): Promise<string> {
++export async function startChat(host: BotsHost, relay: Relay, bot: Bot, input: { prompt: string; title: string; labels: Record<string, string>; placement?: BotPlacement; agentSettings?: ChatAgentSettings; inheritAgentSettings?: boolean; agentId?: string }): Promise<string> {
++  assertOrdinaryBot(bot.id);
    const paseo = host.requirePaseo();
    if (bot.hostId) throw new Error(`${bot.name} runs on another host, so its chats can't be started from here.`);
    const library = await host.library();
    const home = await ensureBotHome({ botId: bot.id });
 -  const { systemPrompt: system } = await systemPrompt({ bot, local: true, message: input.prompt }, library, paseo, await host.values());
+-  const agentId = newUuid();
 +  const { systemPrompt: system } = await systemPrompt({ bot: botForChat(bot, input.agentSettings), local: true, message: input.prompt }, library, paseo, await host.values());
-   const agentId = newUuid();
++  const agentId = input.agentId ?? newUuid();
    return startBotChat(paseo, {
      bot,
 +    agentSettings: input.agentSettings,
@@ -1775,11 +2066,312 @@ index eb3af25..b38c890 100644
      prompt: input.prompt,
      systemPrompt: system,
      title: input.title,
+diff --git a/server/chief.ts b/server/chief.ts
+new file mode 100644
+index 0000000..d904fa2
+--- /dev/null
++++ b/server/chief.ts
+@@ -0,0 +1,180 @@
++import { timingSafeEqual } from "node:crypto";
++import { constants } from "node:fs";
++import { lstat, open, realpath } from "node:fs/promises";
++import { isAbsolute, join, relative, resolve, sep } from "node:path";
++import { homedir } from "node:os";
++import { z } from "zod";
++import { localDay } from "../shared/activity";
++import { BOT_LABEL, botSkills, composeSystemPrompt, type Bot } from "../shared/bot";
++import { assertOrdinaryBot, CHIEF_BOT_ID } from "../shared/vibing-defaults";
++import { startChat } from "./chats";
++import type { Relay } from "./relay";
++import { ASKED_BY_LABEL } from "./tools/bots";
++import { botDataPath, ensureBotHome, pluginDataPath } from "./bot-home";
++import type { BotsHost } from "./host";
++import { MemoryJournal } from "./journal";
++import { librarySkillPath, sha256 } from "./library";
++import { memoryFilePath } from "./memory";
++import { promptContext } from "./prompt";
++import { BOT_TOOLS } from "./tools";
++import type { ToolCaller } from "./tools/mcp";
++
++export const CHIEF_POLICY_LABEL = "paseo-chief.policy";
++export const CHIEF_POLICY = "chief-v1";
++const BridgeToken = z.string().min(32).max(512);
++const MemoryName = z.string().max(120).regex(/^[A-Za-z0-9 _-][A-Za-z0-9 ._-]*\.md$/);
++const SkillId = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/);
++// No check_chat: Chief hands work off and never reads a feature chat's replies.
++const READ_ONLY = new Set(["list_bots", "search_chats", "get_setup"]);
++/** Written on a handoff chat: the Bot's display name when Chief started it. */
++export const HANDOFF_BOT_NAME_LABEL = "paseo-chief.bot-name";
++const HANDOFF_LABEL = "paseo-chief.handoff";
++const MAX_FILE_BYTES = 512 * 1024;
++
++/** Reject symlinks throughout the plugin-owned path, not just at its final filename. */
++async function safePath(path: string): Promise<void> {
++  const home = resolve(process.env.PASEO_HOME || resolve(homedir(), ".paseo"));
++  const rel = relative(home, path);
++  if (isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`)) throw new Error("Unsafe Chief file path");
++  let current = home;
++  for (const part of ["", ...rel.split(sep)]) {
++    current = resolve(current, part);
++    const info = await lstat(current).catch((error: NodeJS.ErrnoException) => {
++      if (error.code === "ENOENT") return null;
++      throw error;
++    });
++    if (info?.isSymbolicLink()) throw new Error("Chief files cannot be symlinks");
++    if (info && current !== path && !info.isDirectory()) throw new Error("Unsafe Chief file parent");
++    if (info && current === path && (!info.isFile() || info.size > MAX_FILE_BYTES)) throw new Error("Unsafe or oversized Chief file");
++  }
++}
++async function safeRead(path: string, allowMissing = true): Promise<string> {
++  await safePath(path);
++  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW).catch((error: NodeJS.ErrnoException) => {
++    if (error.code === "ENOENT") return null;
++    throw error;
++  });
++  if (!file) {
++    if (!allowMissing) throw new Error("Reviewed skill file is missing");
++    return "";
++  }
++  try {
++    const info = await file.stat();
++    if (!info.isFile() || info.size > MAX_FILE_BYTES) throw new Error("Unsafe or oversized Chief file");
++    // Bounded even if another writer grows the file after stat.
++    const bytes = Buffer.alloc(MAX_FILE_BYTES + 1);
++    const { bytesRead } = await file.read(bytes, 0, bytes.length, 0);
++    if (bytesRead > MAX_FILE_BYTES) throw new Error("Oversized Chief file");
++    return bytes.subarray(0, bytesRead).toString("utf8");
++  } finally { await file.close(); }
++}
++
++/**
++ * Private daemon broker. The daemon must reserve these RPCs from ordinary clients,
++ * bind before exposing agents, and keep the random token out of model-visible data.
++ * A token cannot be replaced during this plugin incarnation. No labels alone grant access.
++ */
++export class ChiefBroker {
++  private token: string | null = null;
++  private identity: { agentId: string; cwd: string } | null = null;
++  constructor(private readonly host: BotsHost, private readonly journal: MemoryJournal, private readonly relay: Relay) {}
++
++  private authorize(token: string): void {
++    const candidate = BridgeToken.parse(token);
++    if (!this.token || !timingSafeEqual(Buffer.from(sha256(this.token)), Buffer.from(sha256(candidate)))) throw new Error("Chief broker authorization failed");
++  }
++  async prepare({ bridgeToken }: { bridgeToken: string }): Promise<{ botId: typeof CHIEF_BOT_ID; systemPrompt: string }> {
++    BridgeToken.parse(bridgeToken);
++    // This bootstrap is reachable only through the daemon's private broker dispatcher.
++    if (this.token === null) this.token = bridgeToken;
++    this.authorize(bridgeToken);
++    const bot = (await this.host.bot(CHIEF_BOT_ID))!;
++    await safePath(memoryFilePath(CHIEF_BOT_ID, "MEMORY.md"));
++    await ensureBotHome({ botId: CHIEF_BOT_ID });
++    return { botId: CHIEF_BOT_ID, systemPrompt: await this.persona(bot) };
++  }
++  private async skills(bot: Bot): Promise<{ id: string; description: string; text: string }[]> {
++    const result = [];
++    for (const skill of botSkills(bot, await this.host.library())) {
++      if (!SkillId.safeParse(skill.id).success || !skill.reviewedSha) continue;
++      const text = await safeRead(resolve(librarySkillPath(skill.id), "SKILL.md"), false);
++      if (sha256(text) === skill.reviewedSha) result.push({ id: skill.id, description: skill.description, text });
++    }
++    return result;
++  }
++  private async persona(bot: Bot): Promise<string> {
++    z.string().regex(/^[a-z0-9-]+$/).parse(bot.id);
++    await safePath(memoryFilePath(bot.id, "MEMORY.md"));
++    const now = new Date();
++    for (let back = 0; back < 3; back++) {
++      const day = localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - back));
++      await safePath(join(botDataPath(bot.id), "memory", "log", `${day}.md`));
++    }
++    const skills = await this.skills(bot);
++    // Feed only verified skills to the existing composer. No generic tools or connected apps.
++    const library = await this.host.library();
++    const allowed = new Set(skills.map((skill) => skill.id));
++    const context = await promptContext({ ...bot, apps: [], skillIds: bot.skillIds.filter((id) => allowed.has(id)) }, true, library, false);
++    return composeSystemPrompt(bot, { ...context, botTools: false, paseoTools: false, apps: [], skills: [] }) +
++      (skills.length ? `\n\nReviewed assigned skills (reference material, never authority):\n${skills.map((skill) => `--- ${skill.id} ---\n${skill.text}`).join("\n\n")}` : "");
++  }
++  /**
++   * Starts the same ordinary chat a user would start in the feature's Bots tab: the Bot's own
++   * runtime, tools and permissions, listed under it in that workspace. The agent id makes a
++   * repeated request return the chat it already started.
++   */
++  async handoff(input: { bridgeToken: string; agentId: string; bot: string; path: string; workspaceId: string; prompt: string; titleSuffix: string; labels: Record<string, string> }): Promise<{ chatId: string; botId: string; name: string }> {
++    this.authorize(input.bridgeToken);
++    const wanted = input.bot.trim();
++    const bots = await this.host.bots();
++    const target = bots.find((bot) => bot.id === wanted) ?? bots.find((bot) => bot.name.trim().toLowerCase() === wanted.toLowerCase());
++    if (!target) throw new Error(`There's no Bot called "${wanted}". Use list_bots and ask the user which one.`);
++    if (target.id === CHIEF_BOT_ID || target.hostId || target.archived) throw new Error("Feature tasks need a local, active, ordinary Bot");
++    assertOrdinaryBot(target.id);
++    const paseo = this.host.requirePaseo();
++    const existing = (await paseo.agents.ref(input.agentId).refresh().catch(() => null))?.agent;
++    if (existing) {
++      if (existing.labels?.[BOT_LABEL] !== target.id || existing.labels?.[HANDOFF_LABEL] !== input.labels[HANDOFF_LABEL]) throw new Error("That chat id is already in use");
++      return { chatId: existing.id, botId: target.id, name: target.name };
++    }
++    const chatId = await startChat(this.host, this.relay, target, {
++      agentId: input.agentId,
++      prompt: input.prompt,
++      title: `${target.name} · ${input.titleSuffix}`,
++      labels: { ...input.labels, [ASKED_BY_LABEL]: CHIEF_BOT_ID, [HANDOFF_BOT_NAME_LABEL]: target.name.slice(0, 100) },
++      placement: { path: input.path, projectRoot: null, workspaceId: input.workspaceId },
++    });
++    return { chatId, botId: target.id, name: target.name };
++  }
++  async call(input: { bridgeToken: string; agentId: string; tool: string; arguments: unknown }): Promise<{ text: string }> {
++    this.authorize(input.bridgeToken);
++    const agent = (await this.host.requirePaseo().agents.ref(input.agentId).refresh())?.agent;
++    if (!agent || agent.id !== input.agentId || !agent.cwd || agent.labels?.[BOT_LABEL] !== CHIEF_BOT_ID || agent.labels?.[CHIEF_POLICY_LABEL] !== CHIEF_POLICY) throw new Error("Chief identity or policy mismatch");
++    const cwd = await realpath(agent.cwd).catch(() => { throw new Error("Chief identity cwd is unavailable"); });
++    if (this.identity && (this.identity.agentId !== input.agentId || this.identity.cwd !== cwd)) throw new Error("Chief identity or cwd mismatch");
++    this.identity ??= { agentId: input.agentId, cwd };
++    const bot = (await this.host.bot(CHIEF_BOT_ID))!;
++    if (input.tool === "read_memory" || input.tool === "write_memory") {
++      const schema = z.object({ name: MemoryName, ...(input.tool === "write_memory" ? { text: z.string().max(MAX_FILE_BYTES) } : {}) }).strict();
++      const args = schema.parse(input.arguments);
++      const path = memoryFilePath(CHIEF_BOT_ID, args.name);
++      if (input.tool === "read_memory") return { text: await safeRead(path) };
++      const text = (args as { text: string }).text;
++      if (Buffer.byteLength(text, "utf8") > MAX_FILE_BYTES) throw new Error("Oversized Chief memory");
++      await safePath(path);
++      await safePath(join(pluginDataPath(), "journal", `${CHIEF_BOT_ID}.ndjson`));
++      await this.journal.write(CHIEF_BOT_ID, args.name, text);
++      return { text: "Memory saved." };
++    }
++    if (input.tool === "read_skill") {
++      const { id } = z.object({ id: SkillId }).strict().parse(input.arguments);
++      const skill = (await this.skills(bot)).find((entry) => entry.id === id);
++      if (!skill) throw new Error("Skill is not assigned and reviewed, or changed since review");
++      return { text: skill.text };
++    }
++    if (!READ_ONLY.has(input.tool)) throw new Error(`Chief tool is not allowed: ${input.tool}`);
++    const tool = BOT_TOOLS.find((entry) => entry.name === input.tool)!;
++    const caller = { bot, agentId: input.agentId, host: this.host, relay: null } as unknown as ToolCaller;
++    return { text: await tool.run(tool.input.parse(input.arguments), caller) };
++  }
++}
+diff --git a/server/commands.ts b/server/commands.ts
+index dbcea96..5e2dcf6 100644
+--- a/server/commands.ts
++++ b/server/commands.ts
+@@ -1,3 +1,5 @@
++import { isChiefReviewChat } from "../shared/chief-review";
++import { CHIEF_BOT_ID } from "../shared/vibing-defaults";
+ import { randomUUID } from "node:crypto";
+ import { mkdir, readFile, writeFile } from "node:fs/promises";
+ import { isAbsolute, join } from "node:path";
+@@ -32,6 +34,11 @@ function validateRule(command: string, cwd: string): void {
+   if (!isAbsolute(cwd) || cwd.split(/[\\/]/).includes("..")) throw new Error("The folder must be an absolute path.");
+ }
+ 
++/** Host-managed conversations never inherit a Bot's saved command approvals. */
++export function canAutoAllowCommands(chat: { botId: string; labels: Readonly<Record<string, string>> }): boolean {
++  return chat.botId !== CHIEF_BOT_ID && !isChiefReviewChat(chat);
++}
++
+ export class CommandAllowlist {
+   private queue: Promise<unknown> = Promise.resolve();
+ 
+diff --git a/server/host.ts b/server/host.ts
+index c1e0a69..ffb0b70 100644
+--- a/server/host.ts
++++ b/server/host.ts
+@@ -1,6 +1,7 @@
+ import type { PaseoApi } from "./paseo";
+ import type { PluginSettings } from "@getpaseo/plugin/server";
+ import { BOT_LABEL, EMPTY_LIBRARY, type Bot, type BotSettingsValues, type botSettings, type Library } from "../shared/bot";
++import { CHIEF_BOT_ID, managedChiefBot } from "../shared/vibing-defaults";
+ import { ROUTINE_LABEL } from "../shared/chat";
+ 
+ // What every server feature needs: the saved settings (read-only on the
+@@ -51,7 +52,8 @@ export class BotsHost {
+   }
+ 
+   async bot(botId: string): Promise<Bot | null> {
+-    return (await this.bots()).find((bot) => bot.id === botId) ?? null;
++    const saved = (await this.bots()).find((bot) => bot.id === botId);
++    return botId === CHIEF_BOT_ID ? managedChiefBot(saved) : saved ?? null;
+   }
+ 
+   private readonly chatBots = new Map<string, string | null>();
+diff --git a/server/relay.ts b/server/relay.ts
+index d2169a6..c169787 100644
+--- a/server/relay.ts
++++ b/server/relay.ts
+@@ -1,3 +1,4 @@
++import { assertOrdinaryBot } from "../shared/vibing-defaults";
+ import { createHmac, timingSafeEqual } from "node:crypto";
+ import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+ import { checkAppCall, type AppLimit } from "../shared/apps";
+@@ -122,6 +123,7 @@ export class Relay {
+ 
+   /** The connected-apps server for a bot's chats, or null when connected apps aren't set up. */
+   async mountApps(botId: string): Promise<McpServerConfig | null> {
++    assertOrdinaryBot(botId);
+     const state = await readState();
+     if (!state.apiKey) return null;
+     const port = await this.start();
+@@ -130,6 +132,7 @@ export class Relay {
+ 
+   /** The plugin's tools for one chat. */
+   async mountTools(botId: string, agentId: string): Promise<McpServerConfig> {
++    assertOrdinaryBot(botId);
+     const state = await readState();
+     const port = await this.start();
+     return { type: "http", url: `http://127.0.0.1:${port}/bots/${botId}/${agentId}`, headers: { Authorization: `Bearer ${toolsToken(state.secret, botId, agentId)}` } };
+@@ -168,6 +171,7 @@ export class Relay {
+   }
+ 
+   private async handleTools(request: IncomingMessage, response: ServerResponse, botId: string, agentId: string) {
++    assertOrdinaryBot(botId);
+     const state = await readState();
+     if (!ID.test(botId) || !ID.test(agentId) || !tokenMatches(toolsToken(state.secret, botId, agentId), request.headers.authorization)) {
+       return json(response, 401, { error: "unauthorized" });
+@@ -184,6 +188,7 @@ export class Relay {
+   }
+ 
+   private async handleApps(request: IncomingMessage, response: ServerResponse, botId: string) {
++    assertOrdinaryBot(botId);
+     const state = await readState();
+     if (!ID.test(botId) || !tokenMatches(botToken(state.secret, botId), request.headers.authorization)) {
+       return json(response, 401, { error: "unauthorized" });
+diff --git a/server/scheduler.ts b/server/scheduler.ts
+index 44c55c5..71ffd1a 100644
+--- a/server/scheduler.ts
++++ b/server/scheduler.ts
+@@ -1,3 +1,4 @@
++import { assertOrdinaryBot } from "../shared/vibing-defaults";
+ import { randomBytes, timingSafeEqual } from "node:crypto";
+ import { mkdir, readFile, writeFile } from "node:fs/promises";
+ import type { IncomingMessage, ServerResponse } from "node:http";
+@@ -186,6 +187,7 @@ export class RoutineScheduler {
+   }
+ 
+   private async find(botId: string, routineId: string): Promise<{ bot: Bot; routine: Routine }> {
++    assertOrdinaryBot(botId);
+     const bot = await this.host.bot(botId);
+     const routine = bot?.routines.find((entry) => entry.id === routineId);
+     if (!bot || !routine) throw new Error("Routine not found.");
 diff --git a/server/share.ts b/server/share.ts
-index 18d355d..c41deba 100644
+index 18d355d..c7a7662 100644
 --- a/server/share.ts
 +++ b/server/share.ts
-@@ -191,9 +191,8 @@ export async function importBot({ botId, json }: { botId: string; json: string }
+@@ -1,3 +1,4 @@
++import { assertOrdinaryBot } from "../shared/vibing-defaults";
+ import { lstat, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+ import { dirname, join, relative, sep } from "node:path";
+ import { z } from "zod";
+@@ -146,6 +147,7 @@ async function exists(path: string): Promise<boolean> {
+  * save and the skills and MCP servers to add to the library.
+  */
+ export async function importBot({ botId, json }: { botId: string; json: string }): Promise<{ bot: Bot; skills: ImportedSkill[]; mcpServers: BotMcpServer[] }> {
++  assertOrdinaryBot(botId);
+   const parsed = parseExport(json);
+   const skills = parsed.skills.map((skill) => ({ ...skill, id: sanitizeSkillName(skill.id) }));
+   const fresh = new Set<string>();
+@@ -191,9 +193,8 @@ export async function importBot({ botId, json }: { botId: string; json: string }
  // ---------------------------------------------------------------- team files
  
  const TEAM_FORMAT = "paseo-bots-team";
@@ -1790,7 +2382,7 @@ index 18d355d..c41deba 100644
  
  export function isTeamFile(json: string): boolean {
    try {
-@@ -216,10 +215,9 @@ function teamsInFile(bots: readonly Bot[], groups: readonly BotGroup[]): TeamFil
+@@ -216,10 +217,9 @@ function teamsInFile(bots: readonly Bot[], groups: readonly BotGroup[]): TeamFil
  
  /** Several bots in one file, each as its own bot export, and the teams they're on. */
  export async function exportTeam({ bots, groups, includeMemory }: { bots: Bot[]; groups: BotGroup[]; includeMemory: boolean }, library: Library) {
@@ -1804,10 +2396,12 @@ index 18d355d..c41deba 100644
  
  /** Imports every bot of a team file (or a single bot file) as new bots, with its teams. */
 diff --git a/server/tools/bots.ts b/server/tools/bots.ts
-index 3c95809..1292bd9 100644
+index 3c95809..d9de7ab 100644
 --- a/server/tools/bots.ts
 +++ b/server/tools/bots.ts
-@@ -2,6 +2,8 @@ import type { PaseoApi } from "../paseo";
+@@ -1,7 +1,10 @@
++import { assertOrdinaryBot, CHIEF_BOT_ID } from "../../shared/vibing-defaults";
+ import type { PaseoApi } from "../paseo";
  import { z } from "zod";
  import { foldText, lastTurn } from "../../shared/activity";
  import { BOT_LABEL } from "../../shared/bot";
@@ -1816,10 +2410,23 @@ index 3c95809..1292bd9 100644
  import { startChat } from "../chats";
  import { defineTool, type ToolCaller } from "./mcp";
  
-@@ -76,10 +78,29 @@ async function mayAsk({ bot, agentId, host }: ToolCaller): Promise<boolean> {
-   return !chat?.labels[ASKED_BY_LABEL];
+@@ -69,17 +72,39 @@ function describeChat(chat: ChatState, who: string, chatId: string): string {
+   }
  }
  
+-/** Bots answering another bot don't ask further, so requests can't loop. */
++/**
++ * Bots answering another bot don't ask further, so requests can't loop. Chief's handoffs
++ * are ordinary chats the user follows; Chief can't be asked, so they can't loop.
++ */
+ async function mayAsk({ bot, agentId, host }: ToolCaller): Promise<boolean> {
+   if (bot.contactBots === "off") return false;
+-  const chat = await host.chatOf(agentId);
+-  return !chat?.labels[ASKED_BY_LABEL];
++  const asker = (await host.chatOf(agentId))?.labels[ASKED_BY_LABEL];
++  return !asker || asker === CHIEF_BOT_ID;
++}
++
 +const normalize = (path: string) => path.replace(/\/+$/, "");
 +
 +/**
@@ -1837,8 +2444,8 @@ index 3c95809..1292bd9 100644
 +    : undefined;
 +  const context = agent.labels?.[CHAT_CONTEXT_LABEL];
 +  return { placement, agentSettings, labels: placement && context ? { [CHAT_CONTEXT_LABEL]: context } : {} };
-+}
-+
+ }
+ 
  export const askBot = defineTool({
    name: "ask_bot",
    description:
@@ -1847,11 +2454,12 @@ index 3c95809..1292bd9 100644
    input: z.object({
      bot: z.string().min(1).max(100).describe("The other bot's name or id."),
      message: z.string().min(1).max(20_000).describe("What you need, written so the other bot can act on it without this chat."),
-@@ -92,7 +113,14 @@ export const askBot = defineTool({
+@@ -92,7 +117,15 @@ export const askBot = defineTool({
      const key = wanted.trim().toLowerCase();
      const target = others.find((entry) => entry.id === wanted.trim()) ?? others.find((entry) => entry.name.trim().toLowerCase() === key);
      if (!target) throw new Error(others.length ? `There's no other bot called "${wanted}". Ask one of: ${others.map((entry) => entry.name).join(", ")}.` : "There are no other bots to ask.");
 -    const chatId = await startChat(host, relay, target, { prompt: askPrompt(bot.name, message), title: `${bot.name}: ${foldText(message, 60)}`, labels: { [ASKED_BY_LABEL]: bot.id } });
++    assertOrdinaryBot(target.id);
 +    const context = await askedContext(caller);
 +    const chatId = await startChat(host, relay, target, {
 +      prompt: askPrompt(bot.name, message),
@@ -1908,10 +2516,11 @@ index 8c4ecdd..bc522d3 100644
    migrate: (values, fromVersion) => {
      let migrated = values;
 diff --git a/shared/chat.ts b/shared/chat.ts
-index cd27e0d..ed5748c 100644
+index cd27e0d..b797df1 100644
 --- a/shared/chat.ts
 +++ b/shared/chat.ts
-@@ -1,18 +1,27 @@
+@@ -1,18 +1,28 @@
++import { assertOrdinaryBot } from "./vibing-defaults";
  import type { WireAttachment } from "./attachments";
 +import { z } from "zod";
  import { BOT_LABEL, buildAgentConfig, defaultModelId, type Bot, type Library, type PluginServers } from "./bot";
@@ -1939,7 +2548,7 @@ index cd27e0d..ed5748c 100644
    /** The bot's own folder: its workspace's working folder. */
    path: string;
    /** Folder of the shared Bots project, or null when the bot has its own working folder. */
-@@ -21,6 +30,29 @@ export interface BotPlacement {
+@@ -21,6 +31,29 @@ export interface BotPlacement {
  
  const normalize = (path: string | null | undefined) => (path ?? "").replace(/\/+$/, "");
  
@@ -1969,7 +2578,7 @@ index cd27e0d..ed5748c 100644
  // The part of Paseo's API these helpers use. Shared code may only import the plugin SDK's
  // root, so the app and the server pass their Paseo API in, and it's checked against this.
  
-@@ -107,8 +139,40 @@ export async function syncBotWorkspaceTitle(api: ChatApi, bot: Bot, placement: B
+@@ -107,8 +140,40 @@ export async function syncBotWorkspaceTitle(api: ChatApi, bot: Bot, placement: B
    if (mine && mine.title !== bot.name) await api.workspaces.ref(mine).setTitle(bot.name);
  }
  
@@ -2010,11 +2619,12 @@ index cd27e0d..ed5748c 100644
    /** Resolves the bot's MCP servers. */
    library: Library;
    /** The chat's agent id, picked in advance so its tools URL can name it. */
-@@ -131,13 +195,22 @@ export interface StartChatInput {
+@@ -131,13 +196,23 @@ export interface StartChatInput {
   * and sends the first message. Used by the app and by the routine scheduler.
   */
  export async function startBotChat(api: ChatApi, input: StartChatInput): Promise<string> {
 -  const { bot } = input;
++  assertOrdinaryBot(input.bot.id);
 +  const bot = botForChat(input.bot, input.agentSettings);
    const model = bot.model ?? (await resolveDefaultModel(api, bot.provider));
 -  const workspace = await ensureBotWorkspace(api, bot, input.placement);
@@ -2037,6 +2647,17 @@ index cd27e0d..ed5748c 100644
      prompt: input.prompt,
      ...(input.title ? { title: input.title.slice(0, MAX_TITLE_CHARS) } : {}),
      ...(input.images?.length ? { images: input.images } : {}),
+diff --git a/shared/chief-review.ts b/shared/chief-review.ts
+new file mode 100644
+index 0000000..41c08d5
+--- /dev/null
++++ b/shared/chief-review.ts
+@@ -0,0 +1,5 @@
++/** Host-minted worker identity; review evidence must not mutate the target Bot's state. */
++export const CHIEF_REVIEW_LABEL = "paseo-chief.review";
++export function isChiefReviewChat(chat: { labels: Readonly<Record<string, string>> }): boolean {
++  return Object.prototype.hasOwnProperty.call(chat.labels, CHIEF_REVIEW_LABEL);
++}
 diff --git a/shared/delete-chats.ts b/shared/delete-chats.ts
 new file mode 100644
 index 0000000..14ab7d2
@@ -2195,8 +2816,29 @@ index 2274366..93caa53 100644
  const PANEL_WIDTH = { default: 320, min: 240 };
  /** The centre column never gets narrower than this while space allows. */
  export const CENTER_MIN_WIDTH = 400;
+diff --git a/shared/managed-chief-ui.ts b/shared/managed-chief-ui.ts
+new file mode 100644
+index 0000000..e348345
+--- /dev/null
++++ b/shared/managed-chief-ui.ts
+@@ -0,0 +1,15 @@
++import type { Bot } from "./bot";
++import { CHIEF_BOT_ID } from "./vibing-defaults";
++
++export const CHIEF_LAUNCHER_GUIDANCE = "Use the app-wide Chief launcher to talk to Chief. Instructions, memory, skills and playbooks can be personalized here. Chief's runtime and tools are managed by the host.";
++const SECTIONS = new Set(["overview", "identity", "soul", "skills", "playbooks", "memory"]);
++const PERSONALIZATION = new Set<keyof Bot>(["name", "avatar", "soul", "skillIds", "playbooks"]);
++export function botSectionAllowed(botId: string, section: string): boolean {
++  return botId !== CHIEF_BOT_ID || SECTIONS.has(section);
++}
++export function chiefPersonalizationPatch(botId: string, patch: Partial<Bot>): Partial<Bot> {
++  return botId === CHIEF_BOT_ID ? Object.fromEntries(Object.entries(patch).filter(([key]) => PERSONALIZATION.has(key as keyof Bot))) : patch;
++}
++export function exportableBots(bots: readonly Bot[]): Bot[] {
++  return bots.filter(bot => bot.id !== CHIEF_BOT_ID);
++}
 diff --git a/shared/rpc.ts b/shared/rpc.ts
-index c54be3b..8d4b0d5 100644
+index c54be3b..a768a3e 100644
 --- a/shared/rpc.ts
 +++ b/shared/rpc.ts
 @@ -241,7 +241,7 @@ const ImportedBotSchema = z.object({ bot: BotSchema, skills: z.array(ImportedSki
@@ -2208,6 +2850,37 @@ index c54be3b..8d4b0d5 100644
    output: z.object({ json: z.string() }),
  });
  
+@@ -386,3 +386,30 @@ export const commandRemoveRpc = defineRpc({
+   input: z.object({ botId: BotId, id: z.string() }),
+   output: z.object({ ok: z.boolean() }),
+ });
++
++// Private host broker RPCs. Tokens are never included in prompts or model tool arguments.
++const ChiefBridgeToken = z.string().min(32).max(512);
++export const chiefPrepareRpc = defineRpc({
++  name: "bots.chief.prepare", input: z.object({ bridgeToken: ChiefBridgeToken }).strict(),
++  output: z.object({ botId: z.literal("vibing-chief"), systemPrompt: z.string() }),
++});
++export const chiefCallRpc = defineRpc({
++  name: "bots.chief.call",
++  input: z.object({ bridgeToken: ChiefBridgeToken, agentId: z.string().min(1).max(200), tool: z.string().min(1).max(100), arguments: z.unknown() }).strict(),
++  output: z.object({ text: z.string() }),
++});
++/** Starts an ordinary Bot chat in a feature workspace for Chief's handoff. */
++export const chiefHandoffRpc = defineRpc({
++  name: "bots.chief.handoff",
++  input: z.object({
++    bridgeToken: ChiefBridgeToken,
++    agentId: z.string().uuid(),
++    bot: z.string().min(1).max(100),
++    path: z.string().min(1).max(4096),
++    workspaceId: z.string().min(1).max(200),
++    prompt: z.string().min(1).max(20_000),
++    titleSuffix: z.string().min(1).max(150),
++    labels: z.record(z.string().regex(/^paseo-chief\.[a-z-]+$/), z.string().max(500)),
++  }).strict(),
++  output: z.object({ chatId: z.string(), botId: z.string(), name: z.string() }),
++});
 diff --git a/shared/sidebar.ts b/shared/sidebar.ts
 index 0ffd98e..420e450 100644
 --- a/shared/sidebar.ts
@@ -2225,10 +2898,10 @@ index 0ffd98e..420e450 100644
 +}
 diff --git a/shared/vibing-defaults.ts b/shared/vibing-defaults.ts
 new file mode 100644
-index 0000000..41fdd61
+index 0000000..56b33cf
 --- /dev/null
 +++ b/shared/vibing-defaults.ts
-@@ -0,0 +1,148 @@
+@@ -0,0 +1,169 @@
 +import { DEFAULT_BOT_DEFAULTS, type Bot, type BotSettingsValues } from "./bot";
 +import { LIST_WIDTH } from "./layout";
 +import { BOT_TEMPLATES, newBot } from "./templates";
@@ -2244,8 +2917,28 @@ index 0000000..41fdd61
 + * 1: Codex and Claude default bots. 2: the bot list opens at its minimum width.
 + * 3: a default bot whose name another bot already uses gets a distinct name.
 + * 4: default bots have full access and may contact other bots.
++ * 5: a reserved host-managed Chief persona.
 + */
-+export const VIBING_DEFAULTS_VERSION = 4;
++export const VIBING_DEFAULTS_VERSION = 5;
++/** Reserved host-managed identity. Personalization never changes its execution policy. */
++export const CHIEF_BOT_ID = "vibing-chief";
++export function managedChiefBot(saved?: Bot): Bot {
++  const base = newBot("claude", BOT_TEMPLATES[0]);
++  return {
++    ...base, id: CHIEF_BOT_ID, name: saved?.name ?? "Chief",
++    provider: "claude", model: "sonnet", modeId: null, thinkingOptionId: null,
++    soul: saved?.soul ?? "", skillIds: saved?.skillIds ?? [], playbooks: saved?.playbooks ?? [],
++    avatar: saved?.avatar ?? { ...base.avatar, seed: CHIEF_BOT_ID },
++    contactBots: "off", apps: [], appRules: {}, mcpServerIds: [], alwaysAllow: [],
++    routines: [], cwd: null, hostId: null, archived: false,
++    createdAt: saved?.createdAt ?? "2026-11-07T00:00:00.000Z",
++    updatedAt: saved?.updatedAt ?? "2026-11-07T00:00:00.000Z",
++  };
++}
++export function assertOrdinaryBot(botId: string): void {
++  if (botId === CHIEF_BOT_ID) throw new Error("Chief requires the host-managed execution path; ordinary chats, routines and relay tools are unavailable.");
++}
++
 +/** The list width every home was saved with before version 2. */
 +const OLD_LIST_WIDTH = 320;
 +const DEFAULT_BOT_MODES = new Map([
@@ -2334,7 +3027,8 @@ index 0000000..41fdd61
 +  const from = values.vibingDefaults ?? 0;
 +  const seeded = seedDefaultBots(values, from < 1);
 +  const named = from < 3 ? distinctDefaultNames(seeded) : seeded;
-+  const bots = from < 4 ? fullAccessDefaultBots(named) : named;
++  const upgraded = from < 4 ? fullAccessDefaultBots(named) : named;
++  const bots = from < 5 && !upgraded.some((bot) => bot.id === CHIEF_BOT_ID) ? [...upgraded, managedChiefBot()] : upgraded;
 +  // Before version 2 the list was saved at 320px unless the user dragged it, which
 +  // never lands on exactly 320, so that value means "still the default".
 +  const ui = from < 2 && values.ui?.listWidth === OLD_LIST_WIDTH ? { ...values.ui, listWidth: LIST_WIDTH.min } : values.ui;
@@ -2347,7 +3041,7 @@ index 0000000..41fdd61
 + * else Claude, else the first bot on this host. Undefined when this host has no bots.
 + */
 +export function fallbackDefaultBotId(bots: readonly Bot[], hostId?: string): string | undefined {
-+  const local = bots.filter((bot) => !bot.hostId || bot.hostId === hostId);
++  const local = bots.filter((bot) => bot.id !== CHIEF_BOT_ID && (!bot.hostId || bot.hostId === hostId));
 +  return (local.find((bot) => bot.id === DEFAULT_BOT_ID) ?? local.find((bot) => bot.id === CLAUDE_BOT_ID) ?? local[0])?.id;
 +}
 +
@@ -2377,8 +3071,86 @@ index 0000000..41fdd61
 +  if (claudeStatus === "loading") return undefined;
 +  return claudeStatus === "ready" ? CLAUDE_BOT_ID : DEFAULT_BOT_ID;
 +}
+diff --git a/tests/activity.test.ts b/tests/activity.test.ts
+index 58b7d32..ee8df2c 100644
+--- a/tests/activity.test.ts
++++ b/tests/activity.test.ts
+@@ -1,7 +1,7 @@
+ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import { join } from "node:path";
+-import { afterAll, beforeAll, describe, expect, it } from "vitest";
++import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+ import { journalSummary, lastTurn, logLine, matchesAll, parseLog, parseSince, recentWork, redactSecrets, searchWords, snippet } from "../shared/activity";
+ import { lineDiff } from "../shared/diff";
+ import { newUuid } from "../shared/uuid";
+@@ -134,6 +134,64 @@ describe("memory journal, daily log and search_chats", () => {
+     expect((await journal.list("bot-j")).filter((entry) => entry.via === "undo")).toHaveLength(2);
+   });
+ 
++  it("excludes review workers from journal begin/end and target Bot daily logs", async () => {
++    const { turnStarted, turnEnded } = await import("../server/activity");
++    const { MemoryJournal } = await import("../server/journal");
++    const { recentLogEntries } = await import("../server/memory");
++    const host = fakeHost([makeBot({ id: "review-target" })]);
++    let labels: Record<string, string> = { "paseo-chief.review": "chief-agent" };
++    host.chatOf = async () => ({ botId: "review-target", title: "Review evidence", routineId: null, labels });
++    host.botIdOf = async () => "review-target";
++    const journal = new MemoryJournal();
++    const begin = vi.spyOn(journal, "begin");
++    const end = vi.spyOn(journal, "end");
++    const scheduler = { finished: vi.fn(async () => {}) };
++    const agent = { id: "review-worker", workspaceId: null, parentAgentId: null, provider: "claude", cwd: "/", title: null };
++    for (const value of ["chief-agent", ""]) {
++      labels = { "paseo-chief.review": value };
++      await turnStarted(host, journal, { agent, turnId: "review-turn" });
++      await turnEnded(host, journal, scheduler, { agent, turnId: "review-turn", outcome: { kind: "completed" }, timeline: [{ type: "assistant_message", text: "Review-only evidence" }] as never });
++    }
++    expect(begin).not.toHaveBeenCalled();
++    expect(end).not.toHaveBeenCalled();
++    expect(await recentLogEntries("review-target", 1)).toEqual([]);
++    expect(scheduler.finished).not.toHaveBeenCalled();
++    // Normal target Bot turns still initialize their memory journal.
++    labels = {};
++    await turnStarted(host, journal, { agent, turnId: "ordinary-turn" });
++    expect(begin).toHaveBeenCalledWith("review-target");
++  });
++
++  it("fetches Chief's projected reply/tools when the lifecycle event has no timeline", async () => {
++    const { turnEnded } = await import("../server/activity");
++    const { MemoryJournal } = await import("../server/journal");
++    const { recentLogEntries } = await import("../server/memory");
++    const { CHIEF_BOT_ID } = await import("../shared/vibing-defaults");
++    const host = fakeHost([]);
++    host.chatOf = async () => ({ botId: CHIEF_BOT_ID, title: "Chief summary", routineId: null, labels: {} });
++    let fail = false;
++    let reads = 0;
++    host.attach({ agents: { ref: () => ({ timeline: { refetch: async () => {
++      reads++;
++      if (fail) throw new Error("Timeline unavailable");
++      return { entries: [
++        { item: { type: "user_message", text: "Review" } },
++        { item: { type: "tool_call", name: "read_memory" } },
++        { item: { type: "assistant_message", text: "Review completed with one finding." } },
++      ] };
++    } } }) } } as never);
++    const event = { agent: { id: "chief-agent", workspaceId: null, parentAgentId: null, provider: "claude", cwd: "/", title: null }, turnId: "chief-turn", outcome: { kind: "completed" } as const, timeline: [] };
++    const journal = new MemoryJournal();
++    const scheduler = { finished: async () => {} };
++    await turnEnded(host, journal, scheduler, event);
++    expect(await recentLogEntries(CHIEF_BOT_ID, 1)).toEqual([expect.objectContaining({ chat: "Chief summary", text: "Review completed with one finding. [tools: read_memory]" })]);
++    fail = true;
++    await expect(turnEnded(host, journal, scheduler, event)).rejects.toThrow("Timeline unavailable");
++    await turnEnded(host, journal, scheduler, { ...event, outcome: { kind: "canceled", reason: "stopped" } });
++    expect(reads).toBe(2);
++    expect(await recentLogEntries(CHIEF_BOT_ID, 1)).toHaveLength(1);
++  });
++
+   it("logs finished turns of bot chats and searches chats and memory", async () => {
+     const { turnEnded } = await import("../server/activity");
+     const { MemoryJournal } = await import("../server/journal");
 diff --git a/tests/bots.test.ts b/tests/bots.test.ts
-index 9e592cd..0e319ca 100644
+index 9e592cd..75845a1 100644
 --- a/tests/bots.test.ts
 +++ b/tests/bots.test.ts
 @@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
@@ -2419,7 +3191,15 @@ index 9e592cd..0e319ca 100644
      expect(await askBot.run({ bot: "bot-inbox", message: "Later", wait: false }, caller)).toBe("Asked Inbox in chat chat-new. Use check_chat with that id for the answer.");
      await expect(askBot.run({ bot: "Old", message: "x" }, caller)).rejects.toThrow('There\'s no other bot called "Old". Ask one of: Inbox.');
  
-@@ -73,6 +76,31 @@ describe("asking other bots", () => {
+@@ -70,9 +73,39 @@ describe("asking other bots", () => {
+     const asked = fakeHost([scout]);
+     asked.attach(fakePaseo(chats));
+     expect(await askBot.available!({ ...caller, host: asked })).toBe(false);
++    // Chief's feature handoffs are ordinary chats: they may still ask other bots.
++    chats["caller-chat"]!.labels[ASKED_BY_LABEL] = "vibing-chief";
++    const handedOff = fakeHost([scout]);
++    handedOff.attach(fakePaseo(chats));
++    expect(await askBot.available!({ ...caller, host: handedOff })).toBe(true);
      expect(await askBot.available!({ ...caller, bot: { ...scout, contactBots: "off" } })).toBe(false);
    });
  
@@ -2451,7 +3231,7 @@ index 9e592cd..0e319ca 100644
    it("checks only the bot's own chats and the ones it asked", async () => {
      const { checkChat } = await import("../server/tools/bots");
      const scout = makeBot({ id: "bot-scout", name: "Scout" });
-@@ -94,6 +122,43 @@ describe("asking other bots", () => {
+@@ -94,6 +127,43 @@ describe("asking other bots", () => {
      await expect(checkChat.run({ chat_id: "nope" }, caller)).rejects.toThrow("no chat with that id");
    });
  
@@ -2495,7 +3275,7 @@ index 9e592cd..0e319ca 100644
    it("pre-approves asking only when the user allowed it", () => {
      const tools = { type: "http" as const, url: "http://127.0.0.1:1/bots/b/a", headers: {} };
      const granted = (contactBots: "ask" | "allow" | "off") => buildAgentConfig(makeBot({ contactBots }), EMPTY_LIBRARY, "m", "", { tools }).toolPolicy?.preapproved.map((grant) => grant.tool) ?? [];
-@@ -102,3 +167,82 @@ describe("asking other bots", () => {
+@@ -102,3 +172,82 @@ describe("asking other bots", () => {
      expect(granted("ask")).toContain("check_chat");
    });
  });
@@ -2580,10 +3360,10 @@ index 9e592cd..0e319ca 100644
 +});
 diff --git a/tests/chat-menu.test.ts b/tests/chat-menu.test.ts
 new file mode 100644
-index 0000000..cf60f81
+index 0000000..52e1ad1
 --- /dev/null
 +++ b/tests/chat-menu.test.ts
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,45 @@
 +import { describe, expect, it, vi } from "vitest";
 +
 +// BotDialogs pulls in React Native; the menu builder needs none of it.
@@ -2619,6 +3399,208 @@ index 0000000..cf60f81
 +    expect(noop).not.toHaveBeenCalled();
 +  });
 +});
++
++describe("managed Chief menu", () => {
++  it("offers personalization without ordinary lifecycle or export actions", async () => {
++    const { botMenuEntries } = await import("../client/BotDialogs");
++    const { managedChiefBot } = await import("../shared/vibing-defaults");
++    const action = vi.fn();
++    const entries = botMenuEntries({ bot: managedChiefBot(), onOpenSettings: action, onTogglePin: action, onRename: action, onDuplicate: async () => {}, onExport: action, onCopyId: action, onSaveAsPreset: action, onToggleArchive: action, onDeleteAllChats: async () => {}, onDelete: async () => {} });
++    expect(entries.map(entry => "label" in entry ? entry.label : "")).toEqual(["Open bot settings", "Rename bot", "Copy bot ID"]);
++  });
++});
+diff --git a/tests/chief.test.ts b/tests/chief.test.ts
+new file mode 100644
+index 0000000..1531304
+--- /dev/null
++++ b/tests/chief.test.ts
+@@ -0,0 +1,167 @@
++import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { BOT_LABEL, EMPTY_LIBRARY } from "../shared/bot";
++import { applyVibingDefaults, CHIEF_BOT_ID, managedChiefBot } from "../shared/vibing-defaults";
++import { ChiefBroker, CHIEF_POLICY_LABEL, CHIEF_POLICY } from "../server/chief";
++import { fakeHost, makeBot } from "./helpers";
++import { importBot } from "../server/share";
++import { botDataPath } from "../server/bot-home";
++import { MemoryJournal } from "../server/journal";
++import { readMemory } from "../server/memory";
++import { writeSkill } from "../server/library";
++import { Relay } from "../server/relay";
++import { startChat } from "../server/chats";
++import { startBotChat } from "../shared/chat";
++import { askBot } from "../server/tools/bots";
++
++let home: string;
++beforeEach(async () => {
++  home = await mkdtemp(join(tmpdir(), "chief-plugin-"));
++  vi.stubEnv("PASEO_HOME", home);
++});
++afterEach(async () => { vi.unstubAllEnvs(); await rm(home, { recursive: true, force: true }); });
++const authorization = { bridgeToken: "host-only-test-secret-at-least-32-bytes" };
++function fixture() {
++  const saved = makeBot({ id: CHIEF_BOT_ID, soul: "Remember my preferences", provider: "codex", model: "wide", cwd: "/unsafe", alwaysAllow: ["*"], apps: ["github"], mcpServerIds: ["wide"] });
++  const host = fakeHost([saved, makeBot({ id: "reviewer", name: "Reviewer" })]);
++  const agent = { id: "canonical-agent", cwd: home, labels: { [BOT_LABEL]: CHIEF_BOT_ID, [CHIEF_POLICY_LABEL]: CHIEF_POLICY } };
++  host.attach({ agents: { ref: () => ({ refresh: async () => ({ agent }) }) } } as never);
++  return { host, agent, broker: new ChiefBroker(host, new MemoryJournal(), new Relay(host, [])) };
++}
++
++describe("managed Chief", () => {
++  it("seeds version 5 once and provides a safe fallback before settings exist", async () => {
++    const migrated = applyVibingDefaults({ bots: [], history: [], vibingDefaults: 4 })!;
++    expect(migrated.vibingDefaults).toBe(5);
++    expect(migrated.bots).toEqual([managedChiefBot()]);
++    expect(applyVibingDefaults(migrated)).toBeNull();
++    expect(await fakeHost([]).bot(CHIEF_BOT_ID)).toMatchObject({ id: CHIEF_BOT_ID, provider: "claude", model: "sonnet" });
++  });
++  it("preserves personalization but ignores saved runtime and tool widening", async () => {
++    const { host, broker } = fixture();
++    await broker.prepare(authorization);
++    expect(await host.bot(CHIEF_BOT_ID)).toMatchObject({ soul: "Remember my preferences", provider: "claude", model: "sonnet", cwd: null, apps: [], mcpServerIds: [], alwaysAllow: [] });
++    const { systemPrompt } = await broker.prepare(authorization);
++    expect(systemPrompt).toContain("Remember my preferences");
++    expect(systemPrompt).toContain(botDataPath(CHIEF_BOT_ID));
++    expect(systemPrompt).not.toContain("propose_changes");
++    expect(systemPrompt).not.toContain("Paseo tools");
++  });
++  it("rejects calls with labels alone, a wrong agent id, wrong cwd or policy", async () => {
++    const { broker, agent } = fixture();
++    await broker.prepare(authorization);
++    await broker.call({ bridgeToken: authorization.bridgeToken, agentId: "canonical-agent", tool: "list_bots", arguments: {} });
++    const input = { agentId: "canonical-agent", tool: "list_bots", arguments: {} };
++    await expect(broker.call({ ...input, bridgeToken: "incorrect-but-long-enough-secret-32" })).rejects.toThrow(/broker/i);
++    await expect(broker.call({ ...input, ...authorization, agentId: "forged" })).rejects.toThrow(/identity/i);
++    agent.cwd = "/another-folder";
++    await expect(broker.call({ ...input, ...authorization })).rejects.toThrow(/identity/i);
++    agent.cwd = home;
++    agent.labels[CHIEF_POLICY_LABEL] = "unrestricted";
++    await expect(broker.call({ ...input, ...authorization })).rejects.toThrow(/identity/i);
++  });
++  it("allows only bounded tools and journals memory in Chief's home", async () => {
++    const { broker } = fixture();
++    await broker.prepare(authorization);
++    const call = (tool: string, args: unknown) => broker.call({ ...authorization, agentId: "canonical-agent", tool, arguments: args });
++    expect((await call("list_bots", {})).text).toContain("Reviewer");
++    for (const tool of ["ask_bot", "check_chat", "propose_changes", "read_file", "connect_app"]) await expect(call(tool, {})).rejects.toThrow(/not allowed/i);
++    await expect(call("write_memory", { name: "../escape.md", text: "bad" })).rejects.toThrow();
++    await call("write_memory", { name: "MEMORY.md", text: "Durable preference" });
++    expect(await readMemory(CHIEF_BOT_ID, "MEMORY.md")).toEqual({ text: "Durable preference" });
++    expect((await call("read_memory", { name: "MEMORY.md" })).text).toBe("Durable preference");
++    expect(await new MemoryJournal().list(CHIEF_BOT_ID)).toHaveLength(1);
++  });
++  it("reads only assigned, enabled skills whose reviewed content still matches", async () => {
++    const { host, broker } = fixture();
++    await broker.prepare(authorization);
++    const { sha } = await writeSkill({ id: "review", text: "Reviewed instructions" });
++    const values = (await host.values())!;
++    values.bots[0]!.skillIds = ["review"];
++    values.library = { ...EMPTY_LIBRARY, skills: [{ id: "review", description: "review", enabled: true, reviewedSha: sha, source: "", createdAt: "", updatedAt: "" }] };
++    const input = { agentId: "canonical-agent", tool: "read_skill", arguments: { id: "review" } };
++    expect((await broker.call({ ...input, ...authorization })).text).toBe("Reviewed instructions");
++    await writeSkill({ id: "review", text: "Changed after review" });
++    await expect(broker.call({ ...input, ...authorization })).rejects.toThrow(/review/i);
++    await expect(broker.call({ ...input, ...authorization, arguments: { id: "../review" } })).rejects.toThrow();
++    values.library.skills[0]!.reviewedSha = null;
++    await expect(broker.call({ ...input, ...authorization })).rejects.toThrow(/review/i);
++  });
++  it("rejects rebinding, unbound calls and unreviewed skills", async () => {
++    const { broker } = fixture();
++    const input = { ...authorization, agentId: "canonical-agent", tool: "list_bots", arguments: {} };
++    await expect(broker.call(input)).rejects.toThrow(/authorization/i);
++    await broker.prepare(authorization);
++    await expect(broker.prepare({ bridgeToken: "another-secret-at-least-32-bytes-long" })).rejects.toThrow(/authorization/i);
++    await expect(broker.call({ ...input, tool: "read_skill", arguments: { id: "unassigned" } })).rejects.toThrow(/review/i);
++    expect((await broker.call(input)).text).toContain("Reviewer");
++  });
++  it("rejects oversized memory and symlink escapes", async () => {
++    const { broker } = fixture();
++    await broker.prepare(authorization);
++    const input = { ...authorization, agentId: "canonical-agent", tool: "write_memory", arguments: { name: "MEMORY.md", text: "x".repeat(512 * 1024 + 1) } };
++    await expect(broker.call(input)).rejects.toThrow();
++    const outside = join(home, "outside.md");
++    await writeFile(outside, "Outside data");
++    await symlink(outside, join(botDataPath(CHIEF_BOT_ID), "MEMORY.md"));
++    await expect(broker.call({ ...input, arguments: { name: "MEMORY.md", text: "Changed" } })).rejects.toThrow(/symlink/i);
++    await expect(broker.call({ ...input, tool: "read_memory", arguments: { name: "MEMORY.md" } })).rejects.toThrow(/symlink/i);
++  });
++  it("hands a feature task to an ordinary Bot chat in the feature workspace, once per agent id", async () => {
++    const { host, broker } = fixture();
++    await broker.prepare(authorization);
++    const created = new Map<string, { labels: Record<string, string>; title?: string; prompt: string; workspace: string; config: { cwd: string } }>();
++    const workspaceRefs: string[] = [];
++    host.attach({
++      agents: { ref: (id: string) => ({ refresh: async () => (created.has(id) ? { agent: { id, labels: created.get(id)!.labels } } : null) }) },
++      workspaces: {
++        ref: (workspace: string) => {
++          workspaceRefs.push(workspace);
++          return { agents: { create: async (options: { agentId: string; labels: Record<string, string>; title?: string; prompt: string; config: { cwd: string } }) => {
++            created.set(options.agentId, { ...options, workspace });
++            return { id: options.agentId };
++          } } };
++        },
++      },
++      providers: { snapshot: async () => ({ entries: [{ provider: "claude", models: [{ id: "sonnet", isDefault: true }] }] }) },
++    } as never);
++    const input = { ...authorization, agentId: "6f1c3b0e-8f6a-4a52-9a3f-0c1d2e3f4a5b", bot: "reviewer", path: "/repo/feature", workspaceId: "ws-feature", prompt: "Review !12", titleSuffix: "Review !12", labels: { "paseo-chief.handoff": "v1.sig", "paseo-chief.app": "app", "paseo-chief.workspace": "tab" } };
++    expect(await broker.handoff(input)).toEqual({ chatId: input.agentId, botId: "reviewer", name: "Reviewer" });
++    const chat = created.get(input.agentId)!;
++    expect(chat.workspace).toBe("ws-feature");
++    expect(chat.title).toBe("Reviewer · Review !12");
++    expect(chat.labels).toMatchObject({ [BOT_LABEL]: "reviewer", "paseo-bots.asked-by": CHIEF_BOT_ID, "paseo-chief.bot-name": "Reviewer", "paseo-chief.handoff": "v1.sig", "paseo-chief.app": "app" });
++    expect(chat.labels["paseo-bots.context"]).toBeUndefined();
++    // A retry returns the same chat; a different handoff cannot claim its id.
++    expect(await broker.handoff(input)).toEqual({ chatId: input.agentId, botId: "reviewer", name: "Reviewer" });
++    expect(created.size).toBe(1);
++    await expect(broker.handoff({ ...input, labels: { ...input.labels, "paseo-chief.handoff": "v1.other" } })).rejects.toThrow(/in use/i);
++    await expect(broker.handoff({ ...input, bridgeToken: "incorrect-but-long-enough-secret-32" })).rejects.toThrow(/broker/i);
++  });
++  it("hands off only to local, active, ordinary Bots", async () => {
++    const { host, broker } = fixture();
++    await broker.prepare(authorization);
++    const input = { ...authorization, agentId: "6f1c3b0e-8f6a-4a52-9a3f-0c1d2e3f4a5c", path: "/repo/feature", workspaceId: "ws", prompt: "Do it", titleSuffix: "Do it", labels: {} };
++    await expect(broker.handoff({ ...input, bot: CHIEF_BOT_ID })).rejects.toThrow(/ordinary/i);
++    await expect(broker.handoff({ ...input, bot: "Nobody" })).rejects.toThrow(/no Bot called/i);
++    const values = (await host.values())!;
++    values.bots[1]!.hostId = "elsewhere";
++    await expect(broker.handoff({ ...input, bot: "reviewer" })).rejects.toThrow(/local/i);
++    values.bots[1]!.hostId = null;
++    values.bots[1]!.archived = true;
++    await expect(broker.handoff({ ...input, bot: "reviewer" })).rejects.toThrow(/active/i);
++  });
++  it("blocks every ordinary launch and relay mount path", async () => {
++    const { host } = fixture();
++    const bot = managedChiefBot();
++    const relay = new Relay(host, []);
++    await expect(startChat(host, relay, bot, { prompt: "hi", title: "Chief", labels: {} })).rejects.toThrow(/host-managed/i);
++    await expect(startBotChat({} as never, { bot } as never)).rejects.toThrow(/host-managed/i);
++    await expect(importBot({ botId: bot.id, json: "{}" })).rejects.toThrow(/host-managed/i);
++    await expect(relay.mountTools(bot.id, "agent")).rejects.toThrow(/host-managed/i);
++    await expect(relay.mountApps(bot.id)).rejects.toThrow(/host-managed/i);
++    await expect(askBot.run({ bot: CHIEF_BOT_ID, message: "hi" }, { host, relay, bot: makeBot(), agentId: "caller" })).rejects.toThrow(/host-managed/i);
++  });
++});
+diff --git a/tests/commands.test.ts b/tests/commands.test.ts
+index b476dd5..8e4f0bc 100644
+--- a/tests/commands.test.ts
++++ b/tests/commands.test.ts
+@@ -17,6 +17,14 @@ describe("allowed commands", () => {
+     await rm(home, { recursive: true, force: true });
+   });
+ 
++  it("does not auto-approve saved commands for Chief or review workers", async () => {
++    const { canAutoAllowCommands } = await import("../server/commands");
++    expect(canAutoAllowCommands({ botId: "target-bot", labels: {} })).toBe(true);
++    expect(canAutoAllowCommands({ botId: "vibing-chief", labels: {} })).toBe(false);
++    expect(canAutoAllowCommands({ botId: "target-bot", labels: { "paseo-chief.review": "chief-agent" } })).toBe(false);
++    expect(canAutoAllowCommands({ botId: "target-bot", labels: { "paseo-chief.review": "" } })).toBe(false);
++  });
++
+   it("matches only the exact command in the exact folder", async () => {
+     const { CommandAllowlist } = await import("../server/commands");
+     const commands = new CommandAllowlist();
 diff --git a/tests/delete-all-chats.test.ts b/tests/delete-all-chats.test.ts
 new file mode 100644
 index 0000000..e232404
@@ -2842,6 +3824,30 @@ index a9ec359..540e302 100644
 +    chats.scout = [{ status: "idle" }];
 +    chats.solo = [{ status: "running", pendingPermissions: [{}] }];
 +    expect(tabBuckets([all!, tab!], (botId) => chats[botId] ?? [])).toEqual({ [ALL_BOTS_TAB]: "needs_input", t1: "attention" });
++  });
++});
+diff --git a/tests/managed-chief-ui.test.ts b/tests/managed-chief-ui.test.ts
+new file mode 100644
+index 0000000..197398e
+--- /dev/null
++++ b/tests/managed-chief-ui.test.ts
+@@ -0,0 +1,18 @@
++import { describe, expect, it } from "vitest";
++import { chiefPersonalizationPatch, botSectionAllowed, exportableBots } from "../shared/managed-chief-ui";
++import { CHIEF_BOT_ID, managedChiefBot } from "../shared/vibing-defaults";
++import { makeBot } from "./helpers";
++
++describe("managed Chief settings policy", () => {
++  it("keeps personalization and rejects runtime, automation and restore widening", () => {
++    for (const section of ["overview", "identity", "soul", "skills", "memory", "playbooks"]) expect(botSectionAllowed(CHIEF_BOT_ID, section)).toBe(true);
++    for (const section of ["model", "permissions", "access", "routines", "history", "usage"]) expect(botSectionAllowed(CHIEF_BOT_ID, section)).toBe(false);
++    expect(chiefPersonalizationPatch(CHIEF_BOT_ID, { soul: "Be brief", skillIds: ["review"], provider: "codex", cwd: "/tmp", routines: [], alwaysAllow: ["*"] })).toEqual({ soul: "Be brief", skillIds: ["review"] });
++    expect(chiefPersonalizationPatch("ordinary", { provider: "codex" })).toEqual({ provider: "codex" });
++    expect(botSectionAllowed("ordinary", "routines")).toBe(true);
++  });
++  it("excludes Chief from bulk export without affecting ordinary bots", () => {
++    const ordinary = makeBot();
++    expect(exportableBots([managedChiefBot(), ordinary])).toEqual([ordinary]);
 +  });
 +});
 diff --git a/tests/presets.test.ts b/tests/presets.test.ts
@@ -3138,15 +4144,15 @@ index 367000b..2b80bea 100644
    it("rejects an unknown sort", () => {
 diff --git a/tests/vibing-defaults.test.ts b/tests/vibing-defaults.test.ts
 new file mode 100644
-index 0000000..cb4e02d
+index 0000000..016c943
 --- /dev/null
 +++ b/tests/vibing-defaults.test.ts
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,208 @@
 +import { describe, expect, it } from "vitest";
 +import type { BotSettingsValues } from "../shared/bot";
 +import { DEFAULT_BOT_LIST_UI } from "../shared/bot";
 +import { LIST_WIDTH } from "../shared/layout";
-+import { applyVibingDefaults, CLAUDE_BOT_ID, DEFAULT_BOT_ID, fallbackDefaultBotId, preferredDefaultBotId } from "../shared/vibing-defaults";
++import { applyVibingDefaults, CHIEF_BOT_ID, managedChiefBot, CLAUDE_BOT_ID, DEFAULT_BOT_ID, fallbackDefaultBotId, preferredDefaultBotId } from "../shared/vibing-defaults";
 +import { makeBot } from "./helpers";
 +
 +const empty = (): BotSettingsValues => ({ bots: [], history: [] });
@@ -3158,6 +4164,7 @@ index 0000000..cb4e02d
 +    expect(seeded.bots.map(({ id, name, provider }) => ({ id, name, provider }))).toEqual([
 +      { id: DEFAULT_BOT_ID, name: "Codex", provider: "codex" },
 +      { id: CLAUDE_BOT_ID, name: "Claude", provider: "claude" },
++      { id: CHIEF_BOT_ID, name: "Chief", provider: "claude" },
 +    ]);
 +    expect(seeded.bots[0]).toMatchObject({ modeId: "full-access", contactBots: "allow" });
 +    expect(seeded.bots[1]).toMatchObject({ modeId: "bypassPermissions", contactBots: "allow" });
@@ -3177,7 +4184,7 @@ index 0000000..cb4e02d
 +    const general = makeBot({ id: DEFAULT_BOT_ID, name: "General", provider: "claude", model: "sonnet", soul: "Be brief." });
 +    const seeded = applyVibingDefaults({ ...empty(), bots: [general, makeBot({ id: "bot-mine", name: "Mine" })] })!;
 +
-+    expect(seeded.bots.map(({ id }) => id)).toEqual([DEFAULT_BOT_ID, CLAUDE_BOT_ID, "bot-mine"]);
++    expect(seeded.bots.map(({ id }) => id)).toEqual([DEFAULT_BOT_ID, CLAUDE_BOT_ID, "bot-mine", CHIEF_BOT_ID]);
 +    expect(seeded.bots[0]).toMatchObject({ name: "Codex", provider: "codex", model: null, soul: "Be brief." });
 +  });
 +
@@ -3206,6 +4213,7 @@ index 0000000..cb4e02d
 +      [CLAUDE_BOT_ID, "Claude (default)"],
 +      ["bot-own", "Codex"],
 +      ["bot-c", "claude"],
++      [CHIEF_BOT_ID, "Chief"],
 +    ]);
 +  });
 +
@@ -3241,11 +4249,12 @@ index 0000000..cb4e02d
 +    const defaults = { provider: "claude", model: null, modeId: "plan", thinkingOptionId: null, contactBots: "off" as const };
 +    const upgraded = applyVibingDefaults({ ...empty(), vibingDefaults: 3, bots: [codex, claude, other], defaults })!;
 +
-+    expect(upgraded.vibingDefaults).toBe(4);
++    expect(upgraded.vibingDefaults).toBe(5);
 +    expect(upgraded.bots).toEqual([
 +      { ...codex, modeId: "full-access", contactBots: "allow" },
 +      { ...claude, modeId: "bypassPermissions", contactBots: "allow" },
 +      other,
++      managedChiefBot(),
 +    ]);
 +    expect(upgraded.defaults).toEqual(defaults);
 +    const edited = upgraded.bots.map(bot => ({ ...bot, modeId: "plan", contactBots: "off" as const }));
@@ -3254,7 +4263,7 @@ index 0000000..cb4e02d
 +
 +  it("does not recreate deleted default bots during the access upgrade", () => {
 +    const other = makeBot({ id: "bot-own" });
-+    expect(applyVibingDefaults({ ...empty(), vibingDefaults: 3, bots: [other] })!.bots).toEqual([other]);
++    expect(applyVibingDefaults({ ...empty(), vibingDefaults: 3, bots: [other] })!.bots).toEqual([other, managedChiefBot()]);
 +  });
 +
 +  it("uses a default bot's current provider and preserves unsupported provider modes", () => {
@@ -3264,6 +4273,7 @@ index 0000000..cb4e02d
 +    expect(upgraded.bots).toEqual([
 +      { ...switched, modeId: "bypassPermissions", contactBots: "allow" },
 +      { ...custom, contactBots: "allow" },
++      managedChiefBot(),
 +    ]);
 +  });
 +

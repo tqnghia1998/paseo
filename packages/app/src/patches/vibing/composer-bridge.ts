@@ -4,7 +4,7 @@ import type { ComposerInputMode } from "@/composer/input-mode";
 import type { AgentInputSubmitResult } from "@/composer/submit";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import { isEmbeddedLiveDesignMessaging } from "./focus-mode";
+import { isEmbeddedChiefView, isEmbeddedLiveDesignMessaging } from "./focus-mode";
 import { useEmbeddedPromptInsert } from "./host-prompts";
 import { useEmbeddedLiveDesignSend, waitForLiveDesignTurn } from "./live-design";
 
@@ -49,7 +49,7 @@ export function useEmbeddedComposerBridge(input: ComposerBridgeInput): void {
     workspaceId,
     inputMode,
     readOnly,
-    enabled: enabled && inWorkspace && !isComposerLocked,
+    enabled: enabled && inWorkspace && !isComposerLocked && !isEmbeddedChiefView,
     getText: useStableEvent(getText),
     replaceText,
     focus: useStableEvent(focus),
@@ -57,7 +57,7 @@ export function useEmbeddedComposerBridge(input: ComposerBridgeInput): void {
 
   useEmbeddedLiveDesignSend({
     agentId,
-    enabled: enabled && inWorkspace && isEmbeddedLiveDesignMessaging,
+    enabled: enabled && inWorkspace && isEmbeddedLiveDesignMessaging && !isEmbeddedChiefView,
     isDraft: resolveLiveDesignAgentId !== undefined,
     workspaceId,
     submit: useStableEvent(

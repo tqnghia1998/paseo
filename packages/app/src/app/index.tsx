@@ -13,6 +13,8 @@ import {
 } from "@/stores/navigation-active-workspace-store";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { useEmbeddedFolderWorkspace } from "@/patches/vibing/folder-workspace";
+import { isEmbeddedChiefView } from "@/patches/vibing/focus-mode";
+import { ChiefEmbeddedChat } from "@/patches/vibing/chief-chat";
 
 const isDesktop = shouldUseDesktopDaemon();
 
@@ -35,10 +37,12 @@ export default function Index() {
   );
 
   const folderParam = useEmbeddedFolderWorkspace({
-    folder: params.folder,
+    folder: isEmbeddedChiefView ? undefined : params.folder,
     embeddedLiveDesignMessaging: params["embedded-live-design"] === "1",
     targetServerId: anyOnlineHostServerId || hosts[0]?.serverId || null,
   });
+
+  if (isEmbeddedChiefView) return <ChiefEmbeddedChat />;
 
   const startupRoute = resolveStartupRoute({
     route: { kind: "index", pathname },
