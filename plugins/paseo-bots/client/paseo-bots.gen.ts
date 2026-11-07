@@ -4,576 +4,6 @@
 // index.client.tsx
 import { z as z7 } from "zod";
 
-// client/BotsSurface.tsx
-import { useRpc as useRpc20 } from "@getpaseo/plugin/client";
-import { copyText as copyText6, useToast as useToast17 } from "@getpaseo/plugin/client/react-native";
-import { SettingsAction as SettingsAction17, SettingsCard as SettingsCard21 } from "@getpaseo/plugin/client/ui";
-import { useQueryClient as useQueryClient11 } from "@tanstack/react-query";
-import { useCallback as useCallback6, useEffect as useEffect24, useRef as useRef20, useState as useState44 } from "react";
-import { ActivityIndicator as ActivityIndicator11, BackHandler, Platform as Platform21, Text as Text33, View as View45 } from "react-native";
-
-// shared/pixel.ts
-function toRuns(colors2) {
-  return colors2.map((line) => {
-    const runs = [];
-    line.forEach((color, x) => {
-      const last = runs[runs.length - 1];
-      if (last && last.color === color) last.width++;
-      else runs.push({ x, width: 1, color });
-    });
-    return runs;
-  });
-}
-function hslToHex(h, s, l) {
-  const hue = (h % 360 + 360) % 360;
-  const sat = Math.max(0, Math.min(100, s)) / 100;
-  const light = Math.max(0, Math.min(100, l)) / 100;
-  const k = (n) => (n + hue / 30) % 12;
-  const a = sat * Math.min(light, 1 - light);
-  const f = (n) => light - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  const hex = (x) => Math.round(x * 255).toString(16).padStart(2, "0");
-  return `#${hex(f(0))}${hex(f(8))}${hex(f(4))}`;
-}
-function shiftHue(h, target, amount) {
-  const delta = (target - h + 540) % 360 - 180;
-  return h + Math.sign(delta) * Math.min(Math.abs(delta), amount);
-}
-var PALETTE_DEFS = [
-  { h: 150, s: 55, l: 70 },
-  // mint
-  { h: 22, s: 90, l: 76 },
-  // peach
-  { h: 258, s: 70, l: 80 },
-  // lavender
-  { h: 205, s: 80, l: 74 },
-  // sky
-  { h: 46, s: 90, l: 70 },
-  // butter
-  { h: 335, s: 80, l: 80 },
-  // pink
-  { h: 28, s: 50, l: 62 },
-  // caramel
-  { h: 220, s: 14, l: 82 },
-  // cloud
-  { h: 6, s: 85, l: 74 },
-  // coral
-  { h: 176, s: 50, l: 60 },
-  // teal
-  { h: 285, s: 55, l: 76, night: true },
-  // lilac on night
-  { h: 215, s: 70, l: 72, night: true }
-  // blue on night
-];
-function buildPalette({ h, s, l, night }) {
-  return {
-    outline: hslToHex(shiftHue(h, 260, 25), Math.min(s, 45), 24),
-    deep: hslToHex(shiftHue(h, 250, 18), s * 0.8, l - 19),
-    shade: hslToHex(shiftHue(h, 250, 10), s * 0.9, l - 9),
-    body: hslToHex(h, s, l),
-    light: hslToHex(shiftHue(h, 55, 8), s, Math.min(l + 8, 92)),
-    highlight: hslToHex(shiftHue(h, 55, 10), Math.max(s - 25, 10), Math.min(l + 20, 97)),
-    belly: hslToHex(shiftHue(h, 55, 10), Math.max(s - 20, 10), Math.min(l + 13, 94)),
-    background: night ? hslToHex(232, 35, 16) : hslToHex(shiftHue(h, 55, 25), 70, 93)
-  };
-}
-var PALETTES = PALETTE_DEFS.map(buildPalette);
-function hash(seed) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-function rng(seed) {
-  let a = hash(seed);
-  return () => {
-    a = a + 1831565813 >>> 0;
-    let t = a;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-function pick(next, items) {
-  return items[Math.floor(next() * items.length)];
-}
-var PALETTE_COUNT = PALETTES.length;
-function paletteSwatch(index) {
-  return PALETTES[index % PALETTES.length].body;
-}
-function hexRgb(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return [n >> 16 & 255, n >> 8 & 255, n & 255];
-}
-function luminance(hex) {
-  const [r, g, b] = hexRgb(hex);
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-}
-function blend(a, b, weight) {
-  const x = hexRgb(a);
-  const y = hexRgb(b);
-  return "#" + x.map((channel, i) => Math.round(channel * weight + y[i] * (1 - weight)).toString(16).padStart(2, "0")).join("");
-}
-var DARK_BASE = "#121416";
-function darkBackground(palette) {
-  return luminance(palette.background) < 0.5 ? palette.background : blend(palette.body, DARK_BASE, 0.24);
-}
-
-// shared/avatar.ts
-var SPRITE_SIZE = 24;
-var CENTER = SPRITE_SIZE / 2;
-var BODIES = {
-  slime: {
-    rows: {
-      5: "........####",
-      6: "......######",
-      7: ".....#######",
-      8: "....########",
-      9: "...#########",
-      10: "...#########",
-      11: "..##########",
-      12: "..##########",
-      13: "..##########",
-      14: ".###########",
-      15: ".###########",
-      16: ".###########",
-      17: ".###########",
-      18: ".###########",
-      19: ".###########",
-      20: "..##########"
-    },
-    eyeX: 7,
-    eyeY: 11,
-    mouthY: 15,
-    blushY: 14,
-    top: 5,
-    accessories: ["sprout", "bow", "flower", "crown"],
-    accent: "pink"
-  },
-  cat: {
-    rows: {
-      2: "...#........",
-      3: "...##.......",
-      4: "...#a#......",
-      5: "...#aa#.....",
-      6: "...#aaa#####",
-      7: "...#########",
-      8: "..##########",
-      9: "..##########",
-      10: ".###########",
-      11: ".###########",
-      12: ".###########",
-      13: ".###########",
-      14: ".###########",
-      15: ".###########",
-      16: "..##########",
-      17: "..##########",
-      18: "...#########",
-      19: "....########",
-      20: "......######"
-    },
-    eyeX: 6,
-    eyeY: 11,
-    mouthY: 15,
-    blushY: 14,
-    top: 6,
-    accessories: ["bow", "flower"],
-    patch: { y: 16, rx: 3.5, ry: 1.8 },
-    accent: "pink",
-    mouths: ["cat", "cat", "smile", "open", "tiny"]
-  },
-  bunny: {
-    rows: {
-      1: "....##......",
-      2: "...####.....",
-      3: "...#aa#.....",
-      4: "...#aa#.....",
-      5: "...#aa#.....",
-      6: "...#aa#.....",
-      7: "...#aa#.....",
-      8: "....##......",
-      9: "....########",
-      10: "..##########",
-      11: ".###########",
-      12: ".###########",
-      13: ".###########",
-      14: ".###########",
-      15: ".###########",
-      16: ".###########",
-      17: ".###########",
-      18: "..##########",
-      19: "..##########",
-      20: "...#########",
-      21: ".....#######"
-    },
-    eyeX: 6,
-    eyeY: 13,
-    mouthY: 17,
-    blushY: 16,
-    top: 9,
-    accessories: ["bow", "flower"],
-    patch: { y: 18, rx: 3.5, ry: 1.8 },
-    accent: "pink"
-  },
-  bear: {
-    rows: {
-      2: "..####......",
-      3: ".#aaaa#.....",
-      4: ".#aa########",
-      5: ".###########",
-      6: ".###########",
-      7: ".###########",
-      8: ".###########",
-      9: ".###########",
-      10: ".###########",
-      11: ".###########",
-      12: ".###########",
-      13: ".###########",
-      14: ".###########",
-      15: "..##########",
-      16: "..##########",
-      17: "...#########",
-      18: "....########",
-      19: "......######"
-    },
-    eyeX: 5,
-    eyeY: 9,
-    mouthY: 14,
-    blushY: 12,
-    top: 4,
-    accessories: ["bow", "flower", "crown"],
-    patch: { y: 14.5, rx: 4.2, ry: 2.6 },
-    accent: "pink",
-    mouths: ["smile", "tiny", "open", "cat"]
-  },
-  frog: {
-    rows: {
-      5: "...###......",
-      6: "..#####.....",
-      7: "..#####.....",
-      8: "..##########",
-      9: ".###########",
-      10: ".###########",
-      11: ".###########",
-      12: ".###########",
-      13: ".###########",
-      14: ".###########",
-      15: "..##########",
-      16: "..##########",
-      17: "...#########",
-      18: ".....#######"
-    },
-    eyeX: 3,
-    eyeY: 6,
-    mouthY: 11,
-    blushY: 10,
-    top: 8,
-    accessories: ["crown", "flower"],
-    patch: { y: 15.5, rx: 5.5, ry: 2 },
-    accent: "pink",
-    mouths: ["wide", "wide", "smile", "open"],
-    eyes: ["round", "big", "dot", "happy"]
-  },
-  chick: {
-    rows: {
-      1: "..........#.",
-      2: "...........#",
-      3: "........####",
-      4: "......######",
-      5: ".....#######",
-      6: "....########",
-      7: "...#########",
-      8: "...#########",
-      9: "..##########",
-      10: "..##########",
-      11: "..##########",
-      12: ".###########",
-      13: ".###########",
-      14: ".###########",
-      15: ".###########",
-      16: ".###########",
-      17: "..##########",
-      18: "..##########",
-      19: "...#########",
-      20: ".....#######",
-      21: ".......aa..."
-    },
-    eyeX: 7,
-    eyeY: 10,
-    mouthY: 13,
-    blushY: 13,
-    top: 3,
-    accessories: ["flower", "bow"],
-    patch: { y: 17, rx: 4.5, ry: 2.2 },
-    accent: "orange",
-    mouths: ["beak"]
-  },
-  ghost: {
-    rows: {
-      3: "........####",
-      4: "......######",
-      5: ".....#######",
-      6: "....########",
-      7: "...#########",
-      8: "...#########",
-      9: "..##########",
-      10: "..##########",
-      11: "..##########",
-      12: ".###########",
-      13: ".###########",
-      14: "..##########",
-      15: "..##########",
-      16: "..##########",
-      17: "..##########",
-      18: "..##########",
-      19: "..##########",
-      20: "..####...###",
-      21: "...##.....##"
-    },
-    eyeX: 7,
-    eyeY: 9,
-    mouthY: 13,
-    blushY: 12,
-    top: 3,
-    accessories: ["bow", "crown", "flower"],
-    accent: "pink",
-    mouths: ["ooh", "smile", "open", "tiny"]
-  },
-  robot: {
-    rows: {
-      1: "...........a",
-      2: "...........a",
-      3: "...........#",
-      4: "...#########",
-      5: "..##########",
-      6: "..##########",
-      7: "..##########",
-      8: "..##########",
-      9: ".a##########",
-      10: ".a##########",
-      11: ".a##########",
-      12: "..##########",
-      13: "..##########",
-      14: "..##########",
-      15: "..##########",
-      16: "...#########",
-      17: ".......#####",
-      18: ".....#######",
-      19: "....######aa",
-      20: "....########",
-      21: "....########"
-    },
-    eyeX: 6,
-    eyeY: 8,
-    mouthY: 12,
-    blushY: 11,
-    top: 4,
-    accessories: [],
-    accent: "seeded",
-    mouths: ["smile", "tiny", "open", "wide"],
-    eyes: ["big", "round", "tall", "happy", "wink"]
-  }
-};
-var SPRITE_NAMES = Object.keys(BODIES);
-var EYES = {
-  round: ["we", "ee", "ee"],
-  big: ["wee", "eee", "eeW"],
-  tall: ["we", "ee", "ee", "eW"],
-  happy: [".e.", "e.e"],
-  dot: ["we", "ee"],
-  wink: ["we", "ee", "ee"]
-};
-var DEFAULT_EYES = ["round", "round", "big", "big", "tall", "happy", "happy", "dot", "wink"];
-var MOUTHS = {
-  smile: ["m..m", ".mm."],
-  cat: ["m.mm.m", ".m..m."],
-  open: ["mmmm", "mttm", ".mm."],
-  tiny: ["mm"],
-  ooh: [".mm.", "m..m", ".mm."],
-  wide: ["m......m", ".mmmmmm."],
-  beak: ["kkkk", ".KK."]
-};
-var DEFAULT_MOUTHS = ["smile", "smile", "cat", "open", "tiny", "ooh"];
-var ACCESSORIES = {
-  sprout: { art: ["GG.GG", ".GgG.", "..g.."], place: "top" },
-  bow: { art: ["rr.rr", "rRRRr", "rr.rr"], place: "side" },
-  flower: { art: [".p.", "pyp", ".p."], place: "side" },
-  crown: { art: ["y.y.y", "yyyyy", "YYYYY"], place: "top" }
-};
-var ACCENT_HUES = [345, 20, 48, 140, 190, 230, 285];
-var FIXED = {
-  eye: "#2B2438",
-  shine: "#FFFFFF",
-  glint: "#CFC8E8",
-  mouth: "#4A2A3C",
-  tongue: "#FF7F9C",
-  blush: "#FF8FAB",
-  pink: "#FFB3C7",
-  pinkShade: "#F08BA6",
-  orange: "#FFB347",
-  orangeShade: "#E8892B",
-  leaf: "#7CD67C",
-  leafShade: "#3E9A4E",
-  ribbon: "#FF6FA0",
-  ribbonShade: "#D94A7C",
-  petal: "#FFFFFF",
-  gold: "#FFD54A",
-  goldShade: "#E0A82E"
-};
-function draw(traits) {
-  const body = BODIES[traits.sprite];
-  const grid = Array.from({ length: SPRITE_SIZE }, () => Array.from({ length: SPRITE_SIZE }, () => ({ kind: "empty" })));
-  const inside = (x, y) => x >= 0 && y >= 0 && x < SPRITE_SIZE && y < SPRITE_SIZE;
-  const kindAt = (x, y) => inside(x, y) ? grid[y][x].kind : "empty";
-  const solid = (x, y) => kindAt(x, y) !== "empty";
-  for (const [rowKey, half] of Object.entries(body.rows)) {
-    const y = Number(rowKey);
-    const full = half + half.split("").reverse().join("");
-    for (let x = 0; x < SPRITE_SIZE; x++) {
-      if (full[x] === "#") grid[y][x] = { kind: "body" };
-      else if (full[x] === "a") grid[y][x] = { kind: "accent" };
-    }
-  }
-  if (traits.accessory) {
-    const { art, place } = ACCESSORIES[traits.accessory];
-    const width = art[0].length;
-    const originX = place === "top" ? CENTER - Math.ceil(width / 2) : CENTER + 3;
-    const originY = place === "top" ? body.top - art.length : body.top - 1;
-    const paints = {
-      G: FIXED.leaf,
-      g: FIXED.leafShade,
-      r: FIXED.ribbon,
-      R: FIXED.ribbonShade,
-      p: FIXED.petal,
-      y: FIXED.gold,
-      Y: FIXED.goldShade
-    };
-    art.forEach(
-      (line, dy) => line.split("").forEach((char, dx) => {
-        const color = paints[char];
-        if (color && inside(originX + dx, originY + dy)) grid[originY + dy][originX + dx] = { kind: "paint", color };
-      })
-    );
-  }
-  let minY = SPRITE_SIZE;
-  let maxY = 0;
-  grid.forEach((line, y) => {
-    if (line.some((cell) => cell.kind === "body")) {
-      minY = Math.min(minY, y);
-      maxY = Math.max(maxY, y);
-    }
-  });
-  const midY = (minY + maxY) / 2;
-  const { palette } = traits;
-  const colors2 = grid.map(
-    (line, y) => line.map((cell, x) => {
-      if (cell.kind === "empty") return null;
-      if (cell.kind === "paint") return cell.color;
-      if (cell.kind === "accent") return !solid(x, y + 1) || !solid(x + 1, y) ? traits.accentShade : traits.accent;
-      const bottom = !solid(x, y + 1);
-      if (bottom && y >= midY) return palette.deep;
-      if (bottom || !solid(x + 1, y) || y >= midY && !solid(x, y + 2)) return palette.shade;
-      if (!solid(x, y - 1) || !solid(x - 1, y)) return palette.light;
-      if (body.patch) {
-        const dx = (x + 0.5 - CENTER) / body.patch.rx;
-        const dy = (y - body.patch.y) / body.patch.ry;
-        if (dx * dx + dy * dy <= 1) return palette.belly;
-      }
-      return palette.body;
-    })
-  );
-  for (let y = minY + 1; y < maxY; y++) {
-    const line = grid[y];
-    if (line.filter((cell) => cell.kind === "body").length < 10) continue;
-    const hx = line.findIndex((cell) => cell.kind === "body") + 2;
-    for (const [sx, sy] of [
-      [hx, y + 1],
-      [hx + 1, y + 1],
-      [hx, y + 2]
-    ]) {
-      if (kindAt(sx, sy) === "body" && solid(sx, sy - 1) && solid(sx - 1, sy)) colors2[sy][sx] = palette.highlight;
-    }
-    break;
-  }
-  const paintFace = (art, originX, originY, map) => art.forEach(
-    (line, dy) => line.split("").forEach((char, dx) => {
-      const color = map[char];
-      const px = originX + dx;
-      const py = originY + dy;
-      if (color && inside(px, py) && grid[py][px].kind === "body") colors2[py][px] = color;
-    })
-  );
-  const eyeMap = { e: FIXED.eye, w: FIXED.shine, W: FIXED.glint };
-  const rightArt = EYES[traits.eyes];
-  const leftArt = traits.eyes === "wink" ? EYES.happy : rightArt;
-  const eyeWidth = rightArt[0].length;
-  const leftX = body.eyeX;
-  const rightX = SPRITE_SIZE - body.eyeX - eyeWidth;
-  paintFace(leftArt, leftX + eyeWidth - leftArt[0].length, body.eyeY + rightArt.length - leftArt.length, eyeMap);
-  paintFace(rightArt, rightX, body.eyeY, eyeMap);
-  const mouth = MOUTHS[traits.mouth];
-  paintFace(mouth, Math.floor(CENTER - mouth[0].length / 2), body.mouthY, { m: FIXED.mouth, t: FIXED.tongue, k: FIXED.orange, K: FIXED.orangeShade });
-  if (traits.blush) {
-    paintFace(["cc"], leftX - 1, body.blushY, { c: FIXED.blush });
-    paintFace(["cc"], rightX + eyeWidth - 1, body.blushY, { c: FIXED.blush });
-  }
-  grid.forEach(
-    (line, y) => line.forEach((cell, x) => {
-      if (cell.kind === "empty" && (solid(x + 1, y) || solid(x - 1, y) || solid(x, y + 1) || solid(x, y - 1))) colors2[y][x] = palette.outline;
-    })
-  );
-  return { sprite: traits.sprite, background: palette.background, body: palette.body, rows: toRuns(colors2) };
-}
-function traitsFor(sprite, palette, accentHue, next) {
-  const body = BODIES[sprite];
-  const accent = body.accent === "orange" ? { accent: FIXED.orange, accentShade: FIXED.orangeShade } : body.accent === "pink" ? { accent: FIXED.pink, accentShade: FIXED.pinkShade } : { accent: hslToHex(accentHue, 85, 72), accentShade: hslToHex(shiftHue(accentHue, 250, 14), 80, 58) };
-  const eyes = pick(next, body.eyes ?? DEFAULT_EYES);
-  const mouth = pick(next, body.mouths ?? DEFAULT_MOUTHS);
-  const blush = next() < 0.75;
-  const accessory = next() < 0.45 && body.accessories.length > 0 ? pick(next, body.accessories) : null;
-  return { sprite, palette, ...accent, eyes, mouth, blush, accessory };
-}
-function withTheme(avatar, palette, options) {
-  return options.dark ? { ...avatar, background: darkBackground(palette) } : avatar;
-}
-function pixelAvatar(seed, palette = null, options = {}) {
-  const next = rng(seed);
-  const sprite = pick(next, SPRITE_NAMES);
-  const seeded = pick(next, PALETTES);
-  const colors2 = palette === null ? seeded : PALETTES[palette % PALETTES.length];
-  const accentHue = pick(next, ACCENT_HUES);
-  return withTheme(draw(traitsFor(sprite, colors2, accentHue, next)), colors2, options);
-}
-function spriteAvatar(sprite, palette, accent = 0, options = {}) {
-  const colors2 = PALETTES[palette % PALETTES.length];
-  const next = rng(`${sprite}:${palette}:${accent}`);
-  return withTheme(draw(traitsFor(sprite, colors2, ACCENT_HUES[accent % ACCENT_HUES.length], next)), colors2, options);
-}
-function grayscaleAvatar(avatar) {
-  const gray = (hex) => {
-    const level = Math.round(luminance(hex) * 255).toString(16).padStart(2, "0");
-    return `#${level}${level}${level}`;
-  };
-  return {
-    ...avatar,
-    background: gray(avatar.background),
-    body: gray(avatar.body),
-    rows: avatar.rows.map((runs) => runs.map((run) => run.color ? { ...run, color: gray(run.color) } : run))
-  };
-}
-var SPLASH_LINEUP = [
-  { sprite: "cat", palette: 5, accent: 0 },
-  { sprite: "robot", palette: 3, accent: 5 },
-  { sprite: "slime", palette: 0, accent: 3 },
-  { sprite: "bunny", palette: 2, accent: 6 },
-  { sprite: "chick", palette: 4, accent: 1 },
-  { sprite: "ghost", palette: 9, accent: 4 }
-];
-function randomSeed() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
 // shared/bot.ts
 import { defineSettings } from "@getpaseo/plugin";
 import { z } from "zod";
@@ -1175,6 +605,793 @@ function joinArgs(args) {
   return args.map((arg) => arg === "" || /[\s"']/.test(arg) ? `"${arg.replace(/"/g, "'")}"` : arg).join(" ");
 }
 
+// shared/pixel.ts
+function toRuns(colors2) {
+  return colors2.map((line) => {
+    const runs = [];
+    line.forEach((color, x) => {
+      const last = runs[runs.length - 1];
+      if (last && last.color === color) last.width++;
+      else runs.push({ x, width: 1, color });
+    });
+    return runs;
+  });
+}
+function hslToHex(h, s, l) {
+  const hue = (h % 360 + 360) % 360;
+  const sat = Math.max(0, Math.min(100, s)) / 100;
+  const light = Math.max(0, Math.min(100, l)) / 100;
+  const k = (n) => (n + hue / 30) % 12;
+  const a = sat * Math.min(light, 1 - light);
+  const f = (n) => light - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const hex = (x) => Math.round(x * 255).toString(16).padStart(2, "0");
+  return `#${hex(f(0))}${hex(f(8))}${hex(f(4))}`;
+}
+function shiftHue(h, target, amount) {
+  const delta = (target - h + 540) % 360 - 180;
+  return h + Math.sign(delta) * Math.min(Math.abs(delta), amount);
+}
+var PALETTE_DEFS = [
+  { h: 150, s: 55, l: 70 },
+  // mint
+  { h: 22, s: 90, l: 76 },
+  // peach
+  { h: 258, s: 70, l: 80 },
+  // lavender
+  { h: 205, s: 80, l: 74 },
+  // sky
+  { h: 46, s: 90, l: 70 },
+  // butter
+  { h: 335, s: 80, l: 80 },
+  // pink
+  { h: 28, s: 50, l: 62 },
+  // caramel
+  { h: 220, s: 14, l: 82 },
+  // cloud
+  { h: 6, s: 85, l: 74 },
+  // coral
+  { h: 176, s: 50, l: 60 },
+  // teal
+  { h: 285, s: 55, l: 76, night: true },
+  // lilac on night
+  { h: 215, s: 70, l: 72, night: true }
+  // blue on night
+];
+function buildPalette({ h, s, l, night }) {
+  return {
+    outline: hslToHex(shiftHue(h, 260, 25), Math.min(s, 45), 24),
+    deep: hslToHex(shiftHue(h, 250, 18), s * 0.8, l - 19),
+    shade: hslToHex(shiftHue(h, 250, 10), s * 0.9, l - 9),
+    body: hslToHex(h, s, l),
+    light: hslToHex(shiftHue(h, 55, 8), s, Math.min(l + 8, 92)),
+    highlight: hslToHex(shiftHue(h, 55, 10), Math.max(s - 25, 10), Math.min(l + 20, 97)),
+    belly: hslToHex(shiftHue(h, 55, 10), Math.max(s - 20, 10), Math.min(l + 13, 94)),
+    background: night ? hslToHex(232, 35, 16) : hslToHex(shiftHue(h, 55, 25), 70, 93)
+  };
+}
+var PALETTES = PALETTE_DEFS.map(buildPalette);
+function hash(seed) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function rng(seed) {
+  let a = hash(seed);
+  return () => {
+    a = a + 1831565813 >>> 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function pick(next, items) {
+  return items[Math.floor(next() * items.length)];
+}
+var PALETTE_COUNT = PALETTES.length;
+function paletteSwatch(index) {
+  return PALETTES[index % PALETTES.length].body;
+}
+function hexRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [n >> 16 & 255, n >> 8 & 255, n & 255];
+}
+function luminance(hex) {
+  const [r, g, b] = hexRgb(hex);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+function blend(a, b, weight) {
+  const x = hexRgb(a);
+  const y = hexRgb(b);
+  return "#" + x.map((channel, i) => Math.round(channel * weight + y[i] * (1 - weight)).toString(16).padStart(2, "0")).join("");
+}
+var DARK_BASE = "#121416";
+function darkBackground(palette) {
+  return luminance(palette.background) < 0.5 ? palette.background : blend(palette.body, DARK_BASE, 0.24);
+}
+
+// shared/avatar.ts
+var SPRITE_SIZE = 24;
+var CENTER = SPRITE_SIZE / 2;
+var BODIES = {
+  slime: {
+    rows: {
+      5: "........####",
+      6: "......######",
+      7: ".....#######",
+      8: "....########",
+      9: "...#########",
+      10: "...#########",
+      11: "..##########",
+      12: "..##########",
+      13: "..##########",
+      14: ".###########",
+      15: ".###########",
+      16: ".###########",
+      17: ".###########",
+      18: ".###########",
+      19: ".###########",
+      20: "..##########"
+    },
+    eyeX: 7,
+    eyeY: 11,
+    mouthY: 15,
+    blushY: 14,
+    top: 5,
+    accessories: ["sprout", "bow", "flower", "crown"],
+    accent: "pink"
+  },
+  cat: {
+    rows: {
+      2: "...#........",
+      3: "...##.......",
+      4: "...#a#......",
+      5: "...#aa#.....",
+      6: "...#aaa#####",
+      7: "...#########",
+      8: "..##########",
+      9: "..##########",
+      10: ".###########",
+      11: ".###########",
+      12: ".###########",
+      13: ".###########",
+      14: ".###########",
+      15: ".###########",
+      16: "..##########",
+      17: "..##########",
+      18: "...#########",
+      19: "....########",
+      20: "......######"
+    },
+    eyeX: 6,
+    eyeY: 11,
+    mouthY: 15,
+    blushY: 14,
+    top: 6,
+    accessories: ["bow", "flower"],
+    patch: { y: 16, rx: 3.5, ry: 1.8 },
+    accent: "pink",
+    mouths: ["cat", "cat", "smile", "open", "tiny"]
+  },
+  bunny: {
+    rows: {
+      1: "....##......",
+      2: "...####.....",
+      3: "...#aa#.....",
+      4: "...#aa#.....",
+      5: "...#aa#.....",
+      6: "...#aa#.....",
+      7: "...#aa#.....",
+      8: "....##......",
+      9: "....########",
+      10: "..##########",
+      11: ".###########",
+      12: ".###########",
+      13: ".###########",
+      14: ".###########",
+      15: ".###########",
+      16: ".###########",
+      17: ".###########",
+      18: "..##########",
+      19: "..##########",
+      20: "...#########",
+      21: ".....#######"
+    },
+    eyeX: 6,
+    eyeY: 13,
+    mouthY: 17,
+    blushY: 16,
+    top: 9,
+    accessories: ["bow", "flower"],
+    patch: { y: 18, rx: 3.5, ry: 1.8 },
+    accent: "pink"
+  },
+  bear: {
+    rows: {
+      2: "..####......",
+      3: ".#aaaa#.....",
+      4: ".#aa########",
+      5: ".###########",
+      6: ".###########",
+      7: ".###########",
+      8: ".###########",
+      9: ".###########",
+      10: ".###########",
+      11: ".###########",
+      12: ".###########",
+      13: ".###########",
+      14: ".###########",
+      15: "..##########",
+      16: "..##########",
+      17: "...#########",
+      18: "....########",
+      19: "......######"
+    },
+    eyeX: 5,
+    eyeY: 9,
+    mouthY: 14,
+    blushY: 12,
+    top: 4,
+    accessories: ["bow", "flower", "crown"],
+    patch: { y: 14.5, rx: 4.2, ry: 2.6 },
+    accent: "pink",
+    mouths: ["smile", "tiny", "open", "cat"]
+  },
+  frog: {
+    rows: {
+      5: "...###......",
+      6: "..#####.....",
+      7: "..#####.....",
+      8: "..##########",
+      9: ".###########",
+      10: ".###########",
+      11: ".###########",
+      12: ".###########",
+      13: ".###########",
+      14: ".###########",
+      15: "..##########",
+      16: "..##########",
+      17: "...#########",
+      18: ".....#######"
+    },
+    eyeX: 3,
+    eyeY: 6,
+    mouthY: 11,
+    blushY: 10,
+    top: 8,
+    accessories: ["crown", "flower"],
+    patch: { y: 15.5, rx: 5.5, ry: 2 },
+    accent: "pink",
+    mouths: ["wide", "wide", "smile", "open"],
+    eyes: ["round", "big", "dot", "happy"]
+  },
+  chick: {
+    rows: {
+      1: "..........#.",
+      2: "...........#",
+      3: "........####",
+      4: "......######",
+      5: ".....#######",
+      6: "....########",
+      7: "...#########",
+      8: "...#########",
+      9: "..##########",
+      10: "..##########",
+      11: "..##########",
+      12: ".###########",
+      13: ".###########",
+      14: ".###########",
+      15: ".###########",
+      16: ".###########",
+      17: "..##########",
+      18: "..##########",
+      19: "...#########",
+      20: ".....#######",
+      21: ".......aa..."
+    },
+    eyeX: 7,
+    eyeY: 10,
+    mouthY: 13,
+    blushY: 13,
+    top: 3,
+    accessories: ["flower", "bow"],
+    patch: { y: 17, rx: 4.5, ry: 2.2 },
+    accent: "orange",
+    mouths: ["beak"]
+  },
+  ghost: {
+    rows: {
+      3: "........####",
+      4: "......######",
+      5: ".....#######",
+      6: "....########",
+      7: "...#########",
+      8: "...#########",
+      9: "..##########",
+      10: "..##########",
+      11: "..##########",
+      12: ".###########",
+      13: ".###########",
+      14: "..##########",
+      15: "..##########",
+      16: "..##########",
+      17: "..##########",
+      18: "..##########",
+      19: "..##########",
+      20: "..####...###",
+      21: "...##.....##"
+    },
+    eyeX: 7,
+    eyeY: 9,
+    mouthY: 13,
+    blushY: 12,
+    top: 3,
+    accessories: ["bow", "crown", "flower"],
+    accent: "pink",
+    mouths: ["ooh", "smile", "open", "tiny"]
+  },
+  robot: {
+    rows: {
+      1: "...........a",
+      2: "...........a",
+      3: "...........#",
+      4: "...#########",
+      5: "..##########",
+      6: "..##########",
+      7: "..##########",
+      8: "..##########",
+      9: ".a##########",
+      10: ".a##########",
+      11: ".a##########",
+      12: "..##########",
+      13: "..##########",
+      14: "..##########",
+      15: "..##########",
+      16: "...#########",
+      17: ".......#####",
+      18: ".....#######",
+      19: "....######aa",
+      20: "....########",
+      21: "....########"
+    },
+    eyeX: 6,
+    eyeY: 8,
+    mouthY: 12,
+    blushY: 11,
+    top: 4,
+    accessories: [],
+    accent: "seeded",
+    mouths: ["smile", "tiny", "open", "wide"],
+    eyes: ["big", "round", "tall", "happy", "wink"]
+  }
+};
+var SPRITE_NAMES = Object.keys(BODIES);
+var EYES = {
+  round: ["we", "ee", "ee"],
+  big: ["wee", "eee", "eeW"],
+  tall: ["we", "ee", "ee", "eW"],
+  happy: [".e.", "e.e"],
+  dot: ["we", "ee"],
+  wink: ["we", "ee", "ee"]
+};
+var DEFAULT_EYES = ["round", "round", "big", "big", "tall", "happy", "happy", "dot", "wink"];
+var MOUTHS = {
+  smile: ["m..m", ".mm."],
+  cat: ["m.mm.m", ".m..m."],
+  open: ["mmmm", "mttm", ".mm."],
+  tiny: ["mm"],
+  ooh: [".mm.", "m..m", ".mm."],
+  wide: ["m......m", ".mmmmmm."],
+  beak: ["kkkk", ".KK."]
+};
+var DEFAULT_MOUTHS = ["smile", "smile", "cat", "open", "tiny", "ooh"];
+var ACCESSORIES = {
+  sprout: { art: ["GG.GG", ".GgG.", "..g.."], place: "top" },
+  bow: { art: ["rr.rr", "rRRRr", "rr.rr"], place: "side" },
+  flower: { art: [".p.", "pyp", ".p."], place: "side" },
+  crown: { art: ["y.y.y", "yyyyy", "YYYYY"], place: "top" }
+};
+var ACCENT_HUES = [345, 20, 48, 140, 190, 230, 285];
+var FIXED = {
+  eye: "#2B2438",
+  shine: "#FFFFFF",
+  glint: "#CFC8E8",
+  mouth: "#4A2A3C",
+  tongue: "#FF7F9C",
+  blush: "#FF8FAB",
+  pink: "#FFB3C7",
+  pinkShade: "#F08BA6",
+  orange: "#FFB347",
+  orangeShade: "#E8892B",
+  leaf: "#7CD67C",
+  leafShade: "#3E9A4E",
+  ribbon: "#FF6FA0",
+  ribbonShade: "#D94A7C",
+  petal: "#FFFFFF",
+  gold: "#FFD54A",
+  goldShade: "#E0A82E"
+};
+function draw(traits) {
+  const body = BODIES[traits.sprite];
+  const grid = Array.from({ length: SPRITE_SIZE }, () => Array.from({ length: SPRITE_SIZE }, () => ({ kind: "empty" })));
+  const inside = (x, y) => x >= 0 && y >= 0 && x < SPRITE_SIZE && y < SPRITE_SIZE;
+  const kindAt = (x, y) => inside(x, y) ? grid[y][x].kind : "empty";
+  const solid = (x, y) => kindAt(x, y) !== "empty";
+  for (const [rowKey, half] of Object.entries(body.rows)) {
+    const y = Number(rowKey);
+    const full = half + half.split("").reverse().join("");
+    for (let x = 0; x < SPRITE_SIZE; x++) {
+      if (full[x] === "#") grid[y][x] = { kind: "body" };
+      else if (full[x] === "a") grid[y][x] = { kind: "accent" };
+    }
+  }
+  if (traits.accessory) {
+    const { art, place } = ACCESSORIES[traits.accessory];
+    const width = art[0].length;
+    const originX = place === "top" ? CENTER - Math.ceil(width / 2) : CENTER + 3;
+    const originY = place === "top" ? body.top - art.length : body.top - 1;
+    const paints = {
+      G: FIXED.leaf,
+      g: FIXED.leafShade,
+      r: FIXED.ribbon,
+      R: FIXED.ribbonShade,
+      p: FIXED.petal,
+      y: FIXED.gold,
+      Y: FIXED.goldShade
+    };
+    art.forEach(
+      (line, dy) => line.split("").forEach((char, dx) => {
+        const color = paints[char];
+        if (color && inside(originX + dx, originY + dy)) grid[originY + dy][originX + dx] = { kind: "paint", color };
+      })
+    );
+  }
+  let minY = SPRITE_SIZE;
+  let maxY = 0;
+  grid.forEach((line, y) => {
+    if (line.some((cell) => cell.kind === "body")) {
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+  });
+  const midY = (minY + maxY) / 2;
+  const { palette } = traits;
+  const colors2 = grid.map(
+    (line, y) => line.map((cell, x) => {
+      if (cell.kind === "empty") return null;
+      if (cell.kind === "paint") return cell.color;
+      if (cell.kind === "accent") return !solid(x, y + 1) || !solid(x + 1, y) ? traits.accentShade : traits.accent;
+      const bottom = !solid(x, y + 1);
+      if (bottom && y >= midY) return palette.deep;
+      if (bottom || !solid(x + 1, y) || y >= midY && !solid(x, y + 2)) return palette.shade;
+      if (!solid(x, y - 1) || !solid(x - 1, y)) return palette.light;
+      if (body.patch) {
+        const dx = (x + 0.5 - CENTER) / body.patch.rx;
+        const dy = (y - body.patch.y) / body.patch.ry;
+        if (dx * dx + dy * dy <= 1) return palette.belly;
+      }
+      return palette.body;
+    })
+  );
+  for (let y = minY + 1; y < maxY; y++) {
+    const line = grid[y];
+    if (line.filter((cell) => cell.kind === "body").length < 10) continue;
+    const hx = line.findIndex((cell) => cell.kind === "body") + 2;
+    for (const [sx, sy] of [
+      [hx, y + 1],
+      [hx + 1, y + 1],
+      [hx, y + 2]
+    ]) {
+      if (kindAt(sx, sy) === "body" && solid(sx, sy - 1) && solid(sx - 1, sy)) colors2[sy][sx] = palette.highlight;
+    }
+    break;
+  }
+  const paintFace = (art, originX, originY, map) => art.forEach(
+    (line, dy) => line.split("").forEach((char, dx) => {
+      const color = map[char];
+      const px = originX + dx;
+      const py = originY + dy;
+      if (color && inside(px, py) && grid[py][px].kind === "body") colors2[py][px] = color;
+    })
+  );
+  const eyeMap = { e: FIXED.eye, w: FIXED.shine, W: FIXED.glint };
+  const rightArt = EYES[traits.eyes];
+  const leftArt = traits.eyes === "wink" ? EYES.happy : rightArt;
+  const eyeWidth = rightArt[0].length;
+  const leftX = body.eyeX;
+  const rightX = SPRITE_SIZE - body.eyeX - eyeWidth;
+  paintFace(leftArt, leftX + eyeWidth - leftArt[0].length, body.eyeY + rightArt.length - leftArt.length, eyeMap);
+  paintFace(rightArt, rightX, body.eyeY, eyeMap);
+  const mouth = MOUTHS[traits.mouth];
+  paintFace(mouth, Math.floor(CENTER - mouth[0].length / 2), body.mouthY, { m: FIXED.mouth, t: FIXED.tongue, k: FIXED.orange, K: FIXED.orangeShade });
+  if (traits.blush) {
+    paintFace(["cc"], leftX - 1, body.blushY, { c: FIXED.blush });
+    paintFace(["cc"], rightX + eyeWidth - 1, body.blushY, { c: FIXED.blush });
+  }
+  grid.forEach(
+    (line, y) => line.forEach((cell, x) => {
+      if (cell.kind === "empty" && (solid(x + 1, y) || solid(x - 1, y) || solid(x, y + 1) || solid(x, y - 1))) colors2[y][x] = palette.outline;
+    })
+  );
+  return { sprite: traits.sprite, background: palette.background, body: palette.body, rows: toRuns(colors2) };
+}
+function traitsFor(sprite, palette, accentHue, next) {
+  const body = BODIES[sprite];
+  const accent = body.accent === "orange" ? { accent: FIXED.orange, accentShade: FIXED.orangeShade } : body.accent === "pink" ? { accent: FIXED.pink, accentShade: FIXED.pinkShade } : { accent: hslToHex(accentHue, 85, 72), accentShade: hslToHex(shiftHue(accentHue, 250, 14), 80, 58) };
+  const eyes = pick(next, body.eyes ?? DEFAULT_EYES);
+  const mouth = pick(next, body.mouths ?? DEFAULT_MOUTHS);
+  const blush = next() < 0.75;
+  const accessory = next() < 0.45 && body.accessories.length > 0 ? pick(next, body.accessories) : null;
+  return { sprite, palette, ...accent, eyes, mouth, blush, accessory };
+}
+function withTheme(avatar, palette, options) {
+  return options.dark ? { ...avatar, background: darkBackground(palette) } : avatar;
+}
+function pixelAvatar(seed, palette = null, options = {}) {
+  const next = rng(seed);
+  const sprite = pick(next, SPRITE_NAMES);
+  const seeded = pick(next, PALETTES);
+  const colors2 = palette === null ? seeded : PALETTES[palette % PALETTES.length];
+  const accentHue = pick(next, ACCENT_HUES);
+  return withTheme(draw(traitsFor(sprite, colors2, accentHue, next)), colors2, options);
+}
+function spriteAvatar(sprite, palette, accent = 0, options = {}) {
+  const colors2 = PALETTES[palette % PALETTES.length];
+  const next = rng(`${sprite}:${palette}:${accent}`);
+  return withTheme(draw(traitsFor(sprite, colors2, ACCENT_HUES[accent % ACCENT_HUES.length], next)), colors2, options);
+}
+function grayscaleAvatar(avatar) {
+  const gray = (hex) => {
+    const level = Math.round(luminance(hex) * 255).toString(16).padStart(2, "0");
+    return `#${level}${level}${level}`;
+  };
+  return {
+    ...avatar,
+    background: gray(avatar.background),
+    body: gray(avatar.body),
+    rows: avatar.rows.map((runs) => runs.map((run) => run.color ? { ...run, color: gray(run.color) } : run))
+  };
+}
+var SPLASH_LINEUP = [
+  { sprite: "cat", palette: 5, accent: 0 },
+  { sprite: "robot", palette: 3, accent: 5 },
+  { sprite: "slime", palette: 0, accent: 3 },
+  { sprite: "bunny", palette: 2, accent: 6 },
+  { sprite: "chick", palette: 4, accent: 1 },
+  { sprite: "ghost", palette: 9, accent: 4 }
+];
+function randomSeed() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+// shared/templates.ts
+var BOT_TEMPLATES = [
+  {
+    id: "assistant",
+    name: "Assistant",
+    title: "General assistant",
+    description: "Answers questions, drafts text, and takes on whatever you hand it.",
+    avatarSeed: "assistant-7",
+    soul: "You are a capable, plain-spoken assistant. Ask one clarifying question when a request is ambiguous; otherwise do the work and show the result. Keep replies short and concrete."
+  },
+  {
+    id: "inbox",
+    name: "Inbox",
+    title: "Email triage",
+    description: "Reads your inbox, flags what needs you, and drafts replies for approval.",
+    avatarSeed: "inbox-5",
+    soul: "You manage the user's email. Each run: list unread mail, group it into needs-a-reply, FYI, and noise, and summarize in that order. Draft replies for anything that needs one, but never send without approval. Never unsubscribe, delete, or forward mail on your own."
+  },
+  {
+    id: "research",
+    name: "Scout",
+    title: "Researcher",
+    description: "Digs through the web and your files, and comes back with a sourced brief.",
+    avatarSeed: "research-5",
+    soul: "You research questions and return a brief: the answer first, then the evidence with links, then what you could not verify. Prefer primary sources. Say clearly when sources disagree. Never present a guess as a finding."
+  },
+  {
+    id: "community",
+    name: "Watch",
+    title: "Community monitor",
+    description: "Watches Discord, Slack, or forums and reports what matters, on a schedule.",
+    avatarSeed: "community",
+    soul: "You monitor the user's community channels. Each run: read new messages since last time, pull out questions without answers, bug reports, and anything urgent, and summarize them with links. Never post or reply in the channels yourself; you report to the user."
+  },
+  {
+    id: "ops",
+    name: "Ops",
+    title: "Operations",
+    description: "Keeps calendars, tasks, and follow-ups moving; nudges you before things slip.",
+    avatarSeed: "ops-7",
+    soul: "You keep the user's week on track. Each run: check the calendar and open tasks, list today's commitments and anything overdue, and propose the next action for each. Draft messages when a follow-up is due, but always ask before sending."
+  }
+];
+function newBot(provider, template) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    id: newBotId(),
+    name: template?.name ?? "New bot",
+    title: template?.title ?? "",
+    description: template?.description ?? "",
+    avatar: { seed: template?.avatarSeed ?? randomSeed(), palette: null, shape: "circle", imageUrl: null },
+    hostId: null,
+    provider,
+    model: null,
+    modeId: null,
+    thinkingOptionId: null,
+    soul: template?.soul ?? "",
+    mcpServerIds: [],
+    alwaysAllow: [],
+    skillIds: [],
+    apps: [],
+    appRules: {},
+    voice: { name: null, readReplies: false },
+    contactBots: "ask",
+    routines: [],
+    playbooks: [],
+    cwd: null,
+    pinned: false,
+    archived: false,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+function botFromPreset(provider, preset) {
+  const { id: _id, createdAt: _createdAt, ...fields } = preset;
+  return { ...newBot(provider), ...fields };
+}
+
+// shared/vibing-defaults.ts
+var DEFAULT_BOT_ID = "vibing-general";
+var CLAUDE_BOT_ID = "vibing-claude";
+var VIBING_DEFAULTS_VERSION = 5;
+var CHIEF_BOT_ID = "vibing-chief";
+function managedChiefBot(saved) {
+  const base = newBot("claude", BOT_TEMPLATES[0]);
+  return {
+    ...base,
+    id: CHIEF_BOT_ID,
+    name: saved?.name ?? "Chief",
+    provider: "claude",
+    model: "sonnet",
+    modeId: null,
+    thinkingOptionId: null,
+    soul: saved?.soul ?? "",
+    skillIds: saved?.skillIds ?? [],
+    playbooks: saved?.playbooks ?? [],
+    avatar: saved?.avatar ?? { ...base.avatar, seed: CHIEF_BOT_ID },
+    contactBots: "off",
+    apps: [],
+    appRules: {},
+    mcpServerIds: [],
+    alwaysAllow: [],
+    routines: [],
+    cwd: null,
+    hostId: null,
+    archived: false,
+    createdAt: saved?.createdAt ?? "2026-11-07T00:00:00.000Z",
+    updatedAt: saved?.updatedAt ?? "2026-11-07T00:00:00.000Z"
+  };
+}
+function assertOrdinaryBot(botId) {
+  if (botId === CHIEF_BOT_ID) throw new Error("Chief requires the host-managed execution path; ordinary chats, routines and relay tools are unavailable.");
+}
+var OLD_LIST_WIDTH = 320;
+var DEFAULT_BOT_MODES = /* @__PURE__ */ new Map([
+  ["codex", "full-access"],
+  ["claude", "bypassPermissions"]
+]);
+function defaultBot(id, name, provider, values) {
+  const defaults = values.defaults ?? DEFAULT_BOT_DEFAULTS;
+  const same = defaults.provider === provider;
+  const base = newBot(provider, BOT_TEMPLATES[0]);
+  return {
+    ...base,
+    id,
+    name,
+    // Distinct avatars, so the two default bots are told apart in the sidebar.
+    avatar: { ...base.avatar, seed: `vibing-${provider}` },
+    model: same ? defaults.model : null,
+    modeId: DEFAULT_BOT_MODES.get(provider) ?? null,
+    thinkingOptionId: same ? defaults.thinkingOptionId : null,
+    contactBots: "allow"
+  };
+}
+function seedDefaultBots(values, migrating) {
+  if (!migrating) return values.bots;
+  let bots = values.bots;
+  const current2 = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
+  if (!current2) {
+    bots = [defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values), ...bots];
+  } else if (current2.name === "General") {
+    const codex = defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values);
+    const converted = { ...current2, name: codex.name, provider: codex.provider, model: codex.model, modeId: codex.modeId, thinkingOptionId: codex.thinkingOptionId };
+    bots = bots.map((bot) => bot.id === DEFAULT_BOT_ID ? converted : bot);
+  }
+  if (!bots.some((bot) => bot.id === CLAUDE_BOT_ID)) {
+    const at = bots.findIndex((bot) => bot.id === DEFAULT_BOT_ID) + 1;
+    bots = [...bots.slice(0, at), defaultBot(CLAUDE_BOT_ID, "Claude", "claude", values), ...bots.slice(at)];
+  }
+  return bots;
+}
+var DEFAULT_BOT_NAMES = [
+  [DEFAULT_BOT_ID, "Codex"],
+  [CLAUDE_BOT_ID, "Claude"]
+];
+var nameKey = (name) => name.trim().toLowerCase();
+function distinctDefaultNames(bots) {
+  let result = bots;
+  for (const [id, seededName] of DEFAULT_BOT_NAMES) {
+    const bot = result.find((entry) => entry.id === id);
+    if (!bot || nameKey(bot.name) !== nameKey(seededName)) continue;
+    const taken = new Set(result.filter((entry) => entry.id !== id).map((entry) => nameKey(entry.name)));
+    if (!taken.has(nameKey(seededName))) continue;
+    let name = `${seededName} (default)`;
+    for (let n = 2; taken.has(nameKey(name)); n++) name = `${seededName} (default ${n})`;
+    result = result.map((entry) => entry.id === id ? { ...entry, name } : entry);
+  }
+  return result;
+}
+function fullAccessDefaultBots(bots) {
+  return bots.map(
+    (bot) => bot.id === DEFAULT_BOT_ID || bot.id === CLAUDE_BOT_ID ? { ...bot, modeId: DEFAULT_BOT_MODES.get(bot.provider) ?? bot.modeId, contactBots: "allow" } : bot
+  );
+}
+function applyVibingDefaults(values) {
+  const from = values.vibingDefaults ?? 0;
+  const seeded = seedDefaultBots(values, from < 1);
+  const named = from < 3 ? distinctDefaultNames(seeded) : seeded;
+  const upgraded = from < 4 ? fullAccessDefaultBots(named) : named;
+  const bots = from < 5 && !upgraded.some((bot) => bot.id === CHIEF_BOT_ID) ? [...upgraded, managedChiefBot()] : upgraded;
+  const ui2 = from < 2 && values.ui?.listWidth === OLD_LIST_WIDTH ? { ...values.ui, listWidth: LIST_WIDTH.min } : values.ui;
+  if (from >= VIBING_DEFAULTS_VERSION && bots === values.bots) return null;
+  return { ...values, bots, ...ui2 ? { ui: ui2 } : {}, vibingDefaults: VIBING_DEFAULTS_VERSION };
+}
+function fallbackDefaultBotId(bots, hostId) {
+  const local = bots.filter((bot) => bot.id !== CHIEF_BOT_ID && (!bot.hostId || bot.hostId === hostId));
+  return (local.find((bot) => bot.id === DEFAULT_BOT_ID) ?? local.find((bot) => bot.id === CLAUDE_BOT_ID) ?? local[0])?.id;
+}
+function preferredDefaultBotId(bots, providers, hostId) {
+  if (!providers || bots.length === 0) return void 0;
+  const codex = bots.find((bot) => bot.id === DEFAULT_BOT_ID && (!bot.hostId || bot.hostId === hostId));
+  if (!codex) return fallbackDefaultBotId(bots, hostId);
+  const statusOf = (bot) => providers.find((entry) => entry.provider === bot.provider)?.status ?? "unavailable";
+  const status = statusOf(codex);
+  if (status === "ready") return DEFAULT_BOT_ID;
+  if (status === "loading") return void 0;
+  const claude = bots.find((bot) => bot.id === CLAUDE_BOT_ID && (!bot.hostId || bot.hostId === hostId));
+  if (!claude) return DEFAULT_BOT_ID;
+  const claudeStatus = statusOf(claude);
+  if (claudeStatus === "loading") return void 0;
+  return claudeStatus === "ready" ? CLAUDE_BOT_ID : DEFAULT_BOT_ID;
+}
+
+// shared/managed-chief-ui.ts
+var CHIEF_LAUNCHER_GUIDANCE = "Use the app-wide Chief launcher to talk to Chief. Instructions, memory, skills and playbooks can be personalized here. Chief's runtime and tools are managed by the host.";
+var SECTIONS = /* @__PURE__ */ new Set(["overview", "identity", "soul", "skills", "playbooks", "memory"]);
+var PERSONALIZATION = /* @__PURE__ */ new Set(["name", "avatar", "soul", "skillIds", "playbooks"]);
+function botSectionAllowed(botId, section) {
+  return botId !== CHIEF_BOT_ID || SECTIONS.has(section);
+}
+function chiefPersonalizationPatch(botId, patch) {
+  return botId === CHIEF_BOT_ID ? Object.fromEntries(Object.entries(patch).filter(([key]) => PERSONALIZATION.has(key))) : patch;
+}
+function exportableBots(bots) {
+  return bots.filter((bot) => bot.id !== CHIEF_BOT_ID);
+}
+
+// client/BotsSurface.tsx
+import { useRpc as useRpc20 } from "@getpaseo/plugin/client";
+import { copyText as copyText6, useToast as useToast17 } from "@getpaseo/plugin/client/react-native";
+import { SettingsAction as SettingsAction17, SettingsCard as SettingsCard21 } from "@getpaseo/plugin/client/ui";
+import { useQueryClient as useQueryClient11 } from "@tanstack/react-query";
+import { useCallback as useCallback6, useEffect as useEffect24, useRef as useRef20, useState as useState44 } from "react";
+import { ActivityIndicator as ActivityIndicator11, BackHandler, Platform as Platform21, Text as Text33, View as View45 } from "react-native";
+
 // shared/sidebar.ts
 function chatBucket(agent) {
   if ((agent.pendingPermissions?.length ?? 0) > 0 || agent.attentionReason === "permission") return "needs_input";
@@ -1471,6 +1688,7 @@ function botForChat(bot, settings) {
   return { ...bot, provider, model, modeId, thinkingOptionId };
 }
 async function startBotChat(api, input) {
+  assertOrdinaryBot(input.bot.id);
   const bot = botForChat(input.bot, input.agentSettings);
   const model = bot.model ?? await resolveDefaultModel(api, bot.provider);
   const workspace = input.placement.workspaceId ? api.workspaces.ref(input.placement.workspaceId) : await ensureBotWorkspace(api, bot, input.placement);
@@ -1885,84 +2103,6 @@ function scheduleFrom(input, now) {
     case "webhook":
       return { kind: "webhook" };
   }
-}
-
-// shared/templates.ts
-var BOT_TEMPLATES = [
-  {
-    id: "assistant",
-    name: "Assistant",
-    title: "General assistant",
-    description: "Answers questions, drafts text, and takes on whatever you hand it.",
-    avatarSeed: "assistant-7",
-    soul: "You are a capable, plain-spoken assistant. Ask one clarifying question when a request is ambiguous; otherwise do the work and show the result. Keep replies short and concrete."
-  },
-  {
-    id: "inbox",
-    name: "Inbox",
-    title: "Email triage",
-    description: "Reads your inbox, flags what needs you, and drafts replies for approval.",
-    avatarSeed: "inbox-5",
-    soul: "You manage the user's email. Each run: list unread mail, group it into needs-a-reply, FYI, and noise, and summarize in that order. Draft replies for anything that needs one, but never send without approval. Never unsubscribe, delete, or forward mail on your own."
-  },
-  {
-    id: "research",
-    name: "Scout",
-    title: "Researcher",
-    description: "Digs through the web and your files, and comes back with a sourced brief.",
-    avatarSeed: "research-5",
-    soul: "You research questions and return a brief: the answer first, then the evidence with links, then what you could not verify. Prefer primary sources. Say clearly when sources disagree. Never present a guess as a finding."
-  },
-  {
-    id: "community",
-    name: "Watch",
-    title: "Community monitor",
-    description: "Watches Discord, Slack, or forums and reports what matters, on a schedule.",
-    avatarSeed: "community",
-    soul: "You monitor the user's community channels. Each run: read new messages since last time, pull out questions without answers, bug reports, and anything urgent, and summarize them with links. Never post or reply in the channels yourself; you report to the user."
-  },
-  {
-    id: "ops",
-    name: "Ops",
-    title: "Operations",
-    description: "Keeps calendars, tasks, and follow-ups moving; nudges you before things slip.",
-    avatarSeed: "ops-7",
-    soul: "You keep the user's week on track. Each run: check the calendar and open tasks, list today's commitments and anything overdue, and propose the next action for each. Draft messages when a follow-up is due, but always ask before sending."
-  }
-];
-function newBot(provider, template) {
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  return {
-    id: newBotId(),
-    name: template?.name ?? "New bot",
-    title: template?.title ?? "",
-    description: template?.description ?? "",
-    avatar: { seed: template?.avatarSeed ?? randomSeed(), palette: null, shape: "circle", imageUrl: null },
-    hostId: null,
-    provider,
-    model: null,
-    modeId: null,
-    thinkingOptionId: null,
-    soul: template?.soul ?? "",
-    mcpServerIds: [],
-    alwaysAllow: [],
-    skillIds: [],
-    apps: [],
-    appRules: {},
-    voice: { name: null, readReplies: false },
-    contactBots: "ask",
-    routines: [],
-    playbooks: [],
-    cwd: null,
-    pinned: false,
-    archived: false,
-    createdAt: now,
-    updatedAt: now
-  };
-}
-function botFromPreset(provider, preset) {
-  const { id: _id, createdAt: _createdAt, ...fields } = preset;
-  return { ...newBot(provider), ...fields };
 }
 
 // shared/changes.ts
@@ -2875,99 +3015,31 @@ var commandRemoveRpc = defineRpc({
   input: z6.object({ botId: BotId, id: z6.string() }),
   output: z6.object({ ok: z6.boolean() })
 });
-
-// shared/vibing-defaults.ts
-var DEFAULT_BOT_ID = "vibing-general";
-var CLAUDE_BOT_ID = "vibing-claude";
-var VIBING_DEFAULTS_VERSION = 4;
-var OLD_LIST_WIDTH = 320;
-var DEFAULT_BOT_MODES = /* @__PURE__ */ new Map([
-  ["codex", "full-access"],
-  ["claude", "bypassPermissions"]
-]);
-function defaultBot(id, name, provider, values) {
-  const defaults = values.defaults ?? DEFAULT_BOT_DEFAULTS;
-  const same = defaults.provider === provider;
-  const base = newBot(provider, BOT_TEMPLATES[0]);
-  return {
-    ...base,
-    id,
-    name,
-    // Distinct avatars, so the two default bots are told apart in the sidebar.
-    avatar: { ...base.avatar, seed: `vibing-${provider}` },
-    model: same ? defaults.model : null,
-    modeId: DEFAULT_BOT_MODES.get(provider) ?? null,
-    thinkingOptionId: same ? defaults.thinkingOptionId : null,
-    contactBots: "allow"
-  };
-}
-function seedDefaultBots(values, migrating) {
-  if (!migrating) return values.bots;
-  let bots = values.bots;
-  const current2 = bots.find((bot) => bot.id === DEFAULT_BOT_ID);
-  if (!current2) {
-    bots = [defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values), ...bots];
-  } else if (current2.name === "General") {
-    const codex = defaultBot(DEFAULT_BOT_ID, "Codex", "codex", values);
-    const converted = { ...current2, name: codex.name, provider: codex.provider, model: codex.model, modeId: codex.modeId, thinkingOptionId: codex.thinkingOptionId };
-    bots = bots.map((bot) => bot.id === DEFAULT_BOT_ID ? converted : bot);
-  }
-  if (!bots.some((bot) => bot.id === CLAUDE_BOT_ID)) {
-    const at = bots.findIndex((bot) => bot.id === DEFAULT_BOT_ID) + 1;
-    bots = [...bots.slice(0, at), defaultBot(CLAUDE_BOT_ID, "Claude", "claude", values), ...bots.slice(at)];
-  }
-  return bots;
-}
-var DEFAULT_BOT_NAMES = [
-  [DEFAULT_BOT_ID, "Codex"],
-  [CLAUDE_BOT_ID, "Claude"]
-];
-var nameKey = (name) => name.trim().toLowerCase();
-function distinctDefaultNames(bots) {
-  let result = bots;
-  for (const [id, seededName] of DEFAULT_BOT_NAMES) {
-    const bot = result.find((entry) => entry.id === id);
-    if (!bot || nameKey(bot.name) !== nameKey(seededName)) continue;
-    const taken = new Set(result.filter((entry) => entry.id !== id).map((entry) => nameKey(entry.name)));
-    if (!taken.has(nameKey(seededName))) continue;
-    let name = `${seededName} (default)`;
-    for (let n = 2; taken.has(nameKey(name)); n++) name = `${seededName} (default ${n})`;
-    result = result.map((entry) => entry.id === id ? { ...entry, name } : entry);
-  }
-  return result;
-}
-function fullAccessDefaultBots(bots) {
-  return bots.map(
-    (bot) => bot.id === DEFAULT_BOT_ID || bot.id === CLAUDE_BOT_ID ? { ...bot, modeId: DEFAULT_BOT_MODES.get(bot.provider) ?? bot.modeId, contactBots: "allow" } : bot
-  );
-}
-function applyVibingDefaults(values) {
-  const from = values.vibingDefaults ?? 0;
-  const seeded = seedDefaultBots(values, from < 1);
-  const named = from < 3 ? distinctDefaultNames(seeded) : seeded;
-  const bots = from < 4 ? fullAccessDefaultBots(named) : named;
-  const ui2 = from < 2 && values.ui?.listWidth === OLD_LIST_WIDTH ? { ...values.ui, listWidth: LIST_WIDTH.min } : values.ui;
-  if (from >= VIBING_DEFAULTS_VERSION && bots === values.bots) return null;
-  return { ...values, bots, ...ui2 ? { ui: ui2 } : {}, vibingDefaults: VIBING_DEFAULTS_VERSION };
-}
-function fallbackDefaultBotId(bots, hostId) {
-  const local = bots.filter((bot) => !bot.hostId || bot.hostId === hostId);
-  return (local.find((bot) => bot.id === DEFAULT_BOT_ID) ?? local.find((bot) => bot.id === CLAUDE_BOT_ID) ?? local[0])?.id;
-}
-function preferredDefaultBotId(bots, providers, hostId) {
-  if (!providers || bots.length === 0) return void 0;
-  const codex = bots.find((bot) => bot.id === DEFAULT_BOT_ID && (!bot.hostId || bot.hostId === hostId));
-  if (!codex) return fallbackDefaultBotId(bots, hostId);
-  const statusOf = (bot) => providers.find((entry) => entry.provider === bot.provider)?.status ?? "unavailable";
-  const status = statusOf(codex);
-  if (status === "ready") return DEFAULT_BOT_ID;
-  if (status === "loading") return void 0;
-  const claude = bots.find((bot) => bot.id === CLAUDE_BOT_ID && (!bot.hostId || bot.hostId === hostId));
-  if (!claude) return DEFAULT_BOT_ID;
-  const claudeStatus = statusOf(claude);
-  if (claudeStatus === "loading") return void 0;
-  return claudeStatus === "ready" ? CLAUDE_BOT_ID : DEFAULT_BOT_ID;
-}
+var ChiefBridgeToken = z6.string().min(32).max(512);
+var chiefPrepareRpc = defineRpc({
+  name: "bots.chief.prepare",
+  input: z6.object({ bridgeToken: ChiefBridgeToken }).strict(),
+  output: z6.object({ botId: z6.literal("vibing-chief"), systemPrompt: z6.string() })
+});
+var chiefCallRpc = defineRpc({
+  name: "bots.chief.call",
+  input: z6.object({ bridgeToken: ChiefBridgeToken, agentId: z6.string().min(1).max(200), tool: z6.string().min(1).max(100), arguments: z6.unknown() }).strict(),
+  output: z6.object({ text: z6.string() })
+});
+var chiefHandoffRpc = defineRpc({
+  name: "bots.chief.handoff",
+  input: z6.object({
+    bridgeToken: ChiefBridgeToken,
+    agentId: z6.string().uuid(),
+    bot: z6.string().min(1).max(100),
+    path: z6.string().min(1).max(4096),
+    workspaceId: z6.string().min(1).max(200),
+    prompt: z6.string().min(1).max(2e4),
+    titleSuffix: z6.string().min(1).max(150),
+    labels: z6.record(z6.string().regex(/^paseo-chief\.[a-z-]+$/), z6.string().max(500))
+  }).strict(),
+  output: z6.object({ chatId: z6.string(), botId: z6.string(), name: z6.string() })
+});
 
 // client/Avatar.tsx
 import { createContext, useContext, useMemo } from "react";
@@ -4674,6 +4746,11 @@ function DialogButton({ colors: colors2, label, primary, disabled, onPress }) {
 function botMenuEntries(actions) {
   const { bot } = actions;
   const entries = [{ label: "Open bot settings", icon: "Settings", onSelect: actions.onOpenSettings }];
+  if (bot.id === CHIEF_BOT_ID) return [
+    ...entries,
+    { label: "Rename bot", icon: "Pencil", onSelect: actions.onRename },
+    { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId }
+  ];
   if (actions.onOpenInPaseo) entries.push({ label: "Open in Paseo", icon: "ExternalLink", onSelect: actions.onOpenInPaseo });
   entries.push({ label: bot.pinned ? "Unpin" : "Pin to top", icon: bot.pinned ? "PinOff" : "Pin", onSelect: actions.onTogglePin });
   if (actions.onMoveUp || actions.onMoveDown) {
@@ -4975,7 +5052,7 @@ function BotSidebar(props) {
   const shown = openTab?.bots ?? bots;
   const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
   const listedBots = new Map(shown.map((bot) => [bot.id, bot]));
-  const pins = listUi.pinnedChats.filter((pin) => listedBots.has(pin.botId));
+  const pins = listUi.pinnedChats.filter((pin) => pin.botId !== CHIEF_BOT_ID && listedBots.has(pin.botId));
   const leadId = openTab?.group?.leadId ?? null;
   if (props.splash && bots.length === 0 && hiddenArchivedCount === 0 && pins.length === 0 && !openTab) {
     return /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, paddingBottom: bottomInset, backgroundColor: tokens.surfaceSidebar }, children: [
@@ -5173,7 +5250,9 @@ function BotGroup(props) {
   const loading2 = !!host2.api && chats.isLoading;
   const aggregate = isOpen ? null : aggregateBuckets(unpinned.map(chatBucket));
   let children = null;
-  if (isOpen) {
+  if (isOpen && bot.id === CHIEF_BOT_ID) {
+    children = /* @__PURE__ */ jsx6(GhostButton, { colors: colors2, icon: "Settings", label: "Chief personalization", onPress: () => onSelect({ botId: bot.id, chatId: null }) });
+  } else if (isOpen) {
     if (loading2) children = /* @__PURE__ */ jsx6(SkeletonRows, { colors: colors2 });
     else if (ordered.length > 0 || draftSelected) {
       children = /* @__PURE__ */ jsxs5(Fragment4, { children: [
@@ -5256,7 +5335,7 @@ function BotRow({ colors: colors2, tokens, bot, lead, touch, isOpen, aggregate, 
           lead ? /* @__PURE__ */ jsx6(Icon4, { name: "Crown", size: 12, color: colors2.foregroundMuted }) : null
         ] }),
         /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "center", gap: 2, flexShrink: 0, marginRight: -6 }, children: [
-          /* @__PURE__ */ jsx6(View6, { style: { width: 24, height: 24, alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: actionsVisible ? 1 : 0 }, pointerEvents: actionsVisible ? "auto" : "none", children: /* @__PURE__ */ jsx6(
+          bot.id !== CHIEF_BOT_ID ? /* @__PURE__ */ jsx6(View6, { style: { width: 24, height: 24, alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: actionsVisible ? 1 : 0 }, pointerEvents: actionsVisible ? "auto" : "none", children: /* @__PURE__ */ jsx6(
             Pressable4,
             {
               accessibilityRole: "button",
@@ -5275,7 +5354,7 @@ function BotRow({ colors: colors2, tokens, bot, lead, touch, isOpen, aggregate, 
               }),
               children: ({ pressed: down }) => /* @__PURE__ */ jsx6(Icon4, { name: "Plus", size: 15, color: plus.hovered || down ? colors2.foreground : colors2.foregroundMuted })
             }
-          ) }),
+          ) }) : null,
           /* @__PURE__ */ jsx6(View6, { style: { opacity: actionsVisible ? 1 : 0 }, pointerEvents: actionsVisible ? "auto" : "none", children: /* @__PURE__ */ jsx6(
             KebabButton2,
             {
@@ -11726,7 +11805,7 @@ function LibraryView({ colors: colors2, layout, values, commit, target, onTarget
     {
       colors: colors2,
       server,
-      bots,
+      bots: exportableBots(bots),
       otherNames: library.mcpServers.filter((entry) => entry.id !== server.id).map((entry) => entry.name),
       showTitle,
       onPatch: (patch) => patchServer(server.id, patch),
@@ -11740,7 +11819,7 @@ function LibraryView({ colors: colors2, layout, values, commit, target, onTarget
       colors: colors2,
       app,
       accounts: appAccountsFor,
-      bots,
+      bots: exportableBots(bots),
       showTitle,
       onToggleBot: (bot, on) => toggleApp(app.slug, bot, on),
       onDisconnected: () => setTarget(compact2 ? null : { kind: "apps" }),
@@ -12780,32 +12859,34 @@ function IdentitySection({ colors: colors2, bot, onPatch }) {
           }
         }
       ),
-      /* @__PURE__ */ jsx43(
-        InputField,
-        {
-          colors: colors2,
-          label: "Title",
-          hint: "One line: what the bot does",
-          initialValue: bot.title,
-          placeholder: "Describe what your bot does",
-          onChangeText: (title) => onPatch({ title: title.replace(/\n/g, " ").slice(0, 200) })
-        }
-      ),
-      /* @__PURE__ */ jsx43(
-        TextAreaField,
-        {
-          colors: colors2,
-          label: "Blurb",
-          hint: "Who the bot is. Shown in the bot list and given to the agent.",
-          error: length >= DESCRIPTION_MAX ? `At the ${DESCRIPTION_MAX} character limit` : null,
-          defaultValue: bot.description,
-          maxLength: DESCRIPTION_MAX,
-          onChangeText: (description) => onPatch({ description: description.slice(0, DESCRIPTION_MAX) }),
-          placeholder: "Triages my inbox every morning and drafts replies in my voice."
-        }
-      )
+      bot.id !== CHIEF_BOT_ID ? /* @__PURE__ */ jsxs41(Fragment19, { children: [
+        /* @__PURE__ */ jsx43(
+          InputField,
+          {
+            colors: colors2,
+            label: "Title",
+            hint: "One line: what the bot does",
+            initialValue: bot.title,
+            placeholder: "Describe what your bot does",
+            onChangeText: (title) => onPatch({ title: title.replace(/\n/g, " ").slice(0, 200) })
+          }
+        ),
+        /* @__PURE__ */ jsx43(
+          TextAreaField,
+          {
+            colors: colors2,
+            label: "Blurb",
+            hint: "Who the bot is. Shown in the bot list and given to the agent.",
+            error: length >= DESCRIPTION_MAX ? `At the ${DESCRIPTION_MAX} character limit` : null,
+            defaultValue: bot.description,
+            maxLength: DESCRIPTION_MAX,
+            onChangeText: (description) => onPatch({ description: description.slice(0, DESCRIPTION_MAX) }),
+            placeholder: "Triages my inbox every morning and drafts replies in my voice."
+          }
+        )
+      ] }) : null
     ] }) }),
-    canSpeak ? /* @__PURE__ */ jsx43(VoiceSection, { bot, onPatch }) : null
+    canSpeak && bot.id !== CHIEF_BOT_ID ? /* @__PURE__ */ jsx43(VoiceSection, { bot, onPatch }) : null
   ] });
 }
 function pictureHint(bot) {
@@ -13752,14 +13833,23 @@ var GROUPS = [
     ]
   }
 ];
-var SECTIONS = GROUPS.flatMap((group) => group.sections);
 function BotPanel(props) {
   const { colors: colors2, bot, localHost, section, onSection, onClose, bottomInset } = props;
   const compact2 = useCompact(props.compact);
   const [query, setQuery] = useState42("");
   const host2 = useBotHost(bot.hostId, localHost);
-  const problems = botProblems(bot, host2.isLocal);
-  const open = section ? SECTIONS.find((entry) => entry.id === section && !entry.modal) : void 0;
+  const problems = bot.id === CHIEF_BOT_ID ? [] : botProblems(bot, host2.isLocal);
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    sections: group.sections.filter((entry) => botSectionAllowed(bot.id, entry.id)).map((entry) => {
+      if (bot.id !== CHIEF_BOT_ID) return entry;
+      if (entry.id === "identity") return { ...entry, rows: ["Avatar", "Colour", "Shape", "Image URL", "Name"], keywords: "picture color face upload generate" };
+      if (entry.id === "overview") return { ...entry, rows: ["App-wide Chief launcher"], keywords: "managed personalization" };
+      return entry;
+    })
+  })).filter((group) => group.sections.length > 0);
+  const sections = groups.flatMap((group) => group.sections);
+  const open = section ? sections.find((entry) => entry.id === section && !entry.modal) : void 0;
   const [sheet, setSheet] = useState42(null);
   const choose = (entry) => entry.modal ? setSheet(entry) : onSection(entry.id);
   if (open) {
@@ -13769,7 +13859,7 @@ function BotPanel(props) {
     ] });
   }
   const needle = query.trim().toLowerCase();
-  const matches = needle ? SECTIONS.flatMap((entry) => {
+  const matches = needle ? sections.flatMap((entry) => {
     const rows = entry.rows.filter((row) => row.toLowerCase().includes(needle));
     const hit = rows.length > 0 || `${entry.label} ${entry.keywords}`.toLowerCase().includes(needle);
     return hit ? [{ entry, rows }] : [];
@@ -13778,6 +13868,7 @@ function BotPanel(props) {
     /* @__PURE__ */ jsx48(PanelHeader, { colors: colors2, compact: compact2, title: bot.name || "Untitled bot", onClose }),
     /* @__PURE__ */ jsxs46(ScrollView9, { keyboardShouldPersistTaps: "handled", contentContainerStyle: { paddingBottom: 24 + bottomInset }, children: [
       /* @__PURE__ */ jsxs46(View44, { style: { paddingHorizontal: 8, paddingTop: 8, gap: 8 }, children: [
+        bot.id === CHIEF_BOT_ID ? /* @__PURE__ */ jsx48(Alert2, { colors: colors2, description: CHIEF_LAUNCHER_GUIDANCE }) : null,
         /* @__PURE__ */ jsx48(SearchField, { colors: colors2, value: query, onChangeText: setQuery, placeholder: "Search settings" }),
         problems.length > 0 ? /* @__PURE__ */ jsx48(Alert2, { colors: colors2, variant: "warning", title: "Needs attention", description: problems }) : null
       ] }),
@@ -13788,7 +13879,7 @@ function BotPanel(props) {
           query.trim(),
           '"'
         ] }) : null
-      ] }) : GROUPS.map((group) => /* @__PURE__ */ jsxs46(View44, { style: { paddingVertical: 8, paddingHorizontal: 8, gap: 2 }, children: [
+      ] }) : groups.map((group) => /* @__PURE__ */ jsxs46(View44, { style: { paddingVertical: 8, paddingHorizontal: 8, gap: 2 }, children: [
         /* @__PURE__ */ jsx48(Text32, { style: { fontSize: ui(14), color: nativeTokens(colors2).foregroundExtraMuted, paddingHorizontal: 8, paddingVertical: 4 }, children: group.label }),
         group.sections.map((entry) => /* @__PURE__ */ jsx48(SectionRow, { colors: colors2, compact: compact2, entry, onPress: () => choose(entry) }, entry.id))
       ] }, group.label))
@@ -13797,6 +13888,8 @@ function BotPanel(props) {
   ] });
 }
 function renderSection(id, props) {
+  if (!botSectionAllowed(props.bot.id, id)) return null;
+  if (props.bot.id === CHIEF_BOT_ID && id === "overview") return /* @__PURE__ */ jsx48(Alert2, { colors: props.colors, description: CHIEF_LAUNCHER_GUIDANCE });
   switch (id) {
     case "overview":
       return /* @__PURE__ */ jsx48(OverviewSection, { ...props });
@@ -14128,6 +14221,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     }
   };
   const patchBot = (botId, patch) => {
+    patch = chiefPersonalizationPatch(botId, patch);
     setDrafts((current2) => {
       const base = current2[botId] ?? (latest.current.status === "ready" ? latest.current.values.bots.find((bot) => bot.id === botId) : void 0);
       return base ? { ...current2, [botId]: { ...base, ...patch, updatedAt: (/* @__PURE__ */ new Date()).toISOString() } } : current2;
@@ -14144,6 +14238,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     void commit((values) => ({ ...values, ui: uiRef.current ?? next }));
   };
   const updateBot = (botId, patch, recordHistory = false) => {
+    patch = chiefPersonalizationPatch(botId, patch);
     setDrafts((current2) => current2[botId] ? { ...current2, [botId]: { ...current2[botId], ...patch } } : current2);
     return commit((values) => {
       const previous = values.bots.find((entry) => entry.id === botId);
@@ -14264,7 +14359,10 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     setDragWidths({});
     updateUi((current2) => ({ ...current2, [key]: Math.round(width) }));
   };
-  const allBots = settings.values.bots.map((bot) => drafts2[bot.id] ?? bot);
+  const allBots = settings.values.bots.map((bot) => {
+    const value = drafts2[bot.id] ?? bot;
+    return value.id === CHIEF_BOT_ID ? managedChiefBot(value) : value;
+  });
   const library = settings.values.library ?? EMPTY_LIBRARY;
   const groups = settings.values.groups ?? [];
   const listed = allBots.filter((bot) => listUi.showArchived || !bot.archived).sort((a, b) => Number(b.pinned) - Number(a.pinned));
@@ -14593,7 +14691,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       onSelect: select,
       onNewBot: () => setCreating("new"),
       onImportBot: () => setCreating("import"),
-      onExportAllBots: allBots.length ? () => setExporting({ kind: "all", bots: allBots, groups }) : void 0,
+      onExportAllBots: exportableBots(allBots).length ? () => setExporting({ kind: "all", bots: exportableBots(allBots), groups }) : void 0,
       onBotMenu: openBotMenu,
       onChatMenu: openChatMenu,
       onDeleteChat: (bot, chat, context) => void deleteChat(bot, chat, context),
@@ -14620,7 +14718,11 @@ Its chats stay on the host and remain in Paseo's history.`,
         setPanel({ open: true, section: "overview" });
       }
     }
-  ) : selectedBot && selection ? /* @__PURE__ */ jsx49(
+  ) : selectedBot?.id === CHIEF_BOT_ID ? /* @__PURE__ */ jsxs47(View45, { style: { flex: 1, padding: 24, gap: 16, backgroundColor: colors2.surface0 }, children: [
+    /* @__PURE__ */ jsx49(Text33, { style: { color: colors2.foreground, fontSize: ui(16) }, children: selectedBot.name }),
+    /* @__PURE__ */ jsx49(Text33, { style: { color: colors2.foregroundMuted, fontSize: ui(14) }, children: CHIEF_LAUNCHER_GUIDANCE }),
+    /* @__PURE__ */ jsx49(SettingsAction17, { label: "Chief personalization", actionLabel: "Open settings", onPress: () => setPanel({ open: true, section: null }) })
+  ] }) : selectedBot && selection ? /* @__PURE__ */ jsx49(
     SelectedChat,
     {
       colors: colors2,
@@ -14684,7 +14786,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       onBack: () => setLibraryView(null)
     }
   ) : null;
-  const localBotIds = settings.status === "ready" && defaultBotId && !applyVibingDefaults(settings.values) ? allBots.filter((bot) => !bot.hostId || bot.hostId === host2.id).map((bot) => bot.id) : void 0;
+  const localBotIds = settings.status === "ready" && defaultBotId && !applyVibingDefaults(settings.values) ? allBots.filter((bot) => bot.id !== CHIEF_BOT_ID && (!bot.hostId || bot.hostId === host2.id)).map((bot) => bot.id) : void 0;
   const workspaceHeader = WorkspaceBridge ? /* @__PURE__ */ jsx49(WorkspaceBridge, { localBotIds, selectedAgentId: selection?.chatId, selectedDraftId: selection?.draftId, botId: selection?.botId === DEFAULT_BOT_ID && !selection.chatId && !selection.draftId ? defaultBotId ?? DEFAULT_BOT_ID : selection?.botId ?? defaultBotRef.current, onActivate: activateWorkspaceChat }) : null;
   if (libraryScreen && !layout.compact) {
     return /* @__PURE__ */ jsxs47(Fragment23, { children: [

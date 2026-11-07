@@ -48,6 +48,10 @@ export const ClaudeProviderOptionsSchema = z
     /** Composer controls applied through Claude flag settings. */
     fast_mode: z.boolean().optional(),
     ultracode: z.boolean().optional(),
+    tools: z.array(z.string()).optional(),
+    settingSources: z.array(z.enum(["user", "project", "local"])).optional(),
+    strictMcpConfig: z.boolean().optional(),
+    restrictToConfiguredMcp: z.boolean().optional(),
     allowedTools: z.array(z.string()).optional(),
     disallowedTools: z.array(z.string()).optional(),
     additionalDirectories: z.array(z.string()).optional(),
@@ -97,6 +101,17 @@ export function applyClaudeToolPolicy(
   options: ClaudeProviderOptions,
   toolPolicy: ToolPolicy | undefined,
 ): ClaudeProviderOptions {
+  if (options.restrictToConfiguredMcp) {
+    return {
+      restrictToConfiguredMcp: true,
+      tools: [],
+      settingSources: [],
+      strictMcpConfig: true,
+      allowedTools: (toolPolicy?.preapproved ?? []).map(
+        (grant) => `mcp__${grant.server}__${grant.tool}`,
+      ),
+    };
+  }
   if (!toolPolicy) return options;
   const allowedTools = Array.isArray(options.allowedTools)
     ? options.allowedTools.filter((tool): tool is string => typeof tool === "string")
