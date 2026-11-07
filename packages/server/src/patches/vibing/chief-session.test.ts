@@ -235,6 +235,15 @@ test("the ceiling and persona include the three Vibing API tools", () => {
   expect(CHIEF_PERSONA).toContain("approval_required");
 });
 
+test("the persona knows the app-window commands and that changed commands need approval", () => {
+  expect(CHIEF_PERSONA).toContain("GET /api/ui/state");
+  expect(CHIEF_PERSONA).toContain("POST /api/ui/command");
+  expect(CHIEF_PERSONA).toMatch(/never claim it is closed/);
+  // Saving a changed start command is no longer a routine change.
+  expect(CHIEF_PERSONA).toContain("Changing the install or start command");
+  expect(CHIEF_PERSONA).not.toContain("saving a start command, starting");
+});
+
 test("a Chief saved with the handoff-only ceiling rebinds to include the Vibing API tools", async () => {
   const { service, dependencies, manager, records } = await fixture();
   const first = await service.connect("http://127.0.0.1:7777/api/chief/mcp");
