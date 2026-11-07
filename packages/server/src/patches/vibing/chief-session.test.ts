@@ -242,6 +242,8 @@ test("the persona knows the app-window commands and that changed commands need a
   // Saving a changed start command is no longer a routine change.
   expect(CHIEF_PERSONA).toContain("replaces all of it");
   expect(CHIEF_PERSONA).toContain("send every field back");
+  expect(CHIEF_PERSONA).toContain("commit to save the workspace's changes as commits");
+  expect(CHIEF_PERSONA).toContain("add-app");
   expect(CHIEF_PERSONA).not.toContain("saving a start command, starting");
 });
 
