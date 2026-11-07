@@ -20,6 +20,44 @@ const hubPolicy = {
 };
 
 describe("provider-owned option schemas", () => {
+  test("accepts an isolated Claude built-in and MCP tool configuration", () => {
+    const options = {
+      tools: [],
+      settingSources: [],
+      strictMcpConfig: true,
+    };
+    expect(ClaudeProviderOptionsSchema.parse(options)).toEqual(options);
+  });
+
+  test("configured-MCP-only sessions override inherited broad tool options", () => {
+    expect(
+      applyClaudeToolPolicy(
+        {
+          restrictToConfiguredMcp: true,
+          tools: ["Bash", "Agent"],
+          allowedTools: ["Bash(*)"],
+          extraArgs: { "dangerously-skip-permissions": null },
+          settingSources: ["user", "project"],
+          strictMcpConfig: false,
+        },
+        hubPolicy,
+      ),
+    ).toEqual({
+      restrictToConfiguredMcp: true,
+      tools: [],
+      settingSources: [],
+      strictMcpConfig: true,
+      allowedTools: ["mcp__hub__finish_execution"],
+    });
+  });
+
+  test.each([{ tools: "all" }, { settingSources: ["unknown"] }, { strictMcpConfig: "true" }])(
+    "rejects malformed Claude isolation options: %j",
+    (options) => {
+      expect(ClaudeProviderOptionsSchema.safeParse(options).success).toBe(false);
+    },
+  );
+
   test.each([true, false])("accepts Codex Default-mode questions set to %s", (enabled) => {
     const options = { features: { default_mode_request_user_input: enabled } };
     expect(CodexProviderOptionsSchema.parse(options)).toEqual(options);

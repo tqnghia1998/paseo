@@ -1,5 +1,11 @@
 import { unarchiveWorkspaceAgents } from "./workspace-archive-service.js";
 import { createRestartRecovery } from "./agent/restart-recovery/index.js";
+import { createChiefSession } from "../patches/vibing/chief-session.js";
+import { createChiefTools } from "../patches/vibing/chief-tools.js";
+import { registerChiefRoutes } from "../patches/vibing/chief-http.js";
+import { createChiefBotBridge } from "../patches/vibing/chief-bot.js";
+import { createChiefHandoffs } from "../patches/vibing/chief-handoffs.js";
+import { ensureAgentLoaded } from "./agent/agent-loading.js";
 import { sendPromptToAgent, unarchiveAgentState } from "./agent/agent-prompt.js";
 import { createIdleRuntimeCleanup } from "./agent/idle-runtime-cleanup/index.js";
 import {
@@ -851,6 +857,9 @@ export async function createPaseoDaemon(
   mountWebUi(app, config, logger);
 
   let localCredential: string | null = null;
+  // These endpoints authenticate their own separate host/agent capabilities.
+  const chiefRouter = express.Router();
+  app.use("/api/chief", express.json({ limit: "2mb" }), chiefRouter);
   const daemonAuth = { ...config.auth, localCredential: () => localCredential };
   app.use(
     createRequireBearerMiddleware(daemonAuth, (context) => {
@@ -1030,8 +1039,59 @@ export async function createPaseoDaemon(
     if (git) configureGitProcessPolicy(git);
   });
   const initialAgentManagerState = providerSnapshotManager.getAgentManagerProviderState();
-  const agentManager = new AgentManager({
-    isBotAutoResumeProtected: (id) => wsServer?.agentMessages.hasPending(id) ?? false,
+  let agentManager: AgentManager;
+  const chiefTools = createChiefTools();
+  const chiefBot = createChiefBotBridge((method, input) =>
+    pluginRuntime.invokePluginRpc("paseo-bots", method, input),
+  );
+  const chiefSession = createChiefSession({
+    home: config.paseoHome,
+    serverId,
+    agentManager: {
+      createAgent: (...args) => agentManager.createAgent(...args),
+      flush: () => agentManager.flush(),
+      getAgent: (id) => agentManager.getAgent(id),
+      getProviderAvailability: (provider) => agentManager.getProviderAvailability(provider),
+      reloadAgentSession: (...args) => agentManager.reloadAgentSession(...args),
+      updateAgentMetadata: (...args) => agentManager.updateAgentMetadata(...args),
+    },
+    agentStorage,
+    workspaceRegistry,
+    createWorkspace: (cwd, id) =>
+      workspaceProvisioning.createWorkspaceForDirectory(cwd, "Vibing Chief", undefined, {
+        workspaceId: id,
+        background: true,
+      }),
+    loadAgent: (id) => ensureAgentLoaded(id, { agentManager, agentStorage, logger }),
+    prepareBot: () => chiefBot.prepare(),
+  });
+  const chiefHandoffs = createChiefHandoffs({
+    agentStorage,
+    agentManager: {
+      getAgent: (id) => agentManager.getAgent(id),
+      getTimeline: (id) => agentManager.getTimeline(id),
+    },
+    tools: chiefTools,
+    handoffKey: () => chiefSession.handoffKey(),
+    chiefId: () => (chiefSession.isConnected() ? chiefSession.agentId() : null),
+    paseoWorkspace: async (cwd) => {
+      const workspace = await workspaceProvisioning.findOrCreateWorkspaceForDirectory(cwd);
+      if (workspace.archivedAt || workspace.background)
+        throw new Error("Feature workspace unavailable");
+      return { workspaceId: workspace.workspaceId };
+    },
+    startChat: (input) => chiefBot.handoff(input),
+  });
+  // Read immutable ownership before either automatic recovery mechanism runs.
+  await chiefSession.initialize();
+  agentManager = new AgentManager({
+    hostManagedSession: {
+      seal: (id, candidate) => chiefSession.seal(id, candidate),
+      workspaceId: (id) => chiefSession.workspaceId(id),
+      labels: (id) => chiefSession.labels(id),
+    },
+    isBotAutoResumeProtected: (id) =>
+      chiefSession.owns(id) || (wsServer?.agentMessages.hasPending(id) ?? false),
     pluginLifecycle: pluginRuntime,
     pluginAgentTools: pluginRuntime,
     clients: initialAgentManagerState.clients,
@@ -1057,6 +1117,8 @@ export async function createPaseoDaemon(
   const unsubscribePluginSessionChanges = pluginRuntime.subscribeSessionOpenChanges(() => {
     agentManager.invalidatePluginSessions();
   });
+  // Lives as long as the manager; a canceled handoff turn reads as failed.
+  agentManager.subscribe((event) => chiefHandoffs.observe(event));
 
   const detachAgentStoragePersistence = attachAgentStoragePersistence(
     logger,
@@ -1072,7 +1134,10 @@ export async function createPaseoDaemon(
       prompt: daemonConfigStore.get().resumePrompt ?? "Resume working.",
     }),
     eligible: async (record) =>
-      !record.workspaceId || !(await workspaceRegistry?.get(record.workspaceId))?.archivedAt,
+      !chiefSession.owns(record.id) &&
+      // Retired Chief review workers (the endpoint is gone) never auto-resume.
+      !record.config?.mcpServers?.chief_review &&
+      (!record.workspaceId || !(await workspaceRegistry?.get(record.workspaceId))?.archivedAt),
     dispatch: (agentId, prompt) =>
       sendPromptToAgent({ agentId, prompt, agentManager, agentStorage, logger, unarchive: false }),
     report: (agentId, err) => logger.error({ agentId, err }, "Agent restart recovery failed"),
@@ -1351,6 +1416,15 @@ export async function createPaseoDaemon(
     logger,
     isEnabled: () => daemonConfigStore.get().usage?.enabled !== false,
     listUsageReports: () => pluginRuntime.listUsageReports(),
+  });
+  registerChiefRoutes({
+    router: chiefRouter,
+    hostToken: config.worktreeCleanupToken,
+    session: chiefSession,
+    tools: chiefTools,
+    bot: chiefBot,
+    handoffs: chiefHandoffs,
+    ready: () => pluginRuntime.catalog().some((plugin) => plugin.id === "paseo-bots"),
   });
   registerWorktreeRoutes({
     app,
@@ -2021,6 +2095,8 @@ export async function createPaseoDaemon(
   };
 
   const stop = async (options?: { keepTerminals?: boolean }) => {
+    chiefSession.stopAdmission();
+    chiefTools.close();
     const keepTerminals = options?.keepTerminals === true;
     let terminalShutdownError: unknown = null;
     localCredential = null;
@@ -2052,6 +2128,7 @@ export async function createPaseoDaemon(
     detachAgentStoragePersistence();
     await agentStorage.flush().catch(() => undefined);
     await agentProviderRuntime.shutdown();
+    await chiefSession.close();
     await pluginRuntime.stopAllPlugins();
     try {
       if (keepTerminals) {

@@ -1,4 +1,7 @@
 import { once } from "node:events";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { Query } from "@anthropic-ai/claude-agent-sdk";
 import { describe, expect, test, vi } from "vitest";
 
@@ -6,6 +9,7 @@ import { createTestLogger } from "../../../../test-utils/test-logger.js";
 import type { AgentLaunchContext } from "../../agent-sdk-types.js";
 import { ClaudeAgentClient } from "./agent.js";
 import { claudeQuery, type ClaudeQueryInput } from "./query.js";
+import { loadClaudeConnectionEnv } from "./connection-env.js";
 
 function createQueryMock(events: unknown[]): Query {
   let index = 0;
@@ -30,6 +34,53 @@ function createQueryMock(events: unknown[]): Query {
 }
 
 describe("Claude SDK env", () => {
+  test("isolated sessions retain only configured connection and model values", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "claude-connection-"));
+    try {
+      await fs.writeFile(
+        path.join(root, "settings.json"),
+        JSON.stringify({
+          env: {
+            ANTHROPIC_AUTH_TOKEN: "fixture-settings-token",
+            ANTHROPIC_BASE_URL: "https://model.fixture.test",
+            ANTHROPIC_DEFAULT_SONNET_MODEL: "fixture-model",
+            NODE_OPTIONS: "--require /untrusted/loader.js",
+            PASEO_AGENT_ID: "untrusted-identity",
+          },
+          permissions: { allow: ["Bash(*)"] },
+          hooks: { SessionStart: [{ command: "untrusted-command" }] },
+        }),
+      );
+      const existing = { ANTHROPIC_AUTH_TOKEN: "explicit-runtime-token", PATH: "/fixture/bin" };
+      expect(await loadClaudeConnectionEnv(root, existing)).toEqual({
+        ANTHROPIC_AUTH_TOKEN: "explicit-runtime-token",
+        ANTHROPIC_BASE_URL: "https://model.fixture.test",
+        ANTHROPIC_DEFAULT_SONNET_MODEL: "fixture-model",
+        PATH: "/fixture/bin",
+      });
+      expect(existing).toEqual({
+        ANTHROPIC_AUTH_TOKEN: "explicit-runtime-token",
+        PATH: "/fixture/bin",
+      });
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("isolated connection settings fail without exposing malformed content", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "claude-connection-"));
+    try {
+      expect(await loadClaudeConnectionEnv(root, { PATH: "/fixture" })).toEqual({
+        PATH: "/fixture",
+      });
+      await fs.writeFile(path.join(root, "settings.json"), '{ "private": fixture-malformed');
+      await expect(loadClaudeConnectionEnv(root, {})).rejects.toThrow(
+        "Unable to read provider connection settings",
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
   test.each(
     ["node", "bun", process.execPath].flatMap((command) =>
       [undefined, "Paseo", "custom-client"].map((entrypoint) => ({ command, entrypoint })),

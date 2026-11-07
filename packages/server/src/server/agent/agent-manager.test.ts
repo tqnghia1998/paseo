@@ -68,7 +68,86 @@ import { fileURLToPath } from "node:url";
 import { V2Harness } from "./providers/opencode/test-utils/v2-harness.js";
 
 const DESKTOP_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("desktop-client");
+
+test("host-managed Chief rebinds its canonical endpoint before a real manager reload", async () => {
+  class ChiefProviderSession extends TestAgentSession {
+    override readonly capabilities = { ...TEST_CAPABILITIES, supportsMcpServers: true };
+  }
+  class ChiefClient extends TestAgentClient {
+    override readonly capabilities = { ...TEST_CAPABILITIES, supportsMcpServers: true };
+    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      this.createdConfigs.push(config);
+      return new ChiefProviderSession(config);
+    }
+    override async resumeSession(
+      _handle: AgentPersistenceHandle,
+      config?: Partial<AgentSessionConfig>,
+    ): Promise<AgentSession> {
+      this.resumeOverrides.push(config);
+      return new ChiefProviderSession(config as AgentSessionConfig);
+    }
+  }
+  const client = new ChiefClient("claude");
+  const id = randomUUID();
+  const workspaceId = "wks_0123456789abcdef";
+  let current: AgentSessionConfig | null = {
+    provider: "claude",
+    model: "sonnet",
+    cwd: process.cwd(),
+    providerOptions: { restrictToConfiguredMcp: true },
+    mcpServers: { chief: { type: "http", url: "http://127.0.0.1:7777/api/chief/mcp" } },
+  };
+  const manager = new AgentManager({
+    clients: { claude: client },
+    logger,
+    hostManagedSession: {
+      workspaceId: (target) => (target === id ? workspaceId : null),
+      seal: (target, config) => {
+        if (target !== id) return null;
+        if (!current) throw new Error("Chief host reconciliation required");
+        return { ...config, ...structuredClone(current) };
+      },
+    },
+  });
+  onTestFinished(() => manager.closeAgent(id));
+  await manager.createAgent(current, id, { workspaceId });
+  current = {
+    ...current,
+    mcpServers: { chief: { type: "http", url: "http://127.0.0.1:8888/api/chief/mcp" } },
+  };
+  await manager.reloadAgentSession(id);
+  expect(client.resumeOverrides.at(-1)?.mcpServers).toEqual(current.mcpServers);
+  expect(manager.getAgent(id)?.background).toBe(true);
+  expect(manager.getAgent(id)?.labels["paseo-chief.policy"]).toBe("chief-v1");
+  const launches = client.createdConfigs.length + client.resumeOverrides.length;
+  current = null;
+  await expect(manager.reloadAgentSession(id)).rejects.toThrow(
+    "Chief host reconciliation required",
+  );
+  expect(client.createdConfigs.length + client.resumeOverrides.length).toBe(launches);
+});
 const MOBILE_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("mobile-client");
+
+test("ordinary agents cannot impersonate managed Chief or review worker labels", async () => {
+  const manager = new AgentManager({ clients: { codex: new TestAgentClient("codex") }, logger });
+  const id = randomUUID();
+  onTestFinished(() => manager.closeAgent(id));
+  await expect(
+    manager.createAgent({ provider: "codex", cwd: process.cwd() }, id, {
+      workspaceId: undefined,
+      labels: { "paseo-bots.bot": "vibing-chief" },
+    }),
+  ).rejects.toThrow("Host-managed Bot identity");
+  await manager.createAgent({ provider: "codex", cwd: process.cwd() }, id, {
+    workspaceId: undefined,
+  });
+  await expect(manager.setLabels(id, { "paseo-bots.bot": "vibing-chief" })).rejects.toThrow(
+    "Host-managed Bot identity",
+  );
+  await expect(
+    manager.updateAgentMetadata(id, { labels: { "paseo-chief.review": "parent" } }),
+  ).rejects.toThrow("Host-managed Bot identity");
+});
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -450,7 +529,7 @@ class EnvProbeAgentClient extends TestAgentClient {
 }
 
 class TestAgentSession implements AgentSession {
-  readonly provider = "codex" as const;
+  readonly provider: AgentProvider;
   readonly capabilities = TEST_CAPABILITIES;
   readonly id = randomUUID();
   private runtimeModel: string | null = null;
@@ -458,7 +537,9 @@ class TestAgentSession implements AgentSession {
   private turnIdCounter = 0;
   private interrupted = false;
 
-  constructor(private readonly config: AgentSessionConfig) {}
+  constructor(private readonly config: AgentSessionConfig) {
+    this.provider = config.provider;
+  }
 
   async run(): Promise<AgentRunResult> {
     return {
@@ -3741,6 +3822,137 @@ test("createAgent injects paseo MCP server only into provider launch config", as
       command: "custom-mcp",
     },
   });
+});
+
+test("configured-MCP-only sessions suppress daemon and plugin tools across reload", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-mcp-boundary-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const configs: AgentSessionConfig[] = [];
+  class CaptureClient extends TestAgentClient {
+    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      configs.push(config);
+      return new McpCapableTestAgentSession(config);
+    }
+    override async resumeSession(
+      _handle: AgentPersistenceHandle,
+      config?: Partial<AgentSessionConfig>,
+    ): Promise<AgentSession> {
+      return this.createSession(config as AgentSessionConfig);
+    }
+  }
+  const manager = new AgentManager({
+    clients: { claude: new CaptureClient("claude") },
+    registry: storage,
+    logger,
+    mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
+    pluginLifecycle: {
+      emit: () => {},
+      before: async (name, request) => {
+        if (name === "agent.create.before")
+          return {
+            ...request,
+            config: {
+              ...request.config,
+              providerOptions: {},
+              mcpServers: { injected: { type: "http", url: "http://127.0.0.1:1/untrusted" } },
+            },
+          };
+        if (name === "agent.open.before")
+          return {
+            ...request,
+            mcpServers: { inherited: { type: "http", url: "http://127.0.0.1:1/plugin" } },
+            mcpServerOwners: { inherited: "fixture-plugin" },
+          };
+        return request;
+      },
+    },
+  });
+  onTestFinished(async () => {
+    for (const agent of manager.listAgents()) await manager.closeAgent(agent.id);
+    await manager.flush();
+    rmSync(workdir, { recursive: true, force: true });
+  });
+  const restricted = await manager.createAgent(
+    {
+      provider: "claude",
+      cwd: workdir,
+      providerOptions: { restrictToConfiguredMcp: true },
+      mcpServers: { chief: { type: "http", url: "http://127.0.0.1:1/chief" } },
+    },
+    undefined,
+    { workspaceId: undefined },
+  );
+  await manager.reloadAgentSession(restricted.id);
+  await manager.reloadAgentSession(restricted.id, {
+    providerOptions: { restrictToConfiguredMcp: false, tools: ["Bash"] },
+  });
+  await expect(
+    manager.reloadAgentSession(restricted.id, {
+      mcpServers: { escape: { type: "http", url: "http://127.0.0.1:1/escape" } },
+    }),
+  ).rejects.toThrow("Configured MCP session authority cannot be changed");
+  await manager.createAgent({ provider: "claude", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  expect(configs).toHaveLength(4);
+  for (const config of configs.slice(0, 3)) {
+    expect(Object.keys(config.mcpServers ?? {})).toEqual(["chief"]);
+    expect(config.providerOptions?.restrictToConfiguredMcp).toBe(true);
+  }
+  expect(Object.keys(configs[3]?.mcpServers ?? {}).sort()).toEqual([
+    "inherited",
+    "injected",
+    "paseo",
+  ]);
+  expect((await storage.get(restricted.id))?.config?.providerOptions).toMatchObject({
+    restrictToConfiguredMcp: true,
+  });
+});
+
+test("configured-MCP-only sessions reject unsupported providers before launch", async () => {
+  const client = new TestAgentClient("codex");
+  const manager = new AgentManager({ clients: { codex: client }, logger });
+  await expect(
+    manager.createAgent(
+      {
+        provider: "codex",
+        cwd: process.cwd(),
+        providerOptions: { restrictToConfiguredMcp: true },
+      },
+      undefined,
+      { workspaceId: undefined },
+    ),
+  ).rejects.toThrow("does not support configured-MCP-only sessions");
+  expect(client.createdConfigs).toEqual([]);
+});
+
+test("configured-MCP-only defaults are captured before create hooks", async () => {
+  const client = new TestAgentClient("claude");
+  const before = vi.fn(async (_name, request) => ({
+    ...request,
+    config: { ...request.config, providerOptions: {} },
+  }));
+  const manager = new AgentManager({
+    clients: { claude: client },
+    logger,
+    mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
+    providerDefinitions: {
+      claude: {
+        enabled: true,
+        configuration: { providerOptions: { restrictToConfiguredMcp: true } },
+      },
+    },
+    pluginLifecycle: { before, emit: () => {} },
+  });
+  const created = await manager.createAgent({ provider: "claude", cwd: process.cwd() }, undefined, {
+    workspaceId: undefined,
+  });
+  onTestFinished(async () => {
+    await manager.closeAgent(created.id);
+  });
+  expect(client.createdConfigs[0]?.providerOptions?.restrictToConfiguredMcp).toBe(true);
+  expect(client.createdConfigs[0]?.mcpServers).toBeUndefined();
+  expect(before).not.toHaveBeenCalled();
 });
 
 test("createAgent closes and rejects a provider session that cannot honor MCP servers", async () => {

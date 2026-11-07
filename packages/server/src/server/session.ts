@@ -2819,6 +2819,8 @@ export class Session {
 
   private dispatchPluginRpcMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     if (msg.type === "plugin.rpc.invoke.request") {
+      if (msg.pluginId === "paseo-bots" && msg.method.startsWith("bots.chief."))
+        throw new Error("Chief Bot broker is reserved for the daemon host");
       if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
       return this.pluginRuntime
         .invokePluginRpc(msg.pluginId, msg.method, msg.input)

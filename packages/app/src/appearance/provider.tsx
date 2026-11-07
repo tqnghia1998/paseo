@@ -1,5 +1,6 @@
 import { usePathname } from "expo-router";
 import { resolveChatContentMaxWidth } from "@/patches/vibing/chat-appearance";
+import { applyChiefTheme } from "@/patches/vibing/chief-theme";
 import {
   createContext,
   type ReactNode,
@@ -76,6 +77,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
       contentMaxWidth,
       syntaxTheme: settings.syntaxTheme,
     });
+    // Chief frame only: re-apply its look after every update, which restores the host colours.
+    applyChiefTheme();
     setHasAppliedAppearance(true);
   }, [
     isLoading,

@@ -8,6 +8,7 @@ import {
   subscribeToHostMessages,
 } from "./host-messages";
 import { Redirect, usePathname, type Href } from "expo-router";
+import { isEmbeddedChiefView } from "./focus-mode";
 import {
   embeddedWorkspaceRoute,
   getEmbeddedWorkspace,
@@ -18,6 +19,7 @@ import {
 export function EmbeddedNavigationBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   if (isEmbeddedRouteAllowed(pathname)) return children;
+  if (isEmbeddedChiefView) return <Redirect href={"/?view=chief" as Href} />;
   const route = embeddedWorkspaceRoute();
   return route ? (
     <Redirect href={route as Href} />

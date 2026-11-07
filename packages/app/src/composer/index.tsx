@@ -148,6 +148,7 @@ import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
 import { useEmbeddedComposerBridge } from "@/patches/vibing/composer-bridge";
+import { isEmbeddedChiefView } from "@/patches/vibing/focus-mode";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
@@ -2445,7 +2446,7 @@ function ComposerContentImpl({
           serverId,
           focusInput,
           isCompactLayout,
-          showAgentControls: mode.showAgentControls,
+          showAgentControls: mode.showAgentControls && !isEmbeddedChiefView,
         })}
         {workspaceId ? (
           <PluginComposerPills

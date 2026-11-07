@@ -662,6 +662,28 @@ test("losing daemon.manage during a plugin RPC withholds its JSON and binary res
   expect(binaryMessages).toEqual([]);
 });
 
+test("client RPCs cannot bootstrap or call the private Chief Bot broker", async () => {
+  const messages: SessionOutboundMessage[] = [];
+  const invokePluginRpc = vi.fn(async () => ({}));
+  const pluginRuntime = { subscribe: () => () => {}, invokePluginRpc } as unknown as NonNullable<
+    SessionOptions["pluginRuntime"]
+  >;
+  const session = createSessionForTest({ messages, pluginRuntime });
+  for (const method of ["bots.chief.prepare", "bots.chief.call", "bots.chief.handoff"]) {
+    await session.handleMessage({
+      type: "plugin.rpc.invoke.request",
+      requestId: method,
+      pluginId: "paseo-bots",
+      method,
+      input: { bridgeToken: "forged" },
+    });
+  }
+  expect(invokePluginRpc).not.toHaveBeenCalled();
+  expect(messages.filter((message) => message.type === "plugin.rpc.invoke.response")).toHaveLength(
+    0,
+  );
+});
+
 test("leaves out the client bundles a catalog request already holds", async () => {
   const messages: SessionOutboundMessage[] = [];
   const pluginRuntime: NonNullable<SessionOptions["pluginRuntime"]> = {
