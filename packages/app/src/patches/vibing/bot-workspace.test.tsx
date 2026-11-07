@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { type ReactNode } from "react";
-import { act, renderHook } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({
   activate: undefined as ((agentId?: string, newChat?: boolean) => string | void) | undefined,
   hydrated: true,
@@ -430,4 +430,126 @@ it("does not restore the workspace's unsent draft into Live Design", () => {
   expect(localStorage.getItem("vibing:paseo-bots:last-draft:/worktree")).toContain(
     "paseo-bots:reviewer:workspace",
   );
+});
+
+describe("Chief handoff Open requests", () => {
+  const handoff = "6f1c3b0e-8f6a-4a52-9a3f-0c1d2e3f4a5b";
+  const foreign = "6f1c3b0e-8f6a-4a52-9a3f-0c1d2e3f4a5c";
+  beforeEach(() => {
+    // Earlier tests leave their bridges mounted; only this test's bridge may answer.
+    cleanup();
+    fake.agents.set(handoff, {
+      id: handoff,
+      cwd: "/worktree",
+      createdAt: new Date("2026-04-01"),
+      labels: { "paseo-bots.bot": "reviewer", "paseo-bots.asked-by": "vibing-chief" },
+    });
+    fake.agents.set(foreign, {
+      id: foreign,
+      cwd: "/other",
+      createdAt: new Date("2026-04-01"),
+      labels: { "paseo-bots.bot": "reviewer" },
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    fake.agents.delete(handoff);
+    fake.agents.delete(foreign);
+    vi.restoreAllMocks();
+  });
+  const send = (data: Record<string, unknown>, origin = "http://host") =>
+    act(() =>
+      window.dispatchEvent(new MessageEvent("message", { source: window.parent, origin, data })),
+    );
+  const acks = (post: { mock: { calls: unknown[][] } }) =>
+    post.mock.calls
+      .map(([data]) => data as { type: string })
+      .filter((data) => data.type === "paseo:open-chat-ack");
+
+  it("opens an in-scope chat once and acknowledges every repeat", () => {
+    const post = vi.spyOn(window, "postMessage").mockImplementation(() => {});
+    const activate = vi.fn();
+    renderHook(() =>
+      BotWorkspaceBridge({
+        localBotIds,
+        botId: "vibing-general",
+        selectedAgentId: "existing",
+        onActivate: activate,
+      }),
+    );
+    const requestId = crypto.randomUUID();
+    send({ type: "space:paseo-open-chat", requestId, agentId: handoff }, "http://other");
+    expect(acks(post)).toEqual([]);
+    send({ type: "space:paseo-open-chat", requestId, agentId: handoff });
+    send({ type: "space:paseo-open-chat", requestId, agentId: handoff });
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(activate).toHaveBeenCalledWith({ botId: "reviewer", agentId: handoff });
+    expect(acks(post)).toEqual([
+      { type: "paseo:open-chat-ack", requestId, ok: true },
+      { type: "paseo:open-chat-ack", requestId, ok: true },
+    ]);
+    expect(post).toHaveBeenCalledWith(expect.anything(), "http://host");
+  });
+
+  it("refuses chats outside this worktree's ordinary chat context", () => {
+    const post = vi.spyOn(window, "postMessage").mockImplementation(() => {});
+    const activate = vi.fn();
+    renderHook(() =>
+      BotWorkspaceBridge({
+        localBotIds,
+        botId: "reviewer",
+        selectedAgentId: "existing",
+        onActivate: activate,
+      }),
+    );
+    const requestId = crypto.randomUUID();
+    send({ type: "space:paseo-open-chat", requestId, agentId: foreign });
+    expect(acks(post)).toEqual([{ type: "paseo:open-chat-ack", requestId, ok: false }]);
+    fake.liveDesign = true;
+    const designRequest = crypto.randomUUID();
+    send({ type: "space:paseo-open-chat", requestId: designRequest, agentId: handoff });
+    expect(acks(post).at(-1)).toEqual({
+      type: "paseo:open-chat-ack",
+      requestId: designRequest,
+      ok: false,
+    });
+    expect(activate).not.toHaveBeenCalled();
+  });
+
+  it("waits for hydration and briefly for a chat that has not arrived", () => {
+    const post = vi.spyOn(window, "postMessage").mockImplementation(() => {});
+    let now = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    fake.hydrated = false;
+    const activate = vi.fn();
+    const view = renderHook(() =>
+      BotWorkspaceBridge({
+        localBotIds,
+        botId: "reviewer",
+        selectedAgentId: "existing",
+        onActivate: activate,
+      }),
+    );
+    const requestId = crypto.randomUUID();
+    send({ type: "space:paseo-open-chat", requestId, agentId: handoff });
+    expect(acks(post)).toEqual([]);
+    fake.hydrated = true;
+    view.rerender();
+    send({ type: "space:paseo-open-chat", requestId, agentId: handoff });
+    expect(acks(post)).toEqual([{ type: "paseo:open-chat-ack", requestId, ok: true }]);
+
+    const missing = crypto.randomUUID();
+    const absent = crypto.randomUUID();
+    send({ type: "space:paseo-open-chat", requestId: missing, agentId: absent });
+    now += 2000;
+    send({ type: "space:paseo-open-chat", requestId: missing, agentId: absent });
+    expect(acks(post)).toHaveLength(1);
+    now += 1500;
+    send({ type: "space:paseo-open-chat", requestId: missing, agentId: absent });
+    expect(acks(post).at(-1)).toEqual({
+      type: "paseo:open-chat-ack",
+      requestId: missing,
+      ok: false,
+    });
+  });
 });

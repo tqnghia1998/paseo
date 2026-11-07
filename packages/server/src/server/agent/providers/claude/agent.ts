@@ -3,6 +3,12 @@ import { ClaudeRuntimeSafety } from "./runtime-safety.js";
 import type { ProviderOptions } from "@getpaseo/protocol/agent-types";
 import { applyProviderOptionsPatch } from "../../option-controls.js";
 import { assertChangesAreLive, validateProviderOptions } from "../../provider-options.js";
+import { loadClaudeConnectionEnv } from "./connection-env.js";
+import {
+  assertConfiguredMcpInventory,
+  isConfiguredMcpToolAllowed,
+} from "./configured-mcp-policy.js";
+
 import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -3782,11 +3788,23 @@ class ClaudeAgentSession implements AgentSession {
   private async buildOptions(permissionMode: PermissionMode): Promise<ClaudeOptions> {
     const { thinking, effort, ultracode } = this.resolveThinkingConfig();
     const appendedSystemPrompt = this.buildAppendedSystemPrompt();
-    // `fast_mode` is a composer control the provider applies through flag settings.
     const { fast_mode: _fastMode, ...sdkProviderOptions } = this.config.providerOptions;
-    const providerOptions = applyClaudeToolPolicy(sdkProviderOptions, this.config.toolPolicy);
+    const { restrictToConfiguredMcp, ...providerOptions } = applyClaudeToolPolicy(
+      sdkProviderOptions,
+      this.config.toolPolicy,
+    );
     const settingsOptions = await this.buildSettingsOptions(providerOptions, { ultracode });
     const sdkEnv = this.harnessEnvironment;
+    if (restrictToConfiguredMcp) {
+      Object.assign(sdkEnv, await loadClaudeConnectionEnv(claudeConfigDir(sdkEnv), sdkEnv));
+      // Keep resumed fixed-tool sessions on the classic wire format. Some Claude
+      // gateways reject mid-conversation system/tool-addition blocks when the
+      // host upgrades its sealed tool inventory. This changes formatting only.
+      sdkEnv.CLAUDE_CODE_MODEL_CAPABILITIES =
+        "-mid_conv_system,-mid_conv_tool_change,-inline_tools";
+      sdkEnv.CLAUDE_CODE_INLINE_TOOLS = "0";
+      sdkEnv.CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD = "1";
+    }
     assertClaudeModeCanRun(permissionMode, sdkEnv);
 
     const claudeBinary = await this.resolveBinary();
@@ -3850,6 +3868,11 @@ class ClaudeAgentSession implements AgentSession {
       env: sdkEnv,
     };
 
+    if (restrictToConfiguredMcp) {
+      base.allowDangerouslySkipPermissions = false;
+      base.agents = {};
+      base.hooks = {};
+    }
     if (this.config.mcpServers) {
       base.mcpServers = this.normalizeMcpServers(this.config.mcpServers);
     }
@@ -5247,6 +5270,12 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     const msgRecord = toObjectRecord(message) ?? {};
+    try {
+      assertConfiguredMcpInventory(this.config, msgRecord.tools);
+    } catch (error) {
+      this.query?.close();
+      throw error;
+    }
     const newSessionId = extractSessionIdRaw({
       session_id: msgRecord.session_id,
       sessionId: msgRecord.sessionId,
@@ -5347,10 +5376,14 @@ class ClaudeAgentSession implements AgentSession {
     input,
     options,
   ): Promise<PermissionResult> => {
+    if (!isConfiguredMcpToolAllowed(this.config, toolName)) {
+      return { behavior: "deny", message: "Tool unavailable under configured MCP policy" };
+    }
     // Decide before publishing anything: bypassed asks never enter the permission UI.
     if (this.currentMode === "bypassPermissions" && bypassApprovesAsk(toolName, options)) {
       return { behavior: "allow", updatedInput: input, toolUseID: options.toolUseID };
     }
+
 
     const requestId = `permission-${randomUUID()}`;
     const kind = resolvePermissionKind(toolName, input);
