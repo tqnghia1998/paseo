@@ -218,6 +218,42 @@ test("a review needs a stored resolution for that app and refuses fork merge req
   ).rejects.toThrow(/Cross-repository/);
 });
 
+test("a commit hand-off starts an ordinary chat with a fixed commit template and the user's own words", async () => {
+  const { handoffs, startChat } = await fixture({ said: "commit these changes please" });
+  const started = await handoffs.startFeatureTask({
+    requestId: randomUUID(),
+    appId: "app",
+    workspaceId: "tab",
+    bot: "Reviewer",
+    kind: "commit",
+    instruction: "commit these changes please",
+  });
+  expect(started.status).toBe("working");
+  const call = startChat.mock.calls[0]![0] as { prompt: string; titleSuffix: string };
+  expect(call.titleSuffix).toBe("Commit");
+  expect(call.prompt).toContain("commit the changes in this workspace");
+  expect(call.prompt).toContain("`git status`");
+  // It saves work locally; it does not authorize a push, a rewrite or a discard.
+  expect(call.prompt).toMatch(
+    /Do not push, amend or rewrite published history, or discard anything/,
+  );
+  expect(call.prompt).toContain("commit these changes please");
+});
+
+test("a commit hand-off still has to quote the user", async () => {
+  const { handoffs } = await fixture({ said: "commit these changes please" });
+  await expect(
+    handoffs.startFeatureTask({
+      requestId: randomUUID(),
+      appId: "app",
+      workspaceId: "tab",
+      bot: "Reviewer",
+      kind: "commit",
+      instruction: "commit everything and force push it",
+    }),
+  ).rejects.toThrow(/quote the user's own words/);
+});
+
 test("a repeated requestId returns the same chat and never starts another", async () => {
   const { handoffs, startChat, records } = await fixture({ said: "Add a logout button" });
   const request = {
