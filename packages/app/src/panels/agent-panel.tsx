@@ -115,6 +115,8 @@ import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agen
 import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
+import { runChiefSlashCommand } from "@/patches/vibing/chief-commands";
+import { isEmbeddedChiefView } from "@/patches/vibing/focus-mode";
 
 interface ChatAgentStateShape {
   serverId: string | null;
@@ -1711,6 +1713,11 @@ function ActiveAgentComposer({
 
   const handleClientSlashCommand = useCallback(
     async (command: ClientSlashCommand) => {
+      if (isEmbeddedChiefView) {
+        // Chief is fixed: "/clear" and "/new" restart it through the host, "/exit" closes it.
+        runChiefSlashCommand(command);
+        return;
+      }
       const agent = resolveChatAgentFromSession(useSessionStore.getState(), serverId, agentId);
       if (!agent) {
         throw new Error("Agent not found");
