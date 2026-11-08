@@ -84,6 +84,13 @@ matches, or `unavailable` with `unsupported-url|not-found|no-access|failed`. Nav
 resolve fall back to `unknown` after 30 seconds, open-branch after 5 minutes (it may
 clone). Resolutions are kept for 30 minutes under a `resolutionId`.
 
+What Chief knows: its instructions (`CHIEF_PERSONA`) map each kind of fact to the route that
+returns it, led by `POST /api/ui/workspace` (everything about one workspace, served by the
+Vibing backend) and `GET /api/ui/state`, and tell it to look things up instead of asking the
+user. Routes are only as discoverable as their catalog notes, which the Vibing backend owns;
+Vibing's bundle guard checks that every route this persona names exists and has a note.
+Git and dev-server routes address a worktree by the workspace's name, not its id.
+
 Quick actions: an empty Chief transcript shows chips instead of the generic empty text
 (`agent-stream/view.tsx` renders `ChiefQuickActions` when `isEmbeddedChiefView`). The list is
 `CHIEF_QUICK_ACTIONS` in `chief-quick-actions.ts`: a "send" chip posts its sentence, a

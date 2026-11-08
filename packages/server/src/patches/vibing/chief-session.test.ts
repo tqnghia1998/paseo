@@ -301,11 +301,29 @@ test("the ceiling and persona include the three Vibing API tools", () => {
   expect(CHIEF_PERSONA).toContain("approval_required");
 });
 
-test("the persona says where a workspace's target branch is, so Chief looks it up", () => {
-  expect(CHIEF_PERSONA).toContain("targetBranch in GET /api/ui/state");
-  expect(CHIEF_PERSONA).toContain("POST /api/git/worktree-status");
-  expect(CHIEF_PERSONA).toContain("baseBranch");
-  expect(CHIEF_PERSONA).toMatch(/instead of guessing or asking/);
+test("the persona maps where each kind of fact lives, so Chief looks it up instead of asking", () => {
+  expect(CHIEF_PERSONA).toMatch(/Look things up instead of guessing/);
+  expect(CHIEF_PERSONA).toContain("POST /api/ui/workspace");
+  expect(CHIEF_PERSONA).toContain("GET /api/ui/state");
+  expect(CHIEF_PERSONA).toContain("target branch");
+  // The worktree is addressed by the workspace's name, not its id.
+  expect(CHIEF_PERSONA).toMatch(
+    /worktreeName, which is the workspace's name from the state, not its id/,
+  );
+  for (const route of [
+    "/api/space/workbench/feature/deploy/{id}/last_deploy_info",
+    "/api/feature-context/",
+    "/api/git/workspace-review",
+    "/api/dev-server/config",
+    "/api/metrics",
+    "/api/terminal/active-states",
+    "/api/dependencies/check",
+    "/api/paseo/usage",
+    "/api/prompts",
+    "/api/logs",
+    "vibing_api_catalog",
+  ])
+    expect(CHIEF_PERSONA).toContain(route);
 });
 
 test("the persona knows the app-window commands and that changed commands need approval", () => {
