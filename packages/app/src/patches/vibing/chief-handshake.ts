@@ -4,6 +4,7 @@ import {
   CHIEF_ERROR_TYPE,
   CHIEF_INIT_TYPE,
   CHIEF_READY_TYPE,
+  CHIEF_RESTART_TYPE,
   CHIEF_VISIBILITY_TYPE,
   isChiefActivityState,
   isChiefRequestId,
@@ -132,6 +133,14 @@ export function createChiefHandshake(env: ChiefHandshakeEnv) {
       activity = next;
       if (state.phase !== "ready" || state.requestId === null || postedActivity === next) return;
       postActivity();
+    },
+    /**
+     * "/clear" and "/new" ask the host for a fresh conversation. The frame cannot start one:
+     * it is bound to one verified agent, so the host restarts Chief and reloads the frame.
+     */
+    requestRestart(): void {
+      if (state.phase !== "ready" || state.requestId === null) return;
+      env.post({ type: CHIEF_RESTART_TYPE, requestId: state.requestId });
     },
     /** Escape inside the frame asks the host to close; it never closes anything itself. */
     requestClose(): void {

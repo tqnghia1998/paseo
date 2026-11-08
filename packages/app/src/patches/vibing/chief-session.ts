@@ -2,6 +2,7 @@ export const CHIEF_INIT_TYPE = "space:chief-init";
 export const CHIEF_VISIBILITY_TYPE = "space:chief-visibility";
 export const CHIEF_READY_TYPE = "paseo:chief-ready";
 export const CHIEF_CLOSE_TYPE = "paseo:chief-close";
+export const CHIEF_RESTART_TYPE = "paseo:chief-restart";
 export const CHIEF_ERROR_TYPE = "paseo:chief-error";
 export const CHIEF_ACTIVITY_TYPE = "paseo:chief-activity";
 

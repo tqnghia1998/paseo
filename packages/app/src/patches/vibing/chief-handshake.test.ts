@@ -186,6 +186,20 @@ describe("chief handshake over window messages", () => {
     }
   });
 
+  it("asks the host to restart only when ready, with the current request id", async () => {
+    const { handshake, send, parent } = await frame();
+    send(init("r1"));
+    handshake?.requestRestart();
+    expect(parent.postMessage).not.toHaveBeenCalled();
+    handshake?.verified("r1");
+    vi.mocked(parent.postMessage).mockClear();
+    handshake?.requestRestart();
+    expect(parent.postMessage).toHaveBeenCalledWith(
+      { type: "paseo:chief-restart", requestId: "r1" },
+      origin,
+    );
+  });
+
   it("posts activity only once ready, then on every change, deduplicated", async () => {
     const { handshake, send, parent } = await frame();
     const activity = () =>

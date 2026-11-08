@@ -335,6 +335,10 @@ export function createChiefTools() {
       if (!entry?.delivered) throw new Error("Unknown navigation request");
       entry.settle(input);
     },
+    /** A new conversation: requests the old one was waiting on are answered unknown. */
+    reset() {
+      for (const id of pending.keys()) finish(id, { outcome: "unknown" });
+    },
     close() {
       closed = true;
       for (const id of pending.keys()) finish(id, { outcome: "unknown" });

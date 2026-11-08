@@ -84,6 +84,9 @@ async function fixture() {
     }),
     loadAgent: vi.fn(async (id: string) => records.get(id)),
     prepareBot: vi.fn(async () => "Managed Chief memory and instructions"),
+    deleteAgent: vi.fn(async (id: string) => {
+      records.delete(id);
+    }),
   };
   const service = createChiefSession(
     dependencies as unknown as Parameters<typeof createChiefSession>[0],
@@ -139,6 +142,69 @@ test("restart discovers ownership before recovery and loads the same agent", asy
   expect(await restarted.connect("http://127.0.0.1:8888/api/chief/mcp")).toEqual(first);
   expect(manager.createAgent).toHaveBeenCalledTimes(1);
   expect(dependencies.loadAgent).toHaveBeenCalledWith(first.agentId);
+});
+
+const URL_A = "http://127.0.0.1:7777/api/chief/mcp";
+
+test("a restart starts a fresh agent under the same workspace and deletes the old one", async () => {
+  const { service, records, manager, dependencies } = await fixture();
+  const first = await service.connect(URL_A);
+  const second = await service.restart();
+  expect(second.agentId).not.toBe(first.agentId);
+  expect(second).toMatchObject({ workspaceId: first.workspaceId, cwd: first.cwd, status: "ready" });
+  expect(manager.createAgent).toHaveBeenCalledTimes(2);
+  const [config, id, options] = manager.createAgent.mock.calls[1]!;
+  expect(id).toBe(second.agentId);
+  expect(options).toMatchObject({ background: true, workspaceId: first.workspaceId });
+  expect(config.toolPolicy).toEqual(manager.createAgent.mock.calls[0]![0].toolPolicy);
+  expect(dependencies.deleteAgent).toHaveBeenCalledWith(first.agentId);
+  expect(records.has(first.agentId)).toBe(false);
+  expect(records.has(second.agentId)).toBe(true);
+  expect(service.agentId()).toBe(second.agentId);
+  expect(service.isConnected()).toBe(true);
+  expect(service.owns(second.agentId)).toBe(true);
+});
+
+test("an agent a restart replaced can never be sealed or resumed, even when its deletion fails", async () => {
+  const { service, records, dependencies, manager } = await fixture();
+  const first = await service.connect(URL_A);
+  const oldConfig = manager.createAgent.mock.calls[0]![0];
+  dependencies.deleteAgent.mockRejectedValueOnce(new Error("disk busy"));
+  await service.restart();
+  // Still on disk, but retired: owned (so nothing auto-resumes it) and never sealed.
+  expect(records.has(first.agentId)).toBe(true);
+  expect(service.owns(first.agentId)).toBe(true);
+  expect(() => service.seal(first.agentId, oldConfig)).toThrow("Chief unavailable");
+  // The next connect retries the deletion.
+  await service.connect(URL_A);
+  expect(records.has(first.agentId)).toBe(false);
+  expect(service.owns(first.agentId)).toBe(false);
+});
+
+test("a daemon that stopped between retiring and deleting finishes the job on its next connect", async () => {
+  const { service, records, dependencies } = await fixture();
+  const first = await service.connect(URL_A);
+  dependencies.deleteAgent.mockRejectedValue(new Error("stopped"));
+  const second = await service.restart();
+  await service.close();
+  dependencies.deleteAgent.mockImplementation(async (id: string) => {
+    records.delete(id);
+  });
+  const revived = createChiefSession(dependencies);
+  services.push(revived);
+  await revived.initialize();
+  expect(revived.owns(first.agentId)).toBe(true);
+  expect(await revived.connect("http://127.0.0.1:8888/api/chief/mcp")).toEqual(second);
+  expect(records.has(first.agentId)).toBe(false);
+});
+
+test("a restart needs a connected Chief and never runs twice at once", async () => {
+  const { service, manager } = await fixture();
+  await expect(service.restart()).rejects.toThrow("Chief is not connected");
+  await service.connect(URL_A);
+  const [a, b] = await Promise.all([service.restart(), service.restart()]);
+  expect(a).toEqual(b);
+  expect(manager.createAgent).toHaveBeenCalledTimes(2);
 });
 
 test("deleted history is never silently recreated", async () => {
