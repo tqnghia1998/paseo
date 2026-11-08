@@ -119,6 +119,13 @@ test("host-managed Chief rebinds its canonical endpoint before a real manager re
   expect(client.resumeOverrides.at(-1)?.mcpServers).toEqual(current.mcpServers);
   expect(manager.getAgent(id)?.background).toBe(true);
   expect(manager.getAgent(id)?.labels["paseo-chief.policy"]).toBe("chief-v1");
+  for (const attempt of [
+    () => manager.setAgentModel(id, "opus"),
+    () => manager.setAgentMode(id, "default"),
+    () => manager.setAgentThinkingOption(id, "high"),
+    () => manager.setAgentFeature(id, "test", true),
+  ])
+    await expect(attempt()).rejects.toThrow(/managed by its host source code/);
   const launches = client.createdConfigs.length + client.resumeOverrides.length;
   current = null;
   await expect(manager.reloadAgentSession(id)).rejects.toThrow(

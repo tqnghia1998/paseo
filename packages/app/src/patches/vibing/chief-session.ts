@@ -55,6 +55,13 @@ export function isChiefRequestId(value: unknown): value is string {
   );
 }
 
+const hasControlCharacters = (value: string) =>
+  Array.from(value).some(
+    (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+  );
+const isIdentity = (value: unknown): value is string =>
+  isNonEmptyString(value) && value.length <= 128 && !hasControlCharacters(value);
+
 /** Strict: exact keys, exact literals. Anything else is not a Chief session. */
 export function parseChiefSession(value: unknown): ChiefSession | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
@@ -69,10 +76,13 @@ export function parseChiefSession(value: unknown): ChiefSession | null {
     record.policy !== CHIEF_POLICY ||
     !isNonEmptyString(record.provider) ||
     record.provider.length > 100 ||
-    !isNonEmptyString(record.serverId) ||
-    !isNonEmptyString(record.agentId) ||
-    !isNonEmptyString(record.workspaceId) ||
-    !isNonEmptyString(record.cwd)
+    !isIdentity(record.serverId) ||
+    !isIdentity(record.agentId) ||
+    !isIdentity(record.workspaceId) ||
+    !isNonEmptyString(record.cwd) ||
+    record.cwd.length > 4096 ||
+    hasControlCharacters(record.cwd) ||
+    hasControlCharacters(record.provider)
   ) {
     return null;
   }

@@ -188,7 +188,7 @@ export function registerChiefVibingApiTools(
     "vibing_api_catalog",
     {
       description:
-        "List the Space App Vibing server API with each route's effect (read, local, checkpoint = needs the user's approval, denied) and notes about its body. Pass a prefix such as /api/dev-server to narrow it.",
+        "List the Space App Vibing server API with each route's effect (read, local, checkpoint = needs approval when approvalsRequired is true, denied) and notes about its body, plus the effective approvalsRequired mode. Pass a prefix such as /api/dev-server to narrow it.",
       inputSchema: VibingApiCatalogInput.shape,
     },
     async (args) => api.catalog(args),

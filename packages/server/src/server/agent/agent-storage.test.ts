@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "vitest";
+import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
 import os from "node:os";
 import path from "node:path";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
@@ -631,65 +631,133 @@ describe("AgentStorage", () => {
     expect(dirs[0]).toBe("D-Users-dev-MyProject");
   });
 
-  test("remove deletes all duplicate record files across project directories", async () => {
-    const agentId = "agent-duplicate";
-
-    // Create a valid record file in two different project directories to simulate
-    // storage migrations/duplication. Only one copy will be referenced in-memory,
-    // but deletion should remove *all* copies on disk.
-    const recordA = await (async () => {
-      await storage.applySnapshot(
-        createManagedAgent({
-          id: agentId,
-          cwd: "/tmp/project-a",
-          provider: "codex",
-        }),
-      );
-      const record = await storage.get(agentId);
-      expect(record).not.toBeNull();
-      return record!;
-    })();
-
-    const projectDirB = path.join(storagePath, "tmp-project-b");
-    await fs.mkdir(projectDirB, { recursive: true });
-    const duplicatePathB = path.join(projectDirB, `${agentId}.json`);
-    await fs.writeFile(
-      duplicatePathB,
-      JSON.stringify({ ...recordA, cwd: "/tmp/project-b" }, null, 2),
-      "utf8",
-    );
-
-    // Force a reload so the registry has to discover from disk (and may choose either copy).
-    const reloaded = new AgentStorage(storagePath, createTestLogger());
-    const before = await reloaded.listAll();
-    expect(before.map((r) => r.id)).toContain(agentId);
-
-    await reloaded.remove(agentId);
-
-    const hasAnyRecordFile = async () => {
-      const projects = await fs
-        .readdir(storagePath, { withFileTypes: true })
-        .catch(() => [] as Awaited<ReturnType<typeof fs.readdir>>);
-      const exists = await Promise.all(
-        projects
-          .filter((project) => project.isDirectory())
-          .map(async (project) => {
-            const candidate = path.join(storagePath, project.name, `${agentId}.json`);
-            try {
-              await fs.access(candidate);
-              return true;
-            } catch {
-              return false;
-            }
-          }),
-      );
-      return exists.some((present) => present);
-    };
-
-    expect(await hasAnyRecordFile()).toBe(false);
-
-    const afterReload = new AgentStorage(storagePath, createTestLogger());
-    const after = await afterReload.listAll();
-    expect(after.some((r) => r.id === agentId)).toBe(false);
+  test("overlapping failed removals recover persistence before either caller continues", async () => {
+    const id = "overlapping-delete";
+    await storage.applySnapshot(createManagedAgent({ id, cwd: tmpDir, provider: "codex" }));
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const failure = Object.assign(new Error("fixture unlink denied"), { code: "EACCES" });
+    const originalUnlink = fs.unlink.bind(fs);
+    let attempts = 0;
+    const unlink = vi.spyOn(fs, "unlink").mockImplementation(async (file) => {
+      if (!String(file).endsWith(`${id}.json`)) return originalUnlink(file);
+      attempts++;
+      if (attempts === 1) {
+        entered.resolve();
+        await release.promise;
+        throw failure;
+      }
+      return originalUnlink(file);
+    });
+    try {
+      const first = storage.remove(id);
+      await entered.promise;
+      const second = storage.remove(id);
+      const outcomes = Promise.allSettled([first, second]);
+      release.resolve();
+      for (const outcome of await outcomes) {
+        expect(outcome.status).toBe("rejected");
+        if (outcome.status === "rejected") expect(outcome.reason).toBe(failure);
+      }
+    } finally {
+      release.resolve();
+      unlink.mockRestore();
+    }
+    await storage.setTitle(id, "Saved after failed deletion");
+    const cold = new AgentStorage(storagePath, logger);
+    expect((await cold.get(id))?.title).toBe("Saved after failed deletion");
+    await storage.remove(id);
+    expect(await storage.get(id)).toBeNull();
   });
+
+  test.each([false, true])(
+    "remove deletes every duplicate record and retries unlink failure: %s",
+    async (failUnlink) => {
+      const agentId = "agent-duplicate";
+
+      // Create a valid record file in two different project directories to simulate
+      // storage migrations/duplication. Only one copy will be referenced in-memory,
+      // but deletion should remove *all* copies on disk.
+      const recordA = await (async () => {
+        await storage.applySnapshot(
+          createManagedAgent({
+            id: agentId,
+            cwd: "/tmp/project-a",
+            provider: "codex",
+          }),
+        );
+        const record = await storage.get(agentId);
+        expect(record).not.toBeNull();
+        return record!;
+      })();
+
+      const projectDirB = path.join(storagePath, "tmp-project-b");
+      await fs.mkdir(projectDirB, { recursive: true });
+      const duplicatePathB = path.join(projectDirB, `${agentId}.json`);
+      await fs.writeFile(
+        duplicatePathB,
+        JSON.stringify({ ...recordA, cwd: "/tmp/project-b" }, null, 2),
+        "utf8",
+      );
+
+      // Force a reload so the registry has to discover from disk (and may choose either copy).
+      const reloaded = new AgentStorage(storagePath, createTestLogger());
+      const before = await reloaded.listAll();
+      expect(before.map((r) => r.id)).toContain(agentId);
+
+      if (failUnlink) {
+        const failure = Object.assign(new Error("fixture record deletion denied"), {
+          code: "EACCES",
+        });
+        const originalUnlink = fs.unlink.bind(fs);
+        const unlink = vi.spyOn(fs, "unlink").mockImplementation(async (file) => {
+          if (String(file) === duplicatePathB) throw failure;
+          return originalUnlink(file);
+        });
+        try {
+          await expect(reloaded.remove(agentId)).rejects.toBe(failure);
+          expect(await reloaded.get(agentId)).not.toBeNull();
+          expect((await reloaded.listActive()).map((record) => record.id)).toContain(agentId);
+          expect(JSON.parse(await fs.readFile(duplicatePathB, "utf8")).id).toBe(agentId);
+          const cold = new AgentStorage(storagePath, createTestLogger());
+          expect(await cold.get(agentId)).not.toBeNull();
+        } finally {
+          unlink.mockRestore();
+        }
+        await reloaded.setTitle(agentId, "Usable after failed deletion");
+        expect((await reloaded.get(agentId))?.title).toBe("Usable after failed deletion");
+      }
+
+      await reloaded.remove(agentId);
+      // Late snapshots must still be discarded after deletion actually succeeds.
+      await reloaded.upsert(recordA);
+      expect(await reloaded.get(agentId)).toBeNull();
+
+      const hasAnyRecordFile = async () => {
+        const projects = await fs
+          .readdir(storagePath, { withFileTypes: true })
+          .catch(() => [] as Awaited<ReturnType<typeof fs.readdir>>);
+        const exists = await Promise.all(
+          projects
+            .filter((project) => project.isDirectory())
+            .map(async (project) => {
+              const candidate = path.join(storagePath, project.name, `${agentId}.json`);
+              try {
+                await fs.access(candidate);
+                return true;
+              } catch {
+                return false;
+              }
+            }),
+        );
+        return exists.some((present) => present);
+      };
+
+      expect(await hasAnyRecordFile()).toBe(false);
+
+      const afterReload = new AgentStorage(storagePath, createTestLogger());
+      const after = await afterReload.listAll();
+      expect(after.some((r) => r.id === agentId)).toBe(false);
+    },
+  );
 });

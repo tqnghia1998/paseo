@@ -1,15 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
-export const Identity = z
-  .string()
-  .min(1)
-  .max(128)
-  .refine((value) =>
-    [...value].every(
-      (character) => character.codePointAt(0)! >= 32 && character.codePointAt(0) !== 127,
-    ),
-  );
+const identity = (maximum: number) =>
+  z
+    .string()
+    .min(1)
+    .max(maximum)
+    .refine((value) =>
+      [...value].every(
+        (character) => character.codePointAt(0)! >= 32 && character.codePointAt(0) !== 127,
+      ),
+    );
+export const Identity = identity(128);
+export const WorkspaceIdentity = identity(255);
 /** Git-ref-safe branch names: no spaces, control characters, `..`, leading `-` or `~^:?*[\`. */
 export const BranchName = z
   .string()
@@ -19,6 +22,13 @@ export const BranchName = z
     (value) =>
       !value.startsWith("-") &&
       !value.includes("..") &&
+      value !== "@" &&
+      !value.startsWith("/") &&
+      !value.endsWith("/") &&
+      !value.endsWith(".") &&
+      !value.endsWith(".lock") &&
+      !value.includes("//") &&
+      !value.includes("@{") &&
       [...value].every((character) => {
         const code = character.codePointAt(0)!;
         return code > 32 && code !== 127 && !"~^:?*[\\".includes(character);
@@ -38,8 +48,8 @@ export const MergeRequestUrl = z
   }, "Expected an https merge request URL");
 const Workspace = z
   .object({
-    id: Identity,
-    name: z.string().min(1).max(200),
+    id: WorkspaceIdentity,
+    name: z.string().min(1).max(255),
     cwd: z.string().min(1).max(4096).optional(),
   })
   .strict();
@@ -62,12 +72,16 @@ const Inventory = z
 export const NavigationInput = z
   .object({
     appId: Identity,
-    workspaceId: Identity,
+    workspaceId: WorkspaceIdentity,
     destination: z.enum(["web", "bots", "vscode"]),
   })
   .strict();
 export const OpenBranchInput = z
-  .object({ appId: Identity, branch: BranchName, targetBranch: BranchName.optional() })
+  .object({
+    appId: Identity,
+    branch: BranchName,
+    targetBranch: BranchName.optional(),
+  })
   .strict();
 
 const MergeRequest = z
@@ -86,15 +100,22 @@ const MergeRequest = z
   .strict();
 export type ChiefMergeRequest = z.infer<typeof MergeRequest>;
 const AppMatch = z
-  .object({ appId: Identity, name: z.string().min(1).max(200), workspaceId: Identity.optional() })
+  .object({
+    appId: Identity,
+    name: z.string().min(1).max(200),
+    workspaceId: WorkspaceIdentity.optional(),
+  })
   .strict();
 export type ChiefAppMatch = z.infer<typeof AppMatch>;
 
 const NavigateAck = z.object({ outcome: z.enum(["opened", "unavailable"]) }).strict();
 const OpenBranchAck = z.discriminatedUnion("outcome", [
-  z.object({ outcome: z.literal("opened"), workspaceId: Identity }).strict(),
+  z.object({ outcome: z.literal("opened"), workspaceId: WorkspaceIdentity }).strict(),
   z
-    .object({ outcome: z.literal("unavailable"), reason: z.enum(["unknown-app", "failed"]) })
+    .object({
+      outcome: z.literal("unavailable"),
+      reason: z.enum(["unknown-app", "failed"]),
+    })
     .strict(),
 ]);
 const ResolveAck = z.discriminatedUnion("outcome", [
@@ -273,7 +294,12 @@ export function createChiefTools() {
       const deadline = Date.now() + waitMs;
       for (;;) {
         const workspace = findWorkspace(appId, workspaceId);
-        if (workspace?.cwd) return { cwd: workspace.cwd, name: workspace.name };
+        if (workspace?.cwd)
+          return {
+            cwd: workspace.cwd,
+            name: workspace.name,
+            gitRepo: apps.find((app) => app.id === appId)!.gitRepo,
+          };
         const remaining = deadline - Date.now();
         if (remaining <= 0 || closed) throw new Error("Feature workspace is not available on disk");
         await inventoryUpdate(remaining);

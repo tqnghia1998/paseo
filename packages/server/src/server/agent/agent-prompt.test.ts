@@ -14,7 +14,8 @@ import { join } from "node:path";
 
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { AgentManager } from "./agent-manager.js";
-import { waitForAgentRunStartWithTimeout } from "./agent-prompt.js";
+import { sendPromptToAgent, waitForAgentRunStartWithTimeout } from "./agent-prompt.js";
+import { AgentStorage } from "./agent-storage.js";
 import type {
   AgentClient,
   AgentRunResult,
@@ -161,23 +162,30 @@ class SlowStartAgentClient implements AgentClient {
 async function createRunStartScenario(startDelayMs: number | null): Promise<{
   agentManager: AgentManager;
   agentId: string;
+  storage: AgentStorage;
+  sessions: SlowStartAgentSession[];
   startRun: () => Promise<void>;
   cleanup: () => Promise<void>;
 }> {
   const workdir = mkdtempSync(join(tmpdir(), "agent-run-start-budget-"));
   const client = new SlowStartAgentClient(startDelayMs);
+  const storage = new AgentStorage(join(workdir, "agents"), createTestLogger());
   const agentManager = new AgentManager({
     clients: { codex: client },
+    registry: storage,
     logger: createTestLogger(),
   });
   const snapshot = await agentManager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
     workspaceId: undefined,
   });
 
+  await storage.applySnapshot(snapshot);
   let drained: Promise<void> = Promise.resolve();
   return {
     agentManager,
     agentId: snapshot.id,
+    storage,
+    sessions: client.sessions,
     // streamAgent registers the pending run synchronously, so the wait always observes it.
     startRun: async () => {
       const run = agentManager.streamAgent(snapshot.id, "start the run");
@@ -252,6 +260,205 @@ test("waiting for a run start still gives up at the run start budget", async () 
     expect(settled).toBe(true);
   } finally {
     vi.useRealTimers();
+    await scenario.cleanup();
+  }
+});
+
+test("idle-only dispatch never replaces a run admitted while the prompt was loading", async () => {
+  const scenario = await createRunStartScenario(null);
+  const storage = scenario.storage;
+  const replace = vi.spyOn(scenario.agentManager, "replaceAgentRun");
+  vi.spyOn(scenario.agentManager, "reloadStalePluginSession").mockImplementation(async () => {
+    await scenario.startRun();
+  });
+  try {
+    await expect(
+      sendPromptToAgent({
+        agentId: scenario.agentId,
+        agentManager: scenario.agentManager,
+        agentStorage: storage,
+        prompt: "Chief follow up",
+        idleOnly: true,
+        unarchive: false,
+        clearPendingPermissions: false,
+        logger: createTestLogger(),
+      }),
+    ).rejects.toThrow(/active|busy|running/i);
+    expect(replace).not.toHaveBeenCalled();
+    expect(scenario.agentManager.hasInFlightRun(scenario.agentId)).toBe(true);
+  } finally {
+    await scenario.cleanup();
+  }
+});
+
+test("idle-only dispatch refuses a chat archived while the prompt was loading", async () => {
+  const scenario = await createRunStartScenario(null);
+  const storage = scenario.storage;
+  vi.spyOn(scenario.agentManager, "reloadStalePluginSession").mockImplementation(async () => {
+    const record = (await storage.get(scenario.agentId))!;
+    await storage.upsert({ ...record, archivedAt: new Date().toISOString() });
+  });
+  const stream = vi.spyOn(scenario.agentManager, "streamAgent");
+  try {
+    await expect(
+      sendPromptToAgent({
+        agentId: scenario.agentId,
+        agentManager: scenario.agentManager,
+        agentStorage: storage,
+        prompt: "Chief follow up",
+        idleOnly: true,
+        unarchive: false,
+        clearPendingPermissions: false,
+        logger: createTestLogger(),
+      }),
+    ).rejects.toThrow(/archived/i);
+    expect(stream).not.toHaveBeenCalled();
+  } finally {
+    await scenario.cleanup();
+  }
+});
+
+test("idle-only dispatch reports an already archived chat instead of a successful no-op", async () => {
+  const scenario = await createRunStartScenario(null);
+  const storage = scenario.storage;
+  const record = (await storage.get(scenario.agentId))!;
+  await storage.upsert({ ...record, archivedAt: new Date().toISOString() });
+  const stream = vi.spyOn(scenario.agentManager, "streamAgent");
+  try {
+    await expect(
+      sendPromptToAgent({
+        agentId: scenario.agentId,
+        agentManager: scenario.agentManager,
+        agentStorage: storage,
+        prompt: "Chief follow up",
+        idleOnly: true,
+        unarchive: false,
+        clearPendingPermissions: false,
+        logger: createTestLogger(),
+      }),
+    ).rejects.toThrow(/archived/i);
+    expect(stream).not.toHaveBeenCalled();
+  } finally {
+    await scenario.cleanup();
+  }
+});
+
+test("idle-only dispatch refuses a permission arriving while the prompt was loading", async () => {
+  const scenario = await createRunStartScenario(null);
+  vi.spyOn(scenario.agentManager, "reloadStalePluginSession").mockImplementation(async () => {
+    scenario.agentManager.getAgent(scenario.agentId)!.pendingPermissions.set("permission", {
+      id: "permission",
+      provider: "codex",
+      name: "tool",
+      kind: "tool",
+    });
+  });
+  const stream = vi.spyOn(scenario.agentManager, "streamAgent");
+  try {
+    await expect(
+      sendPromptToAgent({
+        agentId: scenario.agentId,
+        agentManager: scenario.agentManager,
+        agentStorage: scenario.storage,
+        prompt: "Chief follow up",
+        idleOnly: true,
+        unarchive: false,
+        clearPendingPermissions: false,
+        logger: createTestLogger(),
+      }),
+    ).rejects.toThrow(/permission/i);
+    expect(stream).not.toHaveBeenCalled();
+    expect(scenario.agentManager.getAgent(scenario.agentId)!.pendingPermissions.size).toBe(1);
+  } finally {
+    await scenario.cleanup();
+  }
+});
+
+test("idle-only dispatch starts a new run in an unarchived idle chat", async () => {
+  const scenario = await createRunStartScenario(null);
+  const replace = vi.spyOn(scenario.agentManager, "replaceAgentRun");
+  try {
+    await expect(
+      sendPromptToAgent({
+        agentId: scenario.agentId,
+        agentManager: scenario.agentManager,
+        agentStorage: scenario.storage,
+        prompt: "Chief follow up",
+        idleOnly: true,
+        unarchive: false,
+        clearPendingPermissions: false,
+        logger: createTestLogger(),
+      }),
+    ).resolves.toEqual({ disposition: "turn_started" });
+    expect(replace).not.toHaveBeenCalled();
+    expect(scenario.agentManager.hasInFlightRun(scenario.agentId)).toBe(true);
+  } finally {
+    await scenario.cleanup();
+  }
+});
+
+test("idle-only deletion refuses a reserved run before provider startup", async () => {
+  const scenario = await createRunStartScenario(null);
+  const manager = scenario.agentManager as AgentManager & {
+    deleteIdleAgent(id: string): Promise<void>;
+  };
+  try {
+    await scenario.startRun();
+    expect(manager.getAgent(scenario.agentId)!.lifecycle).toBe("idle");
+    expect(manager.hasInFlightRun(scenario.agentId)).toBe(true);
+    await expect(manager.deleteIdleAgent(scenario.agentId)).rejects.toThrow(/busy|run|active/i);
+    expect(await scenario.storage.get(scenario.agentId)).not.toBeNull();
+    expect(manager.hasInFlightRun(scenario.agentId)).toBe(true);
+  } finally {
+    await scenario.cleanup();
+  }
+});
+
+test("idle-only deletion removes a genuinely idle chat", async () => {
+  const scenario = await createRunStartScenario(null);
+  const manager = scenario.agentManager as AgentManager & {
+    deleteIdleAgent(id: string): Promise<void>;
+  };
+  try {
+    await manager.deleteIdleAgent(scenario.agentId);
+    expect(await scenario.storage.get(scenario.agentId)).toBeNull();
+    expect(manager.getAgent(scenario.agentId)).toBeNull();
+  } finally {
+    await scenario.cleanup();
+  }
+});
+
+test("an accepted idle deletion blocks new runs while its provider close is pending", async () => {
+  const scenario = await createRunStartScenario(null);
+  const manager = scenario.agentManager as AgentManager & {
+    deleteIdleAgent(id: string): Promise<void>;
+  };
+  let closing!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    closing = resolve;
+  });
+  let release!: () => void;
+  const closed = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.spyOn(scenario.sessions[0]!, "close").mockImplementation(async () => {
+    closing();
+    await closed;
+  });
+  let deleting: Promise<void> = Promise.resolve();
+  try {
+    deleting = manager.deleteIdleAgent(scenario.agentId);
+    await entered;
+    expect(() => manager.streamAgent(scenario.agentId, "new work")).toThrow(
+      /delet|clos|unavailable/i,
+    );
+    expect(manager.hasInFlightRun(scenario.agentId)).toBe(false);
+    release();
+    await deleting;
+    expect(await scenario.storage.get(scenario.agentId)).toBeNull();
+  } finally {
+    release();
+    await deleting.catch(() => undefined);
     await scenario.cleanup();
   }
 });

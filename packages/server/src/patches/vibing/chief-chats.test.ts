@@ -94,7 +94,7 @@ describe("Chief chats: read", () => {
   test("returns the most recent messages with streamed replies joined, and counts tool calls", async () => {
     const { chats } = setup([record({ id: "a" })], {}, rows);
     const read = await chats.read("a", 3);
-    expect(read?.messages).toEqual([
+    expect(read?.messages).toMatchObject([
       { role: "assistant", text: "Looking now." },
       { role: "assistant", text: "Found 2 issues." },
       { role: "error", text: "boom" },

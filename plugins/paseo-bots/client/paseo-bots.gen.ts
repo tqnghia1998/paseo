@@ -1250,20 +1250,20 @@ var DEFAULT_BOT_ID = "vibing-general";
 var CLAUDE_BOT_ID = "vibing-claude";
 var VIBING_DEFAULTS_VERSION = 5;
 var CHIEF_BOT_ID = "vibing-chief";
-function managedChiefBot(saved) {
+function managedChiefBot() {
   const base = newBot("claude", BOT_TEMPLATES[0]);
   return {
     ...base,
     id: CHIEF_BOT_ID,
-    name: saved?.name ?? "Chief",
+    name: "Chief",
     provider: "claude",
     model: "sonnet",
     modeId: null,
     thinkingOptionId: null,
-    soul: saved?.soul ?? "",
-    skillIds: saved?.skillIds ?? [],
-    playbooks: saved?.playbooks ?? [],
-    avatar: saved?.avatar ?? { ...base.avatar, seed: CHIEF_BOT_ID },
+    soul: "",
+    skillIds: [],
+    playbooks: [],
+    avatar: { ...base.avatar, seed: CHIEF_BOT_ID },
     contactBots: "off",
     apps: [],
     appRules: {},
@@ -1273,8 +1273,8 @@ function managedChiefBot(saved) {
     cwd: null,
     hostId: null,
     archived: false,
-    createdAt: saved?.createdAt ?? "2026-11-07T00:00:00.000Z",
-    updatedAt: saved?.updatedAt ?? "2026-11-07T00:00:00.000Z"
+    createdAt: "2026-11-07T00:00:00.000Z",
+    updatedAt: "2026-11-07T00:00:00.000Z"
   };
 }
 function assertOrdinaryBot(botId) {
@@ -1371,17 +1371,22 @@ function preferredDefaultBotId(bots, providers, hostId) {
 }
 
 // shared/managed-chief-ui.ts
-var CHIEF_LAUNCHER_GUIDANCE = "Use the app-wide Chief launcher to talk to Chief. Instructions, memory, skills and playbooks can be personalized here. Chief's runtime and tools are managed by the host.";
-var SECTIONS = /* @__PURE__ */ new Set(["overview", "identity", "soul", "skills", "playbooks", "memory"]);
-var PERSONALIZATION = /* @__PURE__ */ new Set(["name", "avatar", "soul", "skillIds", "playbooks"]);
-function botSectionAllowed(botId, section) {
-  return botId !== CHIEF_BOT_ID || SECTIONS.has(section);
+function botSectionAllowed(botId, _section) {
+  return botId !== CHIEF_BOT_ID;
 }
 function chiefPersonalizationPatch(botId, patch) {
-  return botId === CHIEF_BOT_ID ? Object.fromEntries(Object.entries(patch).filter(([key]) => PERSONALIZATION.has(key))) : patch;
+  return botId === CHIEF_BOT_ID ? {} : patch;
 }
-function exportableBots(bots) {
+function userBots(bots) {
   return bots.filter((bot) => bot.id !== CHIEF_BOT_ID);
+}
+var exportableBots = userBots;
+function userSettings(values) {
+  return { ...values, bots: userBots(values.bots), groups: values.groups?.map((group) => ({
+    ...group,
+    memberIds: group.memberIds.filter((id) => id !== CHIEF_BOT_ID),
+    leadId: group.leadId === CHIEF_BOT_ID ? null : group.leadId
+  })) };
 }
 
 // client/BotsSurface.tsx
@@ -2270,7 +2275,7 @@ function byRef(items, ref, id, name, what) {
   const known = items.map(name).filter(Boolean);
   throw new Error(`There's no ${what} called "${wanted}".${known.length ? ` There are: ${known.slice(0, 30).join(", ")}.` : ""}`);
 }
-var findBot = (values, ref) => byRef(values.bots, ref, (bot) => bot.id, (bot) => bot.name, "bot");
+var findBot = (values, ref) => byRef(userBots(values.bots), ref, (bot) => bot.id, (bot) => bot.name, "bot");
 var findTeam = (values, ref) => byRef(values.groups ?? [], ref, (group) => group.id, (group) => group.name, "team");
 var findSkill = (library, ref) => byRef(library.skills, ref, (skill) => skill.id, (skill) => skill.id, "skill");
 var findServer = (library, ref) => byRef(library.mcpServers, ref, (server) => server.id, (server) => server.name, "MCP server");
@@ -3018,7 +3023,7 @@ var commandRemoveRpc = defineRpc({
 var ChiefBridgeToken = z6.string().min(32).max(512);
 var chiefPrepareRpc = defineRpc({
   name: "bots.chief.prepare",
-  input: z6.object({ bridgeToken: ChiefBridgeToken }).strict(),
+  input: z6.object({ bridgeToken: ChiefBridgeToken, agentId: z6.string().min(1).max(200), cwd: z6.string().min(1).max(4096) }).strict(),
   output: z6.object({ botId: z6.literal("vibing-chief"), systemPrompt: z6.string() })
 });
 var chiefCallRpc = defineRpc({
@@ -4746,11 +4751,7 @@ function DialogButton({ colors: colors2, label, primary, disabled, onPress }) {
 function botMenuEntries(actions) {
   const { bot } = actions;
   const entries = [{ label: "Open bot settings", icon: "Settings", onSelect: actions.onOpenSettings }];
-  if (bot.id === CHIEF_BOT_ID) return [
-    ...entries,
-    { label: "Rename bot", icon: "Pencil", onSelect: actions.onRename },
-    { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId }
-  ];
+  if (bot.id === CHIEF_BOT_ID) return [];
   if (actions.onOpenInPaseo) entries.push({ label: "Open in Paseo", icon: "ExternalLink", onSelect: actions.onOpenInPaseo });
   entries.push({ label: bot.pinned ? "Unpin" : "Pin to top", icon: bot.pinned ? "PinOff" : "Pin", onSelect: actions.onTogglePin });
   if (actions.onMoveUp || actions.onMoveDown) {
@@ -5049,7 +5050,7 @@ function botChatOrder(chats, listUi, botId) {
 function BotSidebar(props) {
   const { colors: colors2, bots, openTab, ui: listUi, hiddenArchivedCount, bottomInset, onNewBot, onShowArchived, onTeamMap, onEditTeam } = props;
   const tokens = nativeTokens(colors2);
-  const shown = openTab?.bots ?? bots;
+  const shown = userBots(openTab?.bots ?? bots);
   const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
   const listedBots = new Map(shown.map((bot) => [bot.id, bot]));
   const pins = listUi.pinnedChats.filter((pin) => pin.botId !== CHIEF_BOT_ID && listedBots.has(pin.botId));
@@ -5250,9 +5251,7 @@ function BotGroup(props) {
   const loading2 = !!host2.api && chats.isLoading;
   const aggregate = isOpen ? null : aggregateBuckets(unpinned.map(chatBucket));
   let children = null;
-  if (isOpen && bot.id === CHIEF_BOT_ID) {
-    children = /* @__PURE__ */ jsx6(GhostButton, { colors: colors2, icon: "Settings", label: "Chief personalization", onPress: () => onSelect({ botId: bot.id, chatId: null }) });
-  } else if (isOpen) {
+  if (isOpen) {
     if (loading2) children = /* @__PURE__ */ jsx6(SkeletonRows, { colors: colors2 });
     else if (ordered.length > 0 || draftSelected) {
       children = /* @__PURE__ */ jsxs5(Fragment4, { children: [
@@ -13841,17 +13840,13 @@ function BotPanel(props) {
   const problems = bot.id === CHIEF_BOT_ID ? [] : botProblems(bot, host2.isLocal);
   const groups = GROUPS.map((group) => ({
     ...group,
-    sections: group.sections.filter((entry) => botSectionAllowed(bot.id, entry.id)).map((entry) => {
-      if (bot.id !== CHIEF_BOT_ID) return entry;
-      if (entry.id === "identity") return { ...entry, rows: ["Avatar", "Colour", "Shape", "Image URL", "Name"], keywords: "picture color face upload generate" };
-      if (entry.id === "overview") return { ...entry, rows: ["App-wide Chief launcher"], keywords: "managed personalization" };
-      return entry;
-    })
+    sections: group.sections.filter((entry) => botSectionAllowed(bot.id, entry.id))
   })).filter((group) => group.sections.length > 0);
   const sections = groups.flatMap((group) => group.sections);
   const open = section ? sections.find((entry) => entry.id === section && !entry.modal) : void 0;
   const [sheet, setSheet] = useState42(null);
   const choose = (entry) => entry.modal ? setSheet(entry) : onSection(entry.id);
+  if (bot.id === CHIEF_BOT_ID) return null;
   if (open) {
     return /* @__PURE__ */ jsxs46(View44, { style: { flex: 1, backgroundColor: colors2.surface0 }, children: [
       /* @__PURE__ */ jsx48(PanelHeader, { colors: colors2, compact: compact2, title: open.label, onBack: () => onSection(null), onClose }),
@@ -13868,7 +13863,6 @@ function BotPanel(props) {
     /* @__PURE__ */ jsx48(PanelHeader, { colors: colors2, compact: compact2, title: bot.name || "Untitled bot", onClose }),
     /* @__PURE__ */ jsxs46(ScrollView9, { keyboardShouldPersistTaps: "handled", contentContainerStyle: { paddingBottom: 24 + bottomInset }, children: [
       /* @__PURE__ */ jsxs46(View44, { style: { paddingHorizontal: 8, paddingTop: 8, gap: 8 }, children: [
-        bot.id === CHIEF_BOT_ID ? /* @__PURE__ */ jsx48(Alert2, { colors: colors2, description: CHIEF_LAUNCHER_GUIDANCE }) : null,
         /* @__PURE__ */ jsx48(SearchField, { colors: colors2, value: query, onChangeText: setQuery, placeholder: "Search settings" }),
         problems.length > 0 ? /* @__PURE__ */ jsx48(Alert2, { colors: colors2, variant: "warning", title: "Needs attention", description: problems }) : null
       ] }),
@@ -13889,7 +13883,6 @@ function BotPanel(props) {
 }
 function renderSection(id, props) {
   if (!botSectionAllowed(props.bot.id, id)) return null;
-  if (props.bot.id === CHIEF_BOT_ID && id === "overview") return /* @__PURE__ */ jsx48(Alert2, { colors: props.colors, description: CHIEF_LAUNCHER_GUIDANCE });
   switch (id) {
     case "overview":
       return /* @__PURE__ */ jsx48(OverviewSection, { ...props });
@@ -14221,6 +14214,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     }
   };
   const patchBot = (botId, patch) => {
+    if (botId === CHIEF_BOT_ID) return;
     patch = chiefPersonalizationPatch(botId, patch);
     setDrafts((current2) => {
       const base = current2[botId] ?? (latest.current.status === "ready" ? latest.current.values.bots.find((bot) => bot.id === botId) : void 0);
@@ -14238,6 +14232,7 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     void commit((values) => ({ ...values, ui: uiRef.current ?? next }));
   };
   const updateBot = (botId, patch, recordHistory = false) => {
+    if (botId === CHIEF_BOT_ID) return Promise.resolve(false);
     patch = chiefPersonalizationPatch(botId, patch);
     setDrafts((current2) => current2[botId] ? { ...current2, [botId]: { ...current2[botId], ...patch } } : current2);
     return commit((values) => {
@@ -14359,12 +14354,9 @@ function BotsSurfaceContent({ theme, layout, host: host2, navigation, nativeChat
     setDragWidths({});
     updateUi((current2) => ({ ...current2, [key]: Math.round(width) }));
   };
-  const allBots = settings.values.bots.map((bot) => {
-    const value = drafts2[bot.id] ?? bot;
-    return value.id === CHIEF_BOT_ID ? managedChiefBot(value) : value;
-  });
+  const allBots = userBots(settings.values.bots).map((bot) => drafts2[bot.id] ?? bot);
   const library = settings.values.library ?? EMPTY_LIBRARY;
-  const groups = settings.values.groups ?? [];
+  const groups = userSettings(settings.values).groups ?? [];
   const listed = allBots.filter((bot) => listUi.showArchived || !bot.archived).sort((a, b) => Number(b.pinned) - Number(a.pinned));
   const selectedBot = selection ? allBots.find((bot) => bot.id === selection.botId) : void 0;
   const archivedCount = allBots.filter((bot) => bot.archived).length;
@@ -14718,11 +14710,7 @@ Its chats stay on the host and remain in Paseo's history.`,
         setPanel({ open: true, section: "overview" });
       }
     }
-  ) : selectedBot?.id === CHIEF_BOT_ID ? /* @__PURE__ */ jsxs47(View45, { style: { flex: 1, padding: 24, gap: 16, backgroundColor: colors2.surface0 }, children: [
-    /* @__PURE__ */ jsx49(Text33, { style: { color: colors2.foreground, fontSize: ui(16) }, children: selectedBot.name }),
-    /* @__PURE__ */ jsx49(Text33, { style: { color: colors2.foregroundMuted, fontSize: ui(14) }, children: CHIEF_LAUNCHER_GUIDANCE }),
-    /* @__PURE__ */ jsx49(SettingsAction17, { label: "Chief personalization", actionLabel: "Open settings", onPress: () => setPanel({ open: true, section: null }) })
-  ] }) : selectedBot && selection ? /* @__PURE__ */ jsx49(
+  ) : selectedBot && selection ? /* @__PURE__ */ jsx49(
     SelectedChat,
     {
       colors: colors2,

@@ -1076,20 +1076,20 @@ function newBot(provider, template) {
 
 // shared/vibing-defaults.ts
 var CHIEF_BOT_ID = "vibing-chief";
-function managedChiefBot(saved) {
+function managedChiefBot() {
   const base = newBot("claude", BOT_TEMPLATES[0]);
   return {
     ...base,
     id: CHIEF_BOT_ID,
-    name: saved?.name ?? "Chief",
+    name: "Chief",
     provider: "claude",
     model: "sonnet",
     modeId: null,
     thinkingOptionId: null,
-    soul: saved?.soul ?? "",
-    skillIds: saved?.skillIds ?? [],
-    playbooks: saved?.playbooks ?? [],
-    avatar: saved?.avatar ?? { ...base.avatar, seed: CHIEF_BOT_ID },
+    soul: "",
+    skillIds: [],
+    playbooks: [],
+    avatar: { ...base.avatar, seed: CHIEF_BOT_ID },
     contactBots: "off",
     apps: [],
     appRules: {},
@@ -1099,8 +1099,8 @@ function managedChiefBot(saved) {
     cwd: null,
     hostId: null,
     archived: false,
-    createdAt: saved?.createdAt ?? "2026-11-07T00:00:00.000Z",
-    updatedAt: saved?.updatedAt ?? "2026-11-07T00:00:00.000Z"
+    createdAt: "2026-11-07T00:00:00.000Z",
+    updatedAt: "2026-11-07T00:00:00.000Z"
   };
 }
 function assertOrdinaryBot(botId) {
@@ -2225,6 +2225,18 @@ import { z as z9 } from "zod";
 // shared/proposals.ts
 import { z as z8 } from "zod";
 
+// shared/managed-chief-ui.ts
+function userBots(bots) {
+  return bots.filter((bot) => bot.id !== CHIEF_BOT_ID);
+}
+function userSettings(values) {
+  return { ...values, bots: userBots(values.bots), groups: values.groups?.map((group) => ({
+    ...group,
+    memberIds: group.memberIds.filter((id) => id !== CHIEF_BOT_ID),
+    leadId: group.leadId === CHIEF_BOT_ID ? null : group.leadId
+  })) };
+}
+
 // shared/changes.ts
 import { z as z7 } from "zod";
 
@@ -2734,7 +2746,7 @@ function byRef(items, ref, id, name, what) {
   const known = items.map(name).filter(Boolean);
   throw new Error(`There's no ${what} called "${wanted}".${known.length ? ` There are: ${known.slice(0, 30).join(", ")}.` : ""}`);
 }
-var findBot = (values, ref) => byRef(values.bots, ref, (bot) => bot.id, (bot) => bot.name, "bot");
+var findBot = (values, ref) => byRef(userBots(values.bots), ref, (bot) => bot.id, (bot) => bot.name, "bot");
 var findTeam = (values, ref) => byRef(values.groups ?? [], ref, (group) => group.id, (group) => group.name, "team");
 var findSkill = (library, ref) => byRef(library.skills, ref, (skill) => skill.id, (skill) => skill.id, "skill");
 var findServer = (library, ref) => byRef(library.mcpServers, ref, (server) => server.id, (server) => server.name, "MCP server");
@@ -3062,6 +3074,7 @@ function botLine(bot, values) {
   return `- ${bot.name} (id ${bot.id})${bot.title ? `: ${bot.title}` : ""}. ${parts.join("; ")}.`;
 }
 function setupOverview(values, providers, apps) {
+  values = userSettings(values);
   const library = values.library ?? EMPTY_LIBRARY;
   const groups = values.groups ?? [];
   const defaults = values.defaults ?? DEFAULT_BOT_DEFAULTS;
@@ -3225,7 +3238,7 @@ async function hostContext(host) {
 async function readValues(host) {
   const values = await host.values();
   if (!values) throw new Error("The bot settings can't be read right now. Try again in a moment.");
-  return values;
+  return userSettings(values);
 }
 var getSetup = defineTool({
   name: "get_setup",
@@ -3334,10 +3347,12 @@ var ChiefBroker = class {
     const candidate = BridgeToken.parse(token);
     if (!this.token || !timingSafeEqual(Buffer.from(sha256(this.token)), Buffer.from(sha256(candidate)))) throw new Error("Chief broker authorization failed");
   }
-  async prepare({ bridgeToken }) {
+  async prepare({ bridgeToken, agentId, cwd }) {
     BridgeToken.parse(bridgeToken);
     if (this.token === null) this.token = bridgeToken;
     this.authorize(bridgeToken);
+    const identity = { agentId: z12.string().min(1).max(200).parse(agentId), cwd: await realpath(z12.string().min(1).max(4096).parse(cwd)) };
+    this.identity = identity;
     const bot = await this.host.bot(CHIEF_BOT_ID);
     await safePath(memoryFilePath(CHIEF_BOT_ID, "MEMORY.md"));
     await ensureBotHome({ botId: CHIEF_BOT_ID });
@@ -3405,8 +3420,7 @@ ${skill.text}`).join("\n\n")}` : "");
     const cwd = await realpath(agent.cwd).catch(() => {
       throw new Error("Chief identity cwd is unavailable");
     });
-    if (this.identity && (this.identity.agentId !== input.agentId || this.identity.cwd !== cwd)) throw new Error("Chief identity or cwd mismatch");
-    this.identity ??= { agentId: input.agentId, cwd };
+    if (!this.identity || this.identity.agentId !== input.agentId || this.identity.cwd !== cwd) throw new Error("Chief identity or cwd mismatch");
     const bot = await this.host.bot(CHIEF_BOT_ID);
     if (input.tool === "read_memory" || input.tool === "write_memory") {
       const schema = z12.object({ name: MemoryName, ...input.tool === "write_memory" ? { text: z12.string().max(MAX_FILE_BYTES2) } : {} }).strict();
@@ -3713,7 +3727,7 @@ var commandRemoveRpc = defineRpc({
 var ChiefBridgeToken = z13.string().min(32).max(512);
 var chiefPrepareRpc = defineRpc({
   name: "bots.chief.prepare",
-  input: z13.object({ bridgeToken: ChiefBridgeToken }).strict(),
+  input: z13.object({ bridgeToken: ChiefBridgeToken, agentId: z13.string().min(1).max(200), cwd: z13.string().min(1).max(4096) }).strict(),
   output: z13.object({ botId: z13.literal("vibing-chief"), systemPrompt: z13.string() })
 });
 var chiefCallRpc = defineRpc({
@@ -5080,11 +5094,11 @@ var BotsHost = class {
     return (await this.values())?.library ?? EMPTY_LIBRARY;
   }
   async bots() {
-    return (await this.values())?.bots ?? [];
+    return userBots((await this.values())?.bots ?? []);
   }
   async bot(botId) {
-    const saved = (await this.bots()).find((bot) => bot.id === botId);
-    return botId === CHIEF_BOT_ID ? managedChiefBot(saved) : saved ?? null;
+    if (botId === CHIEF_BOT_ID) return managedChiefBot();
+    return (await this.bots()).find((bot) => bot.id === botId) ?? null;
   }
   /** A bot chat's bot, its current title (Paseo names chats after their first message), routine and labels; null for other agents. */
   async chatOf(agentId) {

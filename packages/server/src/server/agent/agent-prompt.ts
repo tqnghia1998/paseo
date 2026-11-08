@@ -19,14 +19,17 @@ export type AgentRunController = Pick<
   | "replaceAgentRun"
   | "steerOrReplaceActiveTurn"
   | "streamAgent"
-> & {
-  reloadAgentSession(agentId: string): Promise<unknown>;
-};
+> &
+  Partial<Pick<AgentManager, "streamIdleAgent">> & {
+    reloadAgentSession(agentId: string): Promise<unknown>;
+  };
 
 export interface StartAgentRunOptions {
   /** Called after selecting the run, before consuming its events. */
   onDispatch?: (disposition: PromptDispatchDisposition) => void;
   replaceRunning?: boolean;
+  /** Admit only a new idle, unarchived turn; never steer or replace. */
+  idleOnly?: boolean;
   activeTurnBehavior?: ActiveTurnBehavior;
   runOptions?: AgentRunOptions;
   /** Ask the provider to deny permissions blocking this steer. */
@@ -73,6 +76,13 @@ async function startOrReplaceRun(
   iterator: AsyncGenerator<import("./agent-sdk-types.js").AgentStreamEvent>;
   replaced: boolean;
 }> {
+  if (options?.idleOnly) {
+    if (!agentManager.streamIdleAgent) throw new Error("Idle-only dispatch is unavailable");
+    return {
+      iterator: await agentManager.streamIdleAgent(agentId, prompt, options.runOptions),
+      replaced: false,
+    };
+  }
   const replaced = Boolean(options?.replaceRunning && agentManager.hasInFlightRun(agentId));
   const iterator = replaced
     ? await agentManager.replaceAgentRun(agentId, prompt, options?.runOptions)
@@ -111,7 +121,10 @@ export async function startAgentRun(
   // Out-of-band commands (e.g. /goal pause) must run WITHOUT canceling an
   // in-flight turn — replaceAgentRun would interrupt the running turn. The
   // intercept lives at this layer so it covers every prompt entrypoint.
-  if (await agentManager.tryRunOutOfBand(agentId, prompt, options?.runOptions)) {
+  if (
+    !options?.idleOnly &&
+    (await agentManager.tryRunOutOfBand(agentId, prompt, options?.runOptions))
+  ) {
     options?.onDispatch?.("out_of_band");
     return { disposition: "out_of_band" };
   }
@@ -136,7 +149,9 @@ async function startAgentRunInner(
   options?: StartAgentRunOptions,
 ): Promise<{ disposition: PromptDispatchDisposition }> {
   const snapshot = agentManager.getAgent(agentId);
-  const steered = await steerOrReplaceActiveRun(agentManager, agentId, prompt, options);
+  const steered = options?.idleOnly
+    ? null
+    : await steerOrReplaceActiveRun(agentManager, agentId, prompt, options);
   if (steered?.disposition === "steered") {
     options?.onDispatch?.("steered");
     return steered;
@@ -159,7 +174,7 @@ async function startAgentRunInner(
       try {
         await drainAgentRunIterator(iterator);
       } catch (error) {
-        if (!isStaleProviderSessionError(error)) throw error;
+        if (options?.idleOnly || !isStaleProviderSessionError(error)) throw error;
         logger.info(
           { agentId, err: error },
           "Provider session went stale; reopening from persistence",
@@ -228,6 +243,8 @@ export interface SendPromptToAgentParams {
    * schedule fires, notify-on-finish).
    */
   unarchive?: boolean;
+  /** Strict system delivery: reject archived or busy chats instead of skipping/replacing. */
+  idleOnly?: boolean;
   /** See {@link StartAgentRunOptions.clearPendingPermissions}. */
   clearPendingPermissions?: boolean;
   logger: Logger;
@@ -306,6 +323,7 @@ async function resolvePromptSource(
  *
  * When `unarchive` is false and the agent is archived, the call is a silent
  * no-op (returns the normal turn-start disposition) — the agent is not run.
+ * idleOnly opts into strict admission and rejects archived/busy agents instead.
  */
 export async function sendPromptToAgent(
   params: SendPromptToAgentParams,
@@ -331,6 +349,7 @@ export async function sendPreparedPromptToAgent(
   let archivedAtToRestore: string | null = null;
   if (record?.archivedAt) {
     if (!unarchive) {
+      if (params.idleOnly) throw new Error("Agent is archived");
       return { disposition: "turn_started" };
     }
     if (await unarchiveAgentState(params.agentStorage, params.agentManager, params.agentId)) {
@@ -358,7 +377,8 @@ export async function sendPreparedPromptToAgent(
   }
 
   return await startAgentRun(params.agentManager, params.agentId, params.prompt, params.logger, {
-    replaceRunning: true,
+    replaceRunning: !params.idleOnly,
+    idleOnly: params.idleOnly,
     onDispatch: params.onDispatch,
     activeTurnBehavior: params.activeTurnBehavior,
     clearPendingPermissions: params.clearPendingPermissions,

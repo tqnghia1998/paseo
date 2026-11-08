@@ -2192,6 +2192,50 @@ export class AgentManager {
     );
   }
 
+  private readonly idleDeletes = new Set<string>();
+
+  /** Reject busy work and exclude new run admission until permanent deletion finishes. */
+  async deleteIdleAgent(
+    agentId: string,
+    eligible: (record: StoredAgentRecord) => boolean = () => true,
+  ): Promise<void> {
+    return this.runLifecycleMutation(agentId, async () => {
+      const registry = this.requireRegistry();
+      const record = await registry.get(agentId);
+      if (!record || record.archivedAt || !eligible(record)) {
+        throw new Error("Agent is missing, archived or protected");
+      }
+      const idle = () => {
+        const agent = this.getAgent(agentId);
+        return (
+          !this.runs.hasRun(agentId) &&
+          (!agent ||
+            (agent.lifecycle !== "running" &&
+              agent.lifecycle !== "initializing" &&
+              !agent.activeForegroundTurnId &&
+              !agent.activeTurnId &&
+              !agent.pendingPermissions.size &&
+              !agent.pendingReplacement &&
+              !agent.inFlightPermissionResponses.size))
+        );
+      };
+      if (!idle()) throw new Error("Agent is busy or waiting for permission");
+      this.idleDeletes.add(agentId);
+      try {
+        if (this.agents.has(agentId) && !(await this.closeAgentRuntime(agentId, idle))) {
+          throw new Error("Agent became busy before deletion");
+        }
+        registry.beginDelete(agentId);
+        await this.flush();
+        await registry.remove(agentId);
+        await this.deleteAgentState(agentId);
+        this.notifyAgentRemoved(record);
+      } finally {
+        this.idleDeletes.delete(agentId);
+      }
+    });
+  }
+
   closeAgent(agentId: string): Promise<void> {
     const existing = this.inFlightAgentCloses.get(agentId);
     if (existing) {
@@ -2483,12 +2527,19 @@ export class AgentManager {
     });
   }
 
+  private assertUserRuntimeConfiguration(agentId: string): void {
+    if (this.hostManagedSession?.workspaceId(agentId)) {
+      throw new Error("This agent's configuration is managed by its host source code.");
+    }
+  }
+
   // Mode, model, thinking and options change inside the agent's lifecycle lane, like every other
   // mutation of one agent. A provider session therefore never has two of `setMode`, `setModel`,
   // `setThinkingOption` and `applyOptions` in flight at once, and none of them overlaps an open,
   // reload or close; providers do no sequencing of their own.
 
   async setAgentMode(agentId: string, modeId: string): Promise<AgentProviderNotice | null> {
+    this.assertUserRuntimeConfiguration(agentId);
     return this.runLifecycleMutation(agentId, async () => {
       const agent = await this.ensureInteractiveSessionUnlocked(agentId);
       const notice = (await agent.session.setMode(modeId)) ?? null;
@@ -2507,10 +2558,12 @@ export class AgentManager {
   }
 
   async setAgentModel(agentId: string, modelId: string | null): Promise<void> {
+    this.assertUserRuntimeConfiguration(agentId);
     return this.runLifecycleMutation(agentId, async () => {
       const agent = await this.ensureInteractiveSessionUnlocked(agentId);
       const normalizedModelId =
         typeof modelId === "string" && modelId.trim().length > 0 ? modelId : null;
+
 
       const selection = await agent.session.setModel?.(normalizedModelId);
       await this.drainSessionEvents(agentId);
@@ -2533,12 +2586,14 @@ export class AgentManager {
     agentId: string,
     thinkingOptionId: string | null,
   ): Promise<AgentProviderNotice | null> {
+    this.assertUserRuntimeConfiguration(agentId);
     return this.runLifecycleMutation(agentId, async () => {
       const agent = await this.ensureInteractiveSessionUnlocked(agentId);
       const normalizedThinkingOptionId =
         typeof thinkingOptionId === "string" && thinkingOptionId.trim().length > 0
           ? thinkingOptionId
           : null;
+
 
       let notice: AgentProviderNotice | null = null;
       if (agent.session.setThinkingOption) {
@@ -2572,6 +2627,7 @@ export class AgentManager {
    * one step once the provider accepts. Patches to one agent run one at a time, in arrival order.
    */
   async setAgentOptions(agentId: string, requested: ProviderOptionsPatch): Promise<void> {
+    this.assertUserRuntimeConfiguration(agentId);
     return this.runLifecycleMutation(agentId, async () => {
       const agent = await this.ensureInteractiveSessionUnlocked(agentId);
       const patch = this.convertLegacyOptions(agent.provider, requested);
@@ -2609,6 +2665,7 @@ export class AgentManager {
       this.emitState(agent);
     });
   }
+
 
   /** The config as the opened session left it: its own difference from the options it was given. */
   private withOpenedOptions(input: {
@@ -3113,6 +3170,7 @@ export class AgentManager {
       });
     }
     const agent = await this.ensureInteractiveSession(agentId);
+    if (this.idleDeletes.has(agentId)) throw new Error("Agent is being deleted");
     // Providers parse slash commands from the raw text, so a command another agent sent
     // must reach them without its sender envelope.
     const agentMessage = typeof prompt === "string" ? parseAgentMessage(prompt) : null;
@@ -3286,11 +3344,39 @@ export class AgentManager {
     yield* this.streamAgent(agentId, prompt, options);
   }
 
+  /** Serialize archive eligibility with lifecycle mutations, then reserve the run synchronously. */
+  async streamIdleAgent(
+    agentId: string,
+    prompt: AgentPromptInput,
+    options?: AgentRunOptions,
+  ): Promise<AsyncGenerator<AgentStreamEvent>> {
+    return this.runLifecycleMutation(agentId, async () => {
+      const record = await this.requireRegistry().get(agentId);
+      if (!record || record.archivedAt) throw new Error("Agent is archived or missing");
+      const agent = this.requireSessionAgent(agentId);
+      if (
+        agent.pendingPermissions.size ||
+        agent.lifecycle === "running" ||
+        agent.activeForegroundTurnId ||
+        this.runs.hasRun(agentId)
+      ) {
+        throw new Error("Agent is busy or waiting for permission");
+      }
+      // Ordinary streamAgent can defer admission while recovering a runtime. Strict
+      // delivery must fail instead of claiming success before a later eligibility check.
+      if (this.collectingRuntimes.has(agentId) || this.historySessions.has(agent.session)) {
+        throw new Error("Agent runtime is not ready");
+      }
+      return this.streamAgent(agentId, prompt, options);
+    });
+  }
+
   streamAgent(
     agentId: string,
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): AsyncGenerator<AgentStreamEvent> {
+    if (this.idleDeletes.has(agentId)) throw new Error("Agent is being deleted");
     if (this.collectingRuntimes.has(agentId) || (!this.agents.has(agentId) && this.registry))
       return this.streamAfterRuntimeCollection(agentId, prompt, options);
     const existingAgent = this.requireSessionAgent(agentId);

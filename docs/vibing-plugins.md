@@ -6,19 +6,19 @@ is the per-plugin reference and the upgrade procedure.
 
 ## What ships
 
-| Plugin                                            | Source and pin                                                                                         | Version       | Ships as                   | Modified                                         |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------- | -------------------------- | ------------------------------------------------ |
-| Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `39a7000`                                    | 0.2.0         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch`       |
-| Claude usage (`claude-usage-source`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                               |
-| Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                      |
-| AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                       |
-| Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                       |
-| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `41395d5`                  | 0.9.1         | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch`    |
-| Annotations (`annotations`)                       | [neunzig-zehn/paseo-annotations](https://github.com/neunzig-zehn/paseo-annotations) `b921586`          | 0.1.0         | Community install          | Yes: `scripts/annotations-vibing.patch`          |
-| Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`                |
-| Recap (`paseo-recap`)                             | [kingsleydon/paseo-plugins](https://github.com/kingsleydon/paseo-plugins) `plugins/recap` `ceb91be`    | 0.2.5         | Community install          | Small: `scripts/paseo-recap-vibing.patch`        |
-| PDF and Office viewer (`paseo-doc-viewer`)        | [nkwib/paseo-doc-viewer](https://github.com/nkwib/paseo-doc-viewer) `0f39c81`                          | 0.7.0         | Community install          | Cleanup: `scripts/paseo-doc-viewer-vibing.patch` |
-| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `af07fc9` | 1.4.0         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`       |
+| Plugin                                            | Source and pin                                                                                         | Version       | Ships as                   | Modified                                      |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------- | -------------------------- | --------------------------------------------- |
+| Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `39a7000`                                    | 0.2.0         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch`    |
+| Claude usage (`claude-usage-source`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                            |
+| Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
+| AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
+| Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
+| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `41395d5`                  | 0.9.1         | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
+| Annotations (`annotations`)                       | [neunzig-zehn/paseo-annotations](https://github.com/neunzig-zehn/paseo-annotations) `b921586`          | 0.1.0         | Community install          | Yes: `scripts/annotations-vibing.patch`       |
+| Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`             |
+| Recap (`paseo-recap`)                             | [kingsleydon/paseo-plugins](https://github.com/kingsleydon/paseo-plugins) `plugins/recap` `ceb91be`    | 0.2.5         | Community install          | Small: `scripts/paseo-recap-vibing.patch`     |
+| PDF and Office viewer (`paseo-doc-viewer`)        | [nkwib/paseo-doc-viewer](https://github.com/nkwib/paseo-doc-viewer) `0f39c81`                          | 0.7.0         | Community install          | `scripts/paseo-doc-viewer-vibing.patch`       |
+| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `af07fc9` | 1.4.0         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`    |
 
 - **Built in:** listed in `builtinPlugins` (`packages/server/src/server/plugins/builtin/index.ts`);
   the bundler copies them beside `server.mjs` and the daemon always loads them.
@@ -43,6 +43,11 @@ The pins live in `scripts/vendor-community-plugins.mjs`, which fetches each sour
 patch, inlines reviewed npm dependencies from the public registry, and writes the generated
 bundles, manifest, licenses and an attribution README into `plugins/<id>/`. Never edit those
 generated files by hand.
+
+A patch change does nothing until its plugin is regenerated (`node scripts/vendor-community-plugins.mjs
+<id>`) and the host bundle is rebuilt. This matters most for the Bots patch: the daemon's Chief broker
+sends `bots.chief.prepare` the agent id and folder, and the plugin's strict schema rejects a bundle that
+lacks them, which leaves Chief unable to connect.
 
 ## Modifications
 
@@ -98,6 +103,12 @@ to one worktree per frame and to the host's native chat.
   too, in the same chat context, so the other bot's chat is listed beside it and its permission
   prompts can be answered (`server/tools/bots.ts`). Bots' own folders and routines keep the target
   bot's placement.
+- **Source-owned Chief UI.** The reserved Chief is excluded from the Bots sidebar,
+  settings, setup details/proposals, team membership views and exports. Saved identity,
+  instructions, skill/playbook assignments and runtime settings do not override the
+  source-defined `managedChiefBot`; its internal memory remains available through the
+  host broker. Ordinary Bots remain user-configurable. This lives in the maintained
+  Bots vendor patch and requires a permitted plugin refresh to activate.
 - **Managed Chief.** `vibing-chief` is a reserved, host-managed persona: ordinary launches,
   routines and relay tools reject it (`assertOrdinaryBot`). The daemon-only broker
   (`server/chief.ts`, `bots.chief.prepare|call|handoff`, bridge-token gated) serves Chief's
@@ -155,6 +166,24 @@ numbers, instead of an anchor that opens a Paseo file tab. Regressions:
 The automatic Claude model is the CLI's `haiku` alias (`server/models.ts`), which honours
 `ANTHROPIC_DEFAULT_HAIKU_MODEL`. The company gateway maps Haiku to an older model and rejects the
 newest Haiku's reasoning-effort setting, so the full model ID would fail.
+
+### PDF and Office viewer (`scripts/paseo-doc-viewer-vibing.patch`)
+
+The document-viewer vendor patch filters untouched tracked assets from newly discovered
+clones and linked worktrees before generating turn cards. A bounded, read-only Git check
+(at most 16 repositories, 2 s per command) compares against the creation commit and keeps
+modified, staged, later-committed and untracked documents (including ignored generated
+files). Fresh git-init repositories remain authored work rather than checkout baselines.
+Existing checkout edits keep the timestamp/revision comparison. Unknown Git state keeps
+files visible. The scan root is never classified as a newly created checkout.
+Folder controls say **Show files / Hide files** and file controls say **Open file**
+(`client/turn-docs-card.tsx`). The patch also drops a few unused imports and helpers.
+Vibing's Chief opens documents in this plugin's `document` surface through the frame's
+`space:chief-open-document` bridge (see [Vibing Chief](./vibing-patches.md#vibing-chief)).
+
+Tests for this change live in the patch (`test/checkout-baseline.test.ts`). Apply the
+patch to the pinned upstream source to run them. Regenerate the plugin through the normal
+vendor workflow when a bundle refresh is permitted; generated plugin output is not edited.
 
 ## Upgrading
 

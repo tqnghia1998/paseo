@@ -8196,7 +8196,7 @@ function FileThumbnail({ file, state, size, palette, theme }) {
 function GroupRow({ group, open, size, styles, theme, onToggle }) {
   const folder = parentDir(group.path);
   const { detail, spoken } = TURN_GROUP[group.reason];
-  const action = open ? "Hide" : "Show";
+  const action = open ? "Hide files" : "Show files";
   return /* @__PURE__ */ jsxs26(
     View28,
     {
@@ -8221,7 +8221,7 @@ function GroupRow({ group, open, size, styles, theme, onToggle }) {
             styles,
             icon: open ? "ChevronUp" : "ChevronDown",
             label: action,
-            accessibilityLabel: `Show or hide ${group.path}, ${spoken}, ${group.count} ${group.count === 1 ? "document" : "documents"}`,
+            accessibilityLabel: `Show or hide files in ${group.path}, ${spoken}, ${group.count} ${group.count === 1 ? "document" : "documents"}`,
             expanded: open,
             onPress: onToggle
           }
@@ -8255,7 +8255,7 @@ function FileRow3({ file, within, thumbnail, pill, palette, size, styles, theme,
           {
             theme,
             styles,
-            label: "Open",
+            label: "Open file",
             accessibilityLabel: `Open ${file.path}, ${KIND_LABEL[file.kind]}, ${spoken}`,
             onPress: onOpen
           }

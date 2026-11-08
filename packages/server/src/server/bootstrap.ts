@@ -3,8 +3,9 @@ import { createRestartRecovery } from "./agent/restart-recovery/index.js";
 import { createChiefSession } from "../patches/vibing/chief-session.js";
 import { createChiefTools } from "../patches/vibing/chief-tools.js";
 import { registerChiefRoutes } from "../patches/vibing/chief-http.js";
-import { createChiefChats } from "../patches/vibing/chief-chats.js";
+import { createChiefChats, isChiefBotChat } from "../patches/vibing/chief-chats.js";
 import { createChiefBotBridge } from "../patches/vibing/chief-bot.js";
+import { verifyChiefReviewWorkspace } from "../patches/vibing/chief-review-workspace.js";
 import { createChiefHandoffs } from "../patches/vibing/chief-handoffs.js";
 import { ensureAgentLoaded } from "./agent/agent-loading.js";
 import { sendPromptToAgent, unarchiveAgentState } from "./agent/agent-prompt.js";
@@ -1053,9 +1054,10 @@ export async function createPaseoDaemon(
   // The same steps as the user's own Delete (see Session.handleDeleteAgentRequest).
   const deleteAgentLikeUser = async (id: string) => {
     const known = agentManager.getAgent(id) ?? (await agentStorage.get(id));
-    if ("beginDelete" in agentStorage && typeof agentStorage.beginDelete === "function")
-      (agentStorage as { beginDelete(agentId: string): void }).beginDelete(id);
-    await closeAgentCommand({ agentManager }, id).catch(() => undefined);
+    // Failed provider closure retains its runtime and must remain retryable. Do not
+    // tombstone its persistence or discard its history until closure succeeds.
+    await closeAgentCommand({ agentManager }, id);
+    agentStorage.beginDelete(id);
     await agentManager.flush();
     await agentStorage.remove(id);
     await agentManager.deleteAgentState(id);
@@ -1083,7 +1085,7 @@ export async function createPaseoDaemon(
         background: true,
       }),
     loadAgent: (id) => ensureAgentLoaded(id, { agentManager, agentStorage, logger }),
-    prepareBot: () => chiefBot.prepare(),
+    prepareBot: (identity) => chiefBot.prepare(identity),
     deleteAgent: deleteAgentLikeUser,
   });
   const chiefHandoffs = createChiefHandoffs({
@@ -1091,6 +1093,7 @@ export async function createPaseoDaemon(
     agentManager: {
       getAgent: (id) => agentManager.getAgent(id),
       getTimeline: (id) => agentManager.getTimeline(id),
+      hasInFlightRun: (id) => agentManager.hasInFlightRun(id),
     },
     tools: chiefTools,
     handoffKey: () => chiefSession.handoffKey(),
@@ -1102,6 +1105,7 @@ export async function createPaseoDaemon(
       return { workspaceId: workspace.workspaceId };
     },
     startChat: (input) => chiefBot.handoff(input),
+    verifyReviewWorkspace: verifyChiefReviewWorkspace,
   });
   // Read immutable ownership before either automatic recovery mechanism runs.
   await chiefSession.initialize();
@@ -1449,11 +1453,15 @@ export async function createPaseoDaemon(
       agentStorage,
       agentManager,
       chiefOwns: (id) => chiefSession.owns(id),
+      isCanceled: chiefHandoffs.isCanceled,
       readRows: async (id) => {
         await ensureAgentLoaded(id, { agentManager, agentStorage, logger });
         return agentManager.getTimelineRows(id);
       },
-      deleteAgent: deleteAgentLikeUser,
+      deleteAgent: (id) =>
+        agentManager.deleteIdleAgent(id, (record) =>
+          isChiefBotChat(record, (candidate) => chiefSession.owns(candidate)),
+        ),
       send: async (id, text) => {
         // A message from Chief never answers a permission the Bot is waiting on.
         await sendPromptToAgent({
@@ -1463,6 +1471,7 @@ export async function createPaseoDaemon(
           agentStorage,
           logger,
           unarchive: false,
+          idleOnly: true,
           clearPendingPermissions: false,
         });
       },

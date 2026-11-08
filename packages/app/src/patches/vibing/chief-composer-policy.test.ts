@@ -3,13 +3,16 @@ import { resolve } from "node:path";
 import { expect, it } from "vitest";
 
 // Source-level guard, like focus-mode.test.tsx: the Chief frame must never offer the
-// model/mode/feature controls. The daemon ceiling is authoritative; this keeps the UI honest.
+// model/mode/feature controls. The daemon refuses user changes to Chief; this keeps the UI honest.
 const composer = readFileSync(resolve(__dirname, "../../composer/index.tsx"), "utf8");
 
-it("shows the agent controls in the Chief frame, so the user chooses its model and mode", () => {
-  // Chief is a plain agent now; the controls are the normal ones, with no Chief-only gate.
-  expect(composer).toContain("showAgentControls: mode.showAgentControls,");
-  expect(composer).not.toContain("isEmbeddedChiefView");
+it("hides the agent controls in the Chief frame: its model and mode are owned by source", () => {
+  // The panel locks the composer for the embedded Chief view and the composer drops the
+  // controls; the daemon refuses user changes to a host-managed agent either way.
+  expect(composer).toContain("showAgentControls: mode.showAgentControls && !configurationLocked,");
+  expect(readFileSync(resolve(__dirname, "../../panels/agent-panel.tsx"), "utf8")).toContain(
+    "configurationLocked={isEmbeddedChiefView}",
+  );
 });
 
 it("keeps every client call that changes a session's model, mode or features inside the controls", () => {

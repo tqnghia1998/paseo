@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { expect, test, vi } from "vitest";
 import type { StoredAgentRecord } from "../../server/agent/agent-storage.js";
 import {
@@ -8,6 +8,7 @@ import {
   HANDOFF_LABEL,
   HANDOFF_WORKSPACE_LABEL,
 } from "./chief-handoffs.js";
+import { createChiefChats } from "./chief-chats.js";
 import { createChiefTools } from "./chief-tools.js";
 
 const mergeRequest = {
@@ -26,8 +27,8 @@ const apps = [
   {
     id: "app",
     name: "App",
-    gitRepo: "",
-    workspaces: [{ id: "tab", name: "Feature", cwd: "/repo/feature" }],
+    gitRepo: "https://git.example.test/team/repo",
+    workspaces: [{ id: "tab", name: mergeRequest.sourceBranch, cwd: "/repo/feature" }],
   },
 ];
 
@@ -74,32 +75,37 @@ async function fixture(options: { said?: string } = {}) {
       return { chatId: input.agentId };
     },
   );
-  const handoffs = createChiefHandoffs({
-    agentStorage: {
-      get: async (id: string) => records.get(id) ?? null,
-      listActive: async () => [...records.values()].filter((record) => !record.archivedAt),
-    } as never,
-    agentManager: {
-      getAgent: (id: string) => (live.has(id) ? { id, ...live.get(id)! } : null),
-      getTimeline: (id: string) => {
-        if (id !== "chief") throw new Error("Unknown agent");
-        return [
-          { type: "user_message", text: "a stale request" },
-          { type: "assistant_message", text: "Done." },
-          { type: "user_message", text: "use the App repository" },
-          { type: "assistant_message", text: "Which Bot?" },
-          { type: "user_message", text: "Reviewer" },
-          { type: "user_message", text: said },
-          { type: "assistant_message", text: "On it." },
-        ];
-      },
-    } as never,
-    tools,
-    handoffKey: () => key,
-    chiefId: () => "chief",
-    paseoWorkspace: async (cwd) => ({ workspaceId: `wks:${cwd}` }),
-    startChat,
-  });
+  const verifyReviewWorkspace = vi.fn(async (_cwd: string, _review: typeof mergeRequest) => {});
+  const createService = () =>
+    createChiefHandoffs({
+      agentStorage: {
+        get: async (id: string) => records.get(id) ?? null,
+        listActive: async () => [...records.values()].filter((record) => !record.archivedAt),
+      } as never,
+      agentManager: {
+        hasInFlightRun: () => false,
+        getAgent: (id: string) => (live.has(id) ? { id, ...live.get(id)! } : null),
+        getTimeline: (id: string) => {
+          if (id !== "chief") throw new Error("Unknown agent");
+          return [
+            { type: "user_message", text: "a stale request" },
+            { type: "assistant_message", text: "Done." },
+            { type: "user_message", text: "use the App repository" },
+            { type: "assistant_message", text: "Which Bot?" },
+            { type: "user_message", text: "Reviewer" },
+            { type: "user_message", text: said },
+            { type: "assistant_message", text: "On it." },
+          ];
+        },
+      } as never,
+      tools,
+      handoffKey: () => key,
+      chiefId: () => "chief",
+      paseoWorkspace: async (cwd) => ({ workspaceId: `wks:${cwd}` }),
+      startChat,
+      verifyReviewWorkspace,
+    });
+  const handoffs = createService();
   const resolving = tools.resolveMergeRequest(mergeRequest.url);
   tools.ack(tools.poll({ apps })[0]!.id, {
     outcome: "resolved",
@@ -114,6 +120,9 @@ async function fixture(options: { said?: string } = {}) {
     records,
     live,
     startChat,
+    createService,
+    verifyReviewWorkspace,
+    key,
     resolutionId: resolution.resolutionId,
     say: (text: string) => {
       said = text;
@@ -183,7 +192,8 @@ test("Chief writes the task itself, but it cannot be empty", async () => {
       workspaceId: "wks:/repo/feature",
       titleSuffix: "Review !12",
       labels: {
-        [HANDOFF_LABEL]: expect.stringMatching(/^v1\.[a-f0-9]{64}$/),
+        [HANDOFF_LABEL]: expect.stringMatching(/^v2\.[a-f0-9]{64}$/),
+        ["paseo-chief.task-digest"]: expect.stringMatching(/^[a-f0-9]{64}$/),
         [HANDOFF_APP_LABEL]: "app",
         [HANDOFF_WORKSPACE_LABEL]: "tab",
       },
@@ -336,3 +346,222 @@ test("handoffs list only signed, unarchived chats, newest first, with live statu
   await expect(handoffs.checkFeatureTask(newest)).rejects.toThrow("Unknown feature task");
   await expect(handoffs.checkFeatureTask(forged)).rejects.toThrow("Unknown feature task");
 });
+
+test("a review refuses a saved workspace on another branch before checking the checkout or starting a Bot", async () => {
+  const { handoffs, tools, resolutionId, verifyReviewWorkspace, startChat } = await fixture();
+  tools.updateInventory({
+    apps: [
+      { ...apps[0], workspaces: [{ id: "tab", name: "unrelated/branch", cwd: "/repo/feature" }] },
+    ],
+  });
+  await expect(
+    handoffs.startFeatureTask({
+      requestId: randomUUID(),
+      appId: "app",
+      workspaceId: "tab",
+      bot: "Reviewer",
+      kind: "review-merge-request",
+      resolutionId,
+      instruction: "Review the login MR",
+    }),
+  ).rejects.toThrow(/branch|workspace/i);
+  expect(verifyReviewWorkspace).not.toHaveBeenCalled();
+  expect(startChat).not.toHaveBeenCalled();
+});
+
+test("a review checks the actual checkout before claiming its branch in the prompt", async () => {
+  const { handoffs, tools, resolutionId, verifyReviewWorkspace, startChat } = await fixture();
+  tools.updateInventory({
+    apps: [
+      {
+        ...apps[0],
+        workspaces: [{ id: "tab", name: mergeRequest.sourceBranch, cwd: "/repo/feature" }],
+      },
+    ],
+  });
+  verifyReviewWorkspace.mockRejectedValueOnce(
+    new Error("Actual checkout branch or repository does not match"),
+  );
+  await expect(
+    handoffs.startFeatureTask({
+      requestId: randomUUID(),
+      appId: "app",
+      workspaceId: "tab",
+      bot: "Reviewer",
+      kind: "review-merge-request",
+      resolutionId,
+      instruction: "Review the login MR",
+    }),
+  ).rejects.toThrow(/checkout|branch|repository/i);
+  expect(verifyReviewWorkspace).toHaveBeenCalledWith(
+    "/repo/feature",
+    expect.objectContaining({ sourceBranch: "feature/login", sourceRepository: "team/repo" }),
+  );
+  expect(startChat).not.toHaveBeenCalled();
+});
+
+test.each([
+  { bot: "Another Bot" },
+  { kind: "commit" },
+  { instruction: "A completely different task" },
+  { resolutionId: "11111111-1111-4111-8111-111111111111" },
+])(
+  "a persisted requestId refuses a different task after the service is reconstructed: %j",
+  async (change) => {
+    const { handoffs, createService, startChat } = await fixture();
+    const request = {
+      requestId: randomUUID(),
+      appId: "app",
+      workspaceId: "tab",
+      bot: "Reviewer",
+      kind: "implement",
+      instruction: "Add a logout button",
+    };
+    const first = await handoffs.startFeatureTask(request);
+    const restored = createService();
+    expect(await restored.startFeatureTask(request)).toEqual(first);
+    await expect(restored.startFeatureTask({ ...request, ...change })).rejects.toThrow(
+      /requestId|fresh UUID|task/i,
+    );
+    expect(startChat).toHaveBeenCalledOnce();
+  },
+);
+
+test("legacy handoffs without a stored task digest remain visible but cannot be claimed as an exact retry", async () => {
+  const { handoffs, createService, records, startChat, key } = await fixture();
+  const request = {
+    requestId: randomUUID(),
+    appId: "app",
+    workspaceId: "tab",
+    bot: "Reviewer",
+    kind: "implement",
+    instruction: "Add a logout button",
+  };
+  const first = await handoffs.startFeatureTask(request);
+  const labels = records.get(first.chatId)!.labels;
+  delete labels["paseo-chief.task-digest"];
+  labels[HANDOFF_LABEL] = `v1.${createHmac("sha256", key)
+    .update(JSON.stringify(["chief-handoff-v1", first.chatId, "app", "tab"]))
+    .digest("hex")}`;
+  const restored = createService();
+  expect((await restored.list()).map((task) => task.chatId)).toContain(first.chatId);
+  await expect(restored.startFeatureTask(request)).rejects.toThrow(
+    /requestId|fresh UUID|task|legacy|digest/i,
+  );
+  expect(startChat).toHaveBeenCalledOnce();
+});
+
+test("an archived handoff cannot report a successful task retry", async () => {
+  const { handoffs, createService, records, startChat } = await fixture();
+  const request = {
+    requestId: randomUUID(),
+    appId: "app",
+    workspaceId: "tab",
+    bot: "Reviewer",
+    kind: "implement",
+    instruction: "Add a logout button",
+  };
+  const first = await handoffs.startFeatureTask(request);
+  records.get(first.chatId)!.archivedAt = new Date().toISOString();
+  await expect(createService().startFeatureTask(request)).rejects.toThrow(
+    /archived|fresh UUID|task/i,
+  );
+  expect(startChat).toHaveBeenCalledOnce();
+});
+
+test("changing a persisted digest without its host signature cannot claim another task", async () => {
+  const { handoffs, createService, records } = await fixture();
+  const request = {
+    requestId: randomUUID(),
+    appId: "app",
+    workspaceId: "tab",
+    bot: "Reviewer",
+    kind: "implement",
+    instruction: "Original task",
+  };
+  await handoffs.startFeatureTask(request);
+  records.get(request.requestId)!.labels["paseo-chief.task-digest"] = "0".repeat(64);
+  await expect(createService().startFeatureTask(request)).rejects.toThrow(/fresh UUID|requestId/);
+});
+
+test("handoff and chat tools share cancellation status until the next turn", async () => {
+  const { handoffs, records, live } = await fixture();
+  const request = {
+    requestId: randomUUID(),
+    appId: "app",
+    workspaceId: "tab",
+    bot: "Reviewer",
+    kind: "implement",
+    instruction: "A task",
+  };
+  await handoffs.startFeatureTask(request);
+  Object.assign(live.get(request.requestId)!, { lifecycle: "idle", activeTurnId: null });
+  const chats = createChiefChats({
+    agentStorage: {
+      get: async (id: string) => records.get(id) ?? null,
+      listActive: async () => [...records.values()],
+    },
+    agentManager: { getAgent: (id: string) => live.get(id) ?? null },
+    chiefOwns: () => false,
+    isCanceled: handoffs.isCanceled,
+    readRows: async () => [],
+    send: async () => {},
+    deleteAgent: async () => {},
+  } as never);
+  handoffs.observe({
+    type: "agent_stream",
+    agentId: request.requestId,
+    event: { type: "turn_canceled" },
+  } as never);
+  expect((await handoffs.checkFeatureTask(request.requestId)).status).toBe("failed");
+  expect((await chats.list({})).chats[0]!.status).toBe("failed");
+  handoffs.observe({
+    type: "agent_stream",
+    agentId: request.requestId,
+    event: { type: "turn_started" },
+  } as never);
+  expect((await handoffs.checkFeatureTask(request.requestId)).status).toBe("idle");
+  expect((await chats.list({})).chats[0]!.status).toBe("idle");
+});
+
+test.each(["implement", "commit"] as const)(
+  "%s verifies the selected workspace branch and repository before dispatch",
+  async (kind) => {
+    const { handoffs, verifyReviewWorkspace, startChat } = await fixture();
+    await handoffs.startFeatureTask({
+      requestId: randomUUID(),
+      appId: "app",
+      workspaceId: "tab",
+      bot: "Reviewer",
+      kind,
+      instruction: "Work in the selected feature workspace",
+    });
+    expect(verifyReviewWorkspace).toHaveBeenCalledWith(
+      "/repo/feature",
+      expect.objectContaining({
+        sourceBranch: "feature/login",
+        sourceRepository: "https://git.example.test/team/repo",
+      }),
+    );
+    expect(startChat).toHaveBeenCalledTimes(1);
+  },
+);
+
+test.each(["implement", "commit"] as const)(
+  "%s refuses a checkout mismatch before launching the Bot",
+  async (kind) => {
+    const { handoffs, verifyReviewWorkspace, startChat } = await fixture();
+    verifyReviewWorkspace.mockRejectedValueOnce(new Error("Actual checkout branch is main"));
+    await expect(
+      handoffs.startFeatureTask({
+        requestId: randomUUID(),
+        appId: "app",
+        workspaceId: "tab",
+        bot: "Reviewer",
+        kind,
+        instruction: "Work in the selected feature workspace",
+      }),
+    ).rejects.toThrow(/checkout|branch/);
+    expect(startChat).not.toHaveBeenCalled();
+  },
+);

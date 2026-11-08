@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_PASEO_EMBEDDED_FOCUS = "true";
 });
+// chief-host wires the document bridge to the plugin registry; these tests are about the handshake.
+vi.mock("@/plugins/registry", () => ({ pluginRegistry: { getSnapshot: () => [] } }));
+vi.mock("@/plugins/navigation", () => ({
+  createPluginNavigation: () => ({ openSurface: vi.fn() }),
+}));
 vi.mock("@/stores/session-store", () => ({
   useSessionStore: { getState: () => ({ sessions: {} }) },
 }));
