@@ -65,6 +65,10 @@ describe("Chief quick actions", () => {
     const empty = view.slice(view.indexOf("function renderListEmptyComponent"));
     expect(empty.indexOf("isEmbeddedChiefView")).toBeGreaterThan(-1);
     expect(empty.indexOf("<ChiefQuickActions />")).toBeLessThan(empty.indexOf("emptyStateText"));
+    // The web list never renders `listEmptyComponent`, so the chips are also laid over the
+    // transcript; without this they only ever showed on native.
+    expect(view).toContain("isEmbeddedChiefView && listEmptyComponent");
+    expect(view).toContain("chiefEmptyOverlay");
     const bridge = readFileSync(resolve(__dirname, "./composer-bridge.ts"), "utf8");
     expect(bridge).toContain("enabled && isEmbeddedChiefView && !isComposerLocked && !readOnly");
   });
