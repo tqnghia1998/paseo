@@ -15,8 +15,6 @@ export const HANDOFF_WORKSPACE_LABEL = "paseo-chief.workspace";
 export const HANDOFF_BOT_NAME_LABEL = "paseo-chief.bot-name";
 const MAX_LISTED = 20;
 const WORKSPACE_WAIT_MS = 15_000;
-/** How many of the user's latest messages Chief may quote from. */
-const QUOTABLE_MESSAGES = 3;
 
 export const StartFeatureTaskInput = z
   .object({
@@ -81,7 +79,7 @@ export function buildFeatureTaskMessage(
     | { kind: "implement"; instruction: string }
     | { kind: "commit"; instruction: string },
 ): { prompt: string; titleSuffix: string } {
-  const quote = `The user's own words, quoted verbatim:\n${fenced(input.instruction.trim())}`;
+  const quote = `The task, from Chief (the user's request and what Chief found out for it):\n${fenced(input.instruction.trim())}`;
   if (input.kind === "implement") {
     const short = normalizeSpace(input.instruction);
     return {
@@ -169,25 +167,6 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
     const stored = await deps.agentStorage.get(chatId);
     return stored && !stored.archivedAt ? stored : null;
   }
-  /**
-   * The user's latest messages to Chief, newest first. More than one, because Chief may ask
-   * which app or Bot before handing off, so the request itself sits a message or two back.
-   */
-  function recentUserMessages(chiefId: string): string[] {
-    const messages: string[] = [];
-    try {
-      const timeline = deps.agentManager.getTimeline(chiefId);
-      for (let index = timeline.length - 1; index >= 0; index--) {
-        const item = timeline[index]!;
-        if (item.type === "user_message") messages.push(item.text);
-        if (messages.length >= QUOTABLE_MESSAGES) break;
-      }
-    } catch {
-      /* Chief is not loaded: there is no message to quote. */
-    }
-    return messages;
-  }
-
   /** A review needs a stored resolution matching the app; fork merge requests wait. */
   function reviewTarget(request: z.infer<typeof StartFeatureTaskInput>): ChiefMergeRequest | null {
     if (request.kind !== "review-merge-request") return null;
@@ -217,14 +196,11 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
     const previous = await previousStart(request);
     if (previous) return previous;
     const mergeRequest = reviewTarget(request);
+    // Chief writes the task: the user's words, links and whatever the Bot needs to act without
+    // asking again. (It used to be limited to quoting the user, which made it useless for a
+    // task it had read itself, such as a SeaTalk message.)
     const instruction = normalizeSpace(request.instruction);
-    if (
-      !instruction ||
-      !recentUserMessages(chiefId).some((said) => normalizeSpace(said).includes(instruction))
-    )
-      throw new Error(
-        "instruction must quote the user's own words verbatim from one of their latest messages. Copy the relevant part of what they wrote; do not paraphrase or add text.",
-      );
+    if (!instruction) throw new Error("instruction must not be empty.");
     const key = deps.handoffKey();
     if (!key) throw new Error("Chief is not connected");
     if (!deps.tools.hasApp(request.appId)) throw new Error("Unknown app");
