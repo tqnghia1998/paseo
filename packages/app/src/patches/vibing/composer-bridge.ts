@@ -5,6 +5,7 @@ import type { AgentInputSubmitResult } from "@/composer/submit";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { isEmbeddedChiefView, isEmbeddedLiveDesignMessaging } from "./focus-mode";
+import { useChiefComposerActions } from "./chief-quick-actions";
 import { useEmbeddedPromptInsert } from "./host-prompts";
 import { useEmbeddedLiveDesignSend, waitForLiveDesignTurn } from "./live-design";
 
@@ -53,6 +54,16 @@ export function useEmbeddedComposerBridge(input: ComposerBridgeInput): void {
     getText: useStableEvent(getText),
     replaceText,
     focus: useStableEvent(focus),
+  });
+
+  // Chief's quick-action chips drive the composer through the same send and fill the user has.
+  useChiefComposerActions({
+    enabled: enabled && isEmbeddedChiefView && !isComposerLocked && !readOnly,
+    send: (text) => {
+      void sendMessage(text, []);
+    },
+    fill: replaceText,
+    focus,
   });
 
   useEmbeddedLiveDesignSend({

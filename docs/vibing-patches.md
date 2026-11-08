@@ -84,6 +84,15 @@ matches, or `unavailable` with `unsupported-url|not-found|no-access|failed`. Nav
 resolve fall back to `unknown` after 30 seconds, open-branch after 5 minutes (it may
 clone). Resolutions are kept for 30 minutes under a `resolutionId`.
 
+Quick actions: an empty Chief transcript shows chips instead of the generic empty text
+(`agent-stream/view.tsx` renders `ChiefQuickActions` when `isEmbeddedChiefView`). The list is
+`CHIEF_QUICK_ACTIONS` in `chief-quick-actions.ts`: a "send" chip posts its sentence, a
+"prefill" chip fills the composer and focuses it for requests that need a link or a name. They
+run through the composer's own `sendMessage` and `replaceText` (registered by
+`useChiefComposerActions` in `composer-bridge.ts`, only while the composer is unlocked and
+editable), so queueing and drafts behave as for typed text, and the chips disappear once
+anything is in the transcript. Wording is English, like the rest of the frame.
+
 Restart ("/clear", "/new"): the composer's client slash commands normally archive the agent
 and open a draft, which would end Chief for good (its record is then "removed"). In the Chief
 frame `agent-panel.tsx` hands them to `chief-commands.ts` instead: `/clear` and `/new` post
