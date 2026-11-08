@@ -145,7 +145,7 @@ test("the review template delimits untrusted data and the user's quoted words", 
   expect(implement.prompt).toContain("Do the work in this workspace");
 });
 
-test("Chief may only quote the user's latest message, whitespace-normalized and case-sensitive", async () => {
+test("Chief writes the task itself, but it cannot be empty", async () => {
   const { handoffs, resolutionId, startChat } = await fixture();
   const base = {
     appId: "app",
@@ -154,24 +154,27 @@ test("Chief may only quote the user's latest message, whitespace-normalized and 
     kind: "review-merge-request",
     resolutionId,
   };
-  for (const instruction of ["focus on the LOGIN flow", "a stale request", "review it thoroughly"])
-    await expect(
-      handoffs.startFeatureTask({ ...base, requestId: randomUUID(), instruction }),
-    ).rejects.toThrow(/verbatim/);
+  await expect(
+    handoffs.startFeatureTask({ ...base, requestId: randomUUID(), instruction: "   " }),
+  ).rejects.toThrow(/must not be empty/);
   expect(startChat).not.toHaveBeenCalled();
-  // A clarifying answer may follow the request: its last few messages are quotable.
+  // Anything Chief worked out is welcome: the user's words need not appear verbatim.
   await expect(
     handoffs.startFeatureTask({
       ...base,
       requestId: randomUUID(),
-      instruction: "use the App repository",
+      instruction: "Review the login flow; the SeaTalk thread says it breaks on Safari.",
     }),
   ).resolves.toMatchObject({ status: "working" });
+  expect((startChat.mock.calls[0]![0] as { prompt: string }).prompt).toContain(
+    "the SeaTalk thread says it breaks on Safari",
+  );
   startChat.mockClear();
   const requestId = randomUUID();
   await expect(
     handoffs.startFeatureTask({ ...base, requestId, instruction: "focus on the\nlogin flow" }),
   ).resolves.toEqual({ chatId: requestId, status: "working" });
+  // Free text, but the chat is still the signed hand-off in the feature's workspace.
   expect(startChat).toHaveBeenCalledWith(
     expect.objectContaining({
       agentId: requestId,
@@ -187,7 +190,6 @@ test("Chief may only quote the user's latest message, whitespace-normalized and 
     }),
   );
 });
-
 test("a review needs a stored resolution for that app and refuses fork merge requests", async () => {
   const { handoffs, resolutionId, tools } = await fixture();
   const base = {
@@ -238,20 +240,6 @@ test("a commit hand-off starts an ordinary chat with a fixed commit template and
     /Do not push, amend or rewrite published history, or discard anything/,
   );
   expect(call.prompt).toContain("commit these changes please");
-});
-
-test("a commit hand-off still has to quote the user", async () => {
-  const { handoffs } = await fixture({ said: "commit these changes please" });
-  await expect(
-    handoffs.startFeatureTask({
-      requestId: randomUUID(),
-      appId: "app",
-      workspaceId: "tab",
-      bot: "Reviewer",
-      kind: "commit",
-      instruction: "commit everything and force push it",
-    }),
-  ).rejects.toThrow(/quote the user's own words/);
 });
 
 test("a repeated requestId returns the same chat and never starts another", async () => {

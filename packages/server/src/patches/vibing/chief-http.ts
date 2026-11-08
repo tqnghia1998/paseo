@@ -275,7 +275,7 @@ export function registerChiefRoutes(input: {
         "start_feature_task",
         {
           description:
-            "Hand a feature task to an ordinary Bot chat in a feature workspace; the message comes from a fixed template. instruction must quote the user's own words verbatim from one of their last three messages (the request itself, not a later answer to your question). Use a fresh UUID requestId per task; reusing it returns the same chat.",
+            "Hand a feature task to an ordinary Bot chat in a feature workspace; the message comes from a fixed template. instruction is the full task for the Bot: the user's own words and links as they wrote them, plus what you found out for them. Use a fresh UUID requestId per task; reusing it returns the same chat.",
           inputSchema: StartFeatureTaskInput.shape,
         },
         async (args) => result(await handoffs.startFeatureTask(args)),

@@ -20,7 +20,7 @@ afterEach(async () => {
   for (const close of cleanup.splice(0).toReversed()) await close();
 });
 
-test("managed Chief hands a quoted task to an ordinary Bot chat in the feature workspace", async () => {
+test("managed Chief hands a task to an ordinary Bot chat in the feature workspace", async () => {
   const fixture = await createTestPaseoDaemon({
     worktreeCleanupToken: "fixture-host-only",
     agentClients: createTestAgentClients({ supportsMcpServers: true }),
@@ -98,7 +98,6 @@ test("managed Chief hands a quoted task to an ordinary Bot chat in the feature w
   expect(JSON.stringify(await call("read_memory", { name: "MEMORY.md" }))).toContain(
     "Fixture preference",
   );
-  // Chief may only quote the user's latest message.
   await fixture.daemon.agentManager.runAgent(
     descriptor.agentId,
     "Ask Reviewer to add a logout   button to the header",
@@ -112,11 +111,6 @@ test("managed Chief hands a quoted task to an ordinary Bot chat in the feature w
     kind: "implement",
     instruction: "add a logout button to the header",
   };
-  const paraphrased = await call("start_feature_task", {
-    ...request,
-    instruction: "implement logout",
-  });
-  expect(paraphrased.isError).toBe(true);
   const first = await call("start_feature_task", request);
   expect(first.isError ? JSON.stringify(first.content) : "").toBe("");
   const receipt = JSON.parse((first.content as Array<{ text: string }>)[0]!.text) as {
