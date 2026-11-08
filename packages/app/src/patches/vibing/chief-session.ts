@@ -31,7 +31,7 @@ export interface ChiefSession {
   agentId: string;
   workspaceId: string;
   cwd: string;
-  provider: "claude";
+  provider: string;
 }
 
 const SESSION_KEYS = [
@@ -67,7 +67,8 @@ export function parseChiefSession(value: unknown): ChiefSession | null {
     record.protocol !== CHIEF_PROTOCOL ||
     record.status !== "ready" ||
     record.policy !== CHIEF_POLICY ||
-    record.provider !== "claude" ||
+    !isNonEmptyString(record.provider) ||
+    record.provider.length > 100 ||
     !isNonEmptyString(record.serverId) ||
     !isNonEmptyString(record.agentId) ||
     !isNonEmptyString(record.workspaceId) ||
@@ -83,7 +84,7 @@ export function parseChiefSession(value: unknown): ChiefSession | null {
     agentId: record.agentId,
     workspaceId: record.workspaceId,
     cwd: record.cwd,
-    provider: "claude",
+    provider: record.provider,
   };
 }
 
