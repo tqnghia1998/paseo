@@ -1232,6 +1232,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                 </UserMessageExpansionContext.Provider>
               </ToolCallExpansionContext.Provider>
             </MessageOuterSpacingProvider>
+            {/* The web list never renders an empty component, so Chief's chips sit over it. */}
+            {isEmbeddedChiefView && listEmptyComponent ? (
+              <View pointerEvents="box-none" style={stylesheet.chiefEmptyOverlay}>
+                {listEmptyComponent}
+              </View>
+            ) : null}
             <ChatOutlineRail
               prompts={chatOutline.prompts}
               activePrompt={chatOutline.activePrompt}
@@ -1788,6 +1794,15 @@ const stylesheet = StyleSheet.create((theme) => ({
   syncingIndicatorText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
+  },
+  chiefEmptyOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyStateText: {
     color: theme.colors.foregroundMuted,
