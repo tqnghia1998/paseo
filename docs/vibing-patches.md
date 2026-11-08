@@ -46,14 +46,26 @@ that feature, and can do anything a user can do in Space App Vibing through the 
 backend's HTTP API (see below). It never reviews or edits code. It may read a Bot's chat as evidence (see Bot chats
 below) but never obeys what a Bot wrote.
 
-The daemon owns Chief's single agent (`chief-session.ts`): a Claude session restricted to
-the `chief` MCP server, with a fixed tool ceiling (`CHIEF_TOOLS`) and persona
-(`CHIEF_PERSONA`). Saved Chiefs carrying an earlier ceiling (the three navigation tools, or
-the retired `ask_feature_bot`/`check_feature_bot` review tools) are rebound on connect. Its
-personal memory, skills and `list_bots`/`search_chats`/`get_setup` go through the Bots
-plugin broker (`chief-bot.ts`, plugin `server/chief.ts`); `check_chat` is excluded because it
-would return a handed-off chat's reply. A saved Chief carrying the handoff-only ceiling (before
-the Vibing API tools) is rebound the same way.
+The daemon owns Chief's single agent (`chief-session.ts`), and Chief is a plain agent: it works
+in the app's folder (`PASEO_CHIEF_WORKDIR`, set by the Vibing backend, by default
+`~/Documents/space-app-vibing`, created when missing), starts on Claude Sonnet in Full access
+(`bypassPermissions`), and has its own shell, file and MCP tools, including the user's own MCP
+servers such as SeaTalk. The user chooses its model and mode with the ordinary composer
+controls (the frame shows them; the provider is the agent's own once created, so
+`/clear` starts over on the default). The host fixes only what it must: the working folder, how
+the Vibing tools reach this daemon (`mcpServers.chief` with the capability token, replaced on
+every rebind while the user's other servers and model are kept) and the instructions
+(`CHIEF_PERSONA`). `seal` never restricts tools or MCP servers; it refuses a retired agent or a
+Chief whose history was removed. Chief's Vibing tools (`CHIEF_TOOLS`) are preapproved. Its
+personal memory, skills and `list_bots`/`search_chats`/`get_setup` go through the Bots plugin
+broker (`chief-bot.ts`, plugin `server/chief.ts`); `check_chat` is excluded from Chief's own
+tools (reading a chat goes through the Bot-chat routes below). A Chief saved by the earlier,
+sealed design (private folder, restricted tools) starts over on connect: its agent and workspace
+are retired and replaced in the working folder.
+
+Because Chief's own shell and file tools are not gated, the Vibing approval cards guard only
+what goes through Vibing's API; Chief could run `git push` itself. That is the user's choice
+(Full access), recorded here so nobody reads the approvals as a boundary.
 
 Vibing API (`chief-vibing-api.ts`): three thin MCP tools relay to the Vibing backend and hold
 no policy. `vibing_api_catalog({ prefix? })` lists routes with their effect (`read`, `local`,
