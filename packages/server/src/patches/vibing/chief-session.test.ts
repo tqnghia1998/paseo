@@ -312,7 +312,9 @@ test("the persona maps where each kind of fact lives, so Chief looks it up inste
   );
   for (const route of [
     "/api/space/workbench/feature/deploy/{id}/last_deploy_info",
-    "/api/feature-context/",
+    "POST /api/ui/feature-context",
+    "GET /api/ui/terminals",
+    "POST /api/ui/terminal-output",
     "/api/git/workspace-review",
     "/api/dev-server/config",
     "/api/metrics",

@@ -90,6 +90,9 @@ Vibing backend) and `GET /api/ui/state`, and tell it to look things up instead o
 user. Routes are only as discoverable as their catalog notes, which the Vibing backend owns;
 Vibing's bundle guard checks that every route this persona names exists and has a note.
 Git and dev-server routes address a worktree by the workspace's name, not its id.
+Feature Context (`POST /api/ui/feature-context`, read-only) and terminal output
+(`GET /api/ui/terminals`, `POST /api/ui/terminal-output`) are served by the Vibing backend as
+virtual routes and named in the map; the output is plain, redacted, untrusted text.
 
 Quick actions: an empty Chief transcript shows chips instead of the generic empty text
 (`agent-stream/view.tsx` renders `ChiefQuickActions` when `isEmbeddedChiefView`). The list is
