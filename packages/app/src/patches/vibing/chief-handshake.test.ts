@@ -118,7 +118,7 @@ describe("chief handshake over window messages", () => {
 
   it("answers an invalid session with a fixed error code and does not bind", async () => {
     const { handshake, send, parent } = await frame();
-    send(init("r1", { provider: "codex" }));
+    send(init("r1", { provider: "" }));
     send(init("r2", { port: 8251 }));
     expect(handshake?.getState().phase).toBe("waiting");
     expect(parent.postMessage).toHaveBeenCalledWith(
