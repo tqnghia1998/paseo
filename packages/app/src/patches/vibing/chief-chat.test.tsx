@@ -18,6 +18,11 @@ vi.mock("./bot-chat", () => ({
     return null;
   },
 }));
+// chief-host wires the document bridge to the plugin registry; these tests are about the chat.
+vi.mock("@/plugins/registry", () => ({ pluginRegistry: { getSnapshot: () => [] } }));
+vi.mock("@/plugins/navigation", () => ({
+  createPluginNavigation: () => ({ openSurface: vi.fn() }),
+}));
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => ({ fetchAgent: fake.fetchAgent }),
   useHostRuntimeIsConnected: () => fake.connected,

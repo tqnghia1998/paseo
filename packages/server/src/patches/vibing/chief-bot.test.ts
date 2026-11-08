@@ -50,16 +50,31 @@ test("prepare and service calls carry one private broker secret, never in the pr
       : { text: "saved" };
   });
   const bridge = createChiefBotBridge(invoke);
-  expect(await bridge.prepare()).toBe("My saved instructions and memory");
+  expect(await bridge.prepare({ agentId: "host-minted-id", cwd: "/app" })).toBe(
+    "My saved instructions and memory",
+  );
   expect(
-    await bridge.call("host-minted-id", "write_memory", { name: "MEMORY.md", text: "Preference" }),
+    await bridge.call("host-minted-id", "write_memory", {
+      name: "MEMORY.md",
+      text: "Preference",
+    }),
   ).toBe("saved");
   expect(invoke.mock.calls[0]![1].bridgeToken).toBe(invoke.mock.calls[1]![1].bridgeToken);
 });
 
 test("missing or incompatible Bot plugin fails closed", async () => {
-  await expect(createChiefBotBridge(async () => null).prepare()).rejects.toThrow();
-  await expect(createChiefBotBridge(async () => ({ systemPrompt: 4 })).prepare()).rejects.toThrow();
+  await expect(
+    createChiefBotBridge(async () => null).prepare({
+      agentId: "chief",
+      cwd: "/app",
+    }),
+  ).rejects.toThrow();
+  await expect(
+    createChiefBotBridge(async () => ({ systemPrompt: 4 })).prepare({
+      agentId: "chief",
+      cwd: "/app",
+    }),
+  ).rejects.toThrow();
 });
 
 test("plugin restart rebinds the same private capability before retrying a rejected call", async () => {
@@ -73,9 +88,9 @@ test("plugin restart rebinds the same private capability before retrying a rejec
     return { text: "memory" };
   });
   const bridge = createChiefBotBridge(invoke);
-  await bridge.prepare();
+  await bridge.prepare({ agentId: "host-minted-id", cwd: "/app" });
   bound = false;
-  expect(await bridge.call("canonical", "read_memory", { name: "MEMORY.md" })).toBe("memory");
+  expect(await bridge.call("host-minted-id", "read_memory", { name: "MEMORY.md" })).toBe("memory");
   expect(invoke.mock.calls.map(([method]) => method)).toEqual([
     "bots.chief.prepare",
     "bots.chief.call",

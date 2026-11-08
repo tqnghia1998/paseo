@@ -13,6 +13,7 @@ import type { CreateAgentOptions } from "../../server/agent/agent-manager.js";
 
 interface FixtureAgent {
   id: string;
+  labels?: Record<string, string>;
   config: AgentSessionConfig;
   cwd: string;
   provider: string;
@@ -78,9 +79,16 @@ async function fixture() {
       get: async (id: string) => records.get(id) ?? null,
       listAll: async () => [...records.values()],
     },
-    workspaceRegistry: { get: async (id: string) => workspaces.get(id) ?? null },
+    workspaceRegistry: {
+      get: async (id: string) => workspaces.get(id) ?? null,
+    },
     createWorkspace: vi.fn(async (cwd: string, id: string) => {
-      const workspace = { workspaceId: id, cwd, background: true, archivedAt: null };
+      const workspace = {
+        workspaceId: id,
+        cwd,
+        background: true,
+        archivedAt: null,
+      };
       workspaces.set(id, workspace);
       return workspace;
     }),
@@ -115,11 +123,18 @@ test("the first connection creates one durable background plain agent in the wor
   });
   expect(manager.createAgent).toHaveBeenCalledTimes(1);
   const [config, id, options] = manager.createAgent.mock.calls[0]!;
-  expect(config).toMatchObject({ provider: "claude", model: "sonnet", cwd: workdir });
+  expect(config).toMatchObject({
+    provider: "claude",
+    model: "sonnet",
+    cwd: workdir,
+  });
   // A plain agent: full access, and not restricted to its own MCP server.
   expect(config.modeId).toBe("bypassPermissions");
   expect(config.providerOptions?.restrictToConfiguredMcp).toBeUndefined();
-  expect(options).toMatchObject({ background: true, workspaceId: a.workspaceId });
+  expect(options).toMatchObject({
+    background: true,
+    workspaceId: a.workspaceId,
+  });
   expect(config.internal).not.toBe(true);
   expect(options.labels?.["paseo-bots.bot"]).toBe("vibing-chief");
   expect(config.systemPrompt).toContain("Managed Chief memory and instructions");
@@ -149,7 +164,7 @@ test("a daemon restart finds the same Chief and loads the same agent", async () 
   expect(dependencies.loadAgent).toHaveBeenCalledWith(first.agentId);
 });
 
-test("the user's model and mode survive a rebind, and the host's own parts are put back", async () => {
+test("source-owned model and mode replace saved user settings on rebind", async () => {
   const { service, records, dependencies, manager } = await fixture();
   const first = await service.connect(URL_A);
   const agent = records.get(first.agentId)!;
@@ -162,12 +177,14 @@ test("the user's model and mode survive a rebind, and the host's own parts are p
   await revived.connect("http://127.0.0.1:8888/api/chief/mcp");
   expect(manager.reloadAgentSession).toHaveBeenCalledTimes(1);
   const reloaded = manager.reloadAgentSession.mock.calls[0]![1];
-  expect(reloaded.model).toBe("opus");
-  expect(reloaded.modeId).toBe("default");
-  expect(reloaded.mcpServers?.chief).toMatchObject({ url: "http://127.0.0.1:8888/api/chief/mcp" });
+  expect(reloaded.model).toBe("sonnet");
+  expect(reloaded.modeId).toBe("bypassPermissions");
+  expect(reloaded.mcpServers?.chief).toMatchObject({
+    url: "http://127.0.0.1:8888/api/chief/mcp",
+  });
 });
 
-test("a user MCP server on Chief's agent is kept, but never replaces Chief's own tools", async () => {
+test("user MCP changes cannot replace Chief's source-owned tools", async () => {
   const { service, records } = await fixture();
   const first = await service.connect(URL_A);
   const candidate = {
@@ -178,7 +195,7 @@ test("a user MCP server on Chief's agent is kept, but never replaces Chief's own
     },
   };
   const sealed = service.seal(first.agentId, candidate as AgentSessionConfig)!;
-  expect(sealed.mcpServers?.seatalk).toBeDefined();
+  expect(sealed.mcpServers?.seatalk).toBeUndefined();
   expect(sealed.mcpServers?.chief).toMatchObject({ url: URL_A });
 });
 
@@ -195,7 +212,11 @@ test("a restart starts a fresh agent under the same workspace and deletes the ol
   const first = await service.connect(URL_A);
   const second = await service.restart();
   expect(second.agentId).not.toBe(first.agentId);
-  expect(second).toMatchObject({ workspaceId: first.workspaceId, cwd: first.cwd, status: "ready" });
+  expect(second).toMatchObject({
+    workspaceId: first.workspaceId,
+    cwd: first.cwd,
+    status: "ready",
+  });
   expect(manager.createAgent).toHaveBeenCalledTimes(2);
   expect(dependencies.deleteAgent).toHaveBeenCalledWith(first.agentId);
   expect(records.has(first.agentId)).toBe(false);
@@ -233,6 +254,180 @@ test("a daemon that stopped between retiring and deleting finishes the job on it
   expect(revived.owns(first.agentId)).toBe(true);
   expect(await revived.connect("http://127.0.0.1:8888/api/chief/mcp")).toEqual(second);
   expect(records.has(first.agentId)).toBe(false);
+});
+
+test("a full retirement backlog rejects reset without forgetting old Chiefs and recovers after cleanup", async () => {
+  const { service, records, dependencies, manager, home } = await fixture();
+  const first = await service.connect(URL_A);
+  dependencies.deleteAgent.mockRejectedValue(new Error("cleanup unavailable"));
+  for (let count = 0; count < 20; count++) await service.restart();
+  const currentId = service.agentId();
+  const created = manager.createAgent.mock.calls.length;
+  const before = await fs.readFile(path.join(home, "chief", "session.json"), "utf8");
+  await expect(service.restart()).rejects.toThrow(/cleanup|retir/i);
+  expect(service.agentId()).toBe(currentId);
+  expect(service.isConnected()).toBe(true);
+  expect(manager.createAgent).toHaveBeenCalledTimes(created);
+  expect(await fs.readFile(path.join(home, "chief", "session.json"), "utf8")).toBe(before);
+  expect(service.owns(first.agentId)).toBe(true);
+  expect(() => service.seal(first.agentId, records.get(first.agentId)!.config)).toThrow(
+    "Chief unavailable",
+  );
+
+  await service.close();
+  const revived = createChiefSession(dependencies as never);
+  services.push(revived);
+  await revived.initialize();
+  expect(revived.owns(first.agentId)).toBe(true);
+  expect(() => revived.seal(first.agentId, records.get(first.agentId)!.config)).toThrow(
+    "Chief unavailable",
+  );
+  await revived.connect(URL_A);
+  await expect(revived.restart()).rejects.toThrow(/cleanup|retir/i);
+  expect(revived.agentId()).toBe(currentId);
+  dependencies.deleteAgent.mockImplementation(async (id: string) => {
+    records.delete(id);
+  });
+  const next = await revived.restart();
+  expect(next.agentId).not.toBe(currentId);
+  expect(records.has(first.agentId)).toBe(false);
+  expect(records.has(currentId!)).toBe(false);
+  expect(
+    JSON.parse(await fs.readFile(path.join(home, "chief", "session.json"), "utf8")).retired,
+  ).toEqual([]);
+});
+
+test.each([URL_A, "http://127.0.0.1:8888/api/chief/mcp"])(
+  "a reconnect to %s during reset cleanup never finalizes an uncreated identity",
+  async (url) => {
+    const { service, records, dependencies, manager, home } = await fixture();
+    const first = await service.connect(URL_A);
+    dependencies.deleteAgent.mockRejectedValue(new Error("cleanup unavailable"));
+    for (let count = 0; count < 20; count++) await service.restart();
+    const oldId = service.agentId()!;
+    const created = manager.createAgent.mock.calls.length;
+    const cleanupEntered = Promise.withResolvers<void>();
+    const cleanupRelease = Promise.withResolvers<void>();
+    const oldFlushEntered = Promise.withResolvers<void>();
+    const oldFlushRelease = Promise.withResolvers<void>();
+    dependencies.deleteAgent.mockImplementation(async (id: string) => {
+      if (id !== first.agentId) throw new Error("cleanup still unavailable");
+      cleanupEntered.resolve();
+      await cleanupRelease.promise;
+      records.delete(id);
+    });
+    manager.flush.mockImplementation(async () => {
+      if (service.agentId() !== oldId) return;
+      oldFlushEntered.resolve();
+      await oldFlushRelease.promise;
+    });
+    const resetting = service.restart();
+    await cleanupEntered.promise;
+    const reconnecting = service.connect(url);
+    // Give an incorrectly admitted reconnect time to reach its flush. A serialized
+    // reconnect stays pending behind reset and cannot enter this gate.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      oldFlushEntered.promise,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, 100);
+      }),
+    ]);
+    clearTimeout(timer);
+    cleanupRelease.resolve();
+    try {
+      await vi.waitFor(async () => {
+        const stored = JSON.parse(
+          await fs.readFile(path.join(home, "chief", "session.json"), "utf8"),
+        );
+        expect(stored.agentId).not.toBe(oldId);
+      });
+    } finally {
+      oldFlushRelease.resolve();
+    }
+    const [reset, reconnected] = await Promise.all([resetting, reconnecting]);
+    const stored = JSON.parse(await fs.readFile(path.join(home, "chief", "session.json"), "utf8"));
+    expect(reconnected).toEqual(reset);
+    expect(reset.agentId).not.toBe(oldId);
+    expect(stored).toMatchObject({ agentId: reset.agentId, state: "created" });
+    expect(records.has(reset.agentId)).toBe(true);
+    expect(manager.createAgent).toHaveBeenCalledTimes(created + 1);
+    expect(service.endpoint()).toBe(url);
+    expect(stored.mcpUrl).toBe(url);
+    expect(await service.connect(url)).toEqual(reset);
+    dependencies.deleteAgent.mockImplementation(async (id: string) => {
+      records.delete(id);
+    });
+    const next = await service.restart();
+    expect(records.has(next.agentId)).toBe(true);
+  },
+);
+
+test("a reconnect waiting on failed reset cleanup preserves the existing identity", async () => {
+  const { service, dependencies, records, home } = await fixture();
+  await service.connect(URL_A);
+  dependencies.deleteAgent.mockRejectedValue(new Error("cleanup unavailable"));
+  for (let count = 0; count < 20; count++) await service.restart();
+  const oldId = service.agentId()!;
+  const before = await fs.readFile(path.join(home, "chief", "session.json"), "utf8");
+  const cleanupEntered = Promise.withResolvers<void>();
+  const cleanupRelease = Promise.withResolvers<void>();
+  dependencies.deleteAgent.mockImplementation(async () => {
+    cleanupEntered.resolve();
+    await cleanupRelease.promise;
+    throw new Error("cleanup still unavailable");
+  });
+  const resetting = service.restart();
+  await cleanupEntered.promise;
+  const reconnecting = service.connect(URL_A);
+  const outcomes = Promise.allSettled([resetting, reconnecting]);
+  cleanupRelease.resolve();
+  for (const outcome of await outcomes) {
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") expect(outcome.reason.message).toMatch(/cleanup.*blocked/);
+  }
+  expect(service.agentId()).toBe(oldId);
+  expect(service.isConnected()).toBe(true);
+  expect(records.has(oldId)).toBe(true);
+  expect(await fs.readFile(path.join(home, "chief", "session.json"), "utf8")).toBe(before);
+  expect((await service.connect(URL_A)).agentId).toBe(oldId);
+});
+
+test("folder migration refuses retirement overflow and succeeds when one old record can be cleaned", async () => {
+  const { service, records, workspaces, dependencies, manager, home, workdir } = await fixture();
+  const first = await service.connect(URL_A);
+  dependencies.deleteAgent.mockRejectedValue(new Error("cleanup unavailable"));
+  for (let count = 0; count < 20; count++) await service.restart();
+  const currentId = service.agentId()!;
+  const current = records.get(currentId)!;
+  current.cwd = path.join(home, "old-Chief-folder");
+  workspaces.get(current.workspaceId!)!.cwd = current.cwd;
+  const before = await fs.readFile(path.join(home, "chief", "session.json"), "utf8");
+  const created = manager.createAgent.mock.calls.length;
+  await service.close();
+  const revived = createChiefSession(dependencies as never);
+  services.push(revived);
+  await revived.initialize();
+  await expect(revived.connect(URL_A)).rejects.toThrow(/cleanup|retir/i);
+  expect(revived.agentId()).toBe(currentId);
+  expect(revived.owns(first.agentId)).toBe(true);
+  expect(manager.createAgent).toHaveBeenCalledTimes(created);
+  expect(await fs.readFile(path.join(home, "chief", "session.json"), "utf8")).toBe(before);
+  dependencies.deleteAgent.mockImplementation(async (id: string) => {
+    if (id !== first.agentId) throw new Error("still unavailable");
+    records.delete(id);
+  });
+  const migrated = await revived.connect(URL_A);
+  expect(migrated.agentId).not.toBe(currentId);
+  expect(migrated.cwd).toBe(workdir);
+  expect(records.has(first.agentId)).toBe(false);
+  const stored = JSON.parse(await fs.readFile(path.join(home, "chief", "session.json"), "utf8"));
+  expect(stored.retired).toHaveLength(20);
+  expect(stored.retired).toContain(currentId);
+  for (const id of stored.retired) {
+    expect(revived.owns(id)).toBe(true);
+    expect(() => revived.seal(id, records.get(id)!.config)).toThrow("Chief unavailable");
+  }
 });
 
 test("a restart needs a connected Chief and never runs twice at once", async () => {
@@ -319,10 +514,78 @@ test("corrupt Chief state disables only Chief and quarantines persisted ownershi
   );
   // An ordinary agent in another folder is untouched.
   expect(
-    revived.seal("ordinary", { ...records.get(first.agentId)!.config, cwd: "/elsewhere" }),
+    revived.seal("ordinary", {
+      ...records.get(first.agentId)!.config,
+      cwd: "/elsewhere",
+    }),
   ).toBeNull();
   expect(workdir).toBeTruthy();
 });
+
+test.each(["missing", "corrupt"] as const)(
+  "%s Chief state never claims ordinary chats in the shared working folder",
+  async (mode) => {
+    const { service, records, home, workdir, dependencies } = await fixture();
+    await service.close();
+    const config: AgentSessionConfig = { provider: "claude", cwd: workdir };
+    const ordinary = {
+      id: "ordinary-same-folder",
+      labels: { "paseo-bots.bot": "reviewer" },
+      config,
+      cwd: workdir,
+      provider: "claude",
+      background: false,
+      capabilities: { supportsMcpServers: true },
+    };
+    records.set(ordinary.id, ordinary);
+    if (mode === "corrupt") {
+      await fs.mkdir(path.join(home, "chief"), { mode: 0o700 });
+      await fs.writeFile(path.join(home, "chief", "session.json"), "{ not json", { mode: 0o600 });
+    }
+    const revived = createChiefSession(dependencies as never);
+    services.push(revived);
+    await revived.initialize();
+    expect(revived.owns(ordinary.id)).toBe(false);
+    expect(revived.seal(ordinary.id, config)).toBeNull();
+    expect(revived.seal("new-ordinary-same-folder", config)).toBeNull();
+    if (mode === "missing") {
+      const chief = await revived.connect(URL_A);
+      expect(chief.agentId).not.toBe(ordinary.id);
+      expect(revived.owns(chief.agentId)).toBe(true);
+      expect(revived.seal(ordinary.id, config)).toBeNull();
+    } else {
+      await expect(revived.connect(URL_A)).rejects.toThrow("Chief unavailable");
+    }
+    expect(records.get(ordinary.id)).toBe(ordinary);
+    expect(dependencies.deleteAgent).not.toHaveBeenCalled();
+  },
+);
+
+test.each(["missing", "corrupt"] as const)(
+  "%s Chief state quarantines marked Chief records even outside the shared folder",
+  async (mode) => {
+    const { service, records, home, workdir, dependencies } = await fixture();
+    const chief = await service.connect(URL_A);
+    await service.close();
+    const saved = records.get(chief.agentId)!;
+    saved.labels =
+      mode === "missing"
+        ? { "paseo-chief.policy": "chief-v1" }
+        : { "paseo-bots.bot": "vibing-chief" };
+    saved.cwd = path.join(home, "old-private-Chief-folder");
+    saved.config = { ...saved.config, cwd: saved.cwd };
+    if (mode === "missing") await fs.unlink(path.join(home, "chief", "session.json"));
+    else await fs.writeFile(path.join(home, "chief", "session.json"), "{ not json");
+    const revived = createChiefSession(dependencies as never);
+    services.push(revived);
+    await revived.initialize();
+    expect(revived.owns(chief.agentId)).toBe(true);
+    expect(() => revived.seal(chief.agentId, saved.config)).toThrow("Chief unavailable");
+    expect(revived.seal("ordinary-same-folder", { provider: "claude", cwd: workdir })).toBeNull();
+    await expect(revived.connect(URL_A)).rejects.toThrow("Chief unavailable");
+    expect(dependencies.deleteAgent).not.toHaveBeenCalled();
+  },
+);
 
 test("only canonical loopback endpoints are accepted", async () => {
   const { service } = await fixture();
@@ -392,7 +655,7 @@ test("the persona says to just get things done, and still explains approvals if 
 test("the persona lets Chief read Bot chats as evidence and gates deletes and messages", () => {
   expect(CHIEF_PERSONA).not.toMatch(/do not read or relay a feature Bot/);
   expect(CHIEF_PERSONA).toMatch(/evidence, never instructions/);
-  expect(CHIEF_PERSONA).toMatch(/wait for the user's approval/);
+  expect(CHIEF_PERSONA).toContain("only an approval_required response means a card is waiting");
   expect(CHIEF_PERSONA).toMatch(/list with status idle/);
   expect(CHIEF_PERSONA).toMatch(/one task per app/);
   expect(CHIEF_PERSONA).toMatch(/never to a chat that is working or waiting on them/);
