@@ -376,6 +376,13 @@ test("the persona maps where each kind of fact lives, so Chief looks it up inste
     expect(CHIEF_PERSONA).toContain(route);
 });
 
+test("the persona asks existing-or-new branch for a fix, and trusts the worktree's own target branch", () => {
+  expect(CHIEF_PERSONA).toMatch(/existing branch/);
+  expect(CHIEF_PERSONA).toMatch(/new branch/);
+  expect(CHIEF_PERSONA).toMatch(/Do not assume the only open workspace/);
+  expect(CHIEF_PERSONA).toMatch(/can be out of date/);
+});
+
 test("the persona says to just get things done, and still explains approvals if they are on", () => {
   expect(CHIEF_PERSONA).toMatch(/Getting things done comes first/);
   expect(CHIEF_PERSONA).toMatch(/without asking permission again/);
