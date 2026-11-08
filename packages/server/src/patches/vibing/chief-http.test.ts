@@ -32,8 +32,19 @@ async function fixture(handoffs?: Parameters<typeof registerChiefRoutes>[0]["han
   }));
   const isConnected = vi.fn(() => true);
   const ready = vi.fn(() => true);
+  const restart = vi.fn(async () => ({
+    protocol: 1,
+    status: "ready",
+    policy: "chief-v1",
+    serverId: "fixture",
+    agentId: "fresh-agent",
+    workspaceId: "workspace",
+    cwd: "/fixture",
+    provider: "claude",
+  }));
   const session = {
     connect,
+    restart,
     isConnected,
     agentToken: () => "fixture-agent-token",
   } as unknown as ReturnType<typeof createChiefSession>;
@@ -58,7 +69,7 @@ async function fixture(handoffs?: Parameters<typeof registerChiefRoutes>[0]["han
       },
       body: JSON.stringify(body),
     });
-  return { url, host, connect, isConnected, ready };
+  return { url, host, connect, restart, isConnected, ready, tools };
 }
 
 test("cold plugin startup returns starting without attempting Chief launch", async () => {
@@ -79,6 +90,55 @@ test("connect reports a missing Claude provider distinctly and other failures ge
   const failed = await host("/connect", { apps });
   expect(failed.status).toBe(503);
   expect(await failed.json()).toEqual({ error: "Chief session unavailable" });
+});
+
+test("restart is host-only, needs a connected Chief and answers with the fresh descriptor", async () => {
+  const { url, host, restart, isConnected } = await fixture();
+  // Neither the agent's capability nor no capability at all can ask for a restart.
+  for (const headers of [
+    { authorization: "Bearer fixture-agent-token" },
+    {} as Record<string, string>,
+  ]) {
+    const refused = await fetch(url + "/restart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: "{}",
+    });
+    expect(refused.status).toBe(403);
+  }
+  expect(restart).not.toHaveBeenCalled();
+  isConnected.mockReturnValueOnce(false);
+  expect((await host("/restart", {})).status).toBe(503);
+  expect(restart).not.toHaveBeenCalled();
+  const fresh = await host("/restart", {});
+  expect(fresh.status).toBe(200);
+  expect(await fresh.json()).toMatchObject({ status: "ready", agentId: "fresh-agent" });
+  expect(restart).toHaveBeenCalledTimes(1);
+});
+
+test("restart reports a missing Claude provider distinctly and other failures generically", async () => {
+  const { host, restart } = await fixture();
+  restart.mockRejectedValueOnce(new ChiefProviderUnavailableError());
+  expect(await (await host("/restart", {})).json()).toEqual({
+    status: "unavailable",
+    reason: "provider-unavailable",
+  });
+  restart.mockRejectedValueOnce(new Error("boom"));
+  const failed = await host("/restart", {});
+  expect(failed.status).toBe(503);
+  expect(JSON.stringify(await failed.json())).not.toContain("boom");
+});
+
+test("restart answers the host requests the old conversation was waiting on as unknown", async () => {
+  const { host, tools } = await fixture();
+  await host("/connect", { apps });
+  const waiting = tools.openWorkspace({
+    appId: "app",
+    workspaceId: "branch/one",
+    destination: "bots",
+  });
+  await host("/restart", {});
+  expect(await waiting).toEqual({ outcome: "unknown" });
 });
 
 test("a cold same-port runtime refuses navigation polling until host reconciliation", async () => {

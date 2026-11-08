@@ -85,6 +85,25 @@ export function registerChiefRoutes(input: {
         res.status(503).json({ error: "Chief session unavailable" });
       });
   });
+  // A fresh conversation. Host-only, like connect; Chief's own tools have no path here.
+  router.post("/restart", (req, res) => {
+    if (!host(req, res)) return;
+    if (!session.isConnected()) {
+      res.status(503).json({ error: "Chief host reconciliation required" });
+      return;
+    }
+    tools.reset();
+    void session
+      .restart()
+      .then((descriptor) => res.json(descriptor))
+      .catch((error) => {
+        if (error instanceof ChiefProviderUnavailableError) {
+          res.json({ status: "unavailable", reason: "provider-unavailable" });
+          return;
+        }
+        res.status(503).json({ error: "Chief session unavailable" });
+      });
+  });
   router.post("/navigation/poll", (req, res) => {
     if (!host(req, res)) return;
     if (!session.isConnected()) {

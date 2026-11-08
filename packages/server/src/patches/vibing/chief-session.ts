@@ -21,6 +21,10 @@ const StateSchema = z
     token: z.string().regex(/^[a-f0-9]{64}$/),
     mcpUrl: z.string().url(),
     state: z.enum(["reserved", "created", "removed"]),
+    // Agents replaced by a restart ("/clear"). They can never be sealed, resumed or owned
+    // again, and each is deleted as soon as the new conversation exists (or on the next
+    // connect if the daemon stopped in between).
+    retired: z.array(z.string().uuid()).max(20).default([]),
   })
   .strict();
 type State = z.infer<typeof StateSchema>;
@@ -115,6 +119,8 @@ interface Dependencies {
   }>;
   loadAgent(id: string): Promise<ManagedAgent>;
   prepareBot(): Promise<string>;
+  /** Permanently removes an agent and its history, like the user's own Delete. */
+  deleteAgent(id: string): Promise<void>;
 }
 
 /** Ownership is private daemon state, never an agent label or provider preference. */
@@ -131,6 +137,7 @@ export function createChiefSession(deps: Dependencies) {
   const quarantined = new Set<string>();
   let currentUrl: string | null = null;
   let connecting: Promise<ChiefDescriptor> | null = null;
+  let restarting: Promise<ChiefDescriptor> | null = null;
   let botPrompt: string | null = null;
 
   function privateMetadata(metadata: Stats) {
@@ -200,6 +207,7 @@ export function createChiefSession(deps: Dependencies) {
         throw new Error("Chief unavailable");
       return null;
     }
+    if (state?.retired.includes(id)) throw new Error("Chief unavailable");
     if (!state || state.agentId !== id) return null;
     const expected = config();
     const candidateServer = candidate.mcpServers?.chief;
@@ -294,6 +302,20 @@ export function createChiefSession(deps: Dependencies) {
     }
   }
 
+  /** Deletes agents a restart replaced. A failure keeps the id retired for the next try. */
+  async function purgeRetired() {
+    if (!state) return;
+    for (const id of state.retired) {
+      try {
+        await deps.deleteAgent(id);
+      } catch {
+        continue;
+      }
+      state.retired = state.retired.filter((candidate) => candidate !== id);
+      await save();
+    }
+  }
+
   async function connect(mcpUrl: string): Promise<ChiefDescriptor> {
     if (disabled) throw new Error("Chief unavailable");
     if (stopped) throw new Error("Chief runtime stopped");
@@ -321,6 +343,7 @@ export function createChiefSession(deps: Dependencies) {
         token: randomBytes(32).toString("hex"),
         mcpUrl,
         state: "reserved",
+        retired: [],
       };
       try {
         await fs.writeFile(statePath, JSON.stringify(state), { mode: 0o600, flag: "wx" });
@@ -368,6 +391,7 @@ export function createChiefSession(deps: Dependencies) {
     state.mcpUrl = mcpUrl;
     state.state = "created";
     await save();
+    await purgeRetired();
     return {
       protocol: 1,
       status: "ready",
@@ -378,6 +402,25 @@ export function createChiefSession(deps: Dependencies) {
       cwd,
       provider: "claude",
     };
+  }
+
+  function connectOnce(url: string) {
+    if (connecting) return connecting;
+    connected = false;
+    connecting = connect(url)
+      .then((descriptor) => {
+        if (stopped) throw new Error("Chief runtime stopped");
+        connected = true;
+        return descriptor;
+      })
+      .catch((error) => {
+        connected = false;
+        throw error;
+      })
+      .finally(() => {
+        connecting = null;
+      });
+    return connecting;
   }
 
   return {
@@ -407,7 +450,8 @@ export function createChiefSession(deps: Dependencies) {
         leased = false;
       }
     },
-    owns: (id: string) => state?.agentId === id || quarantined.has(id),
+    owns: (id: string) =>
+      state?.agentId === id || quarantined.has(id) || (state?.retired.includes(id) ?? false),
     agentId: () => state?.agentId ?? null,
     endpoint: () => (connected && !stopped && !disabled ? currentUrl : null),
     labels: (id: string) =>
@@ -431,22 +475,33 @@ export function createChiefSession(deps: Dependencies) {
         ? (state?.token ?? null)
         : null,
     connect(url: string) {
-      if (connecting) return connecting;
-      connected = false;
-      connecting = connect(url)
-        .then((descriptor) => {
-          if (stopped) throw new Error("Chief runtime stopped");
-          connected = true;
-          return descriptor;
-        })
-        .catch((error) => {
-          connected = false;
-          throw error;
-        })
-        .finally(() => {
-          connecting = null;
-        });
-      return connecting;
+      return connectOnce(url);
+    },
+    /**
+     * Starts a fresh conversation ("/clear", "/new"): a new agent identity under the same
+     * workspace and capability. The old agent is retired first, so a failure at any point
+     * leaves Chief reconnectable and the old agent permanently out of reach, then deleted.
+     */
+    restart() {
+      if (restarting) return restarting;
+      restarting = (async () => {
+        const url = currentUrl;
+        if (!connected || stopped || disabled || !state || state.state !== "created" || !url)
+          throw new Error("Chief is not connected");
+        if (connecting) await connecting.catch(() => undefined);
+        connected = false;
+        state = {
+          ...state,
+          agentId: randomUUID(),
+          state: "reserved",
+          retired: [...state.retired, state.agentId].slice(-20),
+        };
+        await save();
+        return connectOnce(url);
+      })().finally(() => {
+        restarting = null;
+      });
+      return restarting;
     },
   };
 }

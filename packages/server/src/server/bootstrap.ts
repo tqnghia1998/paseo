@@ -251,7 +251,11 @@ import {
   createAgentCommand,
   type CreateAgentCommandDependencies,
 } from "./agent/create-agent/create.js";
-import { archiveAgentCommand, cancelAgentRunCommand } from "./agent/lifecycle-command.js";
+import {
+  archiveAgentCommand,
+  cancelAgentRunCommand,
+  closeAgentCommand,
+} from "./agent/lifecycle-command.js";
 import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
 import {
   HubRelationshipController,
@@ -1064,6 +1068,17 @@ export async function createPaseoDaemon(
       }),
     loadAgent: (id) => ensureAgentLoaded(id, { agentManager, agentStorage, logger }),
     prepareBot: () => chiefBot.prepare(),
+    deleteAgent: async (id) => {
+      // The same steps as the user's own Delete (see Session.handleDeleteAgentRequest).
+      const known = agentManager.getAgent(id) ?? (await agentStorage.get(id));
+      if ("beginDelete" in agentStorage && typeof agentStorage.beginDelete === "function")
+        (agentStorage as { beginDelete(agentId: string): void }).beginDelete(id);
+      await closeAgentCommand({ agentManager }, id).catch(() => undefined);
+      await agentManager.flush();
+      await agentStorage.remove(id);
+      await agentManager.deleteAgentState(id);
+      if (known) agentManager.notifyAgentRemoved(known);
+    },
   });
   const chiefHandoffs = createChiefHandoffs({
     agentStorage,

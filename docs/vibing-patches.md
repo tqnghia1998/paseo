@@ -84,6 +84,22 @@ matches, or `unavailable` with `unsupported-url|not-found|no-access|failed`. Nav
 resolve fall back to `unknown` after 30 seconds, open-branch after 5 minutes (it may
 clone). Resolutions are kept for 30 minutes under a `resolutionId`.
 
+Restart ("/clear", "/new"): the composer's client slash commands normally archive the agent
+and open a draft, which would end Chief for good (its record is then "removed"). In the Chief
+frame `agent-panel.tsx` hands them to `chief-commands.ts` instead: `/clear` and `/new` post
+`{ type: "paseo:chief-restart", requestId }` to the host once the frame is ready, `/exit`
+(`/quit`, `/q`) posts `paseo:chief-close`; nothing in the frame archives or replaces the
+agent. The host calls `POST /api/chief/restart` (host-token gated, connected Chief only, empty
+body), which answers like connect with a descriptor for a new agent. `chiefSession.restart()`
+writes a new agent id under the same workspace and capability first and moves the old id into
+the persisted `retired` list (at most 20): a retired agent is owned (never auto-resumed),
+`seal` refuses it, and it is deleted with the same steps as the user's own Delete once the new
+agent exists, or on the next connect if the daemon stopped in between. A failure at any
+point leaves Chief reconnectable. The route first answers the host requests the old
+conversation was waiting on as `unknown` (`tools.reset()`); the Vibing backend cancels its
+pending approvals. Handoffs survive a restart: they belong to feature chats and are signed
+with the capability, which does not change.
+
 Handoffs (`chief-handoffs.ts`): `start_feature_task` builds the Bot's message from a fixed
 template (untrusted merge request title JSON-escaped, the user's words fenced). Its
 `instruction` must be a whitespace-normalized, case-sensitive excerpt of one of the user's
