@@ -301,6 +301,13 @@ test("the ceiling and persona include the three Vibing API tools", () => {
   expect(CHIEF_PERSONA).toContain("approval_required");
 });
 
+test("the persona says where a workspace's target branch is, so Chief looks it up", () => {
+  expect(CHIEF_PERSONA).toContain("targetBranch in GET /api/ui/state");
+  expect(CHIEF_PERSONA).toContain("POST /api/git/worktree-status");
+  expect(CHIEF_PERSONA).toContain("baseBranch");
+  expect(CHIEF_PERSONA).toMatch(/instead of guessing or asking/);
+});
+
 test("the persona knows the app-window commands and that changed commands need approval", () => {
   expect(CHIEF_PERSONA).toContain("GET /api/ui/state");
   expect(CHIEF_PERSONA).toContain("POST /api/ui/command");
