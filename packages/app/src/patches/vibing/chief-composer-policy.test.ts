@@ -6,10 +6,10 @@ import { expect, it } from "vitest";
 // model/mode/feature controls. The daemon ceiling is authoritative; this keeps the UI honest.
 const composer = readFileSync(resolve(__dirname, "../../composer/index.tsx"), "utf8");
 
-it("hides the agent controls in the Chief frame only", () => {
-  expect(composer).toContain('import { isEmbeddedChiefView } from "@/patches/vibing/focus-mode";');
-  expect(composer).toContain("showAgentControls: mode.showAgentControls && !isEmbeddedChiefView,");
-  expect(composer).not.toMatch(/showAgentControls: mode\.showAgentControls,/);
+it("shows the agent controls in the Chief frame, so the user chooses its model and mode", () => {
+  // Chief is a plain agent now; the controls are the normal ones, with no Chief-only gate.
+  expect(composer).toContain("showAgentControls: mode.showAgentControls,");
+  expect(composer).not.toContain("isEmbeddedChiefView");
 });
 
 it("keeps every client call that changes a session's model, mode or features inside the controls", () => {

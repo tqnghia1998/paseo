@@ -23,6 +23,7 @@ import { constants, existsSync, unlinkSync } from "fs";
 import { open, rm, stat } from "fs/promises";
 import { randomUUID } from "node:crypto";
 import { getHostName } from "./host-name.js";
+import os from "node:os";
 import path from "node:path";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Logger } from "pino";
@@ -1062,6 +1063,9 @@ export async function createPaseoDaemon(
   };
   const chiefSession = createChiefSession({
     home: config.paseoHome,
+    // The folder holding every repository and worktree; Vibing sets it for the runtime.
+    workdir:
+      process.env.PASEO_CHIEF_WORKDIR || path.join(os.homedir(), "Documents", "space-app-vibing"),
     serverId,
     agentManager: {
       createAgent: (...args) => agentManager.createAgent(...args),
