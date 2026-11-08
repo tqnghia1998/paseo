@@ -3,6 +3,7 @@ import { createRestartRecovery } from "./agent/restart-recovery/index.js";
 import { createChiefSession } from "../patches/vibing/chief-session.js";
 import { createChiefTools } from "../patches/vibing/chief-tools.js";
 import { registerChiefRoutes } from "../patches/vibing/chief-http.js";
+import { createChiefChats } from "../patches/vibing/chief-chats.js";
 import { createChiefBotBridge } from "../patches/vibing/chief-bot.js";
 import { createChiefHandoffs } from "../patches/vibing/chief-handoffs.js";
 import { ensureAgentLoaded } from "./agent/agent-loading.js";
@@ -1048,6 +1049,17 @@ export async function createPaseoDaemon(
   const chiefBot = createChiefBotBridge((method, input) =>
     pluginRuntime.invokePluginRpc("paseo-bots", method, input),
   );
+  // The same steps as the user's own Delete (see Session.handleDeleteAgentRequest).
+  const deleteAgentLikeUser = async (id: string) => {
+    const known = agentManager.getAgent(id) ?? (await agentStorage.get(id));
+    if ("beginDelete" in agentStorage && typeof agentStorage.beginDelete === "function")
+      (agentStorage as { beginDelete(agentId: string): void }).beginDelete(id);
+    await closeAgentCommand({ agentManager }, id).catch(() => undefined);
+    await agentManager.flush();
+    await agentStorage.remove(id);
+    await agentManager.deleteAgentState(id);
+    if (known) agentManager.notifyAgentRemoved(known);
+  };
   const chiefSession = createChiefSession({
     home: config.paseoHome,
     serverId,
@@ -1068,17 +1080,7 @@ export async function createPaseoDaemon(
       }),
     loadAgent: (id) => ensureAgentLoaded(id, { agentManager, agentStorage, logger }),
     prepareBot: () => chiefBot.prepare(),
-    deleteAgent: async (id) => {
-      // The same steps as the user's own Delete (see Session.handleDeleteAgentRequest).
-      const known = agentManager.getAgent(id) ?? (await agentStorage.get(id));
-      if ("beginDelete" in agentStorage && typeof agentStorage.beginDelete === "function")
-        (agentStorage as { beginDelete(agentId: string): void }).beginDelete(id);
-      await closeAgentCommand({ agentManager }, id).catch(() => undefined);
-      await agentManager.flush();
-      await agentStorage.remove(id);
-      await agentManager.deleteAgentState(id);
-      if (known) agentManager.notifyAgentRemoved(known);
-    },
+    deleteAgent: deleteAgentLikeUser,
   });
   const chiefHandoffs = createChiefHandoffs({
     agentStorage,
@@ -1439,6 +1441,28 @@ export async function createPaseoDaemon(
     tools: chiefTools,
     bot: chiefBot,
     handoffs: chiefHandoffs,
+    chats: createChiefChats({
+      agentStorage,
+      agentManager,
+      chiefOwns: (id) => chiefSession.owns(id),
+      readRows: async (id) => {
+        await ensureAgentLoaded(id, { agentManager, agentStorage, logger });
+        return agentManager.getTimelineRows(id);
+      },
+      deleteAgent: deleteAgentLikeUser,
+      send: async (id, text) => {
+        // A message from Chief never answers a permission the Bot is waiting on.
+        await sendPromptToAgent({
+          agentId: id,
+          prompt: text,
+          agentManager,
+          agentStorage,
+          logger,
+          unarchive: false,
+          clearPendingPermissions: false,
+        });
+      },
+    }),
     ready: () => pluginRuntime.catalog().some((plugin) => plugin.id === "paseo-bots"),
   });
   registerWorktreeRoutes({
