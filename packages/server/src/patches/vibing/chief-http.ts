@@ -11,6 +11,7 @@ import {
   type createChiefTools,
 } from "./chief-tools.js";
 import { registerChiefBotTools, type createChiefBotBridge } from "./chief-bot.js";
+import type { ChiefChats } from "./chief-chats.js";
 import { StartFeatureTaskInput, type createChiefHandoffs } from "./chief-handoffs.js";
 import { createChiefVibingApi, registerChiefVibingApiTools } from "./chief-vibing-api.js";
 
@@ -46,6 +47,8 @@ export function registerChiefRoutes(input: {
   tools: ReturnType<typeof createChiefTools>;
   bot?: ReturnType<typeof createChiefBotBridge>;
   handoffs?: ReturnType<typeof createChiefHandoffs>;
+  /** Bot chats for the host's own reads, deletes and messages. */
+  chats?: ChiefChats;
   ready?(): boolean;
 }) {
   const { router, session, tools } = input;
@@ -104,6 +107,73 @@ export function registerChiefRoutes(input: {
         res.status(503).json({ error: "Chief session unavailable" });
       });
   });
+  // Bot chats. Host-only: the Vibing backend decides what Chief may do (reads are untrusted
+  // text, deletes and messages wait for the user) and calls these only after that.
+  const chats = input.chats;
+  if (chats) {
+    const ChatId = z.string().min(1).max(200);
+    const run = (
+      req: Request,
+      res: Response,
+      schema: z.ZodType,
+      action: (body: never) => Promise<unknown>,
+    ) => {
+      if (!host(req, res)) return;
+      if (!session.isConnected()) {
+        res.status(503).json({ error: "Chief host reconciliation required" });
+        return;
+      }
+      const parsed = schema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "Invalid request" });
+        return;
+      }
+      void action(parsed.data as never)
+        .then((answer) =>
+          answer === null ? res.status(404).json({ error: "No such chat" }) : res.json(answer),
+        )
+        .catch(() => res.status(503).json({ error: "Chief chat request failed" }));
+    };
+    router.post("/chats/list", (req, res) =>
+      run(
+        req,
+        res,
+        z
+          .object({
+            botId: z.string().max(200).optional(),
+            status: z.enum(["working", "needs-input", "idle", "failed"]).optional(),
+            workspaceId: z.string().max(200).optional(),
+            ids: z.array(ChatId).max(100).optional(),
+          })
+          .strict(),
+        (body: Parameters<ChiefChats["list"]>[0]) => chats.list(body),
+      ),
+    );
+    router.post("/chats/read", (req, res) =>
+      run(
+        req,
+        res,
+        z.object({ chatId: ChatId, limit: z.number().int().min(1).max(50).optional() }).strict(),
+        (body: { chatId: string; limit?: number }) => chats.read(body.chatId, body.limit),
+      ),
+    );
+    router.post("/chats/delete", (req, res) =>
+      run(
+        req,
+        res,
+        z.object({ chatIds: z.array(ChatId).min(1).max(100) }).strict(),
+        (body: { chatIds: string[] }) => chats.remove(body.chatIds),
+      ),
+    );
+    router.post("/chats/send", (req, res) =>
+      run(
+        req,
+        res,
+        z.object({ chatId: ChatId, text: z.string().min(1).max(4000) }).strict(),
+        (body: { chatId: string; text: string }) => chats.send(body.chatId, body.text),
+      ),
+    );
+  }
   router.post("/navigation/poll", (req, res) => {
     if (!host(req, res)) return;
     if (!session.isConnected()) {
