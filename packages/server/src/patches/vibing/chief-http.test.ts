@@ -48,7 +48,21 @@ async function fixture(handoffs?: Parameters<typeof registerChiefRoutes>[0]["han
     isConnected,
     agentToken: () => "fixture-agent-token",
   } as unknown as ReturnType<typeof createChiefSession>;
-  registerChiefRoutes({ router, hostToken: "fixture-host-token", session, tools, ready, handoffs });
+  const chats = {
+    list: vi.fn(async () => ({ total: 0, chats: [] })),
+    read: vi.fn(async (): Promise<unknown> => ({ chat: { id: "c" }, messages: [] })),
+    remove: vi.fn(async () => ({ deleted: ["c"], skipped: [] })),
+    send: vi.fn(async () => ({ ok: true })),
+  };
+  registerChiefRoutes({
+    router,
+    hostToken: "fixture-host-token",
+    session,
+    tools,
+    ready,
+    handoffs,
+    chats: chats as never,
+  });
   const server = createServer(app);
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -69,7 +83,7 @@ async function fixture(handoffs?: Parameters<typeof registerChiefRoutes>[0]["han
       },
       body: JSON.stringify(body),
     });
-  return { url, host, connect, restart, isConnected, ready, tools };
+  return { url, host, connect, restart, isConnected, ready, tools, chats };
 }
 
 test("cold plugin startup returns starting without attempting Chief launch", async () => {
@@ -139,6 +153,57 @@ test("restart answers the host requests the old conversation was waiting on as u
   });
   await host("/restart", {});
   expect(await waiting).toEqual({ outcome: "unknown" });
+});
+
+test("chat routes are host-only, need a connected Chief and validate their input", async () => {
+  const { url, host, chats, isConnected } = await fixture();
+  for (const route of ["/chats/list", "/chats/read", "/chats/delete", "/chats/send"]) {
+    for (const headers of [
+      { authorization: "Bearer fixture-agent-token" },
+      {} as Record<string, string>,
+    ]) {
+      const refused = await fetch(url + route, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: "{}",
+      });
+      expect(refused.status, route).toBe(403);
+    }
+  }
+  expect(chats.list).not.toHaveBeenCalled();
+  isConnected.mockReturnValueOnce(false);
+  expect((await host("/chats/list", {})).status).toBe(503);
+  // Unknown keys, empty ids and oversize input are refused before anything runs.
+  expect((await host("/chats/list", { extra: 1 })).status).toBe(400);
+  expect((await host("/chats/read", {})).status).toBe(400);
+  expect((await host("/chats/delete", { chatIds: [] })).status).toBe(400);
+  expect((await host("/chats/delete", { chatIds: Array(101).fill("a") })).status).toBe(400);
+  expect((await host("/chats/send", { chatId: "a", text: "x".repeat(4001) })).status).toBe(400);
+  expect(chats.remove).not.toHaveBeenCalled();
+  expect(chats.send).not.toHaveBeenCalled();
+});
+
+test("chat routes answer through the chats module, and a missing chat is a 404", async () => {
+  const { host, chats } = await fixture();
+  expect(await (await host("/chats/list", { status: "idle" })).json()).toEqual({
+    total: 0,
+    chats: [],
+  });
+  expect(chats.list).toHaveBeenCalledWith({ status: "idle" });
+  expect(await (await host("/chats/delete", { chatIds: ["c"] })).json()).toEqual({
+    deleted: ["c"],
+    skipped: [],
+  });
+  expect(chats.remove).toHaveBeenCalledWith(["c"]);
+  expect(await (await host("/chats/send", { chatId: "c", text: "hi" })).json()).toEqual({
+    ok: true,
+  });
+  chats.read.mockResolvedValueOnce(null);
+  expect((await host("/chats/read", { chatId: "nope" })).status).toBe(404);
+  chats.list.mockRejectedValueOnce(new Error("secret detail"));
+  const failed = await host("/chats/list", {});
+  expect(failed.status).toBe(503);
+  expect(JSON.stringify(await failed.json())).not.toContain("secret detail");
 });
 
 test("a cold same-port runtime refuses navigation polling until host reconciliation", async () => {

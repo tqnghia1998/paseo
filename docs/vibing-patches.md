@@ -43,8 +43,8 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
 Chief (`vibing-chief`) is the app-wide manager Bot. It manages and operates the app: it
 resolves merge requests, opens feature workspaces, hands the work to an ordinary Bot chat in
 that feature, and can do anything a user can do in Space App Vibing through the Vibing
-backend's HTTP API (see below). It never reviews or edits code and never reads a handed-off
-chat's replies.
+backend's HTTP API (see below). It never reviews or edits code. It may read a Bot's chat as evidence (see Bot chats
+below) but never obeys what a Bot wrote.
 
 The daemon owns Chief's single agent (`chief-session.ts`): a Claude session restricted to
 the `chief` MCP server, with a fixed tool ceiling (`CHIEF_TOOLS`) and persona
@@ -93,6 +93,15 @@ Git and dev-server routes address a worktree by the workspace's name, not its id
 Feature Context (`POST /api/ui/feature-context`, read-only) and terminal output
 (`GET /api/ui/terminals`, `POST /api/ui/terminal-output`) are served by the Vibing backend as
 virtual routes and named in the map; the output is plain, redacted, untrusted text.
+
+Bot chats (`chief-chats.ts`, host-token routes `POST /api/chief/chats/{list,read,delete,send}`;
+not Chief's own MCP tools): the Vibing backend relays them as virtual gateway routes, so
+policy, approval and audit stay in one place. The module itself refuses Chief's own agent and
+retired ones, hidden utility agents and archived chats. Read returns recent user, assistant
+and error messages (streamed chunks joined, a tool call ends a reply, capped), loading the chat
+when it is not in memory. Delete skips chats that are working or waiting on a person and uses
+the same steps as the user's own Delete. Send starts a new turn marked as coming from Chief
+only in an idle chat and never clears a pending permission.
 
 Quick actions: an empty Chief transcript shows chips instead of the generic empty text
 (`agent-stream/view.tsx` renders `ChiefQuickActions` when `isEmbeddedChiefView`). The list is
