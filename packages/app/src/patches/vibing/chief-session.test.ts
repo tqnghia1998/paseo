@@ -19,6 +19,11 @@ const session: ChiefSession = {
 };
 
 describe("parseChiefSession", () => {
+  it("accepts whichever provider Chief runs on", () => {
+    for (const provider of ["codex", "claude", "opencode"])
+      expect(parseChiefSession({ ...session, provider })?.provider).toBe(provider);
+  });
+
   it("accepts the exact descriptor", () => {
     expect(parseChiefSession({ ...session })).toEqual(session);
   });
@@ -27,7 +32,8 @@ describe("parseChiefSession", () => {
     ["protocol", 2],
     ["status", "starting"],
     ["policy", "chief-v2"],
-    ["provider", "codex"],
+    ["provider", ""],
+    ["provider", 5],
     ["serverId", ""],
     ["agentId", "  "],
     ["workspaceId", 7],
