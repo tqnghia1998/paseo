@@ -3,14 +3,14 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export const CHIEF_BOT_ID = "vibing-chief";
-// Chief never reads feature chats: check_chat would return a handed-off chat's reply.
+// Chief's own Bot tools: who can take a task, its memory and its history. It has no skills (its
+// configuration is owned by source and cannot be edited) and never reads the Bot setup.
+// Feature replies use the gateway chat reader.
 export const CHIEF_BOT_TOOLS = [
   "list_bots",
   "search_chats",
-  "get_setup",
   "read_memory",
   "write_memory",
-  "read_skill",
 ] as const;
 
 export function registerChiefBotTools(
@@ -37,11 +37,6 @@ export function registerChiefBotTools(
       },
     },
     {
-      name: "get_setup",
-      description: "Read Bot setup and available skills; does not change configuration.",
-      inputSchema: { bot: z.string().max(100).optional() },
-    },
-    {
       name: "read_memory",
       description: "Read Chief's own MEMORY.md or a named memory topic.",
       inputSchema: {
@@ -64,16 +59,6 @@ export function registerChiefBotTools(
         text: z.string().max(200_000),
       },
     },
-    {
-      name: "read_skill",
-      description: "Read an assigned, reviewed Bot library skill by its ID.",
-      inputSchema: {
-        id: z
-          .string()
-          .regex(/^[A-Za-z0-9._-]+$/)
-          .max(128),
-      },
-    },
   ];
   for (const tool of tools)
     server.registerTool(tool.name, tool, async (args) => ({
@@ -91,8 +76,14 @@ export function createChiefBotBridge(
   invoke: (method: string, input: Record<string, unknown>) => Promise<unknown>,
 ) {
   const bridgeToken = randomBytes(32).toString("hex");
-  const prepare = async (): Promise<string> => {
-    const result = await invoke("bots.chief.prepare", { bridgeToken });
+  let identity: { agentId: string; cwd: string } | null = null;
+  const prepare = async (next = identity): Promise<string> => {
+    if (!next) throw new Error("Chief broker identity is not initialized");
+    identity = { ...next };
+    const result = await invoke("bots.chief.prepare", {
+      bridgeToken,
+      ...identity,
+    });
     return z.object({ systemPrompt: z.string().max(250_000) }).parse(result).systemPrompt;
   };
   const boundCall = async (method: string, input: Record<string, unknown>) => {
@@ -109,6 +100,8 @@ export function createChiefBotBridge(
   return {
     prepare,
     async call(agentId: string, tool: string, args: unknown): Promise<string> {
+      if (identity && identity.agentId !== agentId)
+        throw new Error("Chief broker identity changed");
       if (!(CHIEF_BOT_TOOLS as readonly string[]).includes(tool))
         throw new Error("Unsupported Chief Bot tool");
       const result = await boundCall("bots.chief.call", {
@@ -132,7 +125,11 @@ export function createChiefBotBridge(
       labels: Record<string, string>;
     }) {
       return z
-        .object({ chatId: z.string().min(1), botId: z.string().min(1), name: z.string() })
+        .object({
+          chatId: z.string().min(1),
+          botId: z.string().min(1),
+          name: z.string(),
+        })
         .parse(await boundCall("bots.chief.handoff", { ...input }));
     },
   };

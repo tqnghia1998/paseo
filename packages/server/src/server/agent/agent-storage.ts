@@ -127,6 +127,7 @@ export class AgentStorage {
   private pathById: Map<string, string> = new Map();
   private pathsById: Map<string, Set<string>> = new Map();
   private pendingWrites: Map<string, Promise<void>> = new Map();
+  private pendingRemovals: Map<string, Promise<void>> = new Map();
   private deleting: Set<string> = new Set();
   private daemonAgentIdsByExecution: Map<string, string> = new Map();
   private daemonExecutionKeysByAgentId: Map<string, string> = new Map();
@@ -350,26 +351,41 @@ export class AgentStorage {
     this.deleting.add(agentId);
   }
 
-  async remove(agentId: string): Promise<void> {
+  remove(agentId: string): Promise<void> {
+    const pending = this.pendingRemovals.get(agentId);
+    if (pending) return pending;
+    // Overlapping callers share the attempt, so failure cannot reopen writes
+    // while another removal is still touching the same files.
+    const removal = this.removeOnce(agentId).then(
+      () => {
+        this.pendingRemovals.delete(agentId);
+        return undefined;
+      },
+      (error) => {
+        this.pendingRemovals.delete(agentId);
+        // A failed delete leaves a usable record. Restore writes before callers
+        // release their admission guards; successful deletion keeps its fence.
+        this.deleting.delete(agentId);
+        throw error;
+      },
+    );
+    this.pendingRemovals.set(agentId, removal);
+    return removal;
+  }
+
+  private async removeOnce(agentId: string): Promise<void> {
     await this.load();
     this.beginDelete(agentId);
     await (this.pendingWrites.get(agentId) ?? Promise.resolve());
-    const paths = Array.from(this.pathsById.get(agentId) ?? []);
-    await Promise.all(
-      paths.map(async (filePath) => {
-        try {
-          await fs.unlink(filePath);
-        } catch (error) {
-          const code = (error as NodeJS.ErrnoException).code;
-          if (code && code !== "ENOENT") {
-            this.logger.warn(
-              { err: error, agentId, filePath },
-              "Failed to remove agent record file",
-            );
-          }
-        }
-      }),
-    );
+    // Keep all indexes until deletion succeeds. A partial failure must remain
+    // discoverable and retryable; paths already removed are harmless on retry.
+    for (const filePath of this.pathsById.get(agentId) ?? []) {
+      try {
+        await fs.unlink(filePath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }
 
     const workspaceId = this.workspaceById.get(agentId);
     this.workspaceById.delete(agentId);
