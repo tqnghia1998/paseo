@@ -119,6 +119,8 @@ import { recordRenderProfileReasons } from "@/utils/render-profiler";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useStreamHistoryWindow } from "./use-stream-history-window";
 import { PluginTimelineItemView, useInstalledTimelineTransform } from "@/plugins/timeline";
+import { ChiefQuickActions } from "@/patches/vibing/chief-quick-actions-view";
+import { isEmbeddedChiefView } from "@/patches/vibing/focus-mode";
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -231,6 +233,14 @@ function renderListEmptyComponent(input: {
     input.renderModel.auxiliary.turnFooter
   ) {
     return null;
+  }
+
+  if (isEmbeddedChiefView) {
+    return (
+      <View style={input.emptyStateStyle}>
+        <ChiefQuickActions />
+      </View>
+    );
   }
 
   return (
