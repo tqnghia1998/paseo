@@ -192,6 +192,7 @@ test("a workspace opened by the host is awaited until it reaches the inventory",
   await expect(tools.workspaceDirectory("app-one", "tab-one")).resolves.toEqual({
     cwd: "/repo/feature",
     name: "Feature",
+    gitRepo: apps[0]!.gitRepo,
   });
   const waiting = tools.workspaceDirectory("app-one", "tab-two", 5_000);
   tools.updateInventory({
@@ -202,9 +203,78 @@ test("a workspace opened by the host is awaited until it reaches the inventory",
       },
     ],
   });
-  await expect(waiting).resolves.toEqual({ cwd: "/repo/new", name: "New" });
+  await expect(waiting).resolves.toEqual({
+    cwd: "/repo/new",
+    name: "New",
+    gitRepo: apps[0]!.gitRepo,
+  });
   await expect(tools.workspaceDirectory("app-one", "tab-three", 10)).rejects.toThrow(
     "not available on disk",
   );
   tools.close();
+});
+
+test.each([138, 255])(
+  "inventory and navigation retain a %i-character branch-backed identity",
+  async (length) => {
+    const branch = `feature/${"a".repeat(length - 8)}`;
+    const inventory = {
+      apps: [{ ...apps[0]!, workspaces: [{ id: branch, name: branch, cwd: "/repo/long" }] }],
+    };
+    const tools = createChiefTools();
+    try {
+      tools.updateInventory(inventory);
+      expect(tools.listWorkspaces("app-one")).toEqual([{ id: branch, name: branch }]);
+      await expect(tools.workspaceDirectory("app-one", branch)).resolves.toEqual({
+        cwd: "/repo/long",
+        name: branch,
+        gitRepo: apps[0]!.gitRepo,
+      });
+      const opened = tools.openWorkspace({
+        appId: "app-one",
+        workspaceId: branch,
+        destination: "bots",
+      });
+      const [request] = tools.poll(inventory);
+      expect(request).toMatchObject({ workspaceId: branch });
+      tools.ack(request!.id, { outcome: "opened" });
+      await expect(opened).resolves.toEqual({ outcome: "opened" });
+    } finally {
+      tools.close();
+    }
+  },
+);
+
+test("inventory keeps a full 255-character branch name with a short workspace ID", () => {
+  const branch = `feature/${"a".repeat(247)}`;
+  const tools = createChiefTools();
+  try {
+    tools.updateInventory({ apps: [{ ...apps[0]!, workspaces: [{ id: "tab", name: branch }] }] });
+    expect(tools.listWorkspaces("app-one")).toEqual([{ id: "tab", name: branch }]);
+  } finally {
+    tools.close();
+  }
+});
+
+test("open-branch and MR acknowledgements accept branch-backed workspace identities", async () => {
+  const branch = `feature/${"a".repeat(247)}`;
+  const tools = createChiefTools();
+  tools.updateInventory({ apps });
+  try {
+    const opening = tools.openBranch({ appId: "app-one", branch });
+    tools.ack(tools.poll({ apps })[0]!.id, { outcome: "opened", workspaceId: branch });
+    await expect(opening).resolves.toEqual({ outcome: "opened", workspaceId: branch });
+    const resolving = tools.resolveMergeRequest(mergeRequest.url);
+    tools.ack(tools.poll({ apps })[0]!.id, {
+      outcome: "resolved",
+      mergeRequest: { ...mergeRequest, sourceBranch: branch },
+      apps: [{ appId: "app-one", name: "App", workspaceId: branch }],
+    });
+    await expect(resolving).resolves.toMatchObject({
+      outcome: "resolved",
+      apps: [{ workspaceId: branch }],
+    });
+  } finally {
+    tools.close();
+  }
 });

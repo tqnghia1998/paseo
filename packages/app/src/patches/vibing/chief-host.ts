@@ -1,3 +1,6 @@
+import { createChiefDocumentBridge } from "./chief-documents";
+import { pluginRegistry } from "@/plugins/registry";
+import { createPluginNavigation } from "@/plugins/navigation";
 import { useSyncExternalStore } from "react";
 import { createChiefHandshake, type ChiefHandshake, type ChiefState } from "./chief-handshake";
 import { isEmbeddedChiefView } from "./focus-mode";
@@ -17,7 +20,27 @@ export function getChiefHandshake(): ChiefHandshake | null {
     post: (message) => window.parent.postMessage(message, origin),
   });
   // Shared helper: only the actual parent window at the actual parent origin gets through.
-  subscribeToHostMessages(origin, handshake.receive);
+  const current = handshake;
+  const documentBridge = createChiefDocumentBridge({
+    state: current.getState,
+    post: (message) => window.parent.postMessage(message, origin),
+    open: (serverId, workspaceId, path) => {
+      const viewer = pluginRegistry
+        .getSnapshot()
+        .find((plugin) => plugin.serverId === serverId && plugin.id === "paseo-doc-viewer");
+      if (!viewer?.surfaces.some((surface) => surface.id === "document")) return false;
+      createPluginNavigation({ serverId, workspaceId }).openSurface(
+        "paseo-doc-viewer",
+        "document",
+        { workspaceId, path },
+      );
+      return true;
+    },
+  });
+  subscribeToHostMessages(origin, (data) => {
+    current.receive(data);
+    documentBridge(data);
+  });
   return handshake;
 }
 

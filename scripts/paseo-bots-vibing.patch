@@ -1,5 +1,5 @@
 diff --git a/client/BotDialogs.tsx b/client/BotDialogs.tsx
-index 9d97c7f..55c9dfc 100644
+index 9d97c7f..855ce7f 100644
 --- a/client/BotDialogs.tsx
 +++ b/client/BotDialogs.tsx
 @@ -1,17 +1,19 @@
@@ -147,19 +147,15 @@ index 9d97c7f..55c9dfc 100644
    onDelete(): Promise<void>;
  }
  
-@@ -264,6 +295,11 @@ export interface BotMenuActions {
+@@ -264,6 +295,7 @@ export interface BotMenuActions {
  export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
    const { bot } = actions;
    const entries: MenuEntry[] = [{ label: "Open bot settings", icon: "Settings", onSelect: actions.onOpenSettings }];
-+  if (bot.id === CHIEF_BOT_ID) return [
-+    ...entries,
-+    { label: "Rename bot", icon: "Pencil", onSelect: actions.onRename },
-+    { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId },
-+  ];
++  if (bot.id === CHIEF_BOT_ID) return [];
    if (actions.onOpenInPaseo) entries.push({ label: "Open in Paseo", icon: "ExternalLink", onSelect: actions.onOpenInPaseo });
    entries.push({ label: bot.pinned ? "Unpin" : "Pin to top", icon: bot.pinned ? "PinOff" : "Pin", onSelect: actions.onTogglePin });
    if (actions.onMoveUp || actions.onMoveDown) {
-@@ -278,6 +314,7 @@ export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
+@@ -278,6 +310,7 @@ export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
      { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId },
      { kind: "separator" },
      { label: bot.archived ? "Unarchive bot" : "Archive bot", icon: bot.archived ? "ArchiveRestore" : "Archive", onSelect: actions.onToggleArchive },
@@ -167,7 +163,7 @@ index 9d97c7f..55c9dfc 100644
      { label: "Delete bot", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDelete },
    );
    return entries;
-@@ -289,6 +326,7 @@ export interface ChatMenuActions {
+@@ -289,6 +322,7 @@ export interface ChatMenuActions {
    onCopyId(): void;
    onCopyTranscript(): Promise<void>;
    onTogglePin(): void;
@@ -175,7 +171,7 @@ index 9d97c7f..55c9dfc 100644
    /** Present in manual order; undefined at an edge. `null` hides the pair (pinned chats, activity order). */
    move: { up?: () => void; down?: () => void } | null;
    onOpenInPaseo?: () => void;
-@@ -298,6 +336,7 @@ export interface ChatMenuActions {
+@@ -298,6 +332,7 @@ export interface ChatMenuActions {
  /** The chat menu, after Paseo's workspace menu (sidebar/sidebar-workspace-menu.tsx). */
  export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
    const entries: MenuEntry[] = [
@@ -183,7 +179,7 @@ index 9d97c7f..55c9dfc 100644
      { label: "Copy path", icon: "Copy", onSelect: actions.onCopyPath },
      { label: "Copy chat ID", icon: "Copy", onSelect: actions.onCopyId },
      { label: "Copy transcript", icon: "FileText", pendingLabel: "Copying...", onSelect: actions.onCopyTranscript },
-@@ -314,25 +353,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
+@@ -314,25 +349,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
  
  // ------------------------------------------------------------------ export
  
@@ -219,7 +215,7 @@ index 9d97c7f..55c9dfc 100644
          <SettingsCard>
            <SettingsSwitch
              label="Include memory"
-@@ -340,17 +385,24 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
+@@ -340,17 +381,24 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
              value={includeMemory}
              onValueChange={setIncludeMemory}
            />
@@ -250,15 +246,16 @@ index 9d97c7f..55c9dfc 100644
      </Modal>
    );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 7533cb6..344466c 100644
+index 7533cb6..3ab22a6 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
-@@ -1,3 +1,4 @@
+@@ -1,3 +1,5 @@
++import { userBots } from "../shared/managed-chief-ui";
 +import { CHIEF_BOT_ID } from "../shared/vibing-defaults";
  import type { PluginTheme } from "@getpaseo/plugin";
  import type { PaseoAgent } from "./paseo";
  import { Icon, ScrollView } from "@getpaseo/plugin/client/react-native";
-@@ -13,7 +14,7 @@ import { openLibrary } from "./navigation";
+@@ -13,7 +15,7 @@ import { openLibrary } from "./navigation";
  import { nativeTokens, useHover, type NativeTokens } from "./native";
  import { Splash } from "./Splash";
  import { ui } from "./typography";
@@ -267,7 +264,7 @@ index 7533cb6..344466c 100644
  import { tooltip } from "./ui/Tooltip";
  
  // Paseo's sidebar, reproduced from components/left-sidebar.tsx, sidebar-workspace-list.tsx
-@@ -27,6 +28,8 @@ export interface Selection {
+@@ -27,6 +29,8 @@ export interface Selection {
    chatId: string | null;
    /** First message to send straight away when starting a new chat. */
    prompt?: string;
@@ -276,7 +273,7 @@ index 7533cb6..344466c 100644
  }
  
  export type MenuSource = "kebab" | "context";
-@@ -35,6 +38,8 @@ export interface ChatMenuContext {
+@@ -35,6 +39,8 @@ export interface ChatMenuContext {
    /** Every unpinned chat of the bot in list order, for Move up / Move down. */
    siblings: string[];
    pinned: boolean;
@@ -285,7 +282,7 @@ index 7533cb6..344466c 100644
  }
  
  interface BotSidebarProps {
-@@ -58,8 +63,11 @@ interface BotSidebarProps {
+@@ -58,8 +64,11 @@ interface BotSidebarProps {
    onShowArchived(): void;
    onSelect(selection: Selection): void;
    onNewBot(): void;
@@ -297,7 +294,7 @@ index 7533cb6..344466c 100644
    onDisplayMenu(anchor: LayoutRectangle): void;
    onEditTeam(group: BotGroup): void;
    onTeamMap(): void;
-@@ -69,19 +77,28 @@ const noSelect = { userSelect: "none" } as object;
+@@ -69,19 +78,28 @@ const noSelect = { userSelect: "none" } as object;
  /** Paseo hardcodes the project chevron colour (project-leading-visual.tsx). */
  const CHEVRON_COLOR = "#9ca3af";
  
@@ -313,7 +310,8 @@ index 7533cb6..344466c 100644
  export function BotSidebar(props: BotSidebarProps) {
    const { colors, bots, openTab, ui: listUi, hiddenArchivedCount, bottomInset, onNewBot, onShowArchived, onTeamMap, onEditTeam } = props;
    const tokens = nativeTokens(colors);
-   const shown = openTab?.bots ?? bots;
+-  const shown = openTab?.bots ?? bots;
++  const shown = userBots(openTab?.bots ?? bots);
    const pinnedIds = new Set(listUi.pinnedChats.map((pin) => pin.chatId));
    const listedBots = new Map(shown.map((bot) => [bot.id, bot]));
 -  const pins = listUi.pinnedChats.filter((pin) => listedBots.has(pin.botId));
@@ -328,7 +326,7 @@ index 7533cb6..344466c 100644
        </View>
      );
    }
-@@ -113,7 +130,7 @@ export function BotSidebar(props: BotSidebarProps) {
+@@ -113,7 +131,7 @@ export function BotSidebar(props: BotSidebarProps) {
            )
          ) : null}
        </ScrollView>
@@ -337,7 +335,7 @@ index 7533cb6..344466c 100644
      </View>
    );
  }
-@@ -141,36 +158,24 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
+@@ -141,36 +159,24 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
    );
  }
  
@@ -390,7 +388,7 @@ index 7533cb6..344466c 100644
        <FooterIconButton colors={colors} icon="Network" label="Team map" onPress={onTeamMap} />
        <FooterIconButton colors={colors} icon="Blocks" label="Skills & Tools" onPress={() => openLibrary()} />
      </View>
-@@ -178,17 +183,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
+@@ -178,17 +184,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
  }
  
  /** The sidebar footer's trailing icon buttons (Paseo's host, import and settings buttons): 32 box, 16pt icon. */
@@ -413,7 +411,7 @@ index 7533cb6..344466c 100644
          noSelect,
        ]}
      >
-@@ -232,7 +240,7 @@ function GhostButton({ colors, icon, label, onPress }: { colors: Colors; icon: s
+@@ -232,7 +241,7 @@ function GhostButton({ colors, icon, label, onPress }: { colors: Colors; icon: s
        })}
      >
        <Icon name={icon} size={14} color={tint} />
@@ -422,7 +420,7 @@ index 7533cb6..344466c 100644
      </Pressable>
    );
  }
-@@ -272,11 +280,12 @@ function PinnedSection(props: PinnedProps) {
+@@ -272,11 +281,12 @@ function PinnedSection(props: PinnedProps) {
    );
  }
  
@@ -436,7 +434,7 @@ index 7533cb6..344466c 100644
    return (
      <ChatRow
        colors={colors}
-@@ -287,7 +296,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -287,7 +297,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
        touch={touch}
        selected={selection?.botId === bot.id && selection.chatId === chat.id}
        onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -446,7 +444,7 @@ index 7533cb6..344466c 100644
      />
    );
  }
-@@ -297,7 +307,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -297,7 +308,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
  type GroupProps = BotSidebarProps & { bot: Bot; tokens: NativeTokens; pinnedIds: ReadonlySet<string>; /** The team's Chief of Staff. */ lead?: boolean };
  
  function BotGroup(props: GroupProps) {
@@ -455,7 +453,7 @@ index 7533cb6..344466c 100644
    const host = useBotHost(bot.hostId, localHost);
    const chats = useBotChats(host, bot.id);
    const [expanded, setExpanded] = useState(false);
-@@ -308,13 +318,16 @@ function BotGroup(props: GroupProps) {
+@@ -308,6 +319,7 @@ function BotGroup(props: GroupProps) {
    const unpinned = (chats.data ?? []).filter((chat) => !pinnedIds.has(chat.id));
    const ordered = orderChats(unpinned, listUi.chatSort, listUi.chatOrder[bot.id]);
    const siblings = ordered.map((chat) => chat.id);
@@ -463,17 +461,7 @@ index 7533cb6..344466c 100644
    const visible = expanded ? ordered : ordered.slice(0, SIDEBAR_GROUP_LIMIT);
    const loading = !!host.api && chats.isLoading;
    // Collapsed rows carry their chats' most urgent status; open ones leave it to the rows.
-   const aggregate = isOpen ? null : aggregateBuckets(unpinned.map(chatBucket));
- 
-   let children: ReactNode = null;
--  if (isOpen) {
-+  if (isOpen && bot.id === CHIEF_BOT_ID) {
-+    children = <GhostButton colors={colors} icon="Settings" label="Chief personalization" onPress={() => onSelect({ botId: bot.id, chatId: null })} />;
-+  } else if (isOpen) {
-     if (loading) children = <SkeletonRows colors={colors} />;
-     else if (ordered.length > 0 || draftSelected) {
-       children = (
-@@ -330,7 +343,8 @@ function BotGroup(props: GroupProps) {
+@@ -330,7 +342,8 @@ function BotGroup(props: GroupProps) {
                touch={touch}
                selected={botSelected && selection?.chatId === chat.id}
                onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -483,7 +471,7 @@ index 7533cb6..344466c 100644
              />
            ))}
            {ordered.length > SIDEBAR_GROUP_LIMIT ? <ShowMoreRow colors={colors} expanded={expanded} onPress={() => setExpanded(!expanded)} /> : null}
-@@ -398,14 +412,14 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
+@@ -398,14 +411,14 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
              </View>
            )}
          </View>
@@ -500,7 +488,7 @@ index 7533cb6..344466c 100644
            <Pressable
              accessibilityRole="button"
              accessibilityLabel={`New chat with ${bot.name}`}
-@@ -424,7 +438,7 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
+@@ -424,7 +437,7 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
            >
              {({ pressed: down }) => <Icon name="Plus" size={15} color={plus.hovered || down ? colors.foreground : colors.foregroundMuted} />}
            </Pressable>
@@ -509,7 +497,7 @@ index 7533cb6..344466c 100644
          <View style={{ opacity: actionsVisible ? 1 : 0 }} pointerEvents={actionsVisible ? "auto" : "none"}>
            <KebabButton
              colors={colors}
-@@ -452,10 +466,11 @@ interface ChatRowProps {
+@@ -452,10 +465,11 @@ interface ChatRowProps {
    hoisted?: boolean;
    onPress(): void;
    onMenu(anchor: LayoutRectangle, source: MenuSource): void;
@@ -522,7 +510,7 @@ index 7533cb6..344466c 100644
    const [hovered, setHovered] = useState(false);
    const kebabRef = useRef<View>(null);
    const bucket = chatBucket(chat);
-@@ -504,11 +519,11 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -504,11 +518,11 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
          )}
          <View style={{ flex: 1, minWidth: 0 }}>
            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
@@ -536,7 +524,7 @@ index 7533cb6..344466c 100644
            </View>
            {hoisted ? (
              <Text numberOfLines={1} style={{ fontSize: ui(12), lineHeight: 16, color: colors.foregroundMuted }}>
-@@ -520,8 +535,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -520,8 +534,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
        {showKebab ? (
          <View style={{ position: "absolute", top: 8, right: 12, flexDirection: "row" }}>
            {/* A short scrim in the row's colour hides the title's tail under the kebab, as native does. */}
@@ -548,7 +536,7 @@ index 7533cb6..344466c 100644
              <KebabButton colors={colors} buttonRef={kebabRef} label="Chat actions" onPress={() => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab"))} />
            </View>
          </View>
-@@ -561,7 +577,7 @@ function NewChatGhostRow({ colors, tokens, selected, onPress }: { colors: Colors
+@@ -561,7 +576,7 @@ function NewChatGhostRow({ colors, tokens, selected, onPress }: { colors: Colors
            <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
              <Icon name="Plus" size={14} color={hovered || pressed || selected ? colors.foreground : colors.foregroundMuted} />
            </View>
@@ -557,7 +545,7 @@ index 7533cb6..344466c 100644
              New chat
            </Text>
          </>
-@@ -602,7 +618,7 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -602,7 +617,7 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
            <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
              <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={hovered || pressed ? colors.foreground : colors.foregroundMuted} />
            </View>
@@ -566,7 +554,7 @@ index 7533cb6..344466c 100644
              {label}
            </Text>
          </>
-@@ -611,6 +627,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -611,6 +626,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
    );
  }
  
@@ -591,7 +579,7 @@ index 7533cb6..344466c 100644
  /**
   * Kebab triggers. Chat rows use Paseo's workspace trigger (padding 2, radius 4, pulled
   * onto the rail with marginRight -7); bot rows use the 24pt project kebab (`box`).
-@@ -688,7 +722,7 @@ const BADGE_SIZE = 12;
+@@ -688,7 +721,7 @@ const BADGE_SIZE = 12;
  const BADGE_OFFSET = -4;
  const RING_FRAME = 14;
  
@@ -601,12 +589,12 @@ index 7533cb6..344466c 100644
    if (bucket === "running") {
      const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..bde6cb9 100644
+index ebc4ed2..7aec50f 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
 @@ -1,32 +1,38 @@
-+import { CHIEF_LAUNCHER_GUIDANCE, chiefPersonalizationPatch, exportableBots } from "../shared/managed-chief-ui";
-+import { CHIEF_BOT_ID, managedChiefBot } from "../shared/vibing-defaults";
++import { chiefPersonalizationPatch, exportableBots, userBots, userSettings } from "../shared/managed-chief-ui";
++import { CHIEF_BOT_ID } from "../shared/vibing-defaults";
 +import type { NativeChatSlot } from "./NativeChat";
  import type { PluginTheme } from "@getpaseo/plugin";
 -import type { PaseoAgent } from "./paseo";
@@ -709,23 +697,25 @@ index ebc4ed2..bde6cb9 100644
    const [drafts, setDrafts] = useState<Record<string, Bot>>({});
    // List state (collapsed groups, pins, order, display options) applies at once and saves behind.
    const [uiOverride, setUiOverride] = useState<BotListUi | null>(null);
-@@ -132,6 +143,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -132,6 +143,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    };
  
    const patchBot = (botId: string, patch: Partial<Bot>) => {
++    if (botId === CHIEF_BOT_ID) return;
 +    patch = chiefPersonalizationPatch(botId, patch);
      setDrafts((current) => {
        const base = current[botId] ?? (latest.current.status === "ready" ? latest.current.values.bots.find((bot) => bot.id === botId) : undefined);
        return base ? { ...current, [botId]: { ...base, ...patch, updatedAt: new Date().toISOString() } } : current;
-@@ -155,6 +167,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -155,6 +168,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
  
    /** Applies a patch to the saved bot and to any unsaved draft of it, so autosave can't undo it. */
    const updateBot = (botId: string, patch: Partial<Bot>, recordHistory = false) => {
++    if (botId === CHIEF_BOT_ID) return Promise.resolve(false);
 +    patch = chiefPersonalizationPatch(botId, patch);
      setDrafts((current) => (current[botId] ? { ...current, [botId]: { ...current[botId], ...patch } } : current));
      return commit((values) => {
        const previous = values.bots.find((entry) => entry.id === botId);
-@@ -222,9 +235,63 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -222,9 +237,63 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    // "New bot" from the Command Center opens a fresh Bots screen; only that one consumes it.
    useEffect(() => {
      const intent = takeIntent();
@@ -790,16 +780,19 @@ index ebc4ed2..bde6cb9 100644
    if (settings.status !== "ready") {
      return (
        <View style={{ flex: 1, padding: 24, gap: 12, backgroundColor: colors.surface0, justifyContent: settings.status === "loading" ? "center" : "flex-start", alignItems: settings.status === "loading" ? "center" : "stretch" }}>
-@@ -252,7 +319,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -252,9 +321,9 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      setDragWidths({});
      updateUi((current) => ({ ...current, [key]: Math.round(width) }));
    };
 -  const allBots = settings.values.bots.map((bot) => drafts[bot.id] ?? bot);
-+  const allBots = settings.values.bots.map((bot) => { const value = drafts[bot.id] ?? bot; return value.id === CHIEF_BOT_ID ? managedChiefBot(value) : value; });
++  const allBots = userBots(settings.values.bots).map(bot => drafts[bot.id] ?? bot);
    const library = settings.values.library ?? EMPTY_LIBRARY;
-   const groups = settings.values.groups ?? [];
+-  const groups = settings.values.groups ?? [];
++  const groups = userSettings(settings.values).groups ?? [];
    const listed = allBots
-@@ -269,12 +336,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+     .filter((bot) => listUi.showArchived || !bot.archived)
+     .sort((a, b) => Number(b.pinned) - Number(a.pinned));
+@@ -269,12 +338,33 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    const select = (next: Selection) => {
      setSelection(next);
      setTeamMap(false);
@@ -834,7 +827,7 @@ index ebc4ed2..bde6cb9 100644
    const openPanel = (bot: Bot, section: SectionId | null) => {
      if (selection?.botId !== bot.id) select({ botId: bot.id, chatId: null });
      setPanel({ open: true, section });
-@@ -366,7 +454,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -366,7 +456,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
  
    const openBotMenu = (bot: Bot, anchor: LayoutRectangle, source: MenuSource) => {
      const botHost = resolveHost(bot.hostId);
@@ -843,7 +836,7 @@ index ebc4ed2..bde6cb9 100644
      const workspaceId = chats.find((chat) => chat.workspaceId)?.workspaceId;
      const openWorkspace = navigation?.openWorkspace;
      menu.open({
-@@ -376,20 +464,21 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -376,20 +466,21 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        title: "Bot actions",
        entries: botMenuEntries({
          bot,
@@ -867,7 +860,7 @@ index ebc4ed2..bde6cb9 100644
          onDelete: async () => {
            const confirmed = await confirmDialog({
              title: "Delete bot?",
-@@ -459,26 +548,106 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -459,26 +550,106 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            updateUi((current) =>
              context.pinned ? unpin(current) : { ...current, pinnedChats: [...current.pinnedChats, { botId: bot.id, chatId: chat.id }] },
            ),
@@ -989,7 +982,7 @@ index ebc4ed2..bde6cb9 100644
    const openDisplayMenu = (anchor: LayoutRectangle) => {
      menu.open({
        anchor,
-@@ -527,9 +696,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -527,9 +698,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        onTogglePinnedSection={() => updateUi((current) => ({ ...current, pinnedCollapsed: !current.pinnedCollapsed }))}
        onShowArchived={() => updateUi((current) => ({ ...current, showArchived: true }))}
        onSelect={select}
@@ -1003,7 +996,7 @@ index ebc4ed2..bde6cb9 100644
        onDisplayMenu={openDisplayMenu}
        onEditTeam={setEditingTeam}
        onTeamMap={() => setTeamMap(true)}
-@@ -537,7 +709,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -537,7 +711,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    );
  
    const tabProps = openTab
@@ -1012,16 +1005,8 @@ index ebc4ed2..bde6cb9 100644
      : null;
  
    const pane = teamMap ? (
-@@ -556,13 +728,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
-         setPanel({ open: true, section: "overview" });
-       }}
+@@ -558,11 +732,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
-+  ) : selectedBot?.id === CHIEF_BOT_ID ? (
-+    <View style={{ flex: 1, padding: 24, gap: 16, backgroundColor: colors.surface0 }}>
-+      <Text style={{ color: colors.foreground, fontSize: ui(16) }}>{selectedBot.name}</Text>
-+      <Text style={{ color: colors.foregroundMuted, fontSize: ui(14) }}>{CHIEF_LAUNCHER_GUIDANCE}</Text>
-+      <SettingsAction label="Chief personalization" actionLabel="Open settings" onPress={() => setPanel({ open: true, section: null })} />
-+    </View>
    ) : selectedBot && selection ? (
        <SelectedChat
 -        key={`${selectedBot.id}:${selection.chatId ?? "new"}`}
@@ -1034,7 +1019,7 @@ index ebc4ed2..bde6cb9 100644
          localHost={localHost}
          panelOpen={panel.open}
          layout={layout}
-@@ -571,6 +750,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -571,6 +746,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          onBack={layout.compact ? () => setSelection(null) : undefined}
          onBotMenu={(anchor) => (anchor ? openBotMenu(selectedBot, anchor, "kebab") : openBotMenuFromPane(selectedBot))}
          onTogglePanel={() => setPanel({ open: !panel.open, section: panel.section })}
@@ -1043,7 +1028,7 @@ index ebc4ed2..bde6cb9 100644
          onStarted={(chatId) => setSelection({ botId: selectedBot.id, chatId })}
        />
      ) : (
-@@ -599,7 +780,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -599,7 +776,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            setPanelVersion((version) => version + 1);
            toast.show("Restored. Undo it from History if needed.", { variant: "success" });
          }}
@@ -1052,7 +1037,7 @@ index ebc4ed2..bde6cb9 100644
          onOpenChat={(chatId) => {
            select({ botId: selectedBot.id, chatId });
            // On phones the panel covers the chat.
-@@ -621,13 +802,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -621,13 +798,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : null;
  
@@ -1074,7 +1059,7 @@ index ebc4ed2..bde6cb9 100644
      {/* The host gives plugin surfaces no keyboard handling; lift everything above the keyboard. */}
      <View
        style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}
-@@ -684,6 +872,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -684,6 +868,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
        {creating ? (
          <NewBotDialog
            colors={colors}
@@ -1082,7 +1067,7 @@ index ebc4ed2..bde6cb9 100644
            onClose={() => setCreating(false)}
            presets={settings.status === "ready" ? (settings.values.presets ?? []) : []}
            onCreate={(start) => {
-@@ -694,13 +883,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -694,13 +879,14 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
            }}
            onImport={async (json) => {
              const { bots, teams } = await importTeam({ json });
@@ -1099,7 +1084,7 @@ index ebc4ed2..bde6cb9 100644
              }
            }}
          />
-@@ -721,17 +911,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
+@@ -721,17 +907,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          />
        ) : null}
  
@@ -1133,7 +1118,7 @@ index ebc4ed2..bde6cb9 100644
    localHost: LocalHost;
    panelOpen: boolean;
    layout: PluginSurfaceProps["layout"];
-@@ -743,9 +946,12 @@ interface SelectedChatProps {
+@@ -743,9 +942,12 @@ interface SelectedChatProps {
    onStarted(chatId: string): void;
  }
  
@@ -1148,7 +1133,7 @@ index ebc4ed2..bde6cb9 100644
    const ensureHome = useRpc(ensureBotHomeRpc);
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
-@@ -754,15 +960,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -754,15 +956,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
  
    const start = async (message: OutgoingMessage) => {
      if (!host.api) throw new Error(`${host.label} is offline.`);
@@ -1171,7 +1156,7 @@ index ebc4ed2..bde6cb9 100644
        library,
        ...(host.isLocal ? { agentId } : {}),
        plugin,
-@@ -773,13 +984,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -773,13 +980,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        attachments: message.attachments,
        clientMessageId: message.messageId,
      });
@@ -1195,7 +1180,7 @@ index ebc4ed2..bde6cb9 100644
      const api = host.api;
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
-@@ -799,8 +1018,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -799,8 +1014,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
      // Runs once for the selection that carries the prompt.
    }, [host.api]);
  
@@ -1213,7 +1198,7 @@ index ebc4ed2..bde6cb9 100644
        colors={colors}
        bot={bot}
        host={host}
-@@ -815,6 +1043,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -815,6 +1039,7 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        onTogglePanel={onTogglePanel}
        onStart={start}
        onOpenChat={onStarted}
@@ -1512,11 +1497,11 @@ index ee24cd8..c0cf7b4 100644
          <SettingsSelect
            label="Folder"
 diff --git a/client/panel/BotPanel.tsx b/client/panel/BotPanel.tsx
-index 8938e61..b07f74a 100644
+index 8938e61..b9b545a 100644
 --- a/client/panel/BotPanel.tsx
 +++ b/client/panel/BotPanel.tsx
 @@ -1,3 +1,5 @@
-+import { botSectionAllowed, CHIEF_LAUNCHER_GUIDANCE } from "../../shared/managed-chief-ui";
++import { botSectionAllowed } from "../../shared/managed-chief-ui";
 +import { CHIEF_BOT_ID } from "../../shared/vibing-defaults";
  import type { PluginTheme } from "@getpaseo/plugin";
  import { Icon, Modal, ScrollView } from "@getpaseo/plugin/client/react-native";
@@ -1529,7 +1514,7 @@ index 8938e61..b07f74a 100644
  
  export interface PanelProps {
    colors: Colors;
-@@ -108,8 +109,18 @@ export function BotPanel(props: BotPanelProps) {
+@@ -108,11 +109,18 @@ export function BotPanel(props: BotPanelProps) {
    const compact = useCompact(props.compact);
    const [query, setQuery] = useState("");
    const host = useBotHost(bot.hostId, localHost);
@@ -1538,19 +1523,19 @@ index 8938e61..b07f74a 100644
 +  const problems = bot.id === CHIEF_BOT_ID ? [] : botProblems(bot, host.isLocal);
 +  const groups = GROUPS.map(group => ({
 +    ...group,
-+    sections: group.sections.filter(entry => botSectionAllowed(bot.id, entry.id)).map(entry => {
-+      if (bot.id !== CHIEF_BOT_ID) return entry;
-+      if (entry.id === "identity") return { ...entry, rows: ["Avatar", "Colour", "Shape", "Image URL", "Name"], keywords: "picture color face upload generate" };
-+      if (entry.id === "overview") return { ...entry, rows: ["App-wide Chief launcher"], keywords: "managed personalization" };
-+      return entry;
-+    }),
++    sections: group.sections.filter(entry => botSectionAllowed(bot.id, entry.id)),
 +  })).filter(group => group.sections.length > 0);
 +  const sections = groups.flatMap(group => group.sections);
 +  const open = section ? sections.find((entry) => entry.id === section && !entry.modal) : undefined;
    const [sheet, setSheet] = useState<SectionEntry | null>(null);
    const choose = (entry: SectionEntry) => (entry.modal ? setSheet(entry) : onSection(entry.id));
  
-@@ -126,7 +137,7 @@ export function BotPanel(props: BotPanelProps) {
++  if (bot.id === CHIEF_BOT_ID) return null;
++
+   if (open) {
+     return (
+       <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
+@@ -126,7 +134,7 @@ export function BotPanel(props: BotPanelProps) {
  
    const needle = query.trim().toLowerCase();
    const matches = needle
@@ -1559,15 +1544,7 @@ index 8938e61..b07f74a 100644
          const rows = entry.rows.filter((row) => row.toLowerCase().includes(needle));
          const hit = rows.length > 0 || `${entry.label} ${entry.keywords}`.toLowerCase().includes(needle);
          return hit ? [{ entry, rows }] : [];
-@@ -138,6 +149,7 @@ export function BotPanel(props: BotPanelProps) {
-       <PanelHeader colors={colors} compact={compact} title={bot.name || "Untitled bot"} onClose={onClose} />
-       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 24 + bottomInset }}>
-         <View style={{ paddingHorizontal: 8, paddingTop: 8, gap: 8 }}>
-+          {bot.id === CHIEF_BOT_ID ? <Alert colors={colors} description={CHIEF_LAUNCHER_GUIDANCE} /> : null}
-           <SearchField colors={colors} value={query} onChangeText={setQuery} placeholder="Search settings" />
-           {problems.length > 0 ? <Alert colors={colors} variant="warning" title="Needs attention" description={problems} /> : null}
-         </View>
-@@ -151,7 +163,7 @@ export function BotPanel(props: BotPanelProps) {
+@@ -151,7 +159,7 @@ export function BotPanel(props: BotPanelProps) {
              ) : null}
            </View>
          ) : (
@@ -1576,16 +1553,15 @@ index 8938e61..b07f74a 100644
              <View key={group.label} style={{ paddingVertical: 8, paddingHorizontal: 8, gap: 2 }}>
                <Text style={{ fontSize: ui(14), color: nativeTokens(colors).foregroundExtraMuted, paddingHorizontal: 8, paddingVertical: 4 }}>{group.label}</Text>
                {group.sections.map((entry) => (
-@@ -171,6 +183,8 @@ export function BotPanel(props: BotPanelProps) {
+@@ -171,6 +179,7 @@ export function BotPanel(props: BotPanelProps) {
  }
  
  function renderSection(id: SectionId, props: PanelProps): ReactNode {
 +  if (!botSectionAllowed(props.bot.id, id)) return null;
-+  if (props.bot.id === CHIEF_BOT_ID && id === "overview") return <Alert colors={props.colors} description={CHIEF_LAUNCHER_GUIDANCE} />;
    switch (id) {
      case "overview":
        return <OverviewSection {...props} />;
-@@ -248,7 +262,7 @@ function PanelHeader({ colors, compact, title, onBack, onClose }: { colors: Colo
+@@ -248,7 +257,7 @@ function PanelHeader({ colors, compact, title, onBack, onClose }: { colors: Colo
    return (
      <View
        style={{
@@ -2068,10 +2044,10 @@ index eb3af25..8254186 100644
      title: input.title,
 diff --git a/server/chief.ts b/server/chief.ts
 new file mode 100644
-index 0000000..d904fa2
+index 0000000..e933e57
 --- /dev/null
 +++ b/server/chief.ts
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,181 @@
 +import { timingSafeEqual } from "node:crypto";
 +import { constants } from "node:fs";
 +import { lstat, open, realpath } from "node:fs/promises";
@@ -2098,7 +2074,7 @@ index 0000000..d904fa2
 +const BridgeToken = z.string().min(32).max(512);
 +const MemoryName = z.string().max(120).regex(/^[A-Za-z0-9 _-][A-Za-z0-9 ._-]*\.md$/);
 +const SkillId = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/);
-+// No check_chat: Chief hands work off and never reads a feature chat's replies.
++// General Bot tools stay scoped to Chief; feature replies use the gateway chat reader.
 +const READ_ONLY = new Set(["list_bots", "search_chats", "get_setup"]);
 +/** Written on a handoff chat: the Bot's display name when Chief started it. */
 +export const HANDOFF_BOT_NAME_LABEL = "paseo-chief.bot-name";
@@ -2157,11 +2133,13 @@ index 0000000..d904fa2
 +    const candidate = BridgeToken.parse(token);
 +    if (!this.token || !timingSafeEqual(Buffer.from(sha256(this.token)), Buffer.from(sha256(candidate)))) throw new Error("Chief broker authorization failed");
 +  }
-+  async prepare({ bridgeToken }: { bridgeToken: string }): Promise<{ botId: typeof CHIEF_BOT_ID; systemPrompt: string }> {
++  async prepare({ bridgeToken, agentId, cwd }: { bridgeToken: string; agentId: string; cwd: string }): Promise<{ botId: typeof CHIEF_BOT_ID; systemPrompt: string }> {
 +    BridgeToken.parse(bridgeToken);
 +    // This bootstrap is reachable only through the daemon's private broker dispatcher.
 +    if (this.token === null) this.token = bridgeToken;
 +    this.authorize(bridgeToken);
++    const identity = { agentId: z.string().min(1).max(200).parse(agentId), cwd: await realpath(z.string().min(1).max(4096).parse(cwd)) };
++    this.identity = identity;
 +    const bot = (await this.host.bot(CHIEF_BOT_ID))!;
 +    await safePath(memoryFilePath(CHIEF_BOT_ID, "MEMORY.md"));
 +    await ensureBotHome({ botId: CHIEF_BOT_ID });
@@ -2225,8 +2203,7 @@ index 0000000..d904fa2
 +    const agent = (await this.host.requirePaseo().agents.ref(input.agentId).refresh())?.agent;
 +    if (!agent || agent.id !== input.agentId || !agent.cwd || agent.labels?.[BOT_LABEL] !== CHIEF_BOT_ID || agent.labels?.[CHIEF_POLICY_LABEL] !== CHIEF_POLICY) throw new Error("Chief identity or policy mismatch");
 +    const cwd = await realpath(agent.cwd).catch(() => { throw new Error("Chief identity cwd is unavailable"); });
-+    if (this.identity && (this.identity.agentId !== input.agentId || this.identity.cwd !== cwd)) throw new Error("Chief identity or cwd mismatch");
-+    this.identity ??= { agentId: input.agentId, cwd };
++    if (!this.identity || this.identity.agentId !== input.agentId || this.identity.cwd !== cwd) throw new Error("Chief identity or cwd mismatch");
 +    const bot = (await this.host.bot(CHIEF_BOT_ID))!;
 +    if (input.tool === "read_memory" || input.tool === "write_memory") {
 +      const schema = z.object({ name: MemoryName, ...(input.tool === "write_memory" ? { text: z.string().max(MAX_FILE_BYTES) } : {}) }).strict();
@@ -2275,10 +2252,11 @@ index dbcea96..5e2dcf6 100644
    private queue: Promise<unknown> = Promise.resolve();
  
 diff --git a/server/host.ts b/server/host.ts
-index c1e0a69..ffb0b70 100644
+index c1e0a69..52db651 100644
 --- a/server/host.ts
 +++ b/server/host.ts
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
++import { userBots } from "../shared/managed-chief-ui";
  import type { PaseoApi } from "./paseo";
  import type { PluginSettings } from "@getpaseo/plugin/server";
  import { BOT_LABEL, EMPTY_LIBRARY, type Bot, type BotSettingsValues, type botSettings, type Library } from "../shared/bot";
@@ -2286,13 +2264,18 @@ index c1e0a69..ffb0b70 100644
  import { ROUTINE_LABEL } from "../shared/chat";
  
  // What every server feature needs: the saved settings (read-only on the
-@@ -51,7 +52,8 @@ export class BotsHost {
+@@ -47,11 +49,12 @@ export class BotsHost {
+   }
+
+   async bots(): Promise<Bot[]> {
+-    return (await this.values())?.bots ?? [];
++    return userBots((await this.values())?.bots ?? []);
    }
  
    async bot(botId: string): Promise<Bot | null> {
 -    return (await this.bots()).find((bot) => bot.id === botId) ?? null;
-+    const saved = (await this.bots()).find((bot) => bot.id === botId);
-+    return botId === CHIEF_BOT_ID ? managedChiefBot(saved) : saved ?? null;
++    if (botId === CHIEF_BOT_ID) return managedChiefBot();
++    return (await this.bots()).find(bot => bot.id === botId) ?? null;
    }
  
    private readonly chatBots = new Map<string, string | null>();
@@ -2471,6 +2454,24 @@ index 3c95809..d9de7ab 100644
      if (!wait) return `Asked ${target.name} in chat ${chatId}. Use check_chat with that id for the answer.`;
      const paseo = host.requirePaseo();
      await paseo.agents.ref(chatId).waitForFinish(ASK_WAIT_MS).catch(() => null);
+diff --git a/server/tools/setup.ts b/server/tools/setup.ts
+index 3d844f4..34dc51a 100644
+--- a/server/tools/setup.ts
++++ b/server/tools/setup.ts
+@@ -1,3 +1,4 @@
++import { userSettings } from "../../shared/managed-chief-ui";
+ import { z } from "zod";
+ import { applyChanges, botDetails, ChangesSchema, providerInfo, readyProvider, resolveChanges, setupOverview, type AppAccountInfo, type ApplyContext } from "../../shared/changes";
+ import { proposalReply } from "../../shared/proposals";
+@@ -24,7 +25,7 @@ async function hostContext(host: BotsHost): Promise<ApplyContext> {
+ async function readValues(host: BotsHost) {
+   const values = await host.values();
+   if (!values) throw new Error("The bot settings can't be read right now. Try again in a moment.");
+-  return values;
++  return userSettings(values);
+ }
+
+ export const getSetup = defineTool({
 diff --git a/shared/bot.ts b/shared/bot.ts
 index 8c4ecdd..bc522d3 100644
 --- a/shared/bot.ts
@@ -2515,6 +2516,32 @@ index 8c4ecdd..bc522d3 100644
    }),
    migrate: (values, fromVersion) => {
      let migrated = values;
+diff --git a/shared/changes.ts b/shared/changes.ts
+index 55e1321..c4eff0b 100644
+--- a/shared/changes.ts
++++ b/shared/changes.ts
+@@ -1,3 +1,4 @@
++import { userBots, userSettings } from "./managed-chief-ui";
+ import { z } from "zod";
+ import { randomSeed } from "./avatar";
+ import {
+@@ -283,7 +284,7 @@ function byRef<T>(items: readonly T[], ref: string, id: (item: T) => string, nam
+   throw new Error(`There's no ${what} called "${wanted}".${known.length ? ` There are: ${known.slice(0, 30).join(", ")}.` : ""}`);
+ }
+
+-const findBot = (values: BotSettingsValues, ref: string) => byRef(values.bots, ref, (bot) => bot.id, (bot) => bot.name, "bot");
++const findBot = (values: BotSettingsValues, ref: string) => byRef(userBots(values.bots), ref, (bot) => bot.id, (bot) => bot.name, "bot");
+ const findTeam = (values: BotSettingsValues, ref: string) => byRef(values.groups ?? [], ref, (group) => group.id, (group) => group.name, "team");
+ const findSkill = (library: Library, ref: string) => byRef(library.skills, ref, (skill) => skill.id, (skill) => skill.id, "skill");
+ const findServer = (library: Library, ref: string) => byRef(library.mcpServers, ref, (server) => server.id, (server) => server.name, "MCP server");
+@@ -792,6 +793,7 @@ function botLine(bot: Bot, values: BotSettingsValues): string {
+
+ /** get_setup's overview: bots, teams, the library, defaults, presets and providers. */
+ export function setupOverview(values: BotSettingsValues, providers: readonly ProviderInfo[] | null, apps: readonly AppAccountInfo[] | null): string {
++  values = userSettings(values);
+   const library = values.library ?? EMPTY_LIBRARY;
+   const groups = values.groups ?? [];
+   const defaults = values.defaults ?? DEFAULT_BOT_DEFAULTS;
 diff --git a/shared/chat.ts b/shared/chat.ts
 index cd27e0d..b797df1 100644
 --- a/shared/chat.ts
@@ -2818,27 +2845,32 @@ index 2274366..93caa53 100644
  export const CENTER_MIN_WIDTH = 400;
 diff --git a/shared/managed-chief-ui.ts b/shared/managed-chief-ui.ts
 new file mode 100644
-index 0000000..e348345
+index 0000000..fc03719
 --- /dev/null
 +++ b/shared/managed-chief-ui.ts
-@@ -0,0 +1,15 @@
-+import type { Bot } from "./bot";
+@@ -0,0 +1,20 @@
++import type { Bot, BotSettingsValues } from "./bot";
 +import { CHIEF_BOT_ID } from "./vibing-defaults";
 +
-+export const CHIEF_LAUNCHER_GUIDANCE = "Use the app-wide Chief launcher to talk to Chief. Instructions, memory, skills and playbooks can be personalized here. Chief's runtime and tools are managed by the host.";
-+const SECTIONS = new Set(["overview", "identity", "soul", "skills", "playbooks", "memory"]);
-+const PERSONALIZATION = new Set<keyof Bot>(["name", "avatar", "soul", "skillIds", "playbooks"]);
-+export function botSectionAllowed(botId: string, section: string): boolean {
-+  return botId !== CHIEF_BOT_ID || SECTIONS.has(section);
++export const CHIEF_LAUNCHER_GUIDANCE = "Chief is configured in Vibing source code. Use the app-wide launcher to talk to Chief.";
++export function botSectionAllowed(botId: string, _section: string): boolean {
++  return botId !== CHIEF_BOT_ID;
 +}
 +export function chiefPersonalizationPatch(botId: string, patch: Partial<Bot>): Partial<Bot> {
-+  return botId === CHIEF_BOT_ID ? Object.fromEntries(Object.entries(patch).filter(([key]) => PERSONALIZATION.has(key as keyof Bot))) : patch;
++  return botId === CHIEF_BOT_ID ? {} : patch;
 +}
-+export function exportableBots(bots: readonly Bot[]): Bot[] {
++export function userBots(bots: readonly Bot[]): Bot[] {
 +  return bots.filter(bot => bot.id !== CHIEF_BOT_ID);
 +}
++export const exportableBots = userBots;
++export function userSettings(values: BotSettingsValues): BotSettingsValues {
++  return { ...values, bots: userBots(values.bots), groups: values.groups?.map(group => ({ ...group,
++    memberIds: group.memberIds.filter(id => id !== CHIEF_BOT_ID),
++    leadId: group.leadId === CHIEF_BOT_ID ? null : group.leadId,
++  })) };
++}
 diff --git a/shared/rpc.ts b/shared/rpc.ts
-index c54be3b..a768a3e 100644
+index c54be3b..0d69734 100644
 --- a/shared/rpc.ts
 +++ b/shared/rpc.ts
 @@ -241,7 +241,7 @@ const ImportedBotSchema = z.object({ bot: BotSchema, skills: z.array(ImportedSki
@@ -2858,7 +2890,7 @@ index c54be3b..a768a3e 100644
 +// Private host broker RPCs. Tokens are never included in prompts or model tool arguments.
 +const ChiefBridgeToken = z.string().min(32).max(512);
 +export const chiefPrepareRpc = defineRpc({
-+  name: "bots.chief.prepare", input: z.object({ bridgeToken: ChiefBridgeToken }).strict(),
++  name: "bots.chief.prepare", input: z.object({ bridgeToken: ChiefBridgeToken, agentId: z.string().min(1).max(200), cwd: z.string().min(1).max(4096) }).strict(),
 +  output: z.object({ botId: z.literal("vibing-chief"), systemPrompt: z.string() }),
 +});
 +export const chiefCallRpc = defineRpc({
@@ -2898,7 +2930,7 @@ index 0ffd98e..420e450 100644
 +}
 diff --git a/shared/vibing-defaults.ts b/shared/vibing-defaults.ts
 new file mode 100644
-index 0000000..56b33cf
+index 0000000..f0bbcb7
 --- /dev/null
 +++ b/shared/vibing-defaults.ts
 @@ -0,0 +1,169 @@
@@ -2920,19 +2952,19 @@ index 0000000..56b33cf
 + * 5: a reserved host-managed Chief persona.
 + */
 +export const VIBING_DEFAULTS_VERSION = 5;
-+/** Reserved host-managed identity. Personalization never changes its execution policy. */
++/** Reserved host-managed identity. Configuration is owned entirely by Vibing source. */
 +export const CHIEF_BOT_ID = "vibing-chief";
-+export function managedChiefBot(saved?: Bot): Bot {
++export function managedChiefBot(): Bot {
 +  const base = newBot("claude", BOT_TEMPLATES[0]);
 +  return {
-+    ...base, id: CHIEF_BOT_ID, name: saved?.name ?? "Chief",
++    ...base, id: CHIEF_BOT_ID, name: "Chief",
 +    provider: "claude", model: "sonnet", modeId: null, thinkingOptionId: null,
-+    soul: saved?.soul ?? "", skillIds: saved?.skillIds ?? [], playbooks: saved?.playbooks ?? [],
-+    avatar: saved?.avatar ?? { ...base.avatar, seed: CHIEF_BOT_ID },
++    soul: "", skillIds: [], playbooks: [],
++    avatar: { ...base.avatar, seed: CHIEF_BOT_ID },
 +    contactBots: "off", apps: [], appRules: {}, mcpServerIds: [], alwaysAllow: [],
 +    routines: [], cwd: null, hostId: null, archived: false,
-+    createdAt: saved?.createdAt ?? "2026-11-07T00:00:00.000Z",
-+    updatedAt: saved?.updatedAt ?? "2026-11-07T00:00:00.000Z",
++    createdAt: "2026-11-07T00:00:00.000Z",
++    updatedAt: "2026-11-07T00:00:00.000Z",
 +  };
 +}
 +export function assertOrdinaryBot(botId: string): void {
@@ -3411,7 +3443,7 @@ index 0000000..52e1ad1
 +});
 diff --git a/tests/chief.test.ts b/tests/chief.test.ts
 new file mode 100644
-index 0000000..1531304
+index 0000000..3bb1803
 --- /dev/null
 +++ b/tests/chief.test.ts
 @@ -0,0 +1,167 @@
@@ -3439,9 +3471,9 @@ index 0000000..1531304
 +  vi.stubEnv("PASEO_HOME", home);
 +});
 +afterEach(async () => { vi.unstubAllEnvs(); await rm(home, { recursive: true, force: true }); });
-+const authorization = { bridgeToken: "host-only-test-secret-at-least-32-bytes" };
++const authorization = { bridgeToken: "host-only-test-secret-at-least-32-bytes", agentId: "canonical-agent", get cwd() { return home; } };
 +function fixture() {
-+  const saved = makeBot({ id: CHIEF_BOT_ID, soul: "Remember my preferences", provider: "codex", model: "wide", cwd: "/unsafe", alwaysAllow: ["*"], apps: ["github"], mcpServerIds: ["wide"] });
++  const saved = makeBot({ id: CHIEF_BOT_ID, soul: "", provider: "codex", model: "wide", cwd: "/unsafe", alwaysAllow: ["*"], apps: ["github"], mcpServerIds: ["wide"] });
 +  const host = fakeHost([saved, makeBot({ id: "reviewer", name: "Reviewer" })]);
 +  const agent = { id: "canonical-agent", cwd: home, labels: { [BOT_LABEL]: CHIEF_BOT_ID, [CHIEF_POLICY_LABEL]: CHIEF_POLICY } };
 +  host.attach({ agents: { ref: () => ({ refresh: async () => ({ agent }) }) } } as never);
@@ -3456,12 +3488,12 @@ index 0000000..1531304
 +    expect(applyVibingDefaults(migrated)).toBeNull();
 +    expect(await fakeHost([]).bot(CHIEF_BOT_ID)).toMatchObject({ id: CHIEF_BOT_ID, provider: "claude", model: "sonnet" });
 +  });
-+  it("preserves personalization but ignores saved runtime and tool widening", async () => {
++  it("ignores all saved personalization and runtime changes", async () => {
 +    const { host, broker } = fixture();
 +    await broker.prepare(authorization);
-+    expect(await host.bot(CHIEF_BOT_ID)).toMatchObject({ soul: "Remember my preferences", provider: "claude", model: "sonnet", cwd: null, apps: [], mcpServerIds: [], alwaysAllow: [] });
++    expect(await host.bot(CHIEF_BOT_ID)).toMatchObject({ soul: "", provider: "claude", model: "sonnet", cwd: null, apps: [], mcpServerIds: [], alwaysAllow: [] });
 +    const { systemPrompt } = await broker.prepare(authorization);
-+    expect(systemPrompt).toContain("Remember my preferences");
++    expect(systemPrompt).not.toContain("Remember my preferences");
 +    expect(systemPrompt).toContain(botDataPath(CHIEF_BOT_ID));
 +    expect(systemPrompt).not.toContain("propose_changes");
 +    expect(systemPrompt).not.toContain("Paseo tools");
@@ -3491,7 +3523,7 @@ index 0000000..1531304
 +    expect((await call("read_memory", { name: "MEMORY.md" })).text).toBe("Durable preference");
 +    expect(await new MemoryJournal().list(CHIEF_BOT_ID)).toHaveLength(1);
 +  });
-+  it("reads only assigned, enabled skills whose reviewed content still matches", async () => {
++  it("rejects user-assigned skills even when enabled and reviewed", async () => {
 +    const { host, broker } = fixture();
 +    await broker.prepare(authorization);
 +    const { sha } = await writeSkill({ id: "review", text: "Reviewed instructions" });
@@ -3499,7 +3531,7 @@ index 0000000..1531304
 +    values.bots[0]!.skillIds = ["review"];
 +    values.library = { ...EMPTY_LIBRARY, skills: [{ id: "review", description: "review", enabled: true, reviewedSha: sha, source: "", createdAt: "", updatedAt: "" }] };
 +    const input = { agentId: "canonical-agent", tool: "read_skill", arguments: { id: "review" } };
-+    expect((await broker.call({ ...input, ...authorization })).text).toBe("Reviewed instructions");
++    await expect(broker.call({ ...input, ...authorization })).rejects.toThrow(/not assigned/i);
 +    await writeSkill({ id: "review", text: "Changed after review" });
 +    await expect(broker.call({ ...input, ...authorization })).rejects.toThrow(/review/i);
 +    await expect(broker.call({ ...input, ...authorization, arguments: { id: "../review" } })).rejects.toThrow();
@@ -3511,7 +3543,7 @@ index 0000000..1531304
 +    const input = { ...authorization, agentId: "canonical-agent", tool: "list_bots", arguments: {} };
 +    await expect(broker.call(input)).rejects.toThrow(/authorization/i);
 +    await broker.prepare(authorization);
-+    await expect(broker.prepare({ bridgeToken: "another-secret-at-least-32-bytes-long" })).rejects.toThrow(/authorization/i);
++    await expect(broker.prepare({ ...authorization, bridgeToken: "another-secret-at-least-32-bytes-long" })).rejects.toThrow(/authorization/i);
 +    await expect(broker.call({ ...input, tool: "read_skill", arguments: { id: "unassigned" } })).rejects.toThrow(/review/i);
 +    expect((await broker.call(input)).text).toContain("Reviewer");
 +  });
@@ -3561,7 +3593,7 @@ index 0000000..1531304
 +    const { host, broker } = fixture();
 +    await broker.prepare(authorization);
 +    const input = { ...authorization, agentId: "6f1c3b0e-8f6a-4a52-9a3f-0c1d2e3f4a5c", path: "/repo/feature", workspaceId: "ws", prompt: "Do it", titleSuffix: "Do it", labels: {} };
-+    await expect(broker.handoff({ ...input, bot: CHIEF_BOT_ID })).rejects.toThrow(/ordinary/i);
++    await expect(broker.handoff({ ...input, bot: CHIEF_BOT_ID })).rejects.toThrow(/no Bot called/i);
 +    await expect(broker.handoff({ ...input, bot: "Nobody" })).rejects.toThrow(/no Bot called/i);
 +    const values = (await host.values())!;
 +    values.bots[1]!.hostId = "elsewhere";
@@ -3579,7 +3611,7 @@ index 0000000..1531304
 +    await expect(importBot({ botId: bot.id, json: "{}" })).rejects.toThrow(/host-managed/i);
 +    await expect(relay.mountTools(bot.id, "agent")).rejects.toThrow(/host-managed/i);
 +    await expect(relay.mountApps(bot.id)).rejects.toThrow(/host-managed/i);
-+    await expect(askBot.run({ bot: CHIEF_BOT_ID, message: "hi" }, { host, relay, bot: makeBot(), agentId: "caller" })).rejects.toThrow(/host-managed/i);
++    await expect(askBot.run({ bot: CHIEF_BOT_ID, message: "hi" }, { host, relay, bot: makeBot(), agentId: "caller" })).rejects.toThrow(/no.*bot/i);
 +  });
 +});
 diff --git a/tests/commands.test.ts b/tests/commands.test.ts
@@ -3828,28 +3860,45 @@ index a9ec359..540e302 100644
 +});
 diff --git a/tests/managed-chief-ui.test.ts b/tests/managed-chief-ui.test.ts
 new file mode 100644
-index 0000000..197398e
+index 0000000..dc24759
 --- /dev/null
 +++ b/tests/managed-chief-ui.test.ts
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,35 @@
 +import { describe, expect, it } from "vitest";
-+import { chiefPersonalizationPatch, botSectionAllowed, exportableBots } from "../shared/managed-chief-ui";
++import { chiefPersonalizationPatch, botSectionAllowed, exportableBots, userBots } from "../shared/managed-chief-ui";
 +import { CHIEF_BOT_ID, managedChiefBot } from "../shared/vibing-defaults";
 +import { makeBot } from "./helpers";
 +
 +describe("managed Chief settings policy", () => {
-+  it("keeps personalization and rejects runtime, automation and restore widening", () => {
-+    for (const section of ["overview", "identity", "soul", "skills", "memory", "playbooks"]) expect(botSectionAllowed(CHIEF_BOT_ID, section)).toBe(true);
++  it("hides every Chief settings section and rejects every personalization patch", () => {
++    for (const section of ["overview", "identity", "soul", "skills", "memory", "playbooks"]) expect(botSectionAllowed(CHIEF_BOT_ID, section)).toBe(false);
 +    for (const section of ["model", "permissions", "access", "routines", "history", "usage"]) expect(botSectionAllowed(CHIEF_BOT_ID, section)).toBe(false);
-+    expect(chiefPersonalizationPatch(CHIEF_BOT_ID, { soul: "Be brief", skillIds: ["review"], provider: "codex", cwd: "/tmp", routines: [], alwaysAllow: ["*"] })).toEqual({ soul: "Be brief", skillIds: ["review"] });
++    expect(chiefPersonalizationPatch(CHIEF_BOT_ID, { soul: "Be brief", skillIds: ["review"], provider: "codex", cwd: "/tmp", routines: [], alwaysAllow: ["*"] })).toEqual({});
 +    expect(chiefPersonalizationPatch("ordinary", { provider: "codex" })).toEqual({ provider: "codex" });
 +    expect(botSectionAllowed("ordinary", "routines")).toBe(true);
 +  });
 +  it("excludes Chief from bulk export without affecting ordinary bots", () => {
 +    const ordinary = makeBot();
 +    expect(exportableBots([managedChiefBot(), ordinary])).toEqual([ordinary]);
++    expect(userBots([managedChiefBot(), ordinary])).toEqual([ordinary]);
 +  });
 +});
++
++import { applyChanges, botDetails, setupOverview } from "../shared/changes";
++import { BotGroupSchema } from "../shared/bot";
++import { userSettings } from "../shared/managed-chief-ui";
++it("hides Chief from setup details, proposals and stale team membership", () => {
++  const ordinary = makeBot();
++  const group = BotGroupSchema.parse({id:"team",name:"Team",memberIds:[CHIEF_BOT_ID,ordinary.id],leadId:CHIEF_BOT_ID,createdAt:"now",updatedAt:"now"});
++  const values = {bots:[managedChiefBot(),ordinary],history:[],groups:[group]};
++  const visible = userSettings(values);
++  expect(visible.groups?.[0]?.memberIds).toEqual([ordinary.id]);
++  expect(visible.groups?.[0]?.leadId).toBeNull();
++  expect(visible.bots).toEqual([ordinary]);
++  expect(setupOverview(values,null,null)).not.toContain(CHIEF_BOT_ID);
++  expect(() => botDetails({bots:values.bots,history:[]},CHIEF_BOT_ID)).toThrow(/no bot/i);
++  expect(() => applyChanges({bots:values.bots,history:[]},[{type:"delete_bot",bot:CHIEF_BOT_ID}],{now:"now",provider:"claude"})).toThrow(/no bot/i);
++})
 diff --git a/tests/presets.test.ts b/tests/presets.test.ts
 index f049d61..69e4da6 100644
 --- a/tests/presets.test.ts

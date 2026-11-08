@@ -3886,7 +3886,7 @@ var require_BufferList = __commonJS({
         this.head = this.tail = null;
         this.length = 0;
       };
-      BufferList.prototype.join = function join7(s) {
+      BufferList.prototype.join = function join8(s) {
         if (this.length === 0) return "";
         var p = this.head;
         var ret = "" + p.data;
@@ -6141,7 +6141,7 @@ var require_setImmediate = __commonJS({
       function clearImmediate(handle) {
         delete tasksByHandle[handle];
       }
-      function run(task) {
+      function run2(task) {
         var callback = task.callback;
         var args = task.args;
         switch (args.length) {
@@ -6170,7 +6170,7 @@ var require_setImmediate = __commonJS({
           if (task) {
             currentlyRunningATask = true;
             try {
-              run(task);
+              run2(task);
             } finally {
               clearImmediate(handle);
               currentlyRunningATask = false;
@@ -22042,7 +22042,7 @@ var require_transforms = __commonJS({
   "node_modules/mammoth/lib/transforms.js"(exports) {
     var _3 = (init_index_all(), __toCommonJS(index_all_exports));
     exports.paragraph = paragraph;
-    exports.run = run;
+    exports.run = run2;
     exports._elements = elements2;
     exports._elementsOfType = elementsOfType;
     exports.getDescendantsOfType = getDescendantsOfType;
@@ -22050,7 +22050,7 @@ var require_transforms = __commonJS({
     function paragraph(transform) {
       return elementsOfType("paragraph", transform);
     }
-    function run(transform) {
+    function run2(transform) {
       return elementsOfType("run", transform);
     }
     function elementsOfType(elementType, transform) {
@@ -24200,47 +24200,47 @@ var require_document_to_html = __commonJS({
           return defaultParagraphStyle;
         }
       }
-      function convertRun(run, messages, context) {
+      function convertRun(run2, messages, context) {
         var nodes = function() {
-          return convertElements(run.children, messages, context);
+          return convertElements(run2.children, messages, context);
         };
         var paths = [];
-        if (run.highlight !== null) {
-          var path = findHtmlPath({ type: "highlight", color: run.highlight });
+        if (run2.highlight !== null) {
+          var path = findHtmlPath({ type: "highlight", color: run2.highlight });
           if (path) {
             paths.push(path);
           }
         }
-        if (run.isSmallCaps) {
+        if (run2.isSmallCaps) {
           paths.push(findHtmlPathForRunProperty("smallCaps"));
         }
-        if (run.isAllCaps) {
+        if (run2.isAllCaps) {
           paths.push(findHtmlPathForRunProperty("allCaps"));
         }
-        if (run.isStrikethrough) {
+        if (run2.isStrikethrough) {
           paths.push(findHtmlPathForRunProperty("strikethrough", "s"));
         }
-        if (run.isUnderline) {
+        if (run2.isUnderline) {
           paths.push(findHtmlPathForRunProperty("underline"));
         }
-        if (run.verticalAlignment === documents.verticalAlignment.subscript) {
+        if (run2.verticalAlignment === documents.verticalAlignment.subscript) {
           paths.push(htmlPaths.element("sub", {}, { fresh: false }));
         }
-        if (run.verticalAlignment === documents.verticalAlignment.superscript) {
+        if (run2.verticalAlignment === documents.verticalAlignment.superscript) {
           paths.push(htmlPaths.element("sup", {}, { fresh: false }));
         }
-        if (run.isItalic) {
+        if (run2.isItalic) {
           paths.push(findHtmlPathForRunProperty("italic", "em"));
         }
-        if (run.isBold) {
+        if (run2.isBold) {
           paths.push(findHtmlPathForRunProperty("bold", "strong"));
         }
         var stylePath = htmlPaths.empty;
-        var style = findStyle(run);
+        var style = findStyle(run2);
         if (style) {
           stylePath = style.to;
-        } else if (run.styleId) {
-          messages.push(unrecognisedStyleWarning("run", run));
+        } else if (run2.styleId) {
+          messages.push(unrecognisedStyleWarning("run", run2));
         }
         paths.push(stylePath);
         paths.forEach(function(path2) {
@@ -25410,7 +25410,7 @@ var require_lop = __commonJS({
 var require_document_matchers = __commonJS({
   "node_modules/mammoth/lib/styles/document-matchers.js"(exports) {
     exports.paragraph = paragraph;
-    exports.run = run;
+    exports.run = run2;
     exports.table = table;
     exports.bold = new Matcher("bold");
     exports.italic = new Matcher("italic");
@@ -25428,7 +25428,7 @@ var require_document_matchers = __commonJS({
     function paragraph(options) {
       return new Matcher("paragraph", options);
     }
-    function run(options) {
+    function run2(options) {
       return new Matcher("run", options);
     }
     function table(options) {
@@ -33436,7 +33436,7 @@ async function takeOver(lock) {
   }
   return true;
 }
-async function withFileLock(lock, run) {
+async function withFileLock(lock, run2) {
   const started = Date.now();
   while (!await create(lock)) {
     if (Date.now() - started > LOCK_WAIT_MS) throw new Error(ERROR_MESSAGES.busy());
@@ -33444,7 +33444,7 @@ async function withFileLock(lock, run) {
     await delay(5 + Math.random() * 20);
   }
   try {
-    return await run();
+    return await run2();
   } finally {
     await release(lock);
   }
@@ -33575,14 +33575,14 @@ var ViewerStateStore = class {
       return saved;
     }));
   }
-  async locked(run) {
+  async locked(run2) {
     await this.ensureDirectory();
-    return withFileLock(join(this.directory, "positions.lock"), run);
+    return withFileLock(join(this.directory, "positions.lock"), run2);
   }
-  queue(run) {
+  queue(run2) {
     this.prepared ??= this.removeStaleTemporaries();
     const prepared = this.prepared;
-    const next = this.tail.then(() => prepared).then(run, run);
+    const next = this.tail.then(() => prepared).then(run2, run2);
     this.tail = next.catch(() => {
     });
     return next;
@@ -33781,7 +33781,7 @@ var DocumentViewStore = class {
   // the folder keep each other's choice. A later version's number, views and fields are kept; a damaged
   // file is kept aside as documents-view.json.bad.
   write(layout, view2) {
-    const run = this.tail.then(async () => {
+    const run2 = this.tail.then(async () => {
       await mkdir3(this.directory, { recursive: true, mode: 448 });
       return withFileLock(join3(this.directory, "documents-view.lock"), async () => {
         const path = join3(this.directory, FILE);
@@ -33805,9 +33805,9 @@ var DocumentViewStore = class {
         return { views: understood(next) };
       });
     });
-    this.tail = run.catch(() => {
+    this.tail = run2.catch(() => {
     });
-    return run;
+    return run2;
   }
 };
 
@@ -33826,7 +33826,7 @@ var VisitStore = class {
   }
   // Records a visit at `now` and returns the previous one, or null the first time.
   visit(root2, now = Date.now()) {
-    const run = this.tail.then(async () => {
+    const run2 = this.tail.then(async () => {
       const key = await this.keyOf(root2);
       const visits = await this.load();
       const previous = visits[key] ?? null;
@@ -33835,9 +33835,9 @@ var VisitStore = class {
       await this.save(Object.fromEntries(kept));
       return previous;
     });
-    this.tail = run.catch(() => {
+    this.tail = run2.catch(() => {
     });
-    return run;
+    return run2;
   }
   async load() {
     try {
@@ -34084,29 +34084,29 @@ async function scanCsv(path, start, delimiter, visitor, maxCellBytes = MAX_CELL_
     for await (const chunk3 of stream) {
       let i = 0;
       if (offset === 0 && BOM.every((byte, b) => chunk3[b] === byte)) i = BOM.length;
-      let run = i;
+      let run2 = i;
       for (; i < chunk3.length && !stopped; i++) {
         const byte = chunk3[i];
         switch (state) {
           case 2 /* Quoted */:
             if (byte === QUOTE) {
-              append(chunk3, run, i);
+              append(chunk3, run2, i);
               state = 3 /* QuoteInQuoted */;
             }
             continue;
           case 3 /* QuoteInQuoted */:
             if (byte === QUOTE) {
-              run = i;
+              run2 = i;
               state = 2 /* Quoted */;
               continue;
             }
             state = 1 /* Unquoted */;
-            run = i;
+            run2 = i;
             break;
           case 4 /* AfterCr */:
             if (byte === LF) {
               endRow(offset + i + 1);
-              run = i + 1;
+              run2 = i + 1;
               continue;
             }
             endRow(offset + i);
@@ -34116,10 +34116,10 @@ async function scanCsv(path, start, delimiter, visitor, maxCellBytes = MAX_CELL_
             rowOpen = true;
             if (byte === QUOTE) {
               state = 2 /* Quoted */;
-              run = i + 1;
+              run2 = i + 1;
               continue;
             }
-            run = i;
+            run2 = i;
             state = 1 /* Unquoted */;
             break;
           case 1 /* Unquoted */:
@@ -34127,20 +34127,20 @@ async function scanCsv(path, start, delimiter, visitor, maxCellBytes = MAX_CELL_
         }
         rowOpen = true;
         if (byte === delimiter) {
-          append(chunk3, run, i);
+          append(chunk3, run2, i);
           nextField();
-          run = i + 1;
+          run2 = i + 1;
         } else if (byte === LF) {
-          append(chunk3, run, i);
+          append(chunk3, run2, i);
           endRow(offset + i + 1);
-          run = i + 1;
+          run2 = i + 1;
         } else if (byte === CR) {
-          append(chunk3, run, i);
+          append(chunk3, run2, i);
           state = 4 /* AfterCr */;
         }
       }
       if (stopped) return;
-      if (state === 1 /* Unquoted */ || state === 2 /* Quoted */) append(chunk3, run, chunk3.length);
+      if (state === 1 /* Unquoted */ || state === 2 /* Quoted */) append(chunk3, run2, chunk3.length);
       offset += chunk3.length;
     }
     if (rowOpen) endRow(offset);
@@ -36651,21 +36651,21 @@ function parquetPlanGroup({ rowGroup, groupStart, groupRows, ranges, columns, us
     }
   }
   const columnRanges = [];
-  let run;
+  let run2;
   for (const chunk3 of chunks3) {
     if ("pageLocations" in chunk3) continue;
     if ("offsetIndex" in chunk3) {
       indexes.push(chunk3.offsetIndex);
     } else if (columns) {
       columnRanges.push(chunk3.range);
-    } else if (run && chunk3.range.endByte - run.startByte <= runLimit) {
-      run.endByte = chunk3.range.endByte;
+    } else if (run2 && chunk3.range.endByte - run2.startByte <= runLimit) {
+      run2.endByte = chunk3.range.endByte;
     } else {
-      if (run) fetches.push(run);
-      run = { ...chunk3.range };
+      if (run2) fetches.push(run2);
+      run2 = { ...chunk3.range };
     }
   }
-  if (run) fetches.push(run);
+  if (run2) fetches.push(run2);
   fetches.push(...coalesceByteRanges(columnRanges, columnGapLimit, runLimit));
   const groups = ranges.map(([selectStart, selectEnd]) => ({
     chunks: chunks3,
@@ -43918,23 +43918,23 @@ function encodeBlocks({ coefficients: coefficients2, owners, count }, symbol, bi
     symbol(dcTable, size2);
     if (size2)
       bits2(diff < 0 ? diff - 1 & (1 << size2) - 1 : diff, size2);
-    let run = 0;
+    let run2 = 0;
     for (let k = 1; k < 64; k++) {
       const value = coefficients2[o + ZIGZAG[k]];
       if (value === 0) {
-        run++;
+        run2++;
         continue;
       }
-      while (run > 15) {
+      while (run2 > 15) {
         symbol(acTable, 240);
-        run -= 16;
+        run2 -= 16;
       }
       const s = magnitude(value);
-      symbol(acTable, run << 4 | s);
+      symbol(acTable, run2 << 4 | s);
       bits2(value < 0 ? value - 1 & (1 << s) - 1 : value, s);
-      run = 0;
+      run2 = 0;
     }
-    if (run)
+    if (run2)
       symbol(acTable, 0);
   }
 }
@@ -45236,11 +45236,11 @@ function writeCode(w, counts) {
   let previous = 8;
   for (let i = 0; i < lengths.length; ) {
     const l = lengths[i];
-    let run = 1;
-    while (i + run < lengths.length && lengths[i + run] === l)
-      run++;
+    let run2 = 1;
+    while (i + run2 < lengths.length && lengths[i + run2] === l)
+      run2++;
     if (l === 0) {
-      let left = run;
+      let left = run2;
       while (left > 0) {
         if (left < 3) {
           tokens.push(0);
@@ -45258,7 +45258,7 @@ function writeCode(w, counts) {
         }
       }
     } else {
-      let left = run;
+      let left = run2;
       if (l !== previous) {
         tokens.push(l);
         extras.push(0);
@@ -45278,7 +45278,7 @@ function writeCode(w, counts) {
         }
       }
     }
-    i += run;
+    i += run2;
   }
   const lengthCounts = new Int32Array(19);
   for (const t of tokens)
@@ -46732,13 +46732,13 @@ function encode6(rgba, width, height) {
       out[o++] = rgba[p + 3];
   };
   for (let i = 0; i < count; ) {
-    let run = 1;
-    while (run < 128 && i + run < count && pixels[i + run] === pixels[i])
-      run++;
-    if (run >= 2) {
-      out[o++] = 128 | run - 1;
+    let run2 = 1;
+    while (run2 < 128 && i + run2 < count && pixels[i + run2] === pixels[i])
+      run2++;
+    if (run2 >= 2) {
+      out[o++] = 128 | run2 - 1;
       put(i);
-      i += run;
+      i += run2;
       continue;
     }
     let raw = 1;
@@ -47819,7 +47819,7 @@ function cffCharString(cff, glyph) {
       stack.shift();
     widthParsed = true;
   };
-  const run = (code2) => {
+  const run2 = (code2) => {
     if (++depth > 10)
       return true;
     for (let i = 0; i < code2.length; ) {
@@ -47951,7 +47951,7 @@ function cffCharString(cff, glyph) {
           const local = b0 === 10;
           const index3 = stack.pop() + (local ? localBias : globalBias);
           const subr = (local ? subrs : cff.globalSubrs)[index3];
-          if (subr && run(subr))
+          if (subr && run2(subr))
             return true;
           break;
         }
@@ -47999,7 +47999,7 @@ function cffCharString(cff, glyph) {
     depth--;
     return false;
   };
-  run(code);
+  run2(code);
   if (open9)
     path.push(["Z"]);
   return path;
@@ -50520,15 +50520,15 @@ var Layer = class {
           d[i + 2] = color[2];
           d[i + 3] = 1;
           if (solid) {
-            let run = 1;
-            while (x + run < w && data[o + run] >= 1)
-              run++;
-            if (run > 1) {
-              for (let filled = 1; filled < run; filled *= 2)
-                d.copyWithin(i + filled * 4, i, i + Math.min(filled, run - filled) * 4);
-              x += run - 1;
-              o += run - 1;
-              i += (run - 1) * 4;
+            let run2 = 1;
+            while (x + run2 < w && data[o + run2] >= 1)
+              run2++;
+            if (run2 > 1) {
+              for (let filled = 1; filled < run2; filled *= 2)
+                d.copyWithin(i + filled * 4, i, i + Math.min(filled, run2 - filled) * 4);
+              x += run2 - 1;
+              o += run2 - 1;
+              i += (run2 - 1) * 4;
             }
           }
           continue;
@@ -51043,7 +51043,7 @@ function dash(subpaths, pattern, offset) {
   }
   return result2;
 }
-function strokePolygons(subpaths, halfWidth, cap, join7, miterLimit, tolerance) {
+function strokePolygons(subpaths, halfWidth, cap, join8, miterLimit, tolerance) {
   const polygons = [];
   const add = (polygon) => {
     let area = 0;
@@ -51103,7 +51103,7 @@ function strokePolygons(subpaths, halfWidth, cap, join7, miterLimit, tolerance) 
       const dot = prev[0] * next[0] + prev[1] * next[1];
       if (Math.abs(cross) < 1e-9 && dot > 0)
         continue;
-      if (join7 === "round") {
+      if (join8 === "round") {
         circle(vx, vy);
         continue;
       }
@@ -51112,7 +51112,7 @@ function strokePolygons(subpaths, halfWidth, cap, join7, miterLimit, tolerance) 
       const bx = vx + side * -next[1] * halfWidth, by = vy + side * next[0] * halfWidth;
       const theta = Math.acos(Math.max(-1, Math.min(1, dot)));
       const ratio = 1 / Math.sin((Math.PI - theta) / 2);
-      if ((join7 === "miter" || join7 === "miter-clip" || join7 === "arcs") && ratio <= miterLimit && Math.abs(cross) > 1e-9) {
+      if ((join8 === "miter" || join8 === "miter-clip" || join8 === "arcs") && ratio <= miterLimit && Math.abs(cross) > 1e-9) {
         const t = ((bx - ax) * next[1] - (by - ay) * next[0]) / (prev[0] * next[1] - prev[1] * next[0]);
         add([vx, vy, ax, ay, ax + prev[0] * t, ay + prev[1] * t, bx, by]);
       } else
@@ -54491,9 +54491,9 @@ async function sizeOf(codec, bytes) {
   if (!(size2.width > 0 && size2.height > 0)) throw new Error(ERROR_MESSAGES.imageDamaged(codec.name, "invalid dimensions"));
   return size2;
 }
-async function guarded(codec, run) {
+async function guarded(codec, run2) {
   try {
-    return await run();
+    return await run2();
   } catch (error) {
     if (errorCode(error)) throw error;
     console.error("[doc-viewer] image decode:", error);
@@ -60459,15 +60459,15 @@ async function PDFiumModule(moduleArg = {}) {
     _emscripten_stack_init();
     writeStackCookie();
   }
-  function run() {
+  function run2() {
     if (runDependencies > 0) {
-      dependenciesFulfilled = run;
+      dependenciesFulfilled = run2;
       return;
     }
     stackCheckInit();
     preRun();
     if (runDependencies > 0) {
-      dependenciesFulfilled = run;
+      dependenciesFulfilled = run2;
       return;
     }
     function doRun() {
@@ -60492,7 +60492,7 @@ async function PDFiumModule(moduleArg = {}) {
     checkStackCookie();
   }
   var wasmExports = await createWasm();
-  run();
+  run2();
   if (runtimeInitialized) moduleRtn = Module;
   else moduleRtn = new Promise((resolve4, reject2) => {
     readyPromiseResolve = resolve4;
@@ -60675,7 +60675,7 @@ function pdfiumWorkerMain(port, init2) {
   function size2(module, key, index3) {
     return withPage2(module, key, index3, (page) => ({ width: module._FPDF_GetPageWidth(page), height: module._FPDF_GetPageHeight(page) }));
   }
-  function run(module, request) {
+  function run2(module, request) {
     switch (request.op) {
       case "open":
         return open9(module, request.key, request.bytes, request.password);
@@ -60694,7 +60694,7 @@ function pdfiumWorkerMain(port, init2) {
   port.on("message", async ({ id, request }) => {
     let response;
     try {
-      const { value, failure } = run(await ready, request);
+      const { value, failure } = run2(await ready, request);
       response = failure ? { id, ok: false, failure } : { id, ok: true, value };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -61124,8 +61124,8 @@ function boundedTexts(xml) {
   let bytes = 0;
   for (const body of paragraphs(xml)) {
     let text = "";
-    for (const run of body.matchAll(RUN)) {
-      text += run[1] === void 0 ? "\n" : decodeEntities(run[1]);
+    for (const run2 of body.matchAll(RUN)) {
+      text += run2[1] === void 0 ? "\n" : decodeEntities(run2[1]);
       if (text.length > MAX_TEXT_CHARS) break;
     }
     if (text.trim() === "") continue;
@@ -61913,8 +61913,8 @@ async function loadSharedStrings(workbook2) {
   if (!workbook2.sharedStringsPart) return strings;
   for await (const item of scan(streamEntry(workbook2.index, workbook2.sharedStringsPart, "xlsx"), SHARED_STRING_TOKENS)) {
     let text = "";
-    for (const run of withoutPhonetic(item).matchAll(TEXT_RUN)) {
-      text += run[1];
+    for (const run2 of withoutPhonetic(item).matchAll(TEXT_RUN)) {
+      text += run2[1];
       if (text.length > XLSX_MAX_CELL_CHARS * 2) break;
     }
     strings.push(clip2(decodeEntities(text)));
@@ -61943,7 +61943,7 @@ function cellText2(cell, workbook2, strings) {
   const type = attribute3(open9, "t");
   if (type === "inlineStr") {
     let text = "";
-    for (const run of withoutPhonetic(cell).matchAll(TEXT_RUN)) text += run[1];
+    for (const run2 of withoutPhonetic(cell).matchAll(TEXT_RUN)) text += run2[1];
     return clip2(decodeEntities(text));
   }
   const raw = savedValue(cell, type);
@@ -62042,7 +62042,7 @@ function cellDetail(cell, row, column, workbook2, strings, formulas) {
   let raw = null;
   if (type === "inlineStr") {
     let text = "";
-    for (const run of withoutPhonetic(cell).matchAll(TEXT_RUN)) text += run[1];
+    for (const run2 of withoutPhonetic(cell).matchAll(TEXT_RUN)) text += run2[1];
     raw = clip2(decodeEntities(text));
   } else {
     const stored3 = savedValue(cell, declared);
@@ -62125,7 +62125,7 @@ async function fullCellText(workbook2, strings, sheet, row, column, maxChars, de
   const whole = (text) => text.length > maxChars ? { text: text.slice(0, maxChars), truncated: true, length: text.length } : { text, truncated: false, length: text.length };
   const runs = (xml) => {
     let text = "";
-    for (const run of withoutPhonetic(xml).matchAll(TEXT_RUN)) text += run[1];
+    for (const run2 of withoutPhonetic(xml).matchAll(TEXT_RUN)) text += run2[1];
     return decodeEntities(text);
   };
   const open9 = /^<c\b[^>]*>/.exec(token)?.[0] ?? token;
@@ -62765,9 +62765,11 @@ async function scanIssues(ref, cursor, limits = ISSUE_LIMITS) {
   return result2;
 }
 
-// server/turn-docs.ts
-import { stat as stat6 } from "node:fs/promises";
+// server/checkout-baseline.ts
+import { execFile } from "node:child_process";
 import { join as join6 } from "node:path";
+import { lstat } from "node:fs/promises";
+import { promisify } from "node:util";
 
 // shared/turn-docs.ts
 import { z as z7 } from "zod";
@@ -62883,7 +62885,50 @@ function byteLength(text) {
   return new TextEncoder().encode(text).length;
 }
 
+// server/checkout-baseline.ts
+var run = promisify(execFile);
+async function excludeCheckoutBaseline(root2, files, after2, baseline, startedAt) {
+  const clean = /* @__PURE__ */ new Set();
+  let checked = 0;
+  for (const repo of after2.repos) {
+    if (!repo) continue;
+    const born = after2.dirs.get(repo);
+    const isNew = baseline?.complete ? !baseline.dirs.has(repo) : born != null && born >= startedAt - TURN_WINDOW_SLACK_MS;
+    if (!isNew) continue;
+    const prefix = repo ? `${repo}/` : "";
+    const candidates = files.filter((file2) => file2.path.startsWith(prefix) && ![...after2.repos].some((nested) => nested !== repo && nested.length > repo.length && file2.path.startsWith(`${nested}/`)));
+    if (checked >= 16) break;
+    if (candidates.length === 0) continue;
+    checked++;
+    try {
+      const options = { cwd: join6(root2, repo), timeout: 2e3, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } };
+      const marker = await lstat(join6(root2, repo, ".git"));
+      const history = await run("git", ["reflog", "show", "--format=%H%x00%gs", "-n128", "HEAD"], options);
+      const entries = history.stdout.trim().split("\n").filter(Boolean);
+      if (entries.length === 0 || entries.length >= 128) continue;
+      const creation = entries.at(-1);
+      if (!creation) continue;
+      const [initial2, message] = creation.split("\0");
+      if (!/^[0-9a-f]{40,64}$/.test(initial2)) continue;
+      if (!marker.isFile() && !message?.startsWith("clone: from ")) continue;
+      const unstaged = await run("git", ["ls-files", "--modified", "--others", "--exclude-standard", "-z"], options);
+      const tracked = await run("git", ["ls-files", "--cached", "-z"], options);
+      const trackedPaths = new Set(tracked.stdout.split("\0"));
+      const sinceCreation = await run("git", ["diff", "--name-only", "--diff-filter=d", "-z", initial2, "--"], options);
+      const dirty = new Set(`${unstaged.stdout}\0${sinceCreation.stdout}`.split("\0"));
+      for (const file2 of candidates) {
+        const relative5 = file2.path.slice(prefix.length);
+        if (trackedPaths.has(relative5) && !dirty.has(relative5)) clean.add(file2.path);
+      }
+    } catch {
+    }
+  }
+  return files.filter((file2) => !clean.has(file2.path));
+}
+
 // server/turn-docs.ts
+import { stat as stat6 } from "node:fs/promises";
+import { join as join7 } from "node:path";
 function createTurnDocs(deps) {
   const now = deps.now ?? Date.now;
   const log = deps.log ?? ((message) => console.error(`[doc-viewer] ${message}`));
@@ -62906,7 +62951,7 @@ function createTurnDocs(deps) {
       const root2 = await turn.root;
       const [baseline, after2] = await Promise.all([turn.baseline, deps.scan(root2)]);
       const candidates = after2.entries.filter((entry) => entry.changedMs >= turn.startedAt - TURN_WINDOW_SLACK_MS);
-      const changed2 = changedDuringTurn(baseline?.complete ? candidates : await withBirthtimes(root2, candidates), baseline, turn.startedAt);
+      const changed2 = await excludeCheckoutBaseline(root2, changedDuringTurn(baseline?.complete ? candidates : await withBirthtimes(root2, candidates), baseline, turn.startedAt), after2, baseline, turn.startedAt);
       const { files, groups } = groupChanges(changed2, after2, baseline, turn.startedAt);
       const row = turnDocsRow({
         workspaceId: turn.workspaceId,
@@ -62931,7 +62976,7 @@ function createTurnDocs(deps) {
 async function withBirthtimes(root2, files) {
   return Promise.all(
     files.map(async (file2) => {
-      const info = await stat6(join6(root2, file2.path)).catch(() => null);
+      const info = await stat6(join7(root2, file2.path)).catch(() => null);
       return info ? { ...file2, birthtimeMs: info.birthtimeMs } : file2;
     })
   );

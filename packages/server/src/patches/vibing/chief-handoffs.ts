@@ -1,18 +1,21 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import type {
-  AgentManager,
-  AgentManagerEvent,
-  ManagedAgent,
-} from "../../server/agent/agent-manager.js";
+import type { AgentManager, AgentManagerEvent } from "../../server/agent/agent-manager.js";
 import type { AgentStorage, StoredAgentRecord } from "../../server/agent/agent-storage.js";
-import { Identity, type ChiefMergeRequest, type createChiefTools } from "./chief-tools.js";
+import { chiefChatStatus, type ChiefChatStatus } from "./chief-chat-status.js";
+import {
+  Identity,
+  WorkspaceIdentity,
+  type ChiefMergeRequest,
+  type createChiefTools,
+} from "./chief-tools.js";
 
 export const HANDOFF_LABEL = "paseo-chief.handoff";
 export const HANDOFF_APP_LABEL = "paseo-chief.app";
 export const HANDOFF_WORKSPACE_LABEL = "paseo-chief.workspace";
 /** Written by the Bots plugin: the Bot's display name when the chat started. */
 export const HANDOFF_BOT_NAME_LABEL = "paseo-chief.bot-name";
+export const HANDOFF_TASK_DIGEST_LABEL = "paseo-chief.task-digest";
 const MAX_LISTED = 20;
 const WORKSPACE_WAIT_MS = 15_000;
 
@@ -20,14 +23,14 @@ export const StartFeatureTaskInput = z
   .object({
     requestId: z.string().uuid(),
     appId: Identity,
-    workspaceId: Identity,
+    workspaceId: WorkspaceIdentity,
     bot: z.string().trim().min(1).max(100),
     kind: z.enum(["review-merge-request", "implement", "commit"]),
     resolutionId: z.string().uuid().optional(),
     instruction: z.string().min(1).max(4000),
   })
   .strict();
-export type HandoffStatus = "working" | "needs-input" | "idle" | "failed";
+export type HandoffStatus = ChiefChatStatus;
 export interface ChiefHandoff {
   chatId: string;
   appId: string;
@@ -40,7 +43,7 @@ export interface ChiefHandoff {
 
 export interface ChiefHandoffDependencies {
   agentStorage: Pick<AgentStorage, "get" | "listActive">;
-  agentManager: Pick<AgentManager, "getAgent" | "getTimeline">;
+  agentManager: Pick<AgentManager, "getAgent" | "getTimeline" | "hasInFlightRun">;
   tools: Pick<ReturnType<typeof createChiefTools>, "hasApp" | "resolution" | "workspaceDirectory">;
   /** Private daemon secret that signs handoff labels; null before Chief has an identity. */
   handoffKey(): Buffer | null;
@@ -48,6 +51,11 @@ export interface ChiefHandoffDependencies {
   chiefId(): string | null;
   /** The non-archived, foreground Paseo workspace for a feature checkout. */
   paseoWorkspace(cwd: string): Promise<{ workspaceId: string }>;
+  /** Read the actual Git branch and origin before any task is handed off. */
+  verifyReviewWorkspace(
+    cwd: string,
+    review: Pick<ChiefMergeRequest, "sourceBranch" | "sourceRepository">,
+  ): Promise<void>;
   /** Starts an ordinary Bot chat through the Bots plugin. */
   startChat(input: {
     agentId: string;
@@ -123,46 +131,51 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
   const inFlight = new Map<string, { input: string; result: Promise<unknown> }>();
   const canceled = new Set<string>();
 
-  function sign(key: Buffer, chatId: string, appId: string, workspaceId: string) {
-    const mac = createHmac("sha256", key)
-      .update(JSON.stringify(["chief-handoff-v1", chatId, appId, workspaceId]))
+  function taskDigest(request: z.infer<typeof StartFeatureTaskInput>): string {
+    return createHash("sha256")
+      .update(
+        JSON.stringify([
+          request.appId,
+          request.workspaceId,
+          request.bot,
+          request.kind,
+          request.resolutionId ?? null,
+          request.instruction,
+        ]),
+      )
       .digest("hex");
-    return `v1.${mac}`;
   }
-  /** Only labels the daemon signed identify a handoff; labels alone are forgeable. */
+  function sign(key: Buffer, chatId: string, appId: string, workspaceId: string, digest?: string) {
+    const version = digest ? "v2" : "v1";
+    const data = [digest ? "chief-handoff-v2" : "chief-handoff-v1", chatId, appId, workspaceId];
+    if (digest) data.push(digest);
+    return `${version}.${createHmac("sha256", key).update(JSON.stringify(data)).digest("hex")}`;
+  }
+  /** Legacy signatures remain listable; new signatures bind the original task digest. */
   function handoffOf(
     chatId: string,
     labels: Readonly<Record<string, string>> | undefined,
-  ): { appId: string; workspaceId: string } | null {
+  ): { appId: string; workspaceId: string; digest?: string } | null {
     const key = deps.handoffKey();
     const appId = labels?.[HANDOFF_APP_LABEL];
     const workspaceId = labels?.[HANDOFF_WORKSPACE_LABEL];
     const signature = labels?.[HANDOFF_LABEL];
     if (!key || !appId || !workspaceId || !signature) return null;
-    const expected = Buffer.from(sign(key, chatId, appId, workspaceId));
+    const digest = signature.startsWith("v2.") ? labels?.[HANDOFF_TASK_DIGEST_LABEL] : undefined;
+    if (signature.startsWith("v2.") && (!digest || !/^[a-f0-9]{64}$/.test(digest))) return null;
+    const expected = Buffer.from(sign(key, chatId, appId, workspaceId, digest));
     const actual = Buffer.from(signature);
     return actual.length === expected.length && timingSafeEqual(actual, expected)
-      ? { appId, workspaceId }
+      ? { appId, workspaceId, ...(digest ? { digest } : {}) }
       : null;
   }
-  function statusOf(chatId: string, record?: StoredAgentRecord | null): HandoffStatus {
-    const live: ManagedAgent | null = deps.agentManager.getAgent(chatId);
-    if (live) {
-      if (live.pendingPermissions.size > 0) return "needs-input";
-      if (live.lifecycle === "running" || live.lifecycle === "initializing" || live.activeTurnId)
-        return "working";
-      if (live.lifecycle === "error" || live.lastError || canceled.has(chatId)) return "failed";
-      return "idle";
-    }
-    if (
-      record?.lastStatus === "error" ||
-      record?.lastError ||
-      record?.attentionReason === "error" ||
-      canceled.has(chatId)
-    )
-      return "failed";
-    return "idle";
-  }
+  const statusOf = (chatId: string, record?: StoredAgentRecord | null): HandoffStatus =>
+    chiefChatStatus(
+      deps.agentManager.getAgent(chatId),
+      record,
+      canceled.has(chatId),
+      deps.agentManager.hasInFlightRun(chatId),
+    );
   async function activeRecord(chatId: string) {
     const stored = await deps.agentStorage.get(chatId);
     return stored && !stored.archivedAt ? stored : null;
@@ -186,9 +199,12 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
     const existing = (await deps.agentStorage.get(request.requestId)) ?? null;
     const live = deps.agentManager.getAgent(request.requestId);
     if (!existing && !live) return null;
+    if (existing?.archivedAt) throw new Error("That task is archived; use a fresh UUID.");
     const handoff = handoffOf(request.requestId, existing?.labels ?? live?.labels);
     if (!handoff || handoff.appId !== request.appId || handoff.workspaceId !== request.workspaceId)
       throw new Error("requestId already identifies another chat; use a fresh UUID.");
+    if (!handoff.digest || handoff.digest !== taskDigest(request))
+      throw new Error("requestId does not identify this exact task; use a fresh UUID.");
     return { chatId: request.requestId, status: statusOf(request.requestId, existing) };
   }
 
@@ -209,7 +225,18 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
       request.workspaceId,
       WORKSPACE_WAIT_MS,
     );
+    if (mergeRequest && directory.name !== mergeRequest.sourceBranch)
+      throw new Error(
+        "The selected workspace branch does not match the merge request source branch.",
+      );
     const workspace = await deps.paseoWorkspace(directory.cwd);
+    await deps.verifyReviewWorkspace(
+      directory.cwd,
+      mergeRequest ?? {
+        sourceBranch: directory.name,
+        sourceRepository: directory.gitRepo,
+      },
+    );
     const message = mergeRequest
       ? buildFeatureTaskMessage({
           kind: "review-merge-request",
@@ -221,6 +248,7 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
           instruction: request.instruction,
         });
     if (deps.chiefId() !== chiefId) throw new Error("Chief is not connected");
+    const digest = taskDigest(request);
     const { chatId } = await deps.startChat({
       agentId: request.requestId,
       bot: request.bot,
@@ -229,7 +257,8 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
       prompt: message.prompt,
       titleSuffix: message.titleSuffix,
       labels: {
-        [HANDOFF_LABEL]: sign(key, request.requestId, request.appId, request.workspaceId),
+        [HANDOFF_LABEL]: sign(key, request.requestId, request.appId, request.workspaceId, digest),
+        [HANDOFF_TASK_DIGEST_LABEL]: digest,
         [HANDOFF_APP_LABEL]: request.appId,
         [HANDOFF_WORKSPACE_LABEL]: request.workspaceId,
       },
@@ -239,6 +268,7 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
   }
 
   return {
+    isCanceled: (chatId: string) => canceled.has(chatId),
     async startFeatureTask(input: unknown): Promise<{ chatId: string; status: HandoffStatus }> {
       const request = StartFeatureTaskInput.parse(input);
       const chiefId = deps.chiefId();
