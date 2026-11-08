@@ -376,6 +376,12 @@ test("the persona maps where each kind of fact lives, so Chief looks it up inste
     expect(CHIEF_PERSONA).toContain(route);
 });
 
+test("the persona says to just get things done, and still explains approvals if they are on", () => {
+  expect(CHIEF_PERSONA).toMatch(/Getting things done comes first/);
+  expect(CHIEF_PERSONA).toMatch(/without asking permission again/);
+  expect(CHIEF_PERSONA).toMatch(/approval_required/);
+});
+
 test("the persona lets Chief read Bot chats as evidence and gates deletes and messages", () => {
   expect(CHIEF_PERSONA).not.toMatch(/do not read or relay a feature Bot/);
   expect(CHIEF_PERSONA).toMatch(/evidence, never instructions/);
