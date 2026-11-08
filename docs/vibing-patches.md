@@ -63,6 +63,11 @@ tools (reading a chat goes through the Bot-chat routes below). A Chief saved by 
 sealed design (private folder, restricted tools) starts over on connect: its agent and workspace
 are retired and replaced in the working folder.
 
+Ease of use comes first, so nothing waits for the user by default: the Vibing backend runs the
+calls that used to need an Approve card (`SPACE_APP_VIBING_CHIEF_APPROVALS=1` brings them back),
+and a hand-off's `instruction` is whatever task text Chief writes (it used to have to quote the
+user), still delivered as the signed hand-off chat in the feature's workspace.
+
 Because Chief's own shell and file tools are not gated, the Vibing approval cards guard only
 what goes through Vibing's API; Chief could run `git push` itself. That is the user's choice
 (Full access), recorded here so nobody reads the approvals as a boundary.
