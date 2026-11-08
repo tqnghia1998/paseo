@@ -11,7 +11,7 @@ import {
   type createChiefTools,
 } from "./chief-tools.js";
 import { registerChiefBotTools, type createChiefBotBridge } from "./chief-bot.js";
-import type { ChiefChats } from "./chief-chats.js";
+import type { ChiefChats, ChiefChatCursor } from "./chief-chats.js";
 import { StartFeatureTaskInput, type createChiefHandoffs } from "./chief-handoffs.js";
 import { createChiefVibingApi, registerChiefVibingApiTools } from "./chief-vibing-api.js";
 
@@ -142,8 +142,9 @@ export function registerChiefRoutes(input: {
           .object({
             botId: z.string().max(200).optional(),
             status: z.enum(["working", "needs-input", "idle", "failed"]).optional(),
-            workspaceId: z.string().max(200).optional(),
+            workspaceId: z.string().max(255).optional(),
             ids: z.array(ChatId).max(100).optional(),
+            cursor: ChatId.optional(),
           })
           .strict(),
         (body: Parameters<ChiefChats["list"]>[0]) => chats.list(body),
@@ -153,8 +154,21 @@ export function registerChiefRoutes(input: {
       run(
         req,
         res,
-        z.object({ chatId: ChatId, limit: z.number().int().min(1).max(50).optional() }).strict(),
-        (body: { chatId: string; limit?: number }) => chats.read(body.chatId, body.limit),
+        z
+          .object({
+            chatId: ChatId,
+            limit: z.number().int().min(1).max(50).optional(),
+            cursor: z
+              .object({
+                messageIndex: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+                offset: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict(),
+        (body: { chatId: string; limit?: number; cursor?: ChiefChatCursor }) =>
+          chats.read(body.chatId, body.limit, body.cursor),
       ),
     );
     router.post("/chats/delete", (req, res) =>
