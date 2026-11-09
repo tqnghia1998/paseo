@@ -9,7 +9,7 @@ export type BotChatRuntimeSelection = Pick<
   | "effectiveThinkingOptionId"
   | "isModelLoading"
   | "modelError"
-  | "featureValues"
+  | "providerOptions"
   | "hasUserModifiedAgentSettings"
 >;
 
@@ -26,7 +26,7 @@ export function botChatStartSettings(
       model: selection.effectiveModelId,
       modeId: selection.effectiveModeId || null,
       thinkingOptionId: selection.effectiveThinkingOptionId || null,
-      featureValues: selection.featureValues,
+      featureValues: selection.providerOptions,
     },
   };
 }

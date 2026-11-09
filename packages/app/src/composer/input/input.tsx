@@ -2392,7 +2392,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     paddingBottom: COMPOSER_PADDING_BOTTOM,
     paddingHorizontal: COMPOSER_PADDING_HORIZONTAL,
 
-
     ...(isWeb
       ? {
           transitionProperty: "border-color",
