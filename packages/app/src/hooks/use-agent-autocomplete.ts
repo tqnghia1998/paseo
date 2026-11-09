@@ -1,3 +1,4 @@
+import { isChiefSlashCommandAllowed } from "@/patches/vibing/chief-slash-policy";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
@@ -255,6 +256,7 @@ function buildAutocompleteOptions(input: BuildAutocompleteOptionsInput): AgentAu
         );
       },
     })
+      .filter((entry) => isChiefSlashCommandAllowed(entry.command.name))
       .filter((entry) => !input.isDraftContext || entry.source !== "built-in")
       .map((entry): AvailableCommand => {
         if (entry.source === "built-in") return { source: "client", command: entry.command };

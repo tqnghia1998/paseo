@@ -10,3 +10,308 @@ index 705d513..6aa6aaa 100644
  import { Pressable, Text, View, type TextInput as NativeTextInput } from "react-native";
  import { LIMITS } from "../shared/limits.ts";
  import { start, suggest } from "../shared/rpc.ts";
+diff --git a/shell-yeah/server/runs.test.ts b/shell-yeah/server/runs.test.ts
+index 23d6fc4..4d2ce8d 100644
+--- a/shell-yeah/server/runs.test.ts
++++ b/shell-yeah/server/runs.test.ts
+@@ -295,6 +295,86 @@ posixTest("only so many commands run at once", async () => {
+   await h.registry.shutdown();
+ });
+
++posixTest("concurrent starts reserve capacity before waiting for a spawner", async () => {
++  const h = harness({ terminal: "off", limits: { maxLive: 1 } });
++  const cwd = dir();
++  try {
++    const results = await Promise.allSettled([
++      run(h.registry, "sleep 30", cwd, { runId: "capacity-one" }),
++      run(h.registry, "sleep 30", cwd, { runId: "capacity-two" }),
++    ]);
++    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
++    const refused = results.find((result) => result.status === "rejected") as PromiseRejectedResult;
++    assert.match(String(refused.reason), /1 commands are already running/);
++    assert.equal(h.registry.recent(10).filter(({ row }) => row.phase.kind === "running").length, 1);
++  } finally {
++    await h.registry.shutdown();
++  }
++});
++
++posixTest("failed starts release reserved command capacity", async () => {
++  let rejectFirstPublish = true;
++  const h = harness({
++    terminal: "off",
++    limits: { maxLive: 1 },
++    publish: () => {
++      if (rejectFirstPublish) {
++        rejectFirstPublish = false;
++        throw new Error("Unknown agent");
++      }
++    },
++  });
++  const cwd = dir();
++  try {
++    await assert.rejects(run(h.registry, "touch must-not-run", cwd), /Unknown agent/);
++    assert.equal(existsSync(join(cwd, "must-not-run")), false);
++    const recovered = await ended(h.registry, await run(h.registry, "true", cwd));
++    assert.equal(recovered.phase.kind, "ok");
++    const missing = await ended(h.registry, await run(h.registry, "true", join(cwd, "missing")));
++    assert.equal(missing.phase.kind, "failed");
++    const afterMissing = await ended(h.registry, await run(h.registry, "true", cwd));
++    assert.equal(afterMissing.phase.kind, "ok");
++  } finally {
++    await h.registry.shutdown();
++  }
++});
++
++posixTest("shutdown fences a start waiting for its spawner before it can launch", async () => {
++  const h = harness({ terminal: "off" });
++  const cwd = dir();
++  // No await here: shutdown must close admission while start is suspended at its first await.
++  const outcome = run(h.registry, "touch must-not-run", cwd, { runId: "pending-shutdown" }).then(
++    (runId) => ({ kind: "started" as const, runId }),
++    (error: unknown) => ({ kind: "rejected" as const, error }),
++  );
++  try {
++    await h.registry.shutdown();
++    const result = await outcome;
++    assert.equal(result.kind, "rejected");
++    if (result.kind === "rejected") assert.match(String(result.error), /shut|clos|stop/i);
++    await delay(50);
++    assert.equal(existsSync(join(cwd, "must-not-run")), false);
++    assert.equal(
++      h.registry.recent(10).some(({ row }) => row.phase.kind === "running"),
++      false,
++    );
++  } finally {
++    await h.registry.shutdown();
++  }
++});
++
++posixTest("a closed registry rejects new starts without running the command", async () => {
++  const h = harness({ terminal: "off" });
++  const cwd = dir();
++  try {
++    await h.registry.shutdown();
++    await assert.rejects(run(h.registry, "touch must-not-run", cwd), /shut|clos|stop/i);
++    assert.equal(existsSync(join(cwd, "must-not-run")), false);
++  } finally {
++    await h.registry.shutdown();
++  }
++});
++
+ posixTest("tail: unknown for an unseen run, unchanged after the wait, wakes on a burst and on the end", { timeout: 15_000 }, async () => {
+   // Builtin echoes, so the burst's three writes don't wait on starting a program, which a busy CI
+   // runner can stretch past the coalescing window. A wider window than the default covers the rest.
+@@ -634,3 +714,52 @@ posixTest("after a rerun, a late proposal for the card's first run never overwri
+   assert.deepEqual([h.card(id).runId, h.card(id).phase.kind], [second, "ok"]);
+   await h.registry.shutdown();
+ });
++
++posixTest("same-id retries share pending admission at the command limit", async () => {
++  const h = harness({ terminal: "off", limits: { maxLive: 1 } });
++  const cwd = dir();
++  try {
++    const ids = await Promise.all([
++      run(h.registry, "sleep 30", cwd, { runId: "same-pending-id" }),
++      run(h.registry, "sleep 30", cwd, { runId: "same-pending-id" }),
++    ]);
++    assert.deepEqual(ids, ["same-pending-id", "same-pending-id"]);
++    assert.equal(h.registry.recent(10).length, 1);
++  } finally {
++    await h.registry.shutdown();
++  }
++});
++
++posixTest("shutdown fences a command waiting for its initial timeline publication", async () => {
++  let release!: () => void;
++  const publication = new Promise<void>((resolve) => {
++    release = resolve;
++  });
++  let waiting = false;
++  const h = harness({
++    terminal: "off",
++    limits: { shutdownPublishMs: 10, shutdownKillWaitMs: 10 },
++    publish: (row) => {
++      if (row.phase.kind === "running") {
++        waiting = true;
++        return publication;
++      }
++    },
++  });
++  const cwd = dir();
++  const outcome = run(h.registry, "touch must-not-run", cwd).then(
++    () => "started",
++    () => "rejected",
++  );
++  try {
++    await until(() => waiting);
++    await h.registry.shutdown();
++    release();
++    assert.equal(await outcome, "rejected");
++    await delay(50);
++    assert.equal(existsSync(join(cwd, "must-not-run")), false);
++  } finally {
++    release();
++    await h.registry.shutdown();
++  }
++});
+diff --git a/shell-yeah/server/runs.ts b/shell-yeah/server/runs.ts
+index ad8874c..daf87e3 100644
+--- a/shell-yeah/server/runs.ts
++++ b/shell-yeah/server/runs.ts
+@@ -95,6 +95,8 @@ export function createRunRegistry(deps: RunsDeps): RunRegistry {
+   const latestRunByCard = new Map<string, string>();
+   const timers = new Set<NodeJS.Timeout>();
+   let closed = false;
++  let pendingStarts = 0;
++  const startingRuns = new Map<string, Promise<{ runId: string }>>();
+
+   function after(ms: number, fn: () => void): NodeJS.Timeout {
+     const timer = setTimeout(() => {
+@@ -338,61 +340,96 @@ export function createRunRegistry(deps: RunsDeps): RunRegistry {
+     };
+   }
+
++  function assertOpen(): void {
++    if (closed) throw new Error("Shell Yeah is shutting down; no new commands can start.");
++  }
++
++  function historyForRerun(rerunOf: RunRow | undefined, previous: Run | undefined): PastRun[] {
++    if (!rerunOf) return [];
++    const last = pastOf(previous ? rowOf(previous, limits.scrollbackLines) : rerunOf);
++    const past = previous?.past ?? rerunOf.past ?? [];
++    return [...past, ...(last ? [last] : [])].slice(-limits.pastRuns);
++  }
++
++  async function startRun(input: StartInput, id: string): Promise<{ runId: string }> {
++    if (runs.has(id)) return { runId: id };
++    const { rerunOf } = input;
++    const cardId = rerunOf ? cardIdOf(rerunOf) : id;
++    const latest = latestRunByCard.get(cardId);
++    const alreadyRerun = rerunOf !== undefined && latest !== undefined && latest !== rerunOf.runId;
++    if (alreadyRerun) return { runId: latest };
++    const previous = rerunOf ? runs.get(rerunOf.runId) : undefined;
++    if (previous?.phase.kind === "running") throw new Error("This command is still running. Stop it first.");
++    if (Buffer.byteLength(input.command) > limits.commandBytes) throw new Error("That command is too long to run.");
++    if (liveCount() + pendingStarts >= limits.maxLive) throw new Error(`${limits.maxLive} commands are already running. Stop one first.`);
++    const releaseCard = claimCardBeforeAwait(cardId, id);
++    pendingStarts += 1;
++    let spawner: Spawner;
++    try {
++      spawner = await spawnerReady;
++      assertOpen();
++    } catch (error) {
++      releaseCard();
++      throw error;
++    } finally {
++      pendingStarts -= 1;
++    }
++    if (runs.has(id)) return { runId: id };
++    const past = historyForRerun(rerunOf, previous);
++    const launchedAt = deps.now();
++    const run: Run = {
++      id,
++      agentId: input.agentId,
++      origin: input.origin,
++      command: input.command,
++      cwd: input.cwd,
++      cardId,
++      runNumber: rerunOf ? runNumberOf(rerunOf) + 1 : 1,
++      past,
++      phase: { kind: "running", startedAt: launchedAt, stopRequestedAt: null },
++      rev: 0,
++      screen: createScreen({ maxLines: limits.linesKept, maxLineChars: limits.lineChars }),
++      sentAt: null,
++      lastOutputAt: null,
++      proc: null,
++      terminal: spawner.terminal,
++      capturedBytes: 0,
++      binary: false,
++      capStopped: false,
++      waiters: new Set(),
++      timers: [],
++      escalation: [],
++    };
++    runs.set(id, run);
++    const problem = await folderProblem(input.cwd);
++    assertOpen();
++    if (problem) run.phase = { kind: "failed", startedAt: launchedAt, endedAt: deps.now(), exitCode: null, signal: null, message: problem };
++    try {
++      await publishRun(run, false);
++    } catch (error) {
++      runs.delete(id);
++      releaseCard();
++      throw error;
++    }
++    assertOpen();
++    if (run.phase.kind === "running") launch(run, spawner);
++    evict();
++    return { runId: id };
++  }
++
+   return {
+     async start(input) {
++      assertOpen();
+       const id = input.runId ?? newRunId();
+-      if (runs.has(id)) return { runId: id };
+-      const { rerunOf } = input;
+-      const cardId = rerunOf ? cardIdOf(rerunOf) : id;
+-      const latest = latestRunByCard.get(cardId);
+-      const alreadyRerun = rerunOf !== undefined && latest !== undefined && latest !== rerunOf.runId;
+-      if (alreadyRerun) return { runId: latest };
+-      const previous = rerunOf ? runs.get(rerunOf.runId) : undefined;
+-      if (previous?.phase.kind === "running") throw new Error("This command is still running. Stop it first.");
+-      if (Buffer.byteLength(input.command) > limits.commandBytes) throw new Error("That command is too long to run.");
+-      if (liveCount() >= limits.maxLive) throw new Error(`${limits.maxLive} commands are already running. Stop one first.`);
+-      const releaseCard = claimCardBeforeAwait(cardId, id);
+-      const spawner = await spawnerReady;
+-      if (runs.has(id)) return { runId: id };
+-      const last = rerunOf && pastOf(previous ? rowOf(previous, limits.scrollbackLines) : rerunOf);
+-      const past = rerunOf ? [...(previous?.past ?? rerunOf.past ?? []), ...(last ? [last] : [])].slice(-limits.pastRuns) : [];
+-      const launchedAt = deps.now();
+-      const run: Run = {
+-        id,
+-        agentId: input.agentId,
+-        origin: input.origin,
+-        command: input.command,
+-        cwd: input.cwd,
+-        cardId,
+-        runNumber: rerunOf ? runNumberOf(rerunOf) + 1 : 1,
+-        past,
+-        phase: { kind: "running", startedAt: launchedAt, stopRequestedAt: null },
+-        rev: 0,
+-        screen: createScreen({ maxLines: limits.linesKept, maxLineChars: limits.lineChars }),
+-        sentAt: null,
+-        lastOutputAt: null,
+-        proc: null,
+-        terminal: spawner.terminal,
+-        capturedBytes: 0,
+-        binary: false,
+-        capStopped: false,
+-        waiters: new Set(),
+-        timers: [],
+-        escalation: [],
++      const pending = startingRuns.get(id);
++      if (pending) return pending;
++      const started = startRun(input, id);
++      startingRuns.set(id, started);
++      const release = () => {
++        startingRuns.delete(id);
+       };
+-      runs.set(id, run);
+-      const problem = await folderProblem(input.cwd);
+-      if (problem) run.phase = { kind: "failed", startedAt: launchedAt, endedAt: deps.now(), exitCode: null, signal: null, message: problem };
+-      try {
+-        await publishRun(run, false);
+-      } catch (error) {
+-        runs.delete(id);
+-        releaseCard();
+-        throw error;
+-      }
+-      if (run.phase.kind === "running") launch(run, spawner);
+-      evict();
+-      return { runId: id };
++      void started.then(release, release);
++      return started;
+     },
+
+     stop(runId, force) {
