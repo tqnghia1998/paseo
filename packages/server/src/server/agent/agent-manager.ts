@@ -1627,7 +1627,6 @@ export class AgentManager {
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     config = this.withConvertedOptions(config);
-    const resolvedAgentId = validateAgentId(agentId ?? this.idFactory(), "createAgent");
     config = this.hostManagedSession?.seal(resolvedAgentId, config) ?? config;
     options = { ...options, labels: this.reconcileManagedLabels(resolvedAgentId, options.labels) };
     if (this.isConfiguredMcpOnly(config)) {
@@ -1640,7 +1639,8 @@ export class AgentManager {
       this.pluginLifecycle &&
       !config.internal &&
       config.providerOptions?.restrictToConfiguredMcp !== true
-    ) {      const sent = exposeFeatureValuesToHook(config);
+    ) {
+      const sent = exposeFeatureValuesToHook(config);
 
       const request = await this.pluginLifecycle.before("agent.create.before", {
         config: sent,
@@ -2612,7 +2612,6 @@ export class AgentManager {
       const normalizedModelId =
         typeof modelId === "string" && modelId.trim().length > 0 ? modelId : null;
 
-
       const selection = await agent.session.setModel?.(normalizedModelId);
       await this.drainSessionEvents(agentId);
 
@@ -2641,7 +2640,6 @@ export class AgentManager {
         typeof thinkingOptionId === "string" && thinkingOptionId.trim().length > 0
           ? thinkingOptionId
           : null;
-
 
       let notice: AgentProviderNotice | null = null;
       if (agent.session.setThinkingOption) {
@@ -2713,7 +2711,6 @@ export class AgentManager {
       this.emitState(agent);
     });
   }
-
 
   /** The config as the opened session left it: its own difference from the options it was given. */
   private withOpenedOptions(input: {
