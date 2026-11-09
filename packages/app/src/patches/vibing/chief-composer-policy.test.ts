@@ -23,3 +23,14 @@ it("keeps every client call that changes a session's model, mode or features ins
     expect(readFileSync(resolve(__dirname, file), "utf8")).toContain(call);
   }
 });
+
+it("blocks Chief btw before command dispatch and draft mutation in send and queue paths", () => {
+  expect(composer).toContain("rejectChiefSlashCommand(`/${resolved.command.name}`, setSendError)");
+  expect(composer).toContain("rejectChiefSlashCommand(outgoingMessage, setSendError)");
+  expect(composer.match(/rejectChiefSlashCommand\(payload.text, setSendError\)/g)).toHaveLength(2);
+  const autocomplete = readFileSync(
+    resolve(__dirname, "../../hooks/use-agent-autocomplete.ts"),
+    "utf8",
+  );
+  expect(autocomplete).toContain("isChiefSlashCommandAllowed(entry.command.name)");
+});

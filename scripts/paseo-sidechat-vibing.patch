@@ -1,0 +1,723 @@
+diff --git a/client/ui-registration.ts b/client/ui-registration.ts
+index edf0b02..bb8869a 100644
+--- a/client/ui-registration.ts
++++ b/client/ui-registration.ts
+@@ -23,22 +23,27 @@ export function registerUi(context: PluginClientContext): () => void {
+     }),
+   );
+
+-  cleanups.push(
+-    context.addSlashCommand({
+-      name: "btw",
+-      description: messages.message("commands.btwDescription"),
+-      argumentHint: "<question>",
+-      context: "agent",
+-      async onSubmit({ args, agent, rpc, openPanel }) {
+-        const question = args.trim();
+-        if (!question) {
+-          throw new Error(context.i18n.t(messages, "commands.btwUsage"));
+-        }
+-        await rpc(btwAsk, { agentId: agent.id, question });
+-        openPanel("sidechat", { location: "explorer" });
+-      },
+-    }),
+-  );
++  const chiefView =
++    new URLSearchParams(
++      (globalThis as { location?: { search: string } }).location?.search ?? "",
++    ).get("view") === "chief";
++  if (!chiefView)
++    cleanups.push(
++      context.addSlashCommand({
++        name: "btw",
++        description: messages.message("commands.btwDescription"),
++        argumentHint: "<question>",
++        context: "agent",
++        async onSubmit({ args, agent, rpc, openPanel }) {
++          const question = args.trim();
++          if (!question) {
++            throw new Error(context.i18n.t(messages, "commands.btwUsage"));
++          }
++          await rpc(btwAsk, { agentId: agent.id, question });
++          openPanel("sidechat", { location: "explorer" });
++        },
++      }),
++    );
+
+   cleanups.push(
+     context.addSlashCommand({
+@@ -67,7 +72,9 @@ export function registerUi(context: PluginClientContext): () => void {
+         const page = await paseo.agents
+           .ref(agent.id)
+           .timeline.refetch({ direction: "tail", limit: 200, projection: "canonical" });
+-        const lines: string[] = [context.i18n.t(messages, "commands.forkIntro", { title: agent.title ?? agent.id })];
++        const lines: string[] = [
++          context.i18n.t(messages, "commands.forkIntro", { title: agent.title ?? agent.id }),
++        ];
+         for (const entry of page.entries) {
+           const item = entry.item;
+           if (item.type === "user_message") {
+@@ -86,7 +93,9 @@ export function registerUi(context: PluginClientContext): () => void {
+             {
+               type: "text",
+               mimeType: "text/plain",
+-              title: context.i18n.t(messages, "commands.forkTranscriptTitle", { title: agent.title ?? agent.id }),
++              title: context.i18n.t(messages, "commands.forkTranscriptTitle", {
++                title: agent.title ?? agent.id,
++              }),
+               text: lines.join("\n\n"),
+             },
+           ],
+diff --git a/index.server.ts b/index.server.ts
+index 5184f72..68f83a7 100644
+--- a/index.server.ts
++++ b/index.server.ts
+@@ -71,10 +71,26 @@ export default function contribute(server: PluginServerContext) {
+       clearAllIdleTimers();
+     }
+   };
+-  void settings.read().then(applySettingsState).catch(() => {});
++  void settings
++    .read()
++    .then(applySettingsState)
++    .catch(() => {});
+   settings.subscribe((state) => applySettingsState(state));
+
+-  server.handle(btwAsk, (input, { paseo }) => {
++  server.handle(btwAsk, async (input, { paseo }) => {
++    // Read the daemon-owned parent identity before persisting or starting advice.
++    if ((input.mode ?? "advice") === "advice") {
++      const snapshot = await paseo.agents.ref(input.agentId).refresh();
++      if (!snapshot) throw new Error("SIDECHAT_MAIN_GONE");
++      const parent = snapshot.agent;
++      if (
++        parent.labels?.["paseo-bots.bot"] === "vibing-chief" ||
++        parent.labels?.["paseo-chief.policy"] === "chief-v1"
++      ) {
++        throw new Error("/btw is disabled in Chief. Use a Bot chat for side questions.");
++      }
++    }
++    await ensureLoaded();
+     if (runningCount() >= MAX_RUNNING) {
+       // language-neutral code; the panel translates it for display
+       throw new Error("SIDECHAT_TOO_MANY_RUNNING");
+@@ -109,12 +125,18 @@ export default function contribute(server: PluginServerContext) {
+       const thread = getThreadById(input.agentId, input.threadId);
+       if (thread && !thread.busy) {
+         closeThread(input.agentId, thread.mode);
+-        void paseo.agents.ref(thread.id).archive().catch(() => {});
++        void paseo.agents
++          .ref(thread.id)
++          .archive()
++          .catch(() => {});
+       }
+     } else {
+       cleared = clearQuestions(input.agentId);
+       for (const threadId of closeAllThreads(input.agentId)) {
+-        void paseo.agents.ref(threadId).archive().catch(() => {});
++        void paseo.agents
++          .ref(threadId)
++          .archive()
++          .catch(() => {});
+       }
+     }
+     await flushSave();
+@@ -129,7 +151,10 @@ export default function contribute(server: PluginServerContext) {
+       const ids = [...runningTempAgentIds(), ...openThreadAgentIds()];
+       for (const tempId of ids) {
+         try {
+-          void paseo?.agents.ref(tempId).archive().catch(() => {});
++          void paseo?.agents
++            .ref(tempId)
++            .archive()
++            .catch(() => {});
+         } catch {
+           // plugin is shutting down; best effort only
+         }
+diff --git a/server/persist.ts b/server/persist.ts
+index 4eda742..77fe05e 100644
+--- a/server/persist.ts
++++ b/server/persist.ts
+@@ -36,9 +36,18 @@ export interface PersistedState {
+   threads: PersistedThread[];
+ }
+
+-const dir = join(homedir(), ".paseo", "plugin-data", "paseo-sidechat");
++const dir = join(
++  process.env.PASEO_HOME || join(homedir(), ".paseo"),
++  "plugin-data",
++  "paseo-sidechat",
++);
+ const file = join(dir, "history.json");
+-const legacyFile = join(homedir(), ".paseo", "plugin-data", "paseo-btw", "history.json");
++const legacyFile = join(
++  process.env.PASEO_HOME || join(homedir(), ".paseo"),
++  "plugin-data",
++  "paseo-btw",
++  "history.json",
++);
+
+ export async function loadState(): Promise<PersistedState | null> {
+   for (const candidate of [file, legacyFile]) {
+diff --git a/server/runner.ts b/server/runner.ts
+index 3f9bd20..a227cbd 100644
+--- a/server/runner.ts
++++ b/server/runner.ts
+@@ -1,5 +1,6 @@
+ import type { PluginHandlerContext } from "@getpaseo/plugin/server";
+ import type { QuestionEntry, ThreadState } from "./store";
++import type { BtwMode } from "../shared/contracts";
+ import {
+   closeThread,
+   getQuestionEntry,
+@@ -25,6 +26,28 @@ const DEFAULT_SETTINGS = {
+   attachToMain: true,
+ };
+
++// Serialize selection, retirement and creation; release before waiting for a turn.
++const threadAdmissions = new Map<string, Promise<void>>();
++
++async function acquireThreadLane(agentId: string, mode: BtwMode): Promise<() => void> {
++  const lane = `${agentId}::${mode}`;
++  while (threadAdmissions.has(lane)) await threadAdmissions.get(lane);
++  let unlock!: () => void;
++  threadAdmissions.set(
++    lane,
++    new Promise<void>((resolve) => {
++      unlock = resolve;
++    }),
++  );
++  let released = false;
++  return () => {
++    if (released) return;
++    released = true;
++    threadAdmissions.delete(lane);
++    unlock();
++  };
++}
++
+ let boundPaseo: PaseoApi | null = null;
+ let reaped = false;
+ let activeSettings: {
+@@ -92,9 +115,7 @@ async function pickPlanMode(paseo: PaseoApi, provider: string): Promise<string |
+   try {
+     const result = await paseo.providers.listModes(provider);
+     const modes = result.modes ?? [];
+-    const plan = modes.find(
+-      (mode) => /plan|read/i.test(mode.id) || /plan|read/i.test(mode.label),
+-    );
++    const plan = modes.find((mode) => /plan|read/i.test(mode.id) || /plan|read/i.test(mode.label));
+     return plan?.id;
+   } catch {
+     return undefined;
+@@ -172,25 +193,14 @@ async function runQuestion(entry: QuestionEntry, paseo: PaseoApi): Promise<void>
+         await continueThread(paseo, thread, entry);
+       }
+     } else {
+-      const existing = getThread(entry.agentId, entry.mode);
+-      if (existing && existing.busy) {
+-        // a turn is running: steer the side agent instead of queueing
+-        await steerThread(paseo, existing, entry);
+-      } else {
+-        const reusable =
+-          existing &&
+-          existing.provider === provider &&
+-          existing.model === (model || "");
+-        if (existing && reusable) {
+-          await continueThread(paseo, existing, entry);
+-        } else {
+-          if (existing) {
+-            closeThread(entry.agentId, entry.mode);
+-            await archiveTemp(paseo, existing.id);
+-          }
+-          await startThread(paseo, main.workspaceId, provider, model, main.currentModeId ?? null, entry);
+-        }
+-      }
++      await runDefaultThread(
++        paseo,
++        main.workspaceId,
++        provider,
++        model,
++        main.currentModeId ?? null,
++        entry,
++      );
+     }
+   } catch (error) {
+     entry.status = "error";
+@@ -209,8 +219,42 @@ async function runQuestion(entry: QuestionEntry, paseo: PaseoApi): Promise<void>
+   }
+ }
+
++/** Select and prepare one lane while allowing ready helpers to receive steering. */
++async function runDefaultThread(
++  paseo: PaseoApi,
++  workspaceId: string,
++  provider: string,
++  model: string,
++  mainModeId: string | null,
++  entry: QuestionEntry,
++): Promise<void> {
++  const release = await acquireThreadLane(entry.agentId, entry.mode);
++  try {
++    const existing = getThread(entry.agentId, entry.mode);
++    if (existing?.busy) {
++      release();
++      return await steerThread(paseo, existing, entry);
++    }
++    if (existing && existing.provider === provider && existing.model === (model || "")) {
++      release();
++      return await continueThread(paseo, existing, entry);
++    }
++    if (existing) {
++      closeThread(entry.agentId, entry.mode);
++      await archiveTemp(paseo, existing.id);
++    }
++    await startThread(paseo, workspaceId, provider, model, mainModeId, entry, release);
++  } finally {
++    release();
++  }
++}
++
+ /** Follow-up: the thread's temp agent keeps its own Q&A history, so just send the new question. */
+-async function continueThread(paseo: PaseoApi, thread: ThreadState, entry: QuestionEntry): Promise<void> {
++async function continueThread(
++  paseo: PaseoApi,
++  thread: ThreadState,
++  entry: QuestionEntry,
++): Promise<void> {
+   thread.busy = true;
+   thread.turnEntryId = entry.id;
+   if (thread.archiveTimer) {
+@@ -244,7 +288,11 @@ async function continueThread(paseo: PaseoApi, thread: ThreadState, entry: Quest
+  * The question that owned the turn freezes with the answer generated so far;
+  * the new question takes over and resolves when the extended turn finishes.
+  */
+-async function steerThread(paseo: PaseoApi, thread: ThreadState, entry: QuestionEntry): Promise<void> {
++async function steerThread(
++  paseo: PaseoApi,
++  thread: ThreadState,
++  entry: QuestionEntry,
++): Promise<void> {
+   const owner = thread.turnEntryId ? getQuestionEntry(thread.turnEntryId) : undefined;
+   if (owner && (owner.status === "running" || owner.status === "pending")) {
+     owner.status = "done";
+@@ -298,39 +346,48 @@ async function startThread(
+   model: string,
+   mainModeId: string | null,
+   entry: QuestionEntry,
++  ready: () => void,
+ ): Promise<void> {
+   const work = entry.mode === "work";
+-  const context = await buildContext(paseo, entry.agentId, activeSettings.contextMessages);
+-  const prompt = buildPrompt(context, entry.question, entry.mode);
+-  const modeId = work ? mainModeId ?? undefined : await pickPlanMode(paseo, provider);
+-  const prefix = work ? "[btw·干活]" : "[btw]";
++  let handle: AgentHandle;
++  let thread: ThreadState;
++  try {
++    const context = await buildContext(paseo, entry.agentId, activeSettings.contextMessages);
++    const prompt = buildPrompt(context, entry.question, entry.mode);
++    const modeId = work ? (mainModeId ?? undefined) : await pickPlanMode(paseo, provider);
++    const prefix = work ? "[btw·干活]" : "[btw]";
+
+-  const handle = await paseo.workspaces.ref(workspaceId).agents.create({
+-    config: {
+-      provider: model ? `${provider}/${model}` : provider,
+-      ...(modeId ? { modeId } : {}),
+-    },
+-    title: `${prefix} ${truncateQuestion(entry.question)}`,
+-    prompt,
+-    labels: { btw: "side-question" },
+-    ...(activeSettings.attachToMain ? { parent: entry.agentId } : {}),
+-  });
+-  entry.tempAgentId = handle.id;
+-  entry.threadId = handle.id;
++    handle = await paseo.workspaces.ref(workspaceId).agents.create({
++      config: {
++        provider: model ? `${provider}/${model}` : provider,
++        ...(modeId ? { modeId } : {}),
++      },
++      title: `${prefix} ${truncateQuestion(entry.question)}`,
++      prompt,
++      labels: { btw: "side-question" },
++      ...(activeSettings.attachToMain ? { parent: entry.agentId } : {}),
++    });
++    entry.tempAgentId = handle.id;
++    entry.threadId = handle.id;
+
+-  const thread: ThreadState = {
+-    id: handle.id,
+-    agentId: entry.agentId,
+-    provider,
+-    model: model || "",
+-    mode: entry.mode,
+-    firstQuestion: entry.question,
+-    busy: true,
+-    turnEntryId: entry.id,
+-    archiveTimer: null,
+-  };
+-  setThread(thread);
+-  console.log(`[btw] ${work ? "work" : "advice"} thread ${handle.id} created for question ${entry.id}`);
++    thread = {
++      id: handle.id,
++      agentId: entry.agentId,
++      provider,
++      model: model || "",
++      mode: entry.mode,
++      firstQuestion: entry.question,
++      busy: true,
++      turnEntryId: entry.id,
++      archiveTimer: null,
++    };
++    setThread(thread);
++  } finally {
++    ready();
++  }
++  console.log(
++    `[btw] ${work ? "work" : "advice"} thread ${handle.id} created for question ${entry.id}`,
++  );
+
+   try {
+     await settleTurn(handle.waitForFinish(ANSWER_TIMEOUT_MS), handle, entry);
+@@ -346,7 +403,11 @@ async function startThread(
+   scheduleIdleArchive(thread, paseo);
+ }
+
+-async function settleTurn(turn: Promise<TurnResult>, handle: AgentHandle, entry: QuestionEntry): Promise<void> {
++async function settleTurn(
++  turn: Promise<TurnResult>,
++  handle: AgentHandle,
++  entry: QuestionEntry,
++): Promise<void> {
+   const pollTimer = setInterval(() => {
+     void pollAnswer(handle, entry);
+   }, ANSWER_POLL_MS);
+diff --git a/server/store.ts b/server/store.ts
+index 78c443b..be89169 100644
+--- a/server/store.ts
++++ b/server/store.ts
+@@ -136,7 +136,8 @@ export function scheduleSave(): void {
+   }, SAVE_DEBOUNCE_MS);
+ }
+
+-export function flushSave(): Promise<void> {
++export async function flushSave(): Promise<void> {
++  await ensureLoaded();
+   if (saveTimer) {
+     clearTimeout(saveTimer);
+     saveTimer = null;
+diff --git a/server/vibing-lifecycle.test.ts b/server/vibing-lifecycle.test.ts
+new file mode 100644
+index 0000000..e66ae49
+--- /dev/null
++++ b/server/vibing-lifecycle.test.ts
+@@ -0,0 +1,209 @@
++import { afterEach, expect, it, vi } from "vitest";
++import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import type { PluginServerContext } from "@getpaseo/plugin/server";
++import type { PersistedState } from "./persist";
++
++function deferred<T>() {
++  let resolve!: (value: T) => void;
++  const promise = new Promise<T>((done) => {
++    resolve = done;
++  });
++  return { promise, resolve };
++}
++const finishes: Array<() => void> = [];
++const cleanups: Array<() => void> = [];
++afterEach(async () => {
++  for (const finish of finishes.splice(0)) finish();
++  await new Promise((resolve) => setTimeout(resolve, 10));
++  for (const cleanup of cleanups.splice(0)) cleanup();
++  await new Promise((resolve) => setTimeout(resolve, 10));
++  vi.unstubAllEnvs();
++});
++
++const saved: PersistedState = {
++  version: 1,
++  questions: [
++    {
++      id: "saved",
++      agentId: "parent",
++      threadId: "saved-child",
++      mode: "advice",
++      question: "old question",
++      status: "done",
++      answer: "old answer",
++      error: null,
++      model: "m",
++      startedAt: 1,
++      finishedAt: 2,
++      elapsedMs: 1,
++      requestedModel: null,
++      tempAgentId: "saved-child",
++      threadTarget: null,
++    },
++  ],
++  threads: [
++    {
++      id: "saved-child",
++      agentId: "parent",
++      provider: "codex",
++      model: "m",
++      mode: "advice",
++      firstQuestion: "old question",
++    },
++  ],
++};
++async function fixture(
++  previous?: PersistedState,
++  failFirstCreate = false,
++  archiveWait?: Promise<void>,
++) {
++  vi.resetModules();
++  const home = await mkdtemp(join(tmpdir(), "sidechat-regression-"));
++  vi.stubEnv("PASEO_HOME", home);
++  const file = join(home, "plugin-data/paseo-sidechat/history.json");
++  if (previous) {
++    await mkdir(join(home, "plugin-data/paseo-sidechat"), { recursive: true });
++    await writeFile(file, JSON.stringify(previous));
++  }
++  const { default: contribute } = await import("../index.server");
++  const store = await import("./store");
++  const handlers = new Map<string, (input: unknown, context: unknown) => unknown>();
++  const cleanup = contribute({
++    registerSettings: () => ({
++      read: async () => ({
++        status: "ready",
++        values: { autoArchive: false, idleMinutes: 10, contextMessages: 8, attachToMain: true },
++      }),
++      subscribe: () => () => {},
++    }),
++    handle: (rpc: { name: string }, fn: (input: unknown, context: unknown) => unknown) =>
++      handlers.set(rpc.name, fn),
++  } as unknown as PluginServerContext);
++  cleanups.push(cleanup);
++  const created: string[] = [],
++    archived: string[] = [],
++    sent: string[] = [];
++  const handles = new Map();
++  function child(id: string) {
++    const end = deferred<{ status: "idle"; lastMessage: string }>();
++    finishes.push(() => end.resolve({ status: "idle", lastMessage: "finished" }));
++    const handle = {
++      id,
++      run: (question: string) => {
++        sent.push(question);
++        return end.promise;
++      },
++      send: async (question: string) => {
++        sent.push(question);
++      },
++      waitForFinish: () => end.promise,
++      timeline: { refetch: async () => ({ entries: [] }) },
++      archive: async () => {
++        archived.push(id);
++        if (id === "saved-child") await archiveWait;
++      },
++    };
++    handles.set(id, handle);
++    return handle;
++  }
++  for (const thread of previous?.threads ?? []) child(thread.id);
++  const paseo = {
++    agents: {
++      list: async () => ({
++        entries: (previous?.threads ?? []).map((thread) => ({
++          agent: { id: thread.id, labels: { btw: "side-question" } },
++        })),
++      }),
++      ref: (id: string) =>
++        handles.get(id) ?? {
++          refresh: async () => ({
++            agent: {
++              id,
++              workspaceId: "ws",
++              provider: "codex",
++              model: "m",
++              labels: { "paseo-bots.bot": "ordinary" },
++            },
++          }),
++          timeline: { refetch: async () => ({ entries: [] }) },
++        },
++    },
++    providers: { listModes: async () => ({ modes: [] }) },
++    workspaces: {
++      ref: () => ({
++        agents: {
++          create: async () => {
++            if (failFirstCreate) {
++              failFirstCreate = false;
++              throw new Error("create failed");
++            }
++            const id = `child-${created.length}`;
++            created.push(id);
++            return child(id);
++          },
++        },
++      }),
++    },
++  };
++  return {
++    file,
++    store,
++    cleanup,
++    created,
++    archived,
++    sent,
++    ask: async (question: string, mode: "advice" | "work" = "advice", model?: string) =>
++      handlers.get("sidechat.ask")!({ agentId: "parent", question, mode, model }, { paseo }),
++  };
++}
++
++it("first question restores saved history before persistence and stale-thread cleanup", async () => {
++  const f = await fixture(saved);
++  await f.ask("new question");
++  await vi.waitFor(() => expect(f.sent).toEqual(["new question"]));
++  await f.store.flushSave();
++  const disk: PersistedState = JSON.parse(await readFile(f.file, "utf8"));
++  expect(disk.questions.find((q) => q.id === "saved")?.answer).toBe("old answer");
++  expect(f.archived).not.toContain("saved-child");
++  expect(f.created).toHaveLength(0);
++});
++it("overlapping first questions share one helper and steer the second question", async () => {
++  const f = await fixture();
++  await Promise.all([f.ask("one"), f.ask("two")]);
++  await vi.waitFor(() => expect(f.sent).toEqual(["two"]));
++  expect(f.created).toHaveLength(1);
++  expect(f.store.listOpenThreads("parent")).toHaveLength(1);
++});
++it("a failed creation releases its lane so the next question can start", async () => {
++  const f = await fixture(undefined, true);
++  await f.ask("one");
++  await vi.waitFor(() => expect(f.store.listQuestionsForAgent("parent")[0]?.status).toBe("error"));
++  await f.ask("two");
++  await vi.waitFor(() => expect(f.created).toHaveLength(1));
++});
++it("unloading before any RPC preserves saved history", async () => {
++  const f = await fixture(saved);
++  f.cleanup();
++  await f.store.flushSave();
++  const disk: PersistedState = JSON.parse(await readFile(f.file, "utf8"));
++  expect(disk.questions.find((q) => q.id === "saved")?.answer).toBe("old answer");
++});
++
++it("model replacement reserves the lane while retiring the previous helper", async () => {
++  const archive = deferred<void>();
++  const f = await fixture(saved, false, archive.promise);
++  try {
++    await f.ask("one", "advice", "new-model");
++    await vi.waitFor(() => expect(f.archived).toContain("saved-child"));
++    await f.ask("two", "advice", "new-model");
++    await new Promise((resolve) => setImmediate(resolve));
++    expect(f.created).toHaveLength(0);
++    archive.resolve();
++    await vi.waitFor(() => expect(f.sent).toEqual(["two"]));
++    expect(f.created).toHaveLength(1);
++  } finally {
++    archive.resolve();
++  }
++});
+diff --git a/vibing.test.ts b/vibing.test.ts
+new file mode 100644
+index 0000000..6e9e7f5
+--- /dev/null
++++ b/vibing.test.ts
+@@ -0,0 +1,94 @@
++import { describe, it, expect, vi, beforeEach } from "vitest";
++vi.mock("./client/panel", () => ({ BtwPanel: () => null }));
++vi.mock("./client/settings", () => ({ BtwSettingsScreen: () => null }));
++vi.mock("./server/runner", () => ({
++  applySettings: vi.fn(),
++  boundApi: vi.fn(),
++  isAttachToMain: () => true,
++  reapOnce: vi.fn(),
++  startQuestion: vi.fn(),
++}));
++vi.mock("./server/store", () => ({
++  addQuestion: vi.fn(() => ({ id: "q" })),
++  runningCount: () => 0,
++  clearAllIdleTimers: vi.fn(),
++  clearQuestions: vi.fn(),
++  clearThreadQuestions: vi.fn(),
++  closeAllThreads: vi.fn(),
++  closeThread: vi.fn(),
++  ensureLoaded: vi.fn(),
++  flushSave: vi.fn(),
++  getThreadById: vi.fn(),
++  listOpenThreads: vi.fn(),
++  listQuestionsForAgent: vi.fn(),
++  openThreadAgentIds: vi.fn(),
++  runningTempAgentIds: vi.fn(),
++}));
++import contribute from "./index.server";
++import { registerUi } from "./client/ui-registration";
++import { addQuestion } from "./server/store";
++import { startQuestion } from "./server/runner";
++function handler() {
++  const handlers = new Map();
++  contribute({
++    registerSettings: () => ({ read: async () => ({ status: "ready" }), subscribe: () => {} }),
++    handle: (rpc: any, fn: any) => handlers.set(rpc.name, fn),
++  } as any);
++  return handlers.get("sidechat.ask");
++}
++const api = (labels: Record<string, string | undefined>) => ({
++  paseo: { agents: { ref: () => ({ refresh: async () => ({ agent: { labels } }) }) } },
++});
++beforeEach(() => {
++  vi.clearAllMocks();
++  vi.unstubAllGlobals();
++});
++describe("Vibing Side Chat policy", () => {
++  for (const labels of [{ "paseo-bots.bot": "vibing-chief" }, { "paseo-chief.policy": "chief-v1" }])
++    it("rejects Chief advice before creating a question", async () => {
++      await expect(
++        Promise.resolve().then(() => handler()({ agentId: "chief", question: "hi" }, api(labels))),
++      ).rejects.toThrow("/btw is disabled in Chief");
++      expect(addQuestion).not.toHaveBeenCalled();
++      expect(startQuestion).not.toHaveBeenCalled();
++    });
++  it("allows Bot advice", async () => {
++    await expect(
++      Promise.resolve().then(() =>
++        handler()({ agentId: "bot", question: "hi" }, api({ "paseo-bots.bot": "ordinary" })),
++      ),
++    ).resolves.toEqual({ questionId: "q" });
++    expect(startQuestion).toHaveBeenCalled();
++  });
++  it("preserves explicit work mode", async () => {
++    await expect(
++      Promise.resolve().then(() =>
++        handler()(
++          { agentId: "chief", question: "hi", mode: "work" },
++          api({ "paseo-bots.bot": "vibing-chief" }),
++        ),
++      ),
++    ).resolves.toEqual({ questionId: "q" });
++  });
++  for (const chief of [true, false])
++    it(`registers appropriate commands in ${chief ? "Chief" : "Bot"} view`, () => {
++      vi.stubGlobal("location", { search: chief ? "?view=chief" : "?view=bots" });
++      const commands: string[] = [];
++      const context = new Proxy(
++        {},
++        {
++          get: (_, key) =>
++            key === "addSlashCommand"
++              ? (c: any) => {
++                  commands.push(c.name);
++                  return () => {};
++                }
++              : () => () => {},
++        },
++      );
++      registerUi(context as any);
++      expect(commands.includes("btw")).toBe(!chief);
++      expect(commands).toContain("side");
++      expect(commands).toContain("fork");
++    });
++});

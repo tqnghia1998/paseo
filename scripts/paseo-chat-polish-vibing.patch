@@ -12,7 +12,7 @@ index 294e5fa..db68df4 100644
    const apply = useRpc(applyUpdate);
    const [status, setStatus] = useState<UpdateStatus>();
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index 1c9b5fc..070f610 100644
+index 9419086..ea1d917 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
 @@ -23,7 +23,6 @@ ${[4, 5, 3, 0, 2, 1].map((step, i) => `${DOT}:nth-child(${i + 1}) { animation-de
@@ -37,10 +37,10 @@ index 1c9b5fc..070f610 100644
 +[data-cp-part="queued"] > div:last-child > :is(*):last-child:is(:disabled, [aria-disabled="true"]) :is(svg, svg *) { stroke: var(--cp-muted) !important; }
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]) { opacity: 0.45 !important; }
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]):hover { background-color: transparent !important; }
- 
+
 @@ -249,7 +249,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
  ${PLAN} > div:last-child { padding: 10px 16px 12px !important; border-top: 1px solid var(--cp-rule) !important; }
- 
+
  [data-testid^="chat-outline-tick-"][aria-selected="true"] > div { background-color: var(--cp-accent) !important; }
 -[data-testid="chat-outline-preview"] { background-color: var(--cp-raised) !important; border-radius: 12px !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
 +[data-testid="chat-outline-preview"] { background-color: var(--cp-raised, var(--colors-surface2)) !important; border-radius: 12px !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
@@ -50,7 +50,7 @@ index 1c9b5fc..070f610 100644
 @@ -298,13 +298,27 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
  ${USAGE} > div:nth-child(4) { margin-top: -6px !important; }
  `;
- 
+
 +// Host defaults also cover embedded clients without the sidebar that calls setNativeColors.
  export const NATIVE_CSS = `
 +:root {
@@ -106,8 +106,266 @@ index 28e9004..cb48876 100644
    if (staleShell()) void installHeadlessShell();
    server.before("agent.create", async ({ request }, { paseo }) => {
      // Off by default, so unreadable prefs mean off; internal agents (commit and PR messages) never draw.
+diff --git a/package-lock.json b/package-lock.json
+index 2c8eff2..1e557c0 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -9,18 +9,18 @@
+       "version": "0.10.0",
+       "license": "MIT",
+       "dependencies": {
+-        "@getpaseo/protocol": "0.13.0",
+         "pele": "1.7.0",
+         "sharp": "0.35.5"
+       },
+       "devDependencies": {
+-        "@getpaseo/plugin": "0.13.0",
++        "@getpaseo/plugin": "0.15.3",
++        "@getpaseo/protocol": "0.15.3",
+         "@types/node": "^24.19.2",
+         "@types/react": "~19.2.0",
+         "react": "19.1.0",
+         "react-native": "0.81.5",
+         "typescript": "^5.9.3",
+-        "zod": "^4.4.3"
++        "zod": "4.4.3"
+       }
+     },
+     "node_modules/@agentclientprotocol/sdk": {
+@@ -531,22 +531,22 @@
+       }
+     },
+     "node_modules/@getpaseo/client": {
+-      "version": "0.13.0",
+-      "resolved": "https://registry.npmjs.org/@getpaseo/client/-/client-0.13.0.tgz",
+-      "integrity": "sha512-379gl/OHIowATqKBZugupxX6HaOPWQhkOeVnlMQNWnZ5oKbyfCTEPGSkzA8Kotvv1Uue2u+j8z2WnLXyZ9ChYQ==",
++      "version": "0.15.3",
++      "resolved": "https://registry.npmjs.org/@getpaseo/client/-/client-0.15.3.tgz",
++      "integrity": "sha512-gdZ7pmLIVmFof8lUUEUH5NmaqJ6W3u8SelerwaBn6Ygv+iRzVSZeMt43/OyrEmdr8p3eCMj4D3TrCP3T6ZdrZw==",
+       "dev": true,
+       "peer": true,
+       "dependencies": {
+-        "@getpaseo/protocol": "0.13.0",
+-        "@getpaseo/relay": "0.13.0",
++        "@getpaseo/protocol": "0.15.3",
++        "@getpaseo/relay": "0.15.3",
+         "ws": "^8.20.0",
+         "zod": "^4.4.3"
+       }
+     },
+     "node_modules/@getpaseo/plugin": {
+-      "version": "0.13.0",
+-      "resolved": "https://registry.npmjs.org/@getpaseo/plugin/-/plugin-0.13.0.tgz",
+-      "integrity": "sha512-8aGH0lf5kF9yjaM0dVsm8Awu5eB2jHhmbX9ljgf6+jttNWX3XRbRNeylg3whPoKORGrJNlpuLx3XvJMC5KSCaQ==",
++      "version": "0.15.3",
++      "resolved": "https://registry.npmjs.org/@getpaseo/plugin/-/plugin-0.15.3.tgz",
++      "integrity": "sha512-c5+bi4M5CKSV85vEcms/NDDBrIn0jaihofXm/P73Hni0movbrn3hv/QQdOY3pcaQ07zNqi6P7VzNLanryUIYgA==",
+       "dev": true,
+       "dependencies": {
+         "@agentclientprotocol/sdk": "^1.4.0",
+@@ -554,8 +554,8 @@
+         "use-sync-external-store": "^1.6.0"
+       },
+       "peerDependencies": {
+-        "@getpaseo/client": "0.13.0",
+-        "@getpaseo/protocol": "0.13.0",
++        "@getpaseo/client": "0.15.3",
++        "@getpaseo/protocol": "0.15.3",
+         "react": ">=19.1.0 <20",
+         "react-native": ">=0.81.5",
+         "zod": "^4.4.3"
+@@ -567,18 +567,19 @@
+       }
+     },
+     "node_modules/@getpaseo/protocol": {
+-      "version": "0.13.0",
+-      "resolved": "https://registry.npmjs.org/@getpaseo/protocol/-/protocol-0.13.0.tgz",
+-      "integrity": "sha512-g5Hp6QP5hV7KTCrSRBVye2+qhptwnhhLXRn6PHaS1L8PgmeRh5LvrE8PZq3HRq8B1WxflVDuV2WRB2Z3FNcvJA==",
++      "version": "0.15.3",
++      "resolved": "https://registry.npmjs.org/@getpaseo/protocol/-/protocol-0.15.3.tgz",
++      "integrity": "sha512-JhAYutwgLUSDdvDhQ8yLjxzqJroR3yqmt+5/rv07iqmOAd/CNtKNJSXZAFaTOavWZcRVlL6DD3tkwaobjgb1Xg==",
++      "dev": true,
+       "dependencies": {
+         "semver": "^7.8.5",
+         "zod": "^4.4.3"
+       }
+     },
+     "node_modules/@getpaseo/relay": {
+-      "version": "0.13.0",
+-      "resolved": "https://registry.npmjs.org/@getpaseo/relay/-/relay-0.13.0.tgz",
+-      "integrity": "sha512-Yd/RR+2hStTEtmkutwE21drjVmgz+RnQWyjmoh1++dPysp2oNsrimurnbfN0yoBJ5xXWlyuvn8Sr7CziTpkv7Q==",
++      "version": "0.15.3",
++      "resolved": "https://registry.npmjs.org/@getpaseo/relay/-/relay-0.15.3.tgz",
++      "integrity": "sha512-zLgnVLLo1WsVXIQQF5z1DAt7hg6t6K3Zbxnk22uA/DUKE0ip1brQQSmgN1cNN7a9ss3Hqg5Fdr/4r4Yh401gDA==",
+       "dev": true,
+       "peer": true,
+       "dependencies": {
+@@ -4634,9 +4635,9 @@
+       }
+     },
+     "node_modules/ws": {
+-      "version": "8.22.0",
+-      "resolved": "https://registry.npmjs.org/ws/-/ws-8.22.0.tgz",
+-      "integrity": "sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==",
++      "version": "8.22.2",
++      "resolved": "https://registry.npmjs.org/ws/-/ws-8.22.2.tgz",
++      "integrity": "sha512-/rEZ2ejown2N5gxVTHUu9bVVC7ttu0/Tgzf5hbTOixR3Fs7mbbXgn2DbdbcKgJOmpQMtrIUWivtYuVMnp/W/yA==",
+       "dev": true,
+       "license": "MIT",
+       "peer": true,
+@@ -4719,9 +4720,10 @@
+       }
+     },
+     "node_modules/zod": {
+-      "version": "4.6.7",
+-      "resolved": "https://registry.npmjs.org/zod/-/zod-4.6.7.tgz",
+-      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==",
++      "version": "4.4.3",
++      "resolved": "https://registry.npmjs.org/zod/-/zod-4.4.3.tgz",
++      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==",
++      "dev": true,
+       "license": "MIT",
+       "funding": {
+         "url": "https://github.com/sponsors/colinhacks"
+diff --git a/package.json b/package.json
+index 3b3f326..04b727f 100644
+--- a/package.json
++++ b/package.json
+@@ -32,16 +32,16 @@
+     "test": "node --test test/*.test.mjs"
+   },
+   "devDependencies": {
+-    "@getpaseo/plugin": "0.13.0",
++    "@getpaseo/plugin": "0.15.3",
+     "@types/node": "^24.19.2",
+     "@types/react": "~19.2.0",
+     "react": "19.1.0",
+     "react-native": "0.81.5",
+     "typescript": "^5.9.3",
+-    "zod": "^4.4.3"
++    "zod": "4.4.3",
++    "@getpaseo/protocol": "0.15.3"
+   },
+   "dependencies": {
+-    "@getpaseo/protocol": "0.13.0",
+     "pele": "1.7.0",
+     "sharp": "0.35.5"
+   }
+diff --git a/server/update.ts b/server/update.ts
+index 26e59a7..c80e240 100644
+--- a/server/update.ts
++++ b/server/update.ts
+@@ -1,69 +1,14 @@
+-import { spawn } from "node:child_process";
+ import type { UpdateStatus } from "../shared/update";
+
+-// Paseo hands plugin processes its CLI's path; a daemon started from the CLI has it on PATH.
+-const CLI = process.env.PASEO_CLI || "paseo";
+-const NAME = "Chat Polish";
+-
+-type Revision = { kind: "git"; commit: string } | { kind: "npm"; version: string };
+-type Preview = {
+-  id: string;
+-  outcome: "update" | "current" | "installed-newer" | "local" | "error";
+-  current?: { identity?: { kind: string }; currentRevision?: string };
+-  target?: Revision;
+-  links?: string[];
+-  error?: string;
+-};
+-
+-/**
+- * Runs `paseo plugin <args> --json`. Detached, so an update survives the restart it triggers in this process
+- * (Paseo stops the old plugin process while it installs the new one).
+- */
+-function plugin(args: string[]): Promise<unknown> {
+-  return new Promise((resolve, reject) => {
+-    const child = spawn(CLI, ["plugin", ...args, "--json"], { detached: true, stdio: ["ignore", "pipe", "pipe"] });
+-    let out = "";
+-    let err = "";
+-    child.stdout.on("data", (d) => (out += d));
+-    child.stderr.on("data", (d) => (err += d));
+-    child.on("error", reject);
+-    child.on("close", (code) => {
+-      if (code !== 0) return reject(new Error(err.trim() || `paseo exited with ${code}`));
+-      try {
+-        resolve(JSON.parse(out));
+-      } catch {
+-        reject(new Error(`Unexpected output from paseo: ${out.slice(0, 200)}`));
+-      }
+-    });
+-  });
+-}
+-
+-/** The runtime id this copy runs under: the manifest id, unless it was installed with `--id`. A folder copy loses to an installed one. */
+-async function ownId() {
+-  const list = (await plugin(["ls"])) as Array<{ id: string; name?: string; installation?: { identity?: { kind: string } } }>;
+-  const mine = list.filter((p) => p.name === NAME);
+-  return (mine.find((p) => p.installation?.identity?.kind !== "directory") ?? mine[0])?.id ?? "paseo-chat-polish";
+-}
+-
+-const short = (r: Revision | undefined) => (r?.kind === "git" ? r.commit.slice(0, 7) : r?.version);
+-const shortRevision = (rev: string | undefined) => (rev && /^[0-9a-f]{40}$/.test(rev) ? rev.slice(0, 7) : rev);
+-
++// This vendored directory copy follows Vibing's bundle updates. Do not invoke a
++// separately installed Paseo CLI: it may target another daemon or predate plugins.
+ export async function checkForUpdate(): Promise<UpdateStatus> {
+-  try {
+-    const [item] = (await plugin(["update", await ownId(), "--check"])) as Preview[];
+-    if (!item) return { state: "error", links: [], error: "No result from paseo" };
+-    const state = item.outcome === "installed-newer" ? "current" : item.outcome;
+-    return { state, current: shortRevision(item.current?.currentRevision), target: short(item.target), links: item.links ?? [], error: item.error };
+-  } catch (error) {
+-    return { state: "error", links: [], error: error instanceof Error ? error.message : String(error) };
+-  }
++  return { state: "local", links: [] };
+ }
+
+ export async function installUpdate(): Promise<{ error?: string }> {
+-  try {
+-    const [result] = (await plugin(["update", await ownId(), "--yes"])) as Array<{ outcome: string; error?: string }>;
+-    return result?.outcome === "error" ? { error: result.error ?? "Update failed" } : {};
+-  } catch (error) {
+-    return { error: error instanceof Error ? error.message : String(error) };
+-  }
++  return {
++    error:
++      "This bundled copy is managed by Space App Vibing. Update Space App Vibing to update Chat Polish.",
++  };
+ }
+diff --git a/test/vibing-update.test.mjs b/test/vibing-update.test.mjs
+new file mode 100644
+index 0000000..a4a535c
+--- /dev/null
++++ b/test/vibing-update.test.mjs
+@@ -0,0 +1,26 @@
++import assert from "node:assert/strict";
++import { test, after } from "node:test";
++import { mkdtemp, writeFile, access, rm } from "node:fs/promises";
++import { join } from "node:path";
++import { tmpdir } from "node:os";
++const home = await mkdtemp(join(tmpdir(), "polish-update-test-"));
++const marker = join(home, "cli-invoked");
++const cli = join(home, "paseo");
++await writeFile(cli, `#!/bin/sh\ntouch '${marker}'\nprintf '[]'\n`, { mode: 0o700 });
++const previous = process.env.PASEO_CLI;
++process.env.PASEO_CLI = cli;
++const { checkForUpdate, installUpdate } = await import("../server/update.ts");
++after(async () => {
++  if (previous === undefined) delete process.env.PASEO_CLI;
++  else process.env.PASEO_CLI = previous;
++  await rm(home, { recursive: true, force: true });
++});
++test("Vibing's vendored Chat Polish reports local management without invoking the CLI", async () => {
++  assert.deepEqual(await checkForUpdate(), { state: "local", links: [] });
++  await assert.rejects(access(marker));
++});
++test("direct update requests explain local management without invoking the CLI", async () => {
++  const result = await installUpdate();
++  assert.match(result.error ?? "", /Space App Vibing/);
++  await assert.rejects(access(marker));
++});
 diff --git a/test/web.test.mjs b/test/web.test.mjs
-index 05fc924..1b1d615 100644
+index c46f32c..e765173 100644
 --- a/test/web.test.mjs
 +++ b/test/web.test.mjs
 @@ -21,7 +21,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
@@ -167,12 +425,12 @@ index 05fc924..1b1d615 100644
            checks.mermaidDocFromBundle = (await web.loadMermaidDoc()) === new TextDecoder().decode(Uint8Array.from(atob("${Buffer.from(mermaidDoc).toString("base64")}"), (ch) => ch.charCodeAt(0)));
            await wait(); checks.observerSettles = !capped;
            // Paseo 0.14 wraps a prompt's rows and text in a message preview that clamps long prompts itself.
-@@ -255,7 +296,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
+@@ -284,7 +325,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
      assert.equal(report.error, undefined, report.error);
      assert.deepEqual(report.errors, []);
      for (const [check, passed] of Object.entries(report.checks)) assert.equal(passed, true, check);
--    assert.equal(Object.keys(report.checks).length, 27);
-+    assert.equal(Object.keys(report.checks).length, 36);
+-    assert.equal(Object.keys(report.checks).length, 32);
++    assert.equal(Object.keys(report.checks).length, 41);
    } finally {
      server?.closeAllConnections(); server?.close();
      rmSync(temp, { recursive: true, force: true });

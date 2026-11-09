@@ -5,7 +5,8 @@
   },
   "ignorePatterns": [
     ".dev/**",
-    "plugins/{annotations,genui,mermaid,paseo-bots,paseo-chat-polish,paseo-doc-viewer,paseo-recap,shell-yeah}/**/*.gen.ts"
+    "plugins/genui/gallery/**",
+    "plugins/{annotations,genui,mermaid,paseo-bots,paseo-chat-polish,paseo-doc-viewer,paseo-recap,paseo-sidechat,shell-yeah}/**/*.gen.ts"
   ],
   "plugins": ["react", "react-perf", "unicorn", "typescript", "oxc", "import", "promise"],
   "jsPlugins": ["./scripts/oxlint/paseo-plugin.mjs"],

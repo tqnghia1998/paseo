@@ -14,6 +14,7 @@ import path from "node:path";
 
 // Prebundled under plugins/ and copied beside the runner as community-plugins/.
 export const communityPluginIds = [
+  "paseo-sidechat",
   "paseo-chat-polish",
   "annotations",
   "paseo-doc-viewer",
