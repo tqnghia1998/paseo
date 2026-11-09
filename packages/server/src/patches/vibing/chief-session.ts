@@ -182,7 +182,7 @@ export function createChiefSession(deps: Dependencies) {
     }
   }
 
-  /** Chief configuration is owned by Vibing source, independent of user Bot settings. */
+  /** Source defaults for a fresh Chief conversation, independent of Bot settings. */
   function config(url = currentUrl): AgentSessionConfig {
     if (!state || !url) throw new Error("Chief session is not initialized");
     if (botPrompt === null) throw new Error("Chief Bot infrastructure unavailable");
@@ -220,8 +220,8 @@ export function createChiefSession(deps: Dependencies) {
     }
   }
 
-  /** Reapply the complete source-owned config when Chief is created, resumed or reloaded. */
-  function seal(id: string, _candidate: AgentSessionConfig): AgentSessionConfig | null {
+  /** Keep host tools and persona canonical while preserving conversation controls. */
+  function seal(id: string, candidate: AgentSessionConfig): AgentSessionConfig | null {
     if (disabled) {
       if (quarantined.has(id)) throw new Error("Chief unavailable");
       return null;
@@ -229,7 +229,13 @@ export function createChiefSession(deps: Dependencies) {
     if (state?.retired.includes(id)) throw new Error("Chief unavailable");
     if (!state || state.agentId !== id) return null;
     if (state.state === "removed") throw new Error("Chief unavailable");
-    return config();
+    return {
+      ...config(),
+      model: candidate.model,
+      modeId: candidate.modeId,
+      thinkingOptionId: candidate.thinkingOptionId,
+      providerOptions: candidate.providerOptions,
+    };
   }
 
   async function validateRoot() {
@@ -389,11 +395,12 @@ export function createChiefSession(deps: Dependencies) {
     await ensureWorkspace();
     await requireProvider(config().provider);
     const live = deps.agentManager.getAgent(identity.agentId);
-    if (live && !isDeepStrictEqual(stripInternalPaseoMcpServer(live.config), config())) {
-      // Restore source-owned defaults, including any old user-selected model or mode.
+    if (live) {
       const next = seal(live.id, live.config);
       if (!next) throw new Error("Chief authority changed");
-      await deps.agentManager.reloadAgentSession(live.id, next);
+      if (!isDeepStrictEqual(stripInternalPaseoMcpServer(live.config), next)) {
+        await deps.agentManager.reloadAgentSession(live.id, next);
+      }
     }
     const agent = record
       ? await deps.loadAgent(identity.agentId)

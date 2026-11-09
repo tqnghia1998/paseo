@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CHIEF_QUICK_ACTIONS,
+  createChiefFocusBridge,
   registerChiefComposer,
   runChiefQuickAction,
 } from "./chief-quick-actions";
@@ -71,5 +72,40 @@ describe("Chief quick actions", () => {
     expect(view).toContain("chiefEmptyOverlay");
     const bridge = readFileSync(resolve(__dirname, "./composer-bridge.ts"), "utf8");
     expect(bridge).toContain("enabled && isEmbeddedChiefView && !isComposerLocked && !readOnly");
+  });
+});
+
+describe("Chief keyboard focus bridge", () => {
+  it("waits for the composer to mount and focuses without changing its draft", () => {
+    const receive = createChiefFocusBridge(() => ({
+      phase: "ready",
+      requestId: "r1",
+      active: true,
+    }));
+    receive({ type: "space:chief-focus", requestId: "r1" });
+    const actions = composer();
+    expect(actions.focus).toHaveBeenCalledOnce();
+    expect(actions.fill).not.toHaveBeenCalled();
+    expect(actions.send).not.toHaveBeenCalled();
+    receive({ type: "space:chief-focus", requestId: "r1" });
+    expect(actions.focus).toHaveBeenCalledTimes(2);
+  });
+  it("ignores stale requests, hidden frames and unverified sessions", () => {
+    const actions = composer();
+    const state = { phase: "ready", requestId: "r1", active: true };
+    const receive = createChiefFocusBridge(() => state);
+    receive({ type: "space:chief-focus", requestId: "stale" });
+    state.active = false;
+    receive({ type: "space:chief-focus", requestId: "r1" });
+    state.active = true;
+    state.phase = "verifying";
+    receive({ type: "space:chief-focus", requestId: "r1" });
+    expect(actions.focus).not.toHaveBeenCalled();
+  });
+  it("drops a pending focus when the popup closes before composer registration", () => {
+    const state = { phase: "ready", requestId: "r1", active: true };
+    createChiefFocusBridge(() => state)({ type: "space:chief-focus", requestId: "r1" });
+    state.active = false;
+    expect(composer().focus).not.toHaveBeenCalled();
   });
 });

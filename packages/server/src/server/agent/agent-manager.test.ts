@@ -72,6 +72,7 @@ const DESKTOP_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("desktop-client");
 test("host-managed Chief rebinds its canonical endpoint before a real manager reload", async () => {
   class ChiefProviderSession extends TestAgentSession {
     override readonly capabilities = { ...TEST_CAPABILITIES, supportsMcpServers: true };
+    async applyOptions(_patch: Record<string, unknown>): Promise<void> {}
   }
   class ChiefClient extends TestAgentClient {
     override readonly capabilities = { ...TEST_CAPABILITIES, supportsMcpServers: true };
@@ -119,13 +120,16 @@ test("host-managed Chief rebinds its canonical endpoint before a real manager re
   expect(client.resumeOverrides.at(-1)?.mcpServers).toEqual(current.mcpServers);
   expect(manager.getAgent(id)?.background).toBe(true);
   expect(manager.getAgent(id)?.labels["paseo-chief.policy"]).toBe("chief-v1");
-  for (const attempt of [
-    () => manager.setAgentModel(id, "opus"),
-    () => manager.setAgentMode(id, "default"),
-    () => manager.setAgentThinkingOption(id, "high"),
-    () => manager.setAgentOptions(id, { fast_mode: true }),
-  ])
-    await expect(attempt()).rejects.toThrow(/managed by its host source code/);
+  await manager.setAgentModel(id, "opus");
+  await manager.setAgentMode(id, "default");
+  await manager.setAgentThinkingOption(id, "high");
+  await manager.setAgentOptions(id, { fast_mode: true });
+  expect(manager.getAgent(id)?.config).toMatchObject({
+    model: "opus",
+    modeId: "default",
+    thinkingOptionId: "high",
+    providerOptions: { fast_mode: true },
+  });
   const launches = client.createdConfigs.length + client.resumeOverrides.length;
   current = null;
   await expect(manager.reloadAgentSession(id)).rejects.toThrow(

@@ -164,11 +164,17 @@ test("a daemon restart finds the same Chief and loads the same agent", async () 
   expect(dependencies.loadAgent).toHaveBeenCalledWith(first.agentId);
 });
 
-test("source-owned model and mode replace saved user settings on rebind", async () => {
+test("conversation controls survive reconnect and endpoint rebind", async () => {
   const { service, records, dependencies, manager } = await fixture();
   const first = await service.connect(URL_A);
   const agent = records.get(first.agentId)!;
-  agent.config = { ...agent.config, model: "opus", modeId: "default" };
+  agent.config = {
+    ...agent.config,
+    model: "opus",
+    modeId: "default",
+    thinkingOptionId: "high",
+    providerOptions: { fastMode: true },
+  };
   // The daemon came back on another port: the host's tool address must follow it.
   const revived = createChiefSession(dependencies as never);
   services.push(revived);
@@ -177,11 +183,30 @@ test("source-owned model and mode replace saved user settings on rebind", async 
   await revived.connect("http://127.0.0.1:8888/api/chief/mcp");
   expect(manager.reloadAgentSession).toHaveBeenCalledTimes(1);
   const reloaded = manager.reloadAgentSession.mock.calls[0]![1];
-  expect(reloaded.model).toBe("sonnet");
-  expect(reloaded.modeId).toBe("bypassPermissions");
+  expect(reloaded.model).toBe("opus");
+  expect(reloaded.modeId).toBe("default");
+  expect(reloaded.thinkingOptionId).toBe("high");
+  expect(reloaded.providerOptions).toEqual({ fastMode: true });
   expect(reloaded.mcpServers?.chief).toMatchObject({
     url: "http://127.0.0.1:8888/api/chief/mcp",
   });
+});
+
+test("conversation selections survive sealing and reconnect without restarting the agent", async () => {
+  const { service, records, manager } = await fixture();
+  const first = await service.connect(URL_A);
+  const agent = records.get(first.agentId)!;
+  const selected = {
+    model: "opus",
+    modeId: "default",
+    thinkingOptionId: "high",
+    providerOptions: { fastMode: true },
+  };
+  agent.config = { ...agent.config, ...selected };
+  expect(service.seal(first.agentId, agent.config)).toMatchObject(selected);
+  await service.connect(URL_A);
+  expect(agent.config).toMatchObject(selected);
+  expect(manager.reloadAgentSession).not.toHaveBeenCalled();
 });
 
 test("user MCP changes cannot replace Chief's source-owned tools", async () => {

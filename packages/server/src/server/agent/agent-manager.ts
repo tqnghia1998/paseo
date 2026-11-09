@@ -2527,19 +2527,12 @@ export class AgentManager {
     });
   }
 
-  private assertUserRuntimeConfiguration(agentId: string): void {
-    if (this.hostManagedSession?.workspaceId(agentId)) {
-      throw new Error("This agent's configuration is managed by its host source code.");
-    }
-  }
-
   // Mode, model, thinking and options change inside the agent's lifecycle lane, like every other
   // mutation of one agent. A provider session therefore never has two of `setMode`, `setModel`,
   // `setThinkingOption` and `applyOptions` in flight at once, and none of them overlaps an open,
   // reload or close; providers do no sequencing of their own.
 
   async setAgentMode(agentId: string, modeId: string): Promise<AgentProviderNotice | null> {
-    this.assertUserRuntimeConfiguration(agentId);
     return this.runLifecycleMutation(agentId, async () => {
       const agent = await this.ensureInteractiveSessionUnlocked(agentId);
       const notice = (await agent.session.setMode(modeId)) ?? null;
@@ -2558,7 +2551,6 @@ export class AgentManager {
   }
 
   async setAgentModel(agentId: string, modelId: string | null): Promise<void> {
-    this.assertUserRuntimeConfiguration(agentId);
     return this.runLifecycleMutation(agentId, async () => {
       const agent = await this.ensureInteractiveSessionUnlocked(agentId);
       const normalizedModelId =
@@ -2585,7 +2577,6 @@ export class AgentManager {
     agentId: string,
     thinkingOptionId: string | null,
   ): Promise<AgentProviderNotice | null> {
-    this.assertUserRuntimeConfiguration(agentId);
     return this.runLifecycleMutation(agentId, async () => {
       const agent = await this.ensureInteractiveSessionUnlocked(agentId);
       const normalizedThinkingOptionId =
@@ -2625,7 +2616,6 @@ export class AgentManager {
    * one step once the provider accepts. Patches to one agent run one at a time, in arrival order.
    */
   async setAgentOptions(agentId: string, requested: ProviderOptionsPatch): Promise<void> {
-    this.assertUserRuntimeConfiguration(agentId);
     return this.runLifecycleMutation(agentId, async () => {
       const agent = await this.ensureInteractiveSessionUnlocked(agentId);
       const patch = this.convertLegacyOptions(agent.provider, requested);

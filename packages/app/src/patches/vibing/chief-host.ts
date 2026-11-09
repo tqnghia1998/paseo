@@ -1,3 +1,4 @@
+import { createChiefFocusBridge } from "./chief-quick-actions";
 import { createChiefDocumentBridge } from "./chief-documents";
 import { pluginRegistry } from "@/plugins/registry";
 import { createPluginNavigation } from "@/plugins/navigation";
@@ -37,9 +38,11 @@ export function getChiefHandshake(): ChiefHandshake | null {
       return true;
     },
   });
+  const focusBridge = createChiefFocusBridge(current.getState);
   subscribeToHostMessages(origin, (data) => {
     current.receive(data);
     documentBridge(data);
+    focusBridge(data);
   });
   return handshake;
 }
