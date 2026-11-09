@@ -55,6 +55,22 @@ waiting for it to mount when needed and rechecking visibility/identity before ap
 pending focus. No draft text is replaced or sent. Cmd/Ctrl+Shift+K stays Vibing's
 workspace-switcher shortcut.
 
+Chief disables `/btw` through `chief-slash-policy.ts`: the merged provider/plugin
+command menu hides it, and send/queue/plugin dispatch reject typed commands before
+clearing the draft or attachments. Ordinary Bot chats retain it. This is a Chief
+composer preference. Side Chat is vendored at `Moyf/paseo-sidechat@e1ce6025d864a4f7768ca45e40110971b1f65e57`
+with `paseo-sidechat-vibing.patch`. Its own client omits `/btw` in the Chief view,
+and its server rejects advice for daemon-verified Chief labels before storing or
+starting a question, covering already-installed clients before a host refresh.
+Explicit `/side` work and `/fork` are unchanged. History follows `PASEO_HOME`.
+Side Chat helpers use upstream's generic provider/model context; they do not inherit
+the parent Bot's persona, memory, or tools. The source currently declares no license.
+Side Chat restores history before admitting a question or flushing cleanup, including
+unload before the first RPC. A per-parent/mode admission covers helper selection,
+retirement and creation, releasing after registration so follow-ups can still steer.
+The maintained patch includes cold-load, overlapping-question, failed-creation and
+model-replacement regressions.
+
 The daemon owns Chief's single agent (`chief-session.ts`). Chief is a plain Full access
 agent with source-owned provider, tool configuration and instructions. It works
 in `PASEO_CHIEF_WORKDIR` (the Vibing backend's `GIT_BASE_DIR`; without it the daemon falls back to
@@ -249,6 +265,12 @@ Existing entries, including the same ID installed from another source, and an ex
 global plugin opt-out are preserved. The addons follow native enable, disable, reload
 and remove controls. They are not reserved built-in IDs. Offline source copies live
 beside the bundle in `community-plugins/`.
+Manual hot upgrades can register tested versioned copies under the owning home's
+`plugin-upgrades/<id>/<revision>-<content-hash>/` through native daemon config and
+reload. Settings remain keyed by the same plugin ID, while the native source-path
+override prevents an older app bundle from downgrading the hot upgrade on restart.
+Keep the prior source directory and source-map snapshot for rollback; do not remove
+and reinstall the plugin, which deletes its native settings.
 
 Besides Chat Polish (`paseo-chat-polish`) and Annotations, the addons are PDF and Office viewer
 (`paseo-doc-viewer`), Shell Yeah (`shell-yeah`), Recap (`paseo-recap`) and Generative UI
@@ -270,6 +292,10 @@ Generative UI file cards use a single press target. In embedded workspace and Li
 `genui-vibing.patch` sends worktree-relative paths and line numbers through the existing
 origin-checked `paseo:open-file` bridge; standalone workspace routing remains available.
 The root comes from the timeline agent snapshot. Regressions: `node --test scripts/genui-file-links.test.mjs`.
+The vendor descriptor also preserves `gallery/` (including its data and media) and
+`assets/fonts/` (the sketch font and its license). Asset copying supports complete
+directory trees. `community-vibing.e2e.test.ts` installs the package at a relocated
+path in an isolated daemon and reads its gallery, example data and font by RPC.
 
 Bots and the palette remain built-ins because embedded navigation depends on them.
 The Bots sidebar has no usage cards. Space App Vibing draws the Codex and AIS Switch
@@ -288,6 +314,21 @@ gives its CSS host-color fallbacks for embedded frames without the sidebar that 
 and keeps its field and queued-message selectors working. Its native `sharp` dependency is
 not bundled: thumbnails fall back to the original image. Its optional headless browser is
 downloaded at runtime only when a user enables page checks in its dashboard.
+Chat Polish is pinned at 0.10.0 (`df399f50ca6c93fc93e29ad65a223da91b5b75ea`).
+Its protocol imports are all type-only, so the vendor patch keeps protocol in
+development dependencies with the host SDK/protocol 0.15.3 and Zod 4.4.3; runtime
+vendoring installs only its actual rendering dependencies. The isolated browser
+suite retains all 41 upstream/Vibing DOM checks, including image stacks.
+This vendored Chat Polish copy reports update state `local`; direct update requests
+explain that Space App Vibing manages it. It never invokes a separately installed
+`paseo` CLI, which could be incompatible or address another daemon. A source test
+uses a sentinel CLI, and the isolated-daemon test checks both update RPCs.
+
+Shell Yeah reserves command capacity before waiting for its spawner, shares pending
+same-ID retries, and rejects starts once shutdown begins. It rechecks closure after
+spawner readiness, folder validation and initial timeline publication, before any
+process can launch. Its maintained vendor patch includes concurrent-limit,
+shutdown, failure-release and retry regressions.
 
 Vibing exposes Bots as its only agent tool. Embedded folder launches, including
 legacy entries and Live Design, bind the worktree and open the Bots plugin.

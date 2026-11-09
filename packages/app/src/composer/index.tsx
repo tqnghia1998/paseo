@@ -1,3 +1,4 @@
+import { rejectChiefSlashCommand } from "@/patches/vibing/chief-slash-policy";
 import {
   useComposerEditingSession,
   useComposerFullscreen,
@@ -1586,6 +1587,7 @@ function ComposerContentImpl({
 
   const runPluginClientSlashCommand = useCallback(
     (resolved: { command: (typeof pluginClientSlashCommands)[number]; args: string }): boolean => {
+      if (rejectChiefSlashCommand(`/${resolved.command.name}`, setSendError)) return true;
       if (blurOnSubmit) messageInputRef.current?.blur();
       clearDraft("sent");
       replaceUserInput("");
@@ -1805,6 +1807,7 @@ function ComposerContentImpl({
       forceSend?: boolean,
       onQueuedMessageSubmitted?: () => Promise<void>,
     ) => {
+      if (rejectChiefSlashCommand(outgoingMessage, setSendError)) return "failed" as const;
       const result = await submitAgentInput({
         message: outgoingMessage,
         attachments: outgoingAttachments,
@@ -1928,6 +1931,7 @@ function ComposerContentImpl({
 
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
+      if (rejectChiefSlashCommand(payload.text, setSendError)) return;
       const outgoingAttachments = buildOutgoingAttachments(attachments);
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
@@ -2181,6 +2185,7 @@ function ComposerContentImpl({
 
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
+      if (rejectChiefSlashCommand(payload.text, setSendError)) return;
       const outgoingAttachments = buildOutgoingAttachments(attachments);
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
