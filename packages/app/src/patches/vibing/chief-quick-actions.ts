@@ -60,12 +60,16 @@ interface ComposerActions {
 }
 
 let current: ComposerActions | null = null;
+let pendingFocus: (() => boolean) | null = null;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((listener) => listener());
 
 /** The one visible composer registers here; chips use it instead of a second send path. */
 export function registerChiefComposer(actions: ComposerActions): () => void {
   current = actions;
+  const shouldFocus = pendingFocus;
+  pendingFocus = null;
+  if (shouldFocus?.()) actions.focus();
   notify();
   return () => {
     if (current !== actions) return;
@@ -96,6 +100,27 @@ export function runChiefQuickAction(action: ChiefQuickAction): boolean {
     current.focus();
   }
   return true;
+}
+
+/** Origin/source are checked by the host-message subscription; bind focus to its live session. */
+export function createChiefFocusBridge(
+  state: () => { phase: string; requestId: string | null; active: boolean },
+) {
+  return (data: Record<string, unknown>) => {
+    if (data.type !== "space:chief-focus") return;
+    const matches = () => {
+      const currentState = state();
+      return (
+        currentState.phase === "ready" &&
+        currentState.active &&
+        currentState.requestId !== null &&
+        data.requestId === currentState.requestId
+      );
+    };
+    if (!matches()) return;
+    if (current) current.focus();
+    else pendingFocus = matches;
+  };
 }
 
 export function useChiefComposerActions(input: {
