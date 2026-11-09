@@ -470,7 +470,6 @@ function ControlledAgentControls({
   const densityRef = useRef<ComposerControlDensity>(initialDensity);
   const availableWidthRef = useRef(0);
 
-
   const canSelectModel = Boolean(onSelectModel);
   const canSelectThinking = Boolean(
     onSelectThinkingOption && thinkingOptions && thinkingOptions.length > 0,
@@ -567,9 +566,6 @@ function ControlledAgentControls({
     }
   }, [updateDensityForWidth]);
 
-
-
-
   const fallbackModelSelectorProviders = useMemo(
     () => buildFallbackModelSelectorProviders(provider, modelOptions),
     [modelOptions, provider],
@@ -663,8 +659,6 @@ function ControlledAgentControls({
             onEditAgentProfiles={onEditAgentProfiles}
             onCreateAgentProfile={onCreateAgentProfile}
             onEditAgentProfile={onEditAgentProfile}
-
-
             onDropdownClose={onDropdownClose}
             onModelSelectorOpen={onModelSelectorOpen}
             onRetryModelProvider={onRetryModelProvider}
@@ -698,8 +692,6 @@ function ControlledAgentControls({
             onEditAgentProfiles={onEditAgentProfiles}
             onCreateAgentProfile={onCreateAgentProfile}
             onEditAgentProfile={onEditAgentProfile}
-
-
             onDropdownClose={onDropdownClose}
             onModelSelectorOpen={onModelSelectorOpen}
             onRetryModelProvider={onRetryModelProvider}

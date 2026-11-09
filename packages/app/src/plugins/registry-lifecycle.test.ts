@@ -59,6 +59,7 @@ function registry(
         openScreen: () => {},
         openSurface: () => {},
         composers: () => [],
+        insertComposerText: () => {},
 
         openSettings: () => {},
         playAudio: async () => {},

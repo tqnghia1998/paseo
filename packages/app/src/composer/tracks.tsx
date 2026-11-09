@@ -43,7 +43,13 @@ import { COMPOSER_PILL_CLEARANCE, composerPillStyles } from "./pill-styles";
  * or without pills: that keeps the final footer clear, and pills that come and go every turn do not
  * move the transcript.
  */
-function ComposerTrackBarContent({ children, contentMaxWidth }: { children: ReactNode; contentMaxWidth: number }): ReactElement {
+function ComposerTrackBarContent({
+  children,
+  contentMaxWidth,
+}: {
+  children: ReactNode;
+  contentMaxWidth: number;
+}): ReactElement {
   const scrollGesture = usePanelAwareHorizontalScrollGesture();
   const scrollBoundary = useHorizontalScrollBoundary();
   return (

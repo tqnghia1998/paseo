@@ -596,6 +596,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <CommandCenterWorkspaceActions />
         <WorkspacePinShortcutHandler />
         <WorkspaceRenameHost />
+        <WorkspaceArchiveUndoShortcutHost />
         <CommandCenter />
         <ProviderSettingsHost />
         <KeyboardShortcutsDialog />
