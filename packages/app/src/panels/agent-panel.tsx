@@ -1721,7 +1721,6 @@ function ActiveAgentComposer({
   return (
     <View style={animatedStaticStyles.inputAreaWrapper} onLayout={onInputAreaLayout}>
       <Composer
-        configurationLocked={isEmbeddedChiefView}
         agentId={agentId}
         serverId={serverId}
         workspaceId={workspaceId}
