@@ -1,0 +1,16 @@
+{
+  "id": "paseo-sidechat",
+  "icon": "assets/icon.png",
+  "media": ["assets/screenshot.png"],
+  "requirements": {
+    "paseo": ">=0.14.0"
+  },
+  "description": "Side chats for agent sessions: /btw asks, /side works, /fork clones. Answers never touch the main session.",
+  "name": "Side Chat",
+  "translations": {
+    "zh-CN": {
+      "name": "侧聊",
+      "description": "会话旁路聊天：/btw 提问、/side 干活、/fork 克隆会话平行探索；回答绝不写入主会话。"
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +9,14 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // `bundleDependencies` acknowledges reviewed npm dependencies; they are fetched from the
 // public registry at vendoring time and inlined, so installs never run npm.
 const plugins = [
+  {
+    id: "paseo-sidechat",
+    repository: "Moyf/paseo-sidechat",
+    revision: "e1ce6025d864a4f7768ca45e40110971b1f65e57",
+    patch: "paseo-sidechat-vibing.patch",
+    // Upstream currently distributes no license file or SPDX declaration.
+    licenseFiles: [],
+  },
   {
     id: "paseo-bots",
     repository: "oliexe/paseo-bots",
@@ -34,7 +42,7 @@ const plugins = [
     id: "shell-yeah",
     repository: "stevecastaneda/paseo-plugins",
     directory: "shell-yeah",
-    revision: "a41c885f702a4fa2201f4ffef8fb39a16db99bdc",
+    revision: "7f08467b1adbe54a201978a7af804c1147a312fa",
     patch: "shell-yeah-vibing.patch",
   },
   {
@@ -47,7 +55,7 @@ const plugins = [
   {
     id: "paseo-chat-polish",
     repository: "lthieu96/paseo-chat-polish",
-    revision: "aa8cf5cd9d34ac736bd217533871fd921cd053d4",
+    revision: "df399f50ca6c93fc93e29ad65a223da91b5b75ea",
     patch: "paseo-chat-polish-vibing.patch",
     // pele is inlined; sharp is native and loaded on demand, so thumbnails fall back to the original image.
     bundleDependencies: true,
@@ -56,6 +64,7 @@ const plugins = [
     id: "genui",
     repository: "anh-chu/paseo-plugin-genui",
     patch: "genui-vibing.patch",
+    assets: ["gallery", "assets/fonts"],
     revision: "cd50b2a6b86583eb48915a17d919fd319f0c30ec",
   },
 ];
@@ -155,14 +164,14 @@ for (const plugin of plugins) {
       `${JSON.stringify(manifest, null, 2)}\n`,
     );
     const assets = new Set([
-      "LICENSE",
+      ...(plugin.licenseFiles ?? ["LICENSE"]),
       ...(plugin.assets ?? []),
       ...(manifest.icon ? [manifest.icon] : []),
       ...(manifest.media ?? []).filter((entry) => !entry.startsWith("https:")),
     ]);
     for (const relative of assets) {
       await mkdir(path.dirname(path.join(destination, relative)), { recursive: true });
-      await copyFile(path.join(source, relative), path.join(destination, relative));
+      await cp(path.join(source, relative), path.join(destination, relative), { recursive: true });
     }
     if (bundledPackages.size)
       await writeFile(
@@ -175,7 +184,7 @@ for (const plugin of plugins) {
     const upstream = `https://github.com/${plugin.repository}${plugin.directory ? `/tree/${plugin.revision}/${plugin.directory}` : ""}`;
     await writeFile(
       path.join(destination, "README.md"),
-      `# ${plugin.id}\n\nBundled from [${origin}](${upstream}) at\n\`${plugin.revision}\` (version ${metadata.version}, ${metadata.license}).\n\nRegenerate with \`node scripts/vendor-community-plugins.mjs ${plugin.id}\` in the Paseo fork.\nGenerated code uses the host SDK, React, React Native, React Query and Zod.\n${dependencyNote}\nKeep upstream licenses and notices with the bundle.\n\nSee [the integration contract](../../docs/vibing-patches.md#plugin-boundary) for\nrendering, send defaults and per-daemon storage requirements.\n`,
+      `# ${plugin.id}\n\nBundled from [${origin}](${upstream}) at\n\`${plugin.revision}\` (version ${metadata.version}, ${metadata.license ?? "no license declared"}).\n\nRegenerate with \`node scripts/vendor-community-plugins.mjs ${plugin.id}\` in the Paseo fork.\nGenerated code uses the host SDK, React, React Native, React Query and Zod.\n${dependencyNote}\nKeep upstream licenses and notices with the bundle.\n\nSee [the integration contract](../../docs/vibing-patches.md#plugin-boundary) for\nrendering, send defaults and per-daemon storage requirements.\n`,
     );
   } finally {
     await rm(checkout, { recursive: true, force: true });
