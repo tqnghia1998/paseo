@@ -194,11 +194,11 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
   // The store reads what the host offers when a command runs; each render publishes the latest.
   const catalogRef = useRef<AgentFormCatalog>(EMPTY_CATALOG);
   const [formStore] = useState(() => openAgentForm(() => catalogRef.current));
-  const { form: formState, resolution } = useSyncExternalStore(
-    formStore.subscribe,
-    formStore.getState,
-    formStore.getState,
-  );
+  const {
+    form: formState,
+    resolution,
+    userModified,
+  } = useSyncExternalStore(formStore.subscribe, formStore.getState, formStore.getState);
   const dispatch = formStore.dispatch;
 
   const {

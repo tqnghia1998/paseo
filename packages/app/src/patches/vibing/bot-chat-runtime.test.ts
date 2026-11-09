@@ -8,7 +8,7 @@ const resolvedDefault: BotChatRuntimeSelection = {
   effectiveThinkingOptionId: "high",
   isModelLoading: false,
   modelError: null,
-  featureValues: { planMode: true },
+  providerOptions: { plan_mode: true },
   hasUserModifiedAgentSettings: false,
 };
 
@@ -21,7 +21,7 @@ describe("Bots starting runtime", () => {
       model: "resolved-provider-default",
       modeId: "full-access",
       thinkingOptionId: "high",
-      featureValues: { planMode: true },
+      featureValues: { plan_mode: true },
     });
   });
 

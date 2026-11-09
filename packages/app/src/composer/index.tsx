@@ -2442,8 +2442,7 @@ function ComposerContentImpl({
     () => (
       <ComposerInputProvider value={composerInput}>
         {renderLeftContent({
-          composerInput,
-      agentControls,
+          agentControls,
           agentId,
           serverId,
           focusInput,

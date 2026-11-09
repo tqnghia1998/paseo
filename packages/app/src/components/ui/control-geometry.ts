@@ -1,3 +1,4 @@
+import type { ControlSizing } from "./control-sizing";
 import type { StyleProp, ViewStyle } from "react-native";
 import { ICON_SIZE, ICON_STROKE_WIDTH, type Theme } from "@/styles/theme";
 import {

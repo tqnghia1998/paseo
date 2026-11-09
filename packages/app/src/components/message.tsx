@@ -762,9 +762,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
           ) : null}
           {canFork ? <AssistantForkMenu onFork={handleFork} /> : null}
         </View>
-
       ) : null}
-
 
       {primaryLabel ? (
         <Pressable

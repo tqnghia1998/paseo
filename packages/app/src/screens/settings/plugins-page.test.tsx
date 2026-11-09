@@ -23,7 +23,6 @@ const runtime = vi.hoisted(() => ({
 vi.mock("@/runtime/host-runtime", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/runtime/host-runtime")>()),
 
-
   useHostRuntimeClient: () => runtime.client,
   useHostRuntimeIsConnected: () => runtime.connected,
 }));

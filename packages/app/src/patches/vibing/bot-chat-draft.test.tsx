@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
     effectiveThinkingOptionId: "high",
     isModelLoading: false,
     modelError: null as string | null,
-    featureValues: { planMode: true },
+    providerOptions: { plan_mode: true },
     agentControls: {},
     commandDraft: {},
   },
@@ -412,7 +412,7 @@ it("starts with the draft's selected runtime instead of the bot defaults", async
         model: "opus",
         modeId: "default",
         thinkingOptionId: "medium",
-        featureValues: { planMode: true },
+        featureValues: { plan_mode: true },
       },
     }),
   );

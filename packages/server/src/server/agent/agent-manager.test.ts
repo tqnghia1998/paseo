@@ -123,7 +123,7 @@ test("host-managed Chief rebinds its canonical endpoint before a real manager re
     () => manager.setAgentModel(id, "opus"),
     () => manager.setAgentMode(id, "default"),
     () => manager.setAgentThinkingOption(id, "high"),
-    () => manager.setAgentFeature(id, "test", true),
+    () => manager.setAgentOptions(id, { fast_mode: true }),
   ])
     await expect(attempt()).rejects.toThrow(/managed by its host source code/);
   const launches = client.createdConfigs.length + client.resumeOverrides.length;
@@ -14677,7 +14677,6 @@ test("turns keep distinct identities across an idle runtime collection and resum
     await manager.closeAgent(manager.listAgents()[0]?.id ?? "missing").catch(() => undefined);
     await storage.flush();
     rmSync(workdir, { recursive: true, force: true });
-
   }
 });
 
