@@ -25,7 +25,6 @@ import { STATUS_RING_HALO_INSET } from "@/components/status-ring/geometry";
 import { isWeb } from "@/constants/platform";
 import { usePanelAwareHorizontalScrollGesture } from "@/mobile-panels/gestures";
 
-
 import { getStatusDotColor } from "@/utils/status-dot-color";
 import { STATUS_INDICATOR_FILLED_DOT_SIZE } from "@/utils/status-indicator-geometry";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -44,7 +43,13 @@ import { COMPOSER_PILL_CLEARANCE, composerPillStyles } from "./pill-styles";
  * or without pills: that keeps the final footer clear, and pills that come and go every turn do not
  * move the transcript.
  */
-function ComposerTrackBarContent({ children, contentMaxWidth }: { children: ReactNode; contentMaxWidth: number }): ReactElement {
+function ComposerTrackBarContent({
+  children,
+  contentMaxWidth,
+}: {
+  children: ReactNode;
+  contentMaxWidth: number;
+}): ReactElement {
   const scrollGesture = usePanelAwareHorizontalScrollGesture();
   const scrollBoundary = useHorizontalScrollBoundary();
   return (
@@ -75,9 +80,6 @@ function ComposerTrackBarContent({ children, contentMaxWidth }: { children: Reac
           leftStyle={scrollBoundary.leftShadeStyle}
           rightStyle={scrollBoundary.rightShadeStyle}
         />
-
-
-
       </View>
     </View>
   );
@@ -430,9 +432,6 @@ const styles = StyleSheet.create((theme) => {
       maxWidth: "100%",
     },
     track: {
-
-
-
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing[1],

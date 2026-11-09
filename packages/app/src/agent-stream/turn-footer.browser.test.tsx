@@ -44,6 +44,7 @@ function renderCompletedFooter(timing: TurnTiming): void {
   act(() =>
     root.render(
       <CompletedTurnFooterRow
+        contentMaxWidth={820}
         strategy={createNativeStreamStrategy()}
         items={[reply]}
         timing={timing}

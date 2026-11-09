@@ -80,9 +80,8 @@ import {
 } from "../../../executable-resolution/executable-resolution.js";
 import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import { spawnProcess, type SpawnProcessOptions } from "../../../utils/spawn.js";
-import { extractCodexTerminalSessionId, nonEmptyString } from "./tool-call-mapper-utils.js";
+import { nonEmptyString } from "./tool-call-mapper-utils.js";
 import { CodexTerminalInteractions } from "../../../patches/vibing/codex/terminal-interactions.js";
-
 
 import { CodexBackgroundTerminals } from "../../../patches/vibing/codex/background-terminals.js";
 import {

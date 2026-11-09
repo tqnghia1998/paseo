@@ -139,5 +139,4 @@ export const FileSymlink = StubIcon;
 export const MessageSquareCode = StubIcon;
 export const MicVocal = StubIcon;
 export const Scissors = StubIcon;
-export const Sparkles = StubIcon;
 export const TriangleAlertIcon = StubIcon;
