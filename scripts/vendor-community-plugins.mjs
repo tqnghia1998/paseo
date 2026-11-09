@@ -34,7 +34,7 @@ const plugins = [
     id: "shell-yeah",
     repository: "stevecastaneda/paseo-plugins",
     directory: "shell-yeah",
-    revision: "af07fc9218fb1b8cdd2b77cdd0cb506dccb76bd8",
+    revision: "a41c885f702a4fa2201f4ffef8fb39a16db99bdc",
     patch: "shell-yeah-vibing.patch",
   },
   {
@@ -47,7 +47,7 @@ const plugins = [
   {
     id: "paseo-chat-polish",
     repository: "lthieu96/paseo-chat-polish",
-    revision: "41395d5d4d4c5242314779489e917dfb6c31ccae",
+    revision: "aa8cf5cd9d34ac736bd217533871fd921cd053d4",
     patch: "paseo-chat-polish-vibing.patch",
     // pele is inlined; sharp is native and loaded on demand, so thumbnails fall back to the original image.
     bundleDependencies: true,
