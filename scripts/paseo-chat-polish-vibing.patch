@@ -12,7 +12,7 @@ index 294e5fa..db68df4 100644
    const apply = useRpc(applyUpdate);
    const [status, setStatus] = useState<UpdateStatus>();
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index b762da6..91e314f 100644
+index 1c9b5fc..070f610 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
 @@ -23,7 +23,6 @@ ${[4, 5, 3, 0, 2, 1].map((step, i) => `${DOT}:nth-child(${i + 1}) { animation-de
@@ -77,10 +77,10 @@ index b762da6..91e314f 100644
  :is([data-cp-set="field"], [data-cp-set="area"]):focus-within { border-color: var(--cp-accent, var(--colors-accent)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-accent, var(--colors-accent)) 25%, transparent) !important; }
  /* The field draws focus; an input inside a wrapper field stays see-through. */
 diff --git a/client/web/selectors.ts b/client/web/selectors.ts
-index ae261dd..a8e5807 100644
+index 950e307..7e60db5 100644
 --- a/client/web/selectors.ts
 +++ b/client/web/selectors.ts
-@@ -29,7 +29,8 @@ export const ADMONITION = `${MD} .enrm-admonition`;
+@@ -33,7 +33,8 @@ export const ADMONITION = `${DOC_MD} .enrm-admonition`;
  export const LANG = '[data-paseo-markdown-language]:not([data-paseo-markdown-language=""])';
  export const SLASH = '[data-testid="composer-autocomplete-popover"]';
  export const SLASH_GLIDE_MS = 140;
@@ -107,7 +107,7 @@ index 28e9004..cb48876 100644
    server.before("agent.create", async ({ request }, { paseo }) => {
      // Off by default, so unreadable prefs mean off; internal agents (commit and PR messages) never draw.
 diff --git a/test/web.test.mjs b/test/web.test.mjs
-index 791fe32..24a515b 100644
+index 05fc924..1b1d615 100644
 --- a/test/web.test.mjs
 +++ b/test/web.test.mjs
 @@ -21,7 +21,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
@@ -167,12 +167,12 @@ index 791fe32..24a515b 100644
            checks.mermaidDocFromBundle = (await web.loadMermaidDoc()) === new TextDecoder().decode(Uint8Array.from(atob("${Buffer.from(mermaidDoc).toString("base64")}"), (ch) => ch.charCodeAt(0)));
            await wait(); checks.observerSettles = !capped;
            // Paseo 0.14 wraps a prompt's rows and text in a message preview that clamps long prompts itself.
-@@ -251,7 +292,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
+@@ -255,7 +296,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
      assert.equal(report.error, undefined, report.error);
      assert.deepEqual(report.errors, []);
      for (const [check, passed] of Object.entries(report.checks)) assert.equal(passed, true, check);
--    assert.equal(Object.keys(report.checks).length, 26);
-+    assert.equal(Object.keys(report.checks).length, 35);
+-    assert.equal(Object.keys(report.checks).length, 27);
++    assert.equal(Object.keys(report.checks).length, 36);
    } finally {
      server?.closeAllConnections(); server?.close();
      rmSync(temp, { recursive: true, force: true });
