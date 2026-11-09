@@ -1005,8 +1005,6 @@ interface ComposerProps {
    * and nothing else — never branch on it at the call site.
    */
   inputMode?: ComposerInputMode;
-  /** Source-managed agents expose conversation controls only. */
-  configurationLocked?: boolean;
   /** Renders the current text as static text on the same surface, for content there is nothing to type into. */
   readOnly?: boolean;
   /** Replaces the submit icon with this label, still inside the composer's own toolbar row. */
@@ -1319,7 +1317,6 @@ function ComposerContentImpl({
   inputWrapperStyle,
   isCompactLayout: isCompactLayoutOverride,
   inputMode = "chat",
-  configurationLocked = false,
   editingSession: providedEditingSession,
   readOnly = false,
   submitLabel,
@@ -2447,7 +2444,7 @@ function ComposerContentImpl({
           serverId,
           focusInput,
           isCompactLayout,
-          showAgentControls: mode.showAgentControls && !configurationLocked,
+          showAgentControls: mode.showAgentControls,
         })}
         {workspaceId ? (
           <PluginComposerPills
@@ -2467,7 +2464,6 @@ function ComposerContentImpl({
       focusInput,
       isCompactLayout,
       mode.showAgentControls,
-      configurationLocked,
       serverId,
       workspaceId,
     ],
