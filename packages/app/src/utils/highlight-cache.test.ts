@@ -63,3 +63,27 @@ describe("highlightToKeyedLines", () => {
     expect(highlightToKeyedLines("text", null)).toBeNull();
   });
 });
+
+describe("highlight cache memory budget", () => {
+  it("releases old large token arrays before reaching the entry count limit", () => {
+    const source = (i: number) =>
+      `// memory-budget document ${i}\n` + "const value = 123;\n".repeat(1400);
+    const first = tokenizeToLines(source(0), "ts");
+    expect(first).not.toBeNull();
+    for (let i = 1; i < 20; i++) expect(tokenizeToLines(source(i), "ts")).not.toBeNull();
+    const latest = tokenizeToLines(source(19), "ts");
+    expect(tokenizeToLines(source(19), "ts")).toBe(latest);
+    expect(tokenizeToLines(source(0), "ts")).not.toBe(first);
+  });
+
+  it("keeps frequently reused small results while large older entries are evicted", () => {
+    const source = "const frequentlyRead = true;";
+    const hot = tokenizeToLines(source, "ts");
+    for (let i = 0; i < 20; i++) {
+      expect(
+        tokenizeToLines(`// hot-budget ${i}\n` + "const value = 456;\n".repeat(1400), "ts"),
+      ).not.toBeNull();
+      expect(tokenizeToLines(source, "ts")).toBe(hot);
+    }
+  });
+});
