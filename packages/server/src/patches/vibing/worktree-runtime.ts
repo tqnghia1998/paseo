@@ -169,7 +169,10 @@ interface WorktreeRoutesInput {
   app: express.Express;
   token: string | undefined;
   logger: Logger;
-  agentManager: Pick<AgentManager, "listAgents">;
+  agentManager: Pick<
+    AgentManager,
+    "listAgents" | "getAgentBackgroundWorkSummary" | "listProviderSubagentActivity"
+  >;
   workspaceRegistry: Pick<WorkspaceRegistry, "listAll">;
   cleanupWorktrees: (paths: string[]) => Promise<void>;
   stopWorktrees: (paths: string[]) => Promise<void>;
@@ -228,7 +231,21 @@ export function registerWorktreeRoutes(input: WorktreeRoutesInput): void {
     void (async () => {
       try {
         const workspaces = await workspaceRegistry.listAll();
-        res.json({ runningPaths: getRunningWorktreePaths(agentManager.listAgents(), workspaces) });
+        const runningParents = new Set(
+          agentManager
+            .listProviderSubagentActivity()
+            .filter((subagent) => subagent.status === "running")
+            .map((subagent) => subagent.parentAgentId),
+        );
+        res.json({
+          runningPaths: getRunningWorktreePaths(
+            agentManager.listAgents(),
+            workspaces,
+            (id) =>
+              (agentManager.getAgentBackgroundWorkSummary(id)?.count ?? 0) > 0 ||
+              runningParents.has(id),
+          ),
+        });
       } catch (error) {
         next(error);
       }

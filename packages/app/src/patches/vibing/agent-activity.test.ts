@@ -89,6 +89,61 @@ describe("embedded agent activity", () => {
     ).toBe(false);
   });
 
+  it("keeps the feature running for background work after the main turn ends", () => {
+    const parent = { id: "chat", workspaceId: "feature", labels: {}, backgroundWork: { count: 1 } };
+    expect(isEmbeddedWorkspaceRunning([parent], "feature", () => false)).toBe(true);
+    parent.backgroundWork.count = 0;
+    expect(isEmbeddedWorkspaceRunning([parent], "feature", () => false)).toBe(false);
+  });
+
+  it("keeps the parent feature running until its last provider subagent finishes", () => {
+    const agents = [
+      { id: "parent", workspaceId: "feature", labels: {} },
+      { id: "other", workspaceId: "sibling", labels: {} },
+    ];
+    const runningParents = new Set(["parent", "other"]);
+    const active = () =>
+      isEmbeddedWorkspaceRunning(
+        agents,
+        "feature",
+        () => false,
+        undefined,
+        (id) => runningParents.has(id),
+      );
+    expect(active()).toBe(true);
+    runningParents.delete("parent");
+    expect(active()).toBe(false);
+  });
+
+  it("ignores background and subagent work from archived and Live Design chats", () => {
+    const agents: Array<
+      Pick<Agent, "id" | "workspaceId" | "archivedAt" | "labels" | "backgroundWork">
+    > = [
+      {
+        id: "archived",
+        workspaceId: "feature",
+        archivedAt: new Date(),
+        labels: {},
+        backgroundWork: { count: 1 },
+      },
+      {
+        id: "design",
+        workspaceId: "feature",
+        labels: { "paseo-bots.context": "live-design" },
+        backgroundWork: { count: 1 },
+      },
+    ];
+    expect(
+      isEmbeddedWorkspaceRunning(
+        agents,
+        "feature",
+        () => false,
+        undefined,
+        () => true,
+      ),
+    ).toBe(false);
+  });
+
   it("creates the host activity event contract", () => {
     expect(createEmbeddedAgentActivityEvent(true)).toEqual({
       type: "paseo:agent-activity",
