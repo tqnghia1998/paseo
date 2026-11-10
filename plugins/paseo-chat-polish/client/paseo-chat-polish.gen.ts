@@ -1889,13 +1889,14 @@ ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-c
 ${SLASH} > div { background-color: var(--cp-raised, var(--colors-surface1)) !important; border: 1px solid var(--cp-rule, var(--colors-border)) !important; border-radius: 16px !important; padding: 4px !important; gap: 0 !important; flex-direction: column-reverse !important; overflow: hidden !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35) !important; }
 ${SLASH} > div > div { background-color: transparent !important; border-width: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
 ${SLASH} > div[data-cp-glide] { transition: height ${SLASH_GLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1) !important; }
-[data-cp-part="slash-list"] > div > div { padding: 0 !important; }
-[data-cp-part="slash-list"] > div > div > div { min-height: 32px !important; padding: 0 10px !important; border-radius: 11px !important; }
+/* ScrollView nesting changed in Paseo 0.15; size selectable rows, never their text children. */
+[data-cp-part="slash-list"] > div:not([aria-label]), [data-cp-part="slash-list"] > div > div:not([aria-label]) { padding: 0 !important; }
+[data-cp-part="slash-list"] [aria-label][tabindex] { min-height: 32px !important; padding: 0 10px !important; border-radius: 11px !important; }
 @supports (corner-shape: squircle) {
   ${SLASH} > div { border-radius: 28px !important; corner-shape: squircle; }
-  [data-cp-part="slash-list"] > div > div > div { border-radius: 18px !important; corner-shape: squircle; }
+  [data-cp-part="slash-list"] [aria-label][tabindex] { border-radius: 18px !important; corner-shape: squircle; }
 }
-[data-cp-part="slash-list"] > div > div > div > div > :first-child { font-size: 13px !important; font-weight: 500 !important; color: var(--cp-fg, var(--colors-foreground)) !important; }
+[data-cp-part="slash-list"] [aria-label][tabindex] > [dir="auto"]:nth-child(2) { font-size: 13px !important; font-weight: 500 !important; color: var(--cp-fg, var(--colors-foreground)) !important; }
 [data-cp-part="slash-detail"] { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 4px; margin-top: 4px !important; padding: 10px 10px 8px !important; border-top: 1px solid var(--cp-rule, var(--colors-border)) !important; }
 [data-cp-part="slash-detail"] > :first-child { grid-area: 1 / 1; font-family: var(--cp-mono, ui-monospace, monospace) !important; font-size: 12px !important; color: var(--cp-accent, var(--colors-accent-bright)) !important; }
 /* Skill descriptions run to paragraphs; three lines, like the row above shows one. */
