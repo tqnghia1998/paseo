@@ -1708,6 +1708,7 @@ export async function createPaseoDaemon(
   });
 
   const idleRuntimeCleanup = createIdleRuntimeCleanup({
+    idlePeriodMs: Number(resolveReloadEnv(config).PASEO_IDLE_RUNTIME_TIMEOUT_MS),
     enabled: daemonConfigStore.get().idleRuntimeCleanup !== false,
     runtimes: () => agentManager.getRuntimeCleanupCandidates(),
     isProtected: (agentId) =>
