@@ -74,3 +74,16 @@ Healthy numbers (2026-08, Expo web against a local dev daemon, real Claude Haiku
 Total characters painted is roughly the same either way — the reveal changes when they land, not how many arrive.
 
 Measure the **total** length across every `assistant-message` element, not the last one. A turn emits many assistant messages, so the tail element keeps changing identity and its length is not monotonic; sampling only the tail reads those handovers as resets and reports almost no growth. `sampleStreamFrames` does this correctly.
+
+## Embedded host visibility
+
+Vibing's cached Bots iframes stay mounted. The host sends
+`space:paseo-view-visibility` on workspace/tool switches, load and document
+visibility changes. `patches/vibing/host-visibility.ts` accepts the boolean only
+from the embedding parent origin through the shared host-message helper, and
+requests the current value when a native chat mounts after the initial message.
+`NativeBotChat` combines this with its existing route/prop activity, releasing
+foreground timeline ownership and reusing the retained-panel render guards.
+Revealing the view reuses normal timeline synchronization; no agent cancellation,
+composer clearing, iframe remount or activity-bridge shutdown occurs. Standalone
+views and older hosts keep their existing activity behavior.
