@@ -35,3 +35,11 @@ The library determines how incomplete Markdown appears during streaming. Complet
 ## Verification
 
 Follow [QA](qa.md) and [mobile testing](mobile-testing.md). Exercise chat, file preview, plan and PR content on all three platforms. Include cross-paragraph selection, progressive streaming, a file-link tap, code copy/highlighting, a table and a workspace image. On iPad, repeat preview selection after opening and closing Explorer and after rotation. Check web find, selection-copy and source-message navigation after DOM changes.
+
+## Retained syntax tokens
+
+The shared JavaScript highlighter (`src/utils/highlight-cache.ts`) retains at most
+200 entries and 8 MiB of estimated source/token weight. The weight counts source
+keys, line arrays, token objects and text; it is an eviction policy, not a hard
+heap limit. Cache hits update LRU recency. Eviction leaves mounted consumers and
+conversation data intact; revisiting an evicted block tokenizes it again.

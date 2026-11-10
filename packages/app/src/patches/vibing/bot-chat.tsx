@@ -38,6 +38,7 @@ import { registerEmbeddedTargetOpener } from "./embedded-targets";
 import { openFileInHost } from "./host-file-open";
 import type { NativeBotChatProps } from "./bot-chat-types";
 import { botChatDraftId } from "./bot-chat-scope";
+import { useEmbeddedHostActive } from "./host-visibility";
 import { SheetPaneHostProvider, type SheetPaneHost } from "@/screens/workspace/sheet-pane/host";
 import { buildWorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
@@ -100,7 +101,9 @@ function BotChatPaneEnvironment({
 
 function NativeBotChatContent(props: NativeBotChatProps) {
   const { serverId, agentId, botId, onSelectChat } = props;
-  const active = useIsFocused() && props.active;
+  const focused = useIsFocused();
+  const hostActive = useEmbeddedHostActive();
+  const active = focused && props.active && hostActive;
   const cachedWorkspaceId = useSessionStore((state) => {
     if (!agentId) return null;
     const session = state.sessions[serverId];

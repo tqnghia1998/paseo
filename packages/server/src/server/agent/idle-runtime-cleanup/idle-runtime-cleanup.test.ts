@@ -41,7 +41,7 @@ class Runtime {
     };
   }
 }
-function scenario(enabled = true) {
+function scenario(enabled = true, idlePeriodMs?: number) {
   const runtime = new Runtime();
   const runtimes = [runtime];
   let time = 0;
@@ -49,6 +49,7 @@ function scenario(enabled = true) {
   let tick!: () => void;
   const cleanup = createIdleRuntimeCleanup({
     enabled,
+    idlePeriodMs,
     logger: createTestLogger(),
     now: () => time,
     runtimes: () => runtimes.filter((item) => !item.closed).map((item) => item.capture()),
@@ -292,3 +293,34 @@ test("disabling lets a started close finish but prevents the next closure in tha
     { agentId: "sibling", provider: "test", sessionId: "sibling" },
   ]);
 });
+
+// Vibing can release inactive processes sooner without changing standalone policy.
+test("a configured idle window collects at fifteen minutes and resets after activity", async () => {
+  const s = scenario(true, 15 * 60_000);
+  expect((await s.sweep(14)).collected).toEqual([]);
+  s.runtime.activity = 14 * 60_000;
+  expect((await s.sweep(28)).collected).toEqual([]);
+  expect((await s.sweep(29)).collected).toHaveLength(1);
+});
+
+test("the shorter window still protects background descendants and grants a fresh window", async () => {
+  const s = scenario(true, 15 * 60_000);
+  const child = new Runtime("working-child");
+  child.parentAgentId = s.runtime.id;
+  child.busy = true;
+  s.runtimes.push(child);
+  expect((await s.sweep(15)).collected).toEqual([]);
+  child.busy = false;
+  expect((await s.sweep(16)).collected).toEqual([]);
+  expect((await s.sweep(30)).collected).toEqual([]);
+  expect((await s.sweep(31)).collected).toHaveLength(2);
+});
+
+test.each([0, -1, NaN, Infinity, 0.5])(
+  "invalid idle window %s retains the one-hour default",
+  async (value) => {
+    const s = scenario(true, value);
+    expect((await s.sweep(59)).collected).toEqual([]);
+    expect((await s.sweep(60)).collected).toHaveLength(1);
+  },
+);

@@ -13727,11 +13727,12 @@ test("reads the last durable assistant response without loading a stored-only ch
   expect(manager.getAgent("stored-child")).toBeNull();
 });
 
-function runtimeCleanup(manager: AgentManager) {
+function runtimeCleanup(manager: AgentManager, idlePeriodMs?: number) {
   let now = Date.now();
   let protectedCaller = (_agentId: string) => false;
   const cleanup = createIdleRuntimeCleanup({
     enabled: true,
+    idlePeriodMs,
     runtimes: () => manager.getRuntimeCleanupCandidates(),
     logger,
     now: () => now,
@@ -13746,7 +13747,7 @@ function runtimeCleanup(manager: AgentManager) {
   };
 }
 
-function idleCleanupHarness() {
+function idleCleanupHarness(idlePeriodMs?: number) {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-idle-protection-"));
   const storage = new AgentStorage(join(workdir, "agents"), logger);
   const commands: AgentPromptInput[] = [];
@@ -13803,7 +13804,7 @@ function idleCleanupHarness() {
   });
   return {
     commands,
-    sweep: runtimeCleanup(manager),
+    sweep: runtimeCleanup(manager, idlePeriodMs),
     manager,
     storage,
     sessions,
@@ -13864,22 +13865,25 @@ test("idle cleanup rechecks queued deliveries admitted during the safety probe",
   expect(h.closes).toBe(0);
 });
 
-test("a prompt racing idle cleanup waits for close and resumes exactly once", async () => {
-  const h = idleCleanupHarness();
-  const agent = await h.create();
-  h.probes[0] = async () => true;
-  const gate = deferred<void>();
-  h.holdClose(gate.promise);
-  const sweep = h.sweep({ now: h.later(61) });
-  await h.closeEntered.promise;
-  const run = h.manager.runAgent(agent.id, "arrived while closing");
-  gate.resolve();
-  expect((await sweep).collected).toHaveLength(1);
-  const result = await run;
-  expect(result.sessionId).toBe(agent.persistence?.sessionId);
-  expect(h.closes).toBe(1);
-  expect(h.prompts).toEqual(["arrived while closing"]);
-});
+test.each([60, 15])(
+  "a prompt racing idle cleanup after %s minutes waits for close and resumes exactly once",
+  async (minutes) => {
+    const h = idleCleanupHarness(minutes * 60_000);
+    const agent = await h.create();
+    h.probes[0] = async () => true;
+    const gate = deferred<void>();
+    h.holdClose(gate.promise);
+    const sweep = h.sweep({ now: h.later(minutes + 1) });
+    await h.closeEntered.promise;
+    const run = h.manager.runAgent(agent.id, "arrived while closing");
+    gate.resolve();
+    expect((await sweep).collected).toHaveLength(1);
+    const result = await run;
+    expect(result.sessionId).toBe(agent.persistence?.sessionId);
+    expect(h.closes).toBe(1);
+    expect(h.prompts).toEqual(["arrived while closing"]);
+  },
+);
 
 test("an out-of-band command racing idle cleanup waits for the resumed runtime", async () => {
   const h = idleCleanupHarness();

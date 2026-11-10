@@ -47,6 +47,8 @@ still own an exclusive writer. A close failure retains that runtime for cleanup 
 replacement. Once closure succeeds, a failed resume leaves the durable agent closed and retryable.
 
 Idle resumable runtimes are collected after one hour without activity, checked once a minute.
+Embedded hosts may set `PASEO_IDLE_RUNTIME_TIMEOUT_MS` at daemon startup to a positive safe
+integer in milliseconds; invalid values retain the one-hour default. Vibing uses fifteen minutes.
 Collection releases the process and preserves the agent record, conversation, relationships, and
 provider session. The next prompt resumes that session. Set `agents.idleRuntimeCleanup: false` in
 host config to disable automatic collection. The host setting applies immediately; config-file edits
@@ -60,8 +62,8 @@ An idle managed child can still own background work.
 
 The daemon baseline always applies. An optional provider `canStopRuntime()` adds a veto: false,
 errors and timeouts retain ownership, while true cannot override daemon blockers. Without a provider
-check, the baseline decides collection after the same one-hour idle period. Once protected work
-finishes, a fresh idle hour starts. There is no deadline that overrides a veto.
+check, the baseline decides collection after the configured idle period. Once protected work
+finishes, a fresh configured idle period starts. There is no deadline that overrides a veto.
 
 The `idle-runtime-cleanup/` module owns the clocks, eligibility policy and sweep lifetime.
 AgentManager supplies captured runtime capabilities and owns atomic revalidation and shutdown.
