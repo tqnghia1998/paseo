@@ -4,16 +4,21 @@ import type { PersistedWorkspaceRecord } from "../../server/workspace-registry.j
 
 export function getRunningWorktreePaths(
   agents: ReadonlyArray<
-    Pick<ManagedAgent, "cwd" | "workspaceId" | "lifecycle" | "activeTurnId" | "internal">
+    Pick<ManagedAgent, "id" | "cwd" | "workspaceId" | "lifecycle" | "activeTurnId" | "internal">
   >,
   workspaces: ReadonlyArray<
     Pick<PersistedWorkspaceRecord, "workspaceId" | "cwd" | "worktreeRoot" | "archivedAt">
   >,
+  hasRelatedWork: (agentId: string) => boolean = () => false,
 ): string[] {
   const workspacesById = new Map(workspaces.map((workspace) => [workspace.workspaceId, workspace]));
   const paths = new Set<string>();
   for (const agent of agents) {
-    if (agent.internal || (agent.lifecycle !== "running" && !agent.activeTurnId)) continue;
+    if (
+      agent.internal ||
+      (agent.lifecycle !== "running" && !agent.activeTurnId && !hasRelatedWork(agent.id))
+    )
+      continue;
     const workspace = agent.workspaceId ? workspacesById.get(agent.workspaceId) : undefined;
     if (workspace?.archivedAt) continue;
     paths.add(path.resolve(workspace?.worktreeRoot ?? workspace?.cwd ?? agent.cwd));
