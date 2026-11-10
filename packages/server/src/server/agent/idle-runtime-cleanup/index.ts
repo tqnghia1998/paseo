@@ -15,6 +15,7 @@ export interface RuntimeCleanupCandidate {
 }
 interface Options {
   enabled: boolean;
+  idlePeriodMs?: number;
   runtimes(): readonly RuntimeCleanupCandidate[];
   isProtected?(agentId: string): boolean;
   logger: Pick<Logger, "debug" | "info" | "warn">;
@@ -41,6 +42,11 @@ export function createIdleRuntimeCleanup(options: Options) {
   let generation = 0;
   const isProtected = options.isProtected ?? (() => false);
   const now = options.now ?? Date.now;
+  const configuredIdlePeriodMs = options.idlePeriodMs ?? IDLE_PERIOD_MS;
+  const idlePeriodMs =
+    Number.isSafeInteger(configuredIdlePeriodMs) && configuredIdlePeriodMs > 0
+      ? configuredIdlePeriodMs
+      : IDLE_PERIOD_MS;
 
   function familyOf(root: RuntimeCleanupCandidate, runtimes: readonly RuntimeCleanupCandidate[]) {
     const family = new Map([[root.agentId, root]]);
@@ -99,7 +105,7 @@ export function createIdleRuntimeCleanup(options: Options) {
           runtime.lastActivityAt,
           protectedAt.get(runtime.identity)?.at ?? 0,
         );
-        if (timestamp - idleSince < IDLE_PERIOD_MS) continue;
+        if (timestamp - idleSince < idlePeriodMs) continue;
         const revalidate = () => {
           const currentFamily = familyOf(runtime, options.runtimes());
           return (

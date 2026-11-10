@@ -20,29 +20,53 @@ export interface KeyedLine {
 // monospace text. Generous enough to cover the vast majority of real blocks.
 export const MAX_HIGHLIGHT_CHARS = 100_000;
 
+// Bound retained source and token objects as well as entry count. This is an
+// estimate, not a V8 heap limit; mounted consumers still own their token arrays.
+const MAX_CACHE_WEIGHT = 8 * 1024 * 1024;
+
 class LRUCache<K, V> {
-  private readonly map = new Map<K, V>();
-  constructor(private readonly max: number) {}
+  private readonly map = new Map<K, { value: V; weight: number }>();
+  private weight = 0;
+  constructor(
+    private readonly max: number,
+    private readonly maxWeight: number,
+  ) {}
 
   get(key: K): V | undefined {
-    const value = this.map.get(key);
-    if (value === undefined) return undefined;
+    const entry = this.map.get(key);
+    if (!entry) return undefined;
     this.map.delete(key);
-    this.map.set(key, value);
-    return value;
+    this.map.set(key, entry);
+    return entry.value;
   }
 
-  set(key: K, value: V): void {
-    if (this.map.has(key)) this.map.delete(key);
-    else if (this.map.size >= this.max) {
-      const oldest = this.map.keys().next().value;
-      if (oldest !== undefined) this.map.delete(oldest);
+  set(key: K, value: V, weight: number): void {
+    const previous = this.map.get(key);
+    if (previous) {
+      this.weight -= previous.weight;
+      this.map.delete(key);
     }
-    this.map.set(key, value);
+    if (weight > this.maxWeight) return;
+    while (this.map.size >= this.max || this.weight + weight > this.maxWeight) {
+      const oldest = this.map.entries().next().value;
+      if (!oldest) break;
+      this.map.delete(oldest[0]);
+      this.weight -= oldest[1].weight;
+    }
+    this.map.set(key, { value, weight });
+    this.weight += weight;
   }
 }
 
-const tokenizationCache = new LRUCache<string, HighlightToken[][]>(200);
+const tokenizationCache = new LRUCache<string, HighlightToken[][]>(200, MAX_CACHE_WEIGHT);
+
+function tokenizationWeight(key: string, lines: HighlightToken[][]): number {
+  let weight = key.length * 2 + lines.length * 32;
+  for (const line of lines) {
+    for (const token of line) weight += 64 + token.text.length * 2;
+  }
+  return weight;
+}
 
 // Tokenize `code` to per-line tokens, cached. Returns null when the language is
 // unsupported, the input is over the size cap, or parsing throws — callers then
@@ -59,7 +83,7 @@ export function tokenizeToLines(code: string, ext: string | null): HighlightToke
   } catch {
     return null;
   }
-  tokenizationCache.set(cacheKey, lines);
+  tokenizationCache.set(cacheKey, lines, tokenizationWeight(cacheKey, lines));
   return lines;
 }
 

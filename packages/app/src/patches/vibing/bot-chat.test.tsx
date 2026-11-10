@@ -18,6 +18,7 @@ const fake = vi.hoisted(() => ({
   visible: vi.fn(),
   prepare: vi.fn().mockResolvedValue(undefined),
   focused: true,
+  hostActive: true,
   cache: null as unknown,
   sheetHost: null as ReturnType<typeof useSheetPaneHost> | null,
   fork: undefined as (() => Promise<void>) | undefined,
@@ -83,6 +84,7 @@ vi.mock("@/panels/agent-panel", async () => {
     },
   };
 });
+vi.mock("./host-visibility", () => ({ useEmbeddedHostActive: () => fake.hostActive }));
 vi.mock("./bot-chat-draft", () => ({
   NativeBotChatDraft: () => <div data-testid="native-draft" />,
 }));
@@ -155,6 +157,7 @@ beforeEach(() => {
   fake.visible.mockClear();
   fake.prepare.mockClear();
   fake.focused = true;
+  fake.hostActive = true;
   vi.mocked(props.onSelectChat).mockClear();
   vi.mocked(navigateToWorkspace).mockClear();
   useWorkspaceAttachmentsStore.setState({ attachmentsByScope: {} });
@@ -241,4 +244,17 @@ it("opens a fork in the same bot with the draft that owns its bounded history", 
   ]);
   expect(fake.buildForkContext).toHaveBeenCalledWith("chat", { boundaryMessageId: "turn-end" });
   expect(navigateToWorkspace).not.toHaveBeenCalled();
+});
+
+it("pauses a cached host's timeline subscription while retaining its native panel", () => {
+  const view = render(<NativeBotChat {...props} agentId="chat" />);
+  const panel = screen.getByTestId("native-panel");
+  expect(fake.visible).toHaveBeenLastCalledWith(expect.any(String), ["chat"]);
+  fake.hostActive = false;
+  view.rerender(<NativeBotChat {...props} agentId="chat" />);
+  expect(fake.visible).toHaveBeenLastCalledWith(expect.any(String), []);
+  expect(screen.getByTestId("native-panel")).toBe(panel);
+  fake.hostActive = true;
+  view.rerender(<NativeBotChat {...props} agentId="chat" />);
+  expect(fake.visible).toHaveBeenLastCalledWith(expect.any(String), ["chat"]);
 });
