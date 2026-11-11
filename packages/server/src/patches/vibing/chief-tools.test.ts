@@ -2,6 +2,21 @@ import { afterEach, expect, test, vi } from "vitest";
 import { createChiefTools } from "./chief-tools.js";
 
 afterEach(() => vi.useRealTimers());
+
+test("open_feature returns the underlying workspace preparation error", async () => {
+  const tools = createChiefTools();
+  tools.updateInventory({ apps });
+  const opening = tools.openBranch({ appId: "app-one", branch: "feat/protocol-0.9" });
+  const [request] = tools.poll({ apps });
+  const failure = {
+    outcome: "unavailable",
+    reason: "failed",
+    error: "fatal: branch already checked out at /repo-worktrees/p09",
+  };
+  tools.ack(request!.id, failure);
+  await expect(opening).resolves.toEqual(failure);
+  tools.close();
+});
 const apps = [
   {
     id: "app-one",
