@@ -12,7 +12,7 @@ const plugins = [
   {
     id: "paseo-bots",
     repository: "oliexe/paseo-bots",
-    revision: "39a700006c204aef25de4e0db11419b6f75ac814",
+    revision: "069f8ebc5de28568461e224747dac9d54941ce2b",
     patch: "paseo-bots-vibing.patch",
   },
   {
@@ -21,14 +21,6 @@ const plugins = [
     revision: "b921586b52cc2f937cf7814efc83d106310824fe",
     patch: "annotations-vibing.patch",
     assets: ["NOTICE.md", "assets/icon.png", "assets/hero.png", "assets/screenshot-selection.png"],
-  },
-  {
-    id: "paseo-doc-viewer",
-    repository: "nkwib/paseo-doc-viewer",
-    revision: "0f39c81883aef30711e0c5bce4fb2d41a544de0d",
-    patch: "paseo-doc-viewer-vibing.patch",
-    bundleDependencies: true,
-    assets: ["NOTICE"],
   },
   {
     id: "shell-yeah",
@@ -47,7 +39,7 @@ const plugins = [
   {
     id: "paseo-chat-polish",
     repository: "lthieu96/paseo-chat-polish",
-    revision: "df399f50ca6c93fc93e29ad65a223da91b5b75ea",
+    revision: "a6567814b1a238fd0279e77bf7bb4134617785c5",
     patch: "paseo-chat-polish-vibing.patch",
     // pele is inlined; sharp is native and loaded on demand, so thumbnails fall back to the original image.
     bundleDependencies: true,

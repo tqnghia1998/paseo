@@ -298,8 +298,8 @@ override prevents an older app bundle from downgrading the hot upgrade on restar
 Keep the prior source directory and source-map snapshot for rollback; do not remove
 and reinstall the plugin, which deletes its native settings.
 
-Besides Chat Polish (`paseo-chat-polish`) and Annotations, the addons are PDF and Office viewer
-(`paseo-doc-viewer`), Shell Yeah (`shell-yeah`), Recap (`paseo-recap`) and Generative UI
+Besides Chat Polish (`paseo-chat-polish`) and Annotations, the addons are
+Shell Yeah (`shell-yeah`), Recap (`paseo-recap`) and Generative UI
 (`genui`). Quick Prompts (`paseo-quick-prompts`) and Side Chat (`paseo-sidechat`) were retired: they are no longer bundled, and the next
 start removes the copy Vibing installed (a copy installed from elsewhere stays). Prompt templates
 live in the Vibing host's Insert Prompt menu instead. Fold Turns (`completed-turns`) is
@@ -655,7 +655,8 @@ through the shared host-message helper) only while its handshake phase is `ready
 is the current request and `id` is a string of at most 128 characters; anything else is ignored.
 `root` must equal the Chief session's `cwd` and `path` must be a safe workspace-relative path
 (no absolute, backslash, control-character, `.`/`..` or empty segments, at most 4096 characters).
-It then opens the registered `paseo-doc-viewer` plugin's `document` surface with the Chief
+Doc Viewer is no longer bundled. If separately installed, it opens the registered
+`paseo-doc-viewer` plugin's `document` surface with the Chief
 session's workspace ID and exactly that path, and always answers
 `paseo:chief-document-opened { requestId, id, outcome: "opened" | "unavailable" }`; a missing
 viewer or surface, an invalid path or a different root answers unavailable, with no fallback to
