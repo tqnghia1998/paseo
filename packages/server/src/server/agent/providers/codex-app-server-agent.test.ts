@@ -1094,6 +1094,87 @@ process.stdin.on("data", (chunk) => {
 }
 
 describe("Codex app-server provider", () => {
+  test("restricted planning disables inherited Plan mode and refuses to re-enable it", async () => {
+    const appServer = createFakeCodexAppServer({
+      "collaborationMode/list": () => ({
+        data: [
+          { name: "Plan", mode: "plan", model: "gpt-5.4" },
+          { name: "Code", mode: "default", model: "gpt-5.4" },
+        ],
+      }),
+    });
+    const session = await createProviderWithFakeAppServer(appServer).createSession(
+      createConfig({
+        internal: true,
+        providerOptions: { restrictToConfiguredMcp: true, plan_mode: true },
+        mcpServers: {},
+        toolPolicy: { preapproved: [] },
+      }),
+    );
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    try {
+      expect(session.openOptionsPatch).toMatchObject({ plan_mode: false });
+      await expect(session.applyOptions?.({ plan_mode: true })).rejects.toThrow(
+        "restricted planning",
+      );
+      await session.startTurn("Return a plan.");
+      expect(await appServer.waitForTurnStart()).toMatchObject({
+        collaborationMode: { mode: "default" },
+      });
+      appServer.startsTurn({ threadId: "thread-1", turnId: "plan-turn" });
+      appServer.updatesPlan({ threadId: "thread-1", steps: ["Return supplied plan"] });
+      const completed = waitForNextEvent(session, "turn_completed");
+      appServer.completeTurn();
+      await completed;
+      expect(session.getPendingPermissions()).toEqual([]);
+      expect(
+        events.filter((event) => event.type === "timeline" && event.item.type === "tool_call"),
+      ).toEqual([]);
+      appServer.assertNoErrors();
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("keeps hidden planning read-only on thread and turn despite full-access defaults", async () => {
+    const appServer = createFakeCodexAppServer({
+      "config/read": () => ({
+        config: {
+          mcp_servers: { inherited: { command: "unsafe" } },
+          features: { shell_tool: true, apps: true },
+        },
+      }),
+    });
+    const session = await createProviderWithFakeAppServer(appServer).createSession(
+      createConfig({
+        internal: true,
+        modeId: "full-access",
+        systemPrompt: "Use supplied evidence only.",
+        providerOptions: { restrictToConfiguredMcp: true, sandbox_mode: "danger-full-access" },
+        mcpServers: {},
+        toolPolicy: { preapproved: [] },
+      }),
+    );
+    try {
+      await session.startTurn("Return a plan.");
+      const thread = await appServer.waitForRequest("thread/start");
+      const turn = await appServer.waitForTurnStart();
+      expect(thread).toMatchObject({
+        approvalPolicy: "never",
+        sandbox: "read-only",
+        config: {
+          mcp_servers: { inherited: { enabled: false } },
+          features: { shell_tool: false, apps: false },
+        },
+      });
+      expect(turn).toMatchObject({ approvalPolicy: "never", sandboxPolicy: { type: "readOnly" } });
+      appServer.assertNoErrors();
+    } finally {
+      await session.close();
+    }
+  });
+
   test.each([undefined, "Paseo override"])(
     "preserves native instructions unless Paseo supplies an override (%s)",
     async (systemPrompt) => {
@@ -1149,18 +1230,28 @@ describe("Codex app-server provider", () => {
     },
   );
 
-  test("rejects unreadable native configuration before replacing instructions", async () => {
-    const appServer = createFakeCodexAppServer({
-      "config/read": () => ({
-        __jsonRpcError: { code: -32000, message: "Configuration unavailable" },
-      }),
-    });
-    await expect(
-      createProviderWithFakeAppServer(appServer).createSession(createConfig()),
-    ).rejects.toThrow("Cannot preserve native Codex developer instructions");
-    expect(appServer.requests().some((request) => request.method === "thread/start")).toBe(false);
-    appServer.assertNoErrors();
-  });
+  test.each([
+    undefined,
+    {
+      internal: true,
+      systemPrompt: "Use supplied evidence only.",
+      providerOptions: { restrictToConfiguredMcp: true },
+    },
+  ])(
+    "rejects unreadable native configuration before replacing instructions (%j)",
+    async (overrides) => {
+      const appServer = createFakeCodexAppServer({
+        "config/read": () => ({
+          __jsonRpcError: { code: -32000, message: "Configuration unavailable" },
+        }),
+      });
+      await expect(
+        createProviderWithFakeAppServer(appServer).createSession(createConfig(overrides)),
+      ).rejects.toThrow("Cannot preserve native Codex developer instructions");
+      expect(appServer.requests().some((request) => request.method === "thread/start")).toBe(false);
+      appServer.assertNoErrors();
+    },
+  );
 
   test.each([null, { developer_instructions: 42 }])(
     "rejects invalid native instruction configuration (%s)",

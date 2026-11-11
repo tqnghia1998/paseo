@@ -20,6 +20,49 @@ const hubPolicy = {
 };
 
 describe("provider-owned option schemas", () => {
+  test("Codex planner restrictions override native and requested tool settings", () => {
+    const native = {
+      features: { shell_tool: true, apps: true, future_tool: true },
+      mcp_servers: { inherited: { command: "unsafe" } },
+      plugins: { "local@marketplace": { enabled: true } },
+      apps: { drive: { enabled: true } },
+    };
+    const input = {
+      restrictToConfiguredMcp: true,
+      sandbox_mode: "danger-full-access",
+      web_search: "live",
+      features: { shell_tool: true },
+      mcp_servers: { added: { command: "unsafe" } },
+    };
+    expect(CodexProviderOptionsSchema.parse({ restrictToConfiguredMcp: true })).toEqual({
+      restrictToConfiguredMcp: true,
+    });
+    const restricted = applyCodexToolPolicy(input, { preapproved: [] }, native);
+    expect(restricted).toMatchObject({
+      approval_policy: "never",
+      sandbox_mode: "read-only",
+      web_search: "disabled",
+      features: { shell_tool: false, apps: false, future_tool: false },
+      mcp_servers: { inherited: { enabled: false }, added: { enabled: false } },
+      plugins: { "local@marketplace": { enabled: false } },
+      apps: { _default: { enabled: false }, drive: { enabled: false } },
+      project_doc_max_bytes: 0,
+    });
+    expect(restricted).not.toHaveProperty("restrictToConfiguredMcp");
+    expect(native.features.shell_tool).toBe(true);
+  });
+
+  test("OpenCode planning denies every tool despite inherited grants and auto-accept", () => {
+    const options = OpenCodeProviderOptionsSchema.parse({
+      restrictToConfiguredMcp: true,
+      permission: "allow",
+      auto_accept: true,
+    });
+    expect(buildOpenCodePermissionRules(options, hubPolicy)).toEqual([
+      { permission: "*", pattern: "*", action: "deny" },
+    ]);
+  });
+
   test("accepts an isolated Claude built-in and MCP tool configuration", () => {
     const options = {
       tools: [],

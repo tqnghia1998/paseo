@@ -38,6 +38,44 @@ rebase, rather than requiring reviewers to reconstruct them from commit history.
 | Vibing Chief                            | Server: `chief-session.ts`, `chief-http.ts`, `chief-tools.ts`, `chief-handoffs.ts`, `chief-review-workspace.ts`, `chief-chats.ts`, `chief-chat-status.ts`, `chief-bot.ts`, `chief-vibing-api.ts`; app: `chief-chat.tsx`, `chief-host.ts`, `chief-handshake.ts`, `chief-session.ts`, `chief-verify.ts`, `chief-activity.ts`, `chief-commands.ts`, `chief-documents.ts`, `chief-quick-actions.ts`, `chief-quick-actions-view.tsx`, `chief-theme.ts`, `host-chat-open.ts` | Daemon bootstrap (`/api/chief` router, `hostManagedSession`, handoff stream observer, restart-recovery exclusion); `AgentManager` (`hostManagedSession`, `deleteIdleAgent`, `streamIdleAgent`), `agent-prompt.ts` (`idleOnly`), `agent-storage.ts` (`remove`); `bots.chief.*` RPC reservation in `session.ts`; Bots patch broker (`server/chief.ts`); `app/index.tsx` (`ChiefEmbeddedChat`); `panels/agent-panel.tsx` (slash commands and normal composer controls); `agent-stream/view.tsx` (quick actions); `composer-bridge.ts` (`useChiefComposerActions`); `bot-workspace.tsx`; `appearance/provider.tsx` (`applyChiefTheme()` after each appearance update) | Colocated chief tests (including `chief-chat-access.test.ts`, `chief-review-workspace.test.ts`, `chief-contract.test.ts` and `chief-documents.test.ts`), `chief-bot-integration.test.ts` (real Bots plugin), `bot-workspace.test.tsx` |
 | Standalone distribution                 | `scripts/bundle-paseo-web.mjs`, `scripts/paseo-web.js`                                                                                                                                                                                                                                                                                                                                                                                                                 | Root build command, embedded build flag, packaged version and built-in plugin discovery                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Runner tests, full standalone build and Vibing bundle guard; see [porting guide](../README-PORT.md)                                                                                                                                   |
 
+## Mock System model picker
+
+Vibing's Mock System embeds `/?view=mock-picker` in a focused frame. The framed
+entry is enabled only in the embedded build. `focus-mode.ts` and `app/index.tsx`
+bypass folder/workspace creation and restrict global shortcuts for this view.
+`mock-picker.tsx` uses the existing `ModelBrowser`, `SheetHeaderView` and anchored
+`DropdownMenu` thinking selector, with live model/effort metadata supplied by the host.
+
+`mock-picker-protocol.ts` validates the loopback parent origin, request ID and
+versioned configuration. The frame sends ready, receives configuration, then
+acknowledges it before the host reveals the controls. Selection and close messages
+stay bound to that request and exact parent window/origin. Harnesses explicitly
+unsupported for mock planning appear in a muted note; runtime/auth failures on
+supported harnesses retain their error. Model changes use that model's thinking default; reselecting
+the current model retains its effort, including Default (no override).
+
+This view creates no agent or chat and writes no Bot/global provider defaults.
+The host saves the selection per worktree. Changes require bundling the Paseo UI
+and the host's Live Design client together; an older frame stays hidden behind an
+explicit update message. Protocol tests cover parent admission and effort
+selection; host tests cover handshake gating, old bundles and persisted settings.
+
+Restricted planning supports Claude, Codex, OpenCode and derived providers.
+The manager suppresses inherited/plugin MCP and refuses nonempty configured MCP
+for Codex/OpenCode. Codex reads native configuration before launch, disables its
+inherited tool sources, forces read-only thread/turn policies and declines
+approvals. OpenCode v1/v2 deny all tool permissions and decline unexpected
+questions/approvals. The host rejects planner results containing a tool call.
+These restrictions apply only to flagged planner sessions; ordinary chats retain
+their provider settings. Backend changes also require rebuilding the standalone
+server and activating it in an idle dev runtime.
+
+The standalone runner attaches the host's planner IPC bridge only when launched
+with an IPC channel. `scripts/mock-planner.mjs` is the canonical adapter; both
+full and runner-only bundles include it with its WebSocket dependency. Keep the
+host's runner/catalog round-trip test and bundle guard when rebundling, otherwise
+model loading can work in a warm process and fail after its next restart.
+
 ## Vibing Chief
 
 Chief (`vibing-chief`) is the app-wide manager Bot. It manages and operates the app: it
@@ -55,21 +93,9 @@ waiting for it to mount when needed and rechecking visibility/identity before ap
 pending focus. No draft text is replaced or sent. Cmd/Ctrl+Shift+K stays Vibing's
 workspace-switcher shortcut.
 
-Chief disables `/btw` through `chief-slash-policy.ts`: the merged provider/plugin
-command menu hides it, and send/queue/plugin dispatch reject typed commands before
-clearing the draft or attachments. Ordinary Bot chats retain it. This is a Chief
-composer preference. Side Chat is vendored at `Moyf/paseo-sidechat@e1ce6025d864a4f7768ca45e40110971b1f65e57`
-with `paseo-sidechat-vibing.patch`. Its own client omits `/btw` in the Chief view,
-and its server rejects advice for daemon-verified Chief labels before storing or
-starting a question, covering already-installed clients before a host refresh.
-Explicit `/side` work and `/fork` are unchanged. History follows `PASEO_HOME`.
-Side Chat helpers use upstream's generic provider/model context; they do not inherit
-the parent Bot's persona, memory, or tools. The source currently declares no license.
-Side Chat restores history before admitting a question or flushing cleanup, including
-unload before the first RPC. A per-parent/mode admission covers helper selection,
-retirement and creation, releasing after registration so follow-ups can still steer.
-The maintained patch includes cold-load, overlapping-question, failed-creation and
-model-replacement regressions.
+Chief rejects a typed `/btw` through `chief-slash-policy.ts` (a leftover from the retired Side
+Chat addon, `paseo-sidechat`, which is no longer bundled; the next start removes the copy Vibing
+installed). It is harmless without the addon.
 
 The daemon owns Chief's single agent (`chief-session.ts`). Chief is a plain Full access
 agent with source-owned provider, tool configuration and instructions. It works
@@ -274,7 +300,7 @@ and reinstall the plugin, which deletes its native settings.
 
 Besides Chat Polish (`paseo-chat-polish`) and Annotations, the addons are PDF and Office viewer
 (`paseo-doc-viewer`), Shell Yeah (`shell-yeah`), Recap (`paseo-recap`) and Generative UI
-(`genui`). Quick Prompts (`paseo-quick-prompts`) was retired: it is no longer bundled, and the next
+(`genui`). Quick Prompts (`paseo-quick-prompts`) and Side Chat (`paseo-sidechat`) were retired: they are no longer bundled, and the next
 start removes the copy Vibing installed (a copy installed from elsewhere stays). Prompt templates
 live in the Vibing host's Insert Prompt menu instead. Fold Turns (`completed-turns`) is
 deliberately not shipped: Chat Polish already merges the steps between replies into one row.

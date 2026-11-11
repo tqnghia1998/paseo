@@ -59,6 +59,7 @@ const {
   createRootLogger,
   readPersistedConfig,
   savePersistedConfig,
+  getStructuredAgentResponse,
 } = await import(`file://${serverModulePath}`);
 
 function parseArgs(args) {
@@ -134,6 +135,18 @@ if (cleanupWorktrees) {
 await daemon.start();
 
 const listenTarget = daemon.getListenTarget() || { host, port };
+if (process.send) {
+  const { attachMockPlannerIpc, createMockPlannerBridge, readMockPlannerCatalog } =
+    await import("./mock-planner.mjs");
+  attachMockPlannerIpc(
+    createMockPlannerBridge({
+      manager: daemon.agentManager,
+      structured: getStructuredAgentResponse,
+      providerOverrides: config.providerOverrides ?? {},
+      catalog: () => readMockPlannerCatalog(listenTarget.port, config.providerOverrides ?? {}),
+    }),
+  );
+}
 console.log(`[Paseo] Paseo Web UI is running at http://${listenTarget.host}:${listenTarget.port}`);
 
 let stopping = false;
