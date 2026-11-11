@@ -3929,12 +3929,12 @@ test("configured-MCP-only sessions suppress daemon and plugin tools across reloa
 });
 
 test("configured-MCP-only sessions reject unsupported providers before launch", async () => {
-  const client = new TestAgentClient("pi");
-  const manager = new AgentManager({ clients: { pi: client }, logger });
+  const client = new TestAgentClient("copilot");
+  const manager = new AgentManager({ clients: { copilot: client }, logger });
   await expect(
     manager.createAgent(
       {
-        provider: "pi",
+        provider: "copilot",
         cwd: process.cwd(),
         providerOptions: { restrictToConfiguredMcp: true },
       },
@@ -3945,7 +3945,7 @@ test("configured-MCP-only sessions reject unsupported providers before launch", 
   expect(client.createdConfigs).toEqual([]);
 });
 
-test.each(["codex", "opencode"] as const)(
+test.each(["codex", "opencode", "pi"] as const)(
   "%s admits a restricted planner but refuses configured tools",
   async (provider) => {
     const client = new TestAgentClient(provider);

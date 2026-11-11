@@ -6227,7 +6227,7 @@ export class AgentManager {
     if (config.providerOptions?.restrictToConfiguredMcp === true) {
       let provider: string | null | undefined = config.provider;
       const visited = new Set<string>();
-      const supported = new Set(["claude", "codex", "opencode"]);
+      const supported = new Set(["claude", "codex", "opencode", "pi"]);
       while (provider && !supported.has(provider) && !visited.has(provider)) {
         visited.add(provider);
         provider = this.providerDefinitions.get(provider)?.derivedFromProviderId;

@@ -202,7 +202,7 @@ test("community plugins install once as ordinary directory sources and respect r
     const home = path.join(root, "home");
     const sourceRoot = path.join(root, "sources");
     mkdirSync(home);
-    for (const id of ["paseo-chat-polish", "annotations"]) {
+    for (const id of ["paseo-chat-polish", "shell-yeah"]) {
       mkdirSync(path.join(sourceRoot, id), { recursive: true });
       writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
     }
@@ -224,13 +224,13 @@ test("community plugins install once as ordinary directory sources and respect r
     const config = JSON.parse(readFileSync(configPath, "utf8"));
     assert.equal(config.pluginsEnabled, false);
     assert.equal(config.log.level, "warn");
-    for (const id of ["paseo-chat-polish", "annotations"]) {
+    for (const id of ["paseo-chat-polish", "shell-yeah"]) {
       assert.equal(config.plugins[id].source, "directory");
       assert.equal(config.plugins[id].enabled, true);
       assert.ok(existsSync(path.join(config.plugins[id].path, "paseo-plugin.json")));
     }
     delete config.plugins["paseo-chat-polish"];
-    config.plugins.annotations.enabled = false;
+    config.plugins["shell-yeah"].enabled = false;
     writeFileSync(configPath, JSON.stringify(config));
     prepareCommunityPlugins({
       home,
@@ -375,7 +375,13 @@ for (const offered of [["beautiful-chat"], ["beautiful-chat", "paseo-chat-polish
   });
 }
 
-for (const retired of ["paseo-quick-prompts", "paseo-doc-viewer"])
+for (const retired of [
+  "paseo-quick-prompts",
+  "paseo-doc-viewer",
+  "paseo-sidechat",
+  "paseo-recap",
+  "annotations",
+])
   test(`the retired ${retired} copy Vibing installed is removed once; one from elsewhere stays`, async () => {
     const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
     const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
@@ -504,7 +510,7 @@ for (const kind of ["bom", "permissions", "symlink"]) {
         const home = path.join(root, "home");
         const sourceRoot = path.join(root, "sources");
         mkdirSync(home, { mode: 0o755 });
-        for (const id of ["paseo-chat-polish", "annotations"]) {
+        for (const id of ["paseo-chat-polish", "shell-yeah"]) {
           mkdirSync(path.join(sourceRoot, id), { recursive: true });
           writeFileSync(path.join(sourceRoot, id, "paseo-plugin.json"), JSON.stringify({ id }));
         }
@@ -530,7 +536,7 @@ for (const kind of ["bom", "permissions", "symlink"]) {
         });
         const config = JSON.parse(readFileSync(configPath, "utf8"));
         assert.equal(config.features.dictation.stt.apiKey, "test-only-key");
-        assert.equal(config.plugins.annotations.source, "directory");
+        assert.equal(config.plugins["shell-yeah"].source, "directory");
         if (kind === "permissions") {
           assert.equal(statSync(configPath).mode & 0o777, 0o600);
           assert.equal(statSync(home).mode & 0o777, 0o700);
@@ -538,7 +544,7 @@ for (const kind of ["bom", "permissions", "symlink"]) {
         if (kind === "symlink") {
           assert.ok(lstatSync(configPath).isSymbolicLink());
           assert.equal(
-            JSON.parse(readFileSync(target, "utf8")).plugins.annotations.source,
+            JSON.parse(readFileSync(target, "utf8")).plugins["shell-yeah"].source,
             "directory",
           );
           assert.equal(statSync(target).mode & 0o777, 0o600);
@@ -571,7 +577,7 @@ test("Vibing-installed community plugins follow the bundle, keeping their state"
   try {
     const { home, sourceRoot, configPath } = communityHome(root, []);
     writeBundle(sourceRoot, "genui", "v1");
-    writeBundle(sourceRoot, "annotations", "v1");
+    writeBundle(sourceRoot, "shell-yeah", "v1");
     prepareCommunityPlugins({
       home,
       sourceRoot,
@@ -590,11 +596,11 @@ test("Vibing-installed community plugins follow the bundle, keeping their state"
       savePersistedConfig,
     });
     assert.equal(installedCode(home, "genui"), "v2");
-    assert.equal(installedCode(home, "annotations"), "v1");
+    assert.equal(installedCode(home, "shell-yeah"), "v1");
     assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), config);
     assert.deepEqual(readdirSync(path.join(home, "installed-plugins")).sort(), [
-      "annotations",
       "genui",
+      "shell-yeah",
     ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -606,7 +612,8 @@ test("community plugins that were edited, removed or installed elsewhere are not
   const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
   try {
     const { home, sourceRoot, configPath } = communityHome(root, []);
-    for (const id of ["genui", "annotations", "shell-yeah"]) writeBundle(sourceRoot, id, "v1");
+    for (const id of ["genui", "paseo-chat-polish", "shell-yeah"])
+      writeBundle(sourceRoot, id, "v1");
     prepareCommunityPlugins({
       home,
       sourceRoot,
@@ -616,11 +623,12 @@ test("community plugins that were edited, removed or installed elsewhere are not
     const genui = path.join(home, "installed-plugins", "genui", "client", "genui.gen.ts");
     writeFileSync(genui, "edited");
     const config = JSON.parse(readFileSync(configPath, "utf8"));
-    delete config.plugins.annotations;
+    delete config.plugins["paseo-chat-polish"];
     config.plugins["shell-yeah"].path = path.join(root, "elsewhere");
     writeFileSync(configPath, JSON.stringify(config));
 
-    for (const id of ["genui", "annotations", "shell-yeah"]) writeBundle(sourceRoot, id, "v2");
+    for (const id of ["genui", "paseo-chat-polish", "shell-yeah"])
+      writeBundle(sourceRoot, id, "v2");
     prepareCommunityPlugins({
       home,
       sourceRoot,
@@ -628,7 +636,7 @@ test("community plugins that were edited, removed or installed elsewhere are not
       savePersistedConfig,
     });
     assert.equal(readFileSync(genui, "utf8"), "edited");
-    assert.equal(installedCode(home, "annotations"), "v1");
+    assert.equal(installedCode(home, "paseo-chat-polish"), "v1");
     assert.equal(installedCode(home, "shell-yeah"), "v1");
     assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), config);
   } finally {
@@ -716,4 +724,9 @@ test("an update interrupted mid-swap restores the previous copy", async () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("the bundled community list excludes retired addons", async () => {
+  const { communityPluginIds } = await import("./paseo-web-plugins.mjs");
+  assert.deepEqual(communityPluginIds, ["paseo-chat-polish", "shell-yeah", "genui"]);
 });

@@ -16,25 +16,11 @@ const plugins = [
     patch: "paseo-bots-vibing.patch",
   },
   {
-    id: "annotations",
-    repository: "neunzig-zehn/paseo-annotations",
-    revision: "b921586b52cc2f937cf7814efc83d106310824fe",
-    patch: "annotations-vibing.patch",
-    assets: ["NOTICE.md", "assets/icon.png", "assets/hero.png", "assets/screenshot-selection.png"],
-  },
-  {
     id: "shell-yeah",
     repository: "stevecastaneda/paseo-plugins",
     directory: "shell-yeah",
     revision: "7f08467b1adbe54a201978a7af804c1147a312fa",
     patch: "shell-yeah-vibing.patch",
-  },
-  {
-    id: "paseo-recap",
-    repository: "kingsleydon/paseo-plugins",
-    directory: "plugins/recap",
-    revision: "ceb91bef9d9a978d083cbc373bb192f98b794581",
-    patch: "paseo-recap-vibing.patch",
   },
   {
     id: "paseo-chat-polish",

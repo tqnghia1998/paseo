@@ -119,6 +119,7 @@ const QUESTION_RESPONSE_HEADER = "Response";
 
 export const PiProviderOptionsSchema = z
   .object({
+    restrictToConfiguredMcp: z.boolean().optional(),
     sessionDir: z.string().min(1).optional(),
     rpcTimeoutMs: z.number().int().positive().default(DEFAULT_PI_RPC_TIMEOUT_MS),
     extensionTimeoutMs: z.number().int().positive().default(DEFAULT_PI_EXTENSION_RESULT_TIMEOUT_MS),
@@ -282,6 +283,7 @@ type PiMcpInjection =
   | { kind: "adapter"; configFile: PiTempFile };
 
 interface PiPaseoExtensionOptions {
+  restrictToConfiguredMcp?: boolean;
   systemPrompt?: string;
   mcpServers?: Record<string, PiMcpServerConfig>;
 }
@@ -289,6 +291,15 @@ interface PiPaseoExtensionOptions {
 interface PiTempFile {
   path: string;
   cleanup: () => void;
+}
+
+function assertRestrictedPiServers(config: AgentSessionConfig): void {
+  if (
+    config.providerOptions?.restrictToConfiguredMcp === true &&
+    Object.keys(config.mcpServers ?? {}).length
+  ) {
+    throw new Error("Restricted Pi sessions support only tool-free planning");
+  }
 }
 
 interface PiCapturedEntry extends PiCapturedUserMessageEntry {
@@ -507,6 +518,8 @@ function buildResumeStartInput(input: {
   paseoExtension: PiTempFile | null;
 }): PiStartSessionInput {
   return {
+    restrictToConfiguredMcp:
+      input.resumeConfig.config.providerOptions?.restrictToConfiguredMcp === true,
     cwd: input.processCwd,
     env: input.launchContext?.env,
     session: input.sessionFile,
@@ -643,6 +656,7 @@ async function createPiSessionCopy(sessionFile: string, cwd: string): Promise<Pi
 function createPiPaseoExtensionFile({
   systemPrompt,
   mcpServers = {},
+  restrictToConfiguredMcp = false,
 }: PiPaseoExtensionOptions): PiTempFile {
   const dir = mkdtempSync(join(tmpdir(), "paseo-pi-extension-"));
   const filePath = join(dir, "paseo-integration.mjs");
@@ -701,6 +715,7 @@ function createPiPaseoExtensionFile({
 	}
 
 	export default function paseoIntegration(pi) {
+    ${restrictToConfiguredMcp ? 'pi.on("tool_call", () => ({block:true, reason:"Tools are disabled for restricted planning."}));' : ""}
 	  for (const [name, config] of Object.entries(${JSON.stringify(mcpServers)})) {
 	    pi.registerMcpServer(name, config);
 	  }
@@ -732,7 +747,7 @@ function createPiPaseoExtensionFile({
 	  ${
       systemPrompt
         ? `pi.on("before_agent_start", async (event) => ({
-	    systemPrompt: event.systemPrompt + "\\n\\n" + ${JSON.stringify(systemPrompt)},
+	    systemPrompt: ${restrictToConfiguredMcp ? "" : 'event.systemPrompt + "\\n\\n" + '}${JSON.stringify(systemPrompt)},
 	  }));`
         : ""
     }
@@ -2629,6 +2644,7 @@ export class PiRpcAgentClient implements AgentClient {
     launchContext?: AgentLaunchContext,
   ): Promise<AgentSession> {
     const providerOptions = PiProviderOptionsSchema.parse(config.providerOptions ?? {});
+    assertRestrictedPiServers(config);
     const runtime = this.resolveRuntime(providerOptions.rpcTimeoutMs);
     const mcpEnv = {
       ...this.runtimeSettings?.env,
@@ -2637,12 +2653,14 @@ export class PiRpcAgentClient implements AgentClient {
     const mcp = await this.prepareMcpInjection(config.cwd, config.mcpServers, mcpEnv, runtime);
     const mcpConfigFile = mcp?.kind === "adapter" ? mcp.configFile : null;
     const paseoExtension = createPiPaseoExtensionFile({
+      restrictToConfiguredMcp: providerOptions.restrictToConfiguredMcp,
       systemPrompt: composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
       mcpServers: mcp?.kind === "builtin" ? mcp.servers : undefined,
     });
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await runtime.startSession({
+        restrictToConfiguredMcp: providerOptions.restrictToConfiguredMcp,
         cwd: config.cwd,
         model: config.model,
         thinkingOptionId: normalizePiThinkingOption(config.thinkingOptionId) ?? undefined,
@@ -2688,6 +2706,7 @@ export class PiRpcAgentClient implements AgentClient {
 
     const persistenceMetadata = parsePersistenceMetadata(handle.metadata);
     const resumeConfig = buildResumeConfig(persistenceMetadata, overrides, this.provider);
+    assertRestrictedPiServers(resumeConfig.config);
     const processCwd = await resolveResumeProcessCwd(resumeConfig.cwd, options?.purpose);
 
     const providerOptions = PiProviderOptionsSchema.parse(
@@ -2706,6 +2725,7 @@ export class PiRpcAgentClient implements AgentClient {
     );
     const mcpConfigFile = mcp?.kind === "adapter" ? mcp.configFile : null;
     const paseoExtension = createPiPaseoExtensionFile({
+      restrictToConfiguredMcp: providerOptions.restrictToConfiguredMcp,
       systemPrompt: composeSystemPromptParts(
         resumeConfig.config.systemPrompt,
         resumeConfig.config.daemonAppendSystemPrompt,

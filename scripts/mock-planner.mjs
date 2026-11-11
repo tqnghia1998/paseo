@@ -4,14 +4,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
 
-function supportedProvider(id, providerOverrides) {
+function baseProvider(id, providerOverrides) {
   const seen = new Set();
   while (id && !seen.has(id)) {
-    if (["claude", "codex", "opencode"].includes(id)) return true;
+    if (["claude", "codex", "opencode", "pi"].includes(id)) return id;
     seen.add(id);
     id = providerOverrides[id]?.extends;
   }
-  return false;
+  return null;
+}
+
+function supportedProvider(id, providerOverrides) {
+  return ["claude", "codex", "pi"].includes(baseProvider(id, providerOverrides));
 }
 
 // Read Paseo's existing snapshot. A GET already warms cold providers in the daemon;
@@ -86,23 +90,25 @@ export function createMockPlannerBridge({ manager, structured, catalog, provider
   const active = new Map();
   const supported = (id) => supportedProvider(id, providerOverrides);
   const list = async () =>
-    (await catalog()).map((entry) => ({
-      provider: entry.provider,
-      label: entry.label ?? entry.provider,
-      supportsMockPlanning: supported(entry.provider),
-      enabled: entry.enabled !== false && entry.status === "ready" && supported(entry.provider),
-      reason: !supported(entry.provider)
-        ? "Mock planning is not supported for this harness yet."
-        : (entry.error ?? (entry.status === "ready" ? "" : "Harness unavailable.")),
-      models: (entry.models ?? [])
-        .filter((model) => model.isSelectable !== false)
-        .map(({ id, label, isDefault, thinkingOptions, defaultThinkingOptionId }) => {
-          const value = { id, label, isDefault: isDefault === true };
-          if (thinkingOptions) value.thinkingOptions = thinkingOptions;
-          if (defaultThinkingOptionId) value.defaultThinkingOptionId = defaultThinkingOptionId;
-          return value;
-        }),
-    }));
+    (await catalog())
+      .filter((entry) => baseProvider(entry.provider, providerOverrides) !== "opencode")
+      .map((entry) => ({
+        provider: entry.provider,
+        label: entry.label ?? entry.provider,
+        supportsMockPlanning: supported(entry.provider),
+        enabled: entry.enabled !== false && entry.status === "ready" && supported(entry.provider),
+        reason: !supported(entry.provider)
+          ? "Mock planning is not supported for this harness yet."
+          : (entry.error ?? (entry.status === "ready" ? "" : "Harness unavailable.")),
+        models: (entry.models ?? [])
+          .filter((model) => model.isSelectable !== false)
+          .map(({ id, label, isDefault, thinkingOptions, defaultThinkingOptionId }) => {
+            const value = { id, label, isDefault: isDefault === true };
+            if (thinkingOptions) value.thinkingOptions = thinkingOptions;
+            if (defaultThinkingOptionId) value.defaultThinkingOptionId = defaultThinkingOptionId;
+            return value;
+          }),
+      }));
   return {
     list,
     async cancel(id) {
@@ -139,7 +145,9 @@ export function createMockPlannerBridge({ manager, structured, catalog, provider
             systemPrompt:
               "Follow only the fixed Mock System rulebook supplied in the request. Use only the supplied evidence and return structured plans. Do not use tools.",
             mcpServers: {},
-            toolPolicy: { preapproved: [] },
+            ...(baseProvider(input.provider, providerOverrides) === "pi"
+              ? {}
+              : { toolPolicy: { preapproved: [] } }),
             providerOptions: { restrictToConfiguredMcp: true },
           },
           entry.agentId,

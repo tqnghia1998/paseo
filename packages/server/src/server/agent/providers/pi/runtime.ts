@@ -25,6 +25,7 @@ export interface PiRuntimeLaunch {
 }
 
 export interface PiStartSessionInput {
+  restrictToConfiguredMcp?: boolean;
   cwd: string;
   signal?: AbortSignal;
   env?: Record<string, string>;
@@ -88,6 +89,21 @@ export function buildPiLaunch(input: {
       ? input.runtimeSettings.command.argv
       : input.command;
   const argv = [...command];
+  if (input.session.restrictToConfiguredMcp) {
+    if (command.length !== 1 || input.session.extraArgs?.length || input.session.mcpConfigPath) {
+      throw new Error(
+        "Restricted Pi planning requires a command without additional arguments or MCP configuration",
+      );
+    }
+    argv.push(
+      "--no-tools",
+      "--no-extensions",
+      "--no-mcp",
+      "--no-skills",
+      "--no-prompt-templates",
+      "--no-context-files",
+    );
+  }
 
   const protocolMode = input.session.protocolMode ?? "rpc";
   appendPiLaunchArgs(argv, input.session, protocolMode);
