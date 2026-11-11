@@ -60,12 +60,15 @@ and the host's Live Design client together; an older frame stays hidden behind a
 explicit update message. Protocol tests cover parent admission and effort
 selection; host tests cover handshake gating, old bundles and persisted settings.
 
-Restricted planning supports Claude, Codex, OpenCode and derived providers.
+Mock planning supports Claude, Codex, Pi and their derived providers. OpenCode
+and its derived profiles are excluded from the Mock catalog and execution adapter.
 The manager suppresses inherited/plugin MCP and refuses nonempty configured MCP
-for Codex/OpenCode. Codex reads native configuration before launch, disables its
+for Codex/Pi. Codex reads native configuration before launch, disables its
 inherited tool sources, forces read-only thread/turn policies and declines
-approvals. OpenCode v1/v2 deny all tool permissions and decline unexpected
-questions/approvals. The host rejects planner results containing a tool call.
+approvals. Pi disables tools, MCP, discovered extensions, skills, prompt templates
+and context files, loading only Paseo's trusted session extension; it refuses tool
+calls and replaces inherited instructions with the supplied planner prompt. Restricted
+Pi launch commands with extra arguments are refused. The host rejects planner results containing a tool call.
 These restrictions apply only to flagged planner sessions; ordinary chats retain
 their provider settings. Backend changes also require rebuilding the standalone
 server and activating it in an idle dev runtime.
@@ -298,21 +301,16 @@ override prevents an older app bundle from downgrading the hot upgrade on restar
 Keep the prior source directory and source-map snapshot for rollback; do not remove
 and reinstall the plugin, which deletes its native settings.
 
-Besides Chat Polish (`paseo-chat-polish`) and Annotations, the addons are
-Shell Yeah (`shell-yeah`), Recap (`paseo-recap`) and Generative UI
-(`genui`). Quick Prompts (`paseo-quick-prompts`) and Side Chat (`paseo-sidechat`) were retired: they are no longer bundled, and the next
-start removes the copy Vibing installed (a copy installed from elsewhere stays). Prompt templates
-live in the Vibing host's Insert Prompt menu instead. Fold Turns (`completed-turns`) is
-deliberately not shipped: Chat Polish already merges the steps between replies into one row.
-Bots chats use the native agent panel, so their slash commands, composer pills,
+The community addons are Chat Polish (`paseo-chat-polish`), Shell Yeah (`shell-yeah`)
+and Generative UI (`genui`). Quick Prompts, Side Chat, Doc Viewer, Recap and Annotations
+are retired: they are no longer bundled, and the next start removes the copy Vibing
+installed (a copy installed from elsewhere stays). Prompt templates live in the Vibing
+host's Insert Prompt menu instead. Fold Turns (`completed-turns`) is deliberately not
+shipped: Chat Polish already merges the steps between replies into one row.
+Bots chats use the native agent panel, so addon slash commands, composer pills,
 attachment sources and timeline renderers apply there. Addon workspace panels open
-inside the chat through the Bots workspace views below (Cmd+K or plugin actions); header
-buttons and sidebar items do not appear, because the embedded build mounts no workspace
-screen or sidebar. Recap generates summaries through
-the `claude`, `codex` or `opencode` CLIs on the daemon's `PATH`;
-`scripts/paseo-recap-vibing.patch` makes its automatic Claude choice the CLI's `haiku`
-alias, which honors `ANTHROPIC_DEFAULT_HAIKU_MODEL`, because the company gateway maps
-the newest Haiku to an older model that rejects its reasoning-effort setting.
+inside the chat through the Bots workspace views below (Cmd+K or plugin actions);
+header buttons and sidebar items do not appear in the embedded build.
 
 Generative UI file cards use a single press target. In embedded workspace and Live Design chats,
 `genui-vibing.patch` sends worktree-relative paths and line numbers through the existing
