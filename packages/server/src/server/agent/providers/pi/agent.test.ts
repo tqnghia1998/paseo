@@ -63,6 +63,68 @@ test("Pi RPC timeout defaults to 60 seconds and accepts an override", () => {
   expect(PiProviderOptionsSchema.parse({ rpcTimeoutMs: 90_000 }).rpcTimeoutMs).toBe(90_000);
 });
 
+test("restricted Pi planners launch without tools or discovered resources and refuse tool calls", async () => {
+  const pi = new FakePi();
+  const session = await createClient(pi).createSession(
+    createConfig({
+      internal: true,
+      systemPrompt: "Fixed planner rulebook",
+      providerOptions: { restrictToConfiguredMcp: true },
+      mcpServers: {},
+    }),
+  );
+  onTestFinished(() => session.close());
+  const launch = pi.recordedLaunches[0];
+  for (const flag of [
+    "--no-tools",
+    "--no-extensions",
+    "--no-mcp",
+    "--no-skills",
+    "--no-prompt-templates",
+    "--no-context-files",
+    "--no-session",
+  ])
+    expect(launch.argv).toContain(flag);
+  expect(launch.extensionPaths).toHaveLength(1);
+  const listeners = await loadPaseoExtensionListeners(launch.extensionPaths![0]);
+  expect(await listeners.get("tool_call")!({ toolName: "bash" })).toEqual({
+    block: true,
+    reason: "Tools are disabled for restricted planning.",
+  });
+  expect(
+    await listeners.get("before_agent_start")!({ systemPrompt: "Inherited instructions" }),
+  ).toEqual({ systemPrompt: "Fixed planner rulebook" });
+});
+
+test("restricted Pi planners refuse configured MCP before starting a process", async () => {
+  const pi = new FakePi();
+  await expect(
+    createClient(pi).createSession(
+      createConfig({
+        providerOptions: { restrictToConfiguredMcp: true },
+        mcpServers: { injected: { type: "http", url: "http://localhost:1" } },
+      }),
+    ),
+  ).rejects.toThrow("tool-free planning");
+  expect(pi.recordedLaunches).toEqual([]);
+});
+
+test("resumed restricted Pi sessions retain tool and resource isolation", async () => {
+  const pi = new FakePi();
+  const session = await createClient(pi).resumeSession(
+    {
+      provider: "pi",
+      sessionId: "pi-session-1",
+      nativeHandle: "/tmp/native-pi-session",
+      metadata: { cwd: tmpdir() },
+    },
+    { providerOptions: { restrictToConfiguredMcp: true }, systemPrompt: "Fixed planner rulebook" },
+  );
+  onTestFinished(() => session.close());
+  expect(pi.recordedLaunches[0].argv).toContain("--no-tools");
+  expect(pi.recordedLaunches[0].argv).toContain("--no-extensions");
+});
+
 function createClient(
   pi = new FakePi(),
   usagePollScheduler?: PiUsagePollScheduler,
