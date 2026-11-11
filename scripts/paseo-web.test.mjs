@@ -19,10 +19,41 @@ import {
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createTestPaseoDaemon } from "../packages/server/dist/server/server/test-utils/paseo-daemon.js";
+import { readMockPlannerCatalog } from "./mock-planner.mjs";
+import { createTestAgentClient } from "../packages/server/dist/server/server/test-utils/fake-agent-client.js";
 import {
   readPersistedConfig,
   savePersistedConfig,
 } from "../packages/server/dist/server/server/persisted-config.js";
+
+test("mock planner catalog includes configured providers over the daemon connection", async () => {
+  const providerOverrides = {
+    "mock-codex": {
+      extends: "codex",
+      label: "Mock Codex",
+    },
+  };
+  const daemon = await createTestPaseoDaemon({
+    providerOverrides,
+    agentClients: { "mock-codex": createTestAgentClient("mock-codex") },
+  });
+  try {
+    const entries = await readMockPlannerCatalog(daemon.port, providerOverrides);
+    assert.deepEqual(
+      entries
+        .filter((entry) => entry.provider === "mock-codex")
+        .map((entry) => ({
+          provider: entry.provider,
+          status: entry.status,
+          models: entry.models.map((model) => model.id),
+        })),
+      [{ provider: "mock-codex", status: "ready", models: ["test-model", "test-model-alt"] }],
+    );
+  } finally {
+    await daemon.close();
+  }
+});
 
 test("runner keeps cleanup capability out of external commands and Bash sessions", () => {
   const directory = mkdtempSync(path.join(os.tmpdir(), "paseo-runner-token-"));

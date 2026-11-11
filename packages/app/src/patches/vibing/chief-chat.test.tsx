@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { useProviderSubagentStore } from "@/subagents/provider-store";
 import type { NativeBotChatProps } from "./bot-chat-types";
 
 vi.hoisted(() => {
@@ -51,6 +52,7 @@ function setChiefSession(options: { running?: boolean; pending?: boolean } = {})
       sessions: {
         local: {
           running: new Set(options.running ? ["agent-1"] : []),
+          agents: new Map(),
           pendingPermissions: new Map(
             options.pending ? [["p1", { key: "p1", agentId: "agent-1", request: {} }]] : [],
           ),
@@ -126,6 +128,7 @@ async function mount(options: { agent?: unknown } = {}) {
 
 const messageListeners: EventListener[] = [];
 beforeEach(() => {
+  useProviderSubagentStore.setState({ descriptors: new Map() });
   const add = window.addEventListener.bind(window);
   vi.spyOn(window, "addEventListener").mockImplementation(((type: string, listener: never) => {
     if (type === "message") messageListeners.push(listener);

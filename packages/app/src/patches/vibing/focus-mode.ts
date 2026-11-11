@@ -33,6 +33,11 @@ export const isEmbeddedChiefView = shouldUseEmbeddedChiefView(
   typeof window !== "undefined" && window.parent !== window,
   typeof window !== "undefined" ? window.location.search : "",
 );
+export const isEmbeddedMockPickerView =
+  isEmbeddedFocusMode &&
+  typeof window !== "undefined" &&
+  window.parent !== window &&
+  new URLSearchParams(window.location.search).get("view") === "mock-picker";
 
 export function preserveEmbeddedLiveDesignMessagingQuery(route: string, enabled: boolean): string {
   return enabled ? `${route}${route.includes("?") ? "&" : "?"}embedded-live-design=1` : route;
@@ -45,7 +50,8 @@ export function selectEmbeddedFocusMode<T>(embedded: T, standard: T): T {
 // Bots owns conversation navigation. Keep only global appearance/settings and chat actions.
 export function isEmbeddedShortcutAllowed(action: string): boolean {
   // Chief navigates nowhere: no command center, settings or theme changes.
-  if (isEmbeddedChiefView) return action === "message-input.action" || action === "agent.interrupt";
+  if (isEmbeddedChiefView || isEmbeddedMockPickerView)
+    return action === "message-input.action" || action === "agent.interrupt";
   return (
     !isEmbeddedFocusMode ||
     [

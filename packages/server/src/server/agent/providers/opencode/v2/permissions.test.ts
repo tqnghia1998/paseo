@@ -4,9 +4,119 @@ import { createTestLogger } from "../../../../../test-utils/test-logger.js";
 import type { V2Api } from "./api.js";
 import { OpenCodeV2AgentClient } from "./agent.js";
 import { V2Harness } from "../test-utils/v2-harness.js";
-import type { AgentPermissionResponse } from "../../../agent-sdk-types.js";
+import type { AgentPermissionResponse, AgentStreamEvent } from "../../../agent-sdk-types.js";
 
 describe("OpenCode v2 denial reasons", () => {
+  test("hidden restricted planning rejects permission requests without waiting for a user", async () => {
+    const harness = new V2Harness();
+    let pending = true;
+    harness.api.permission.list = async () =>
+      pending
+        ? [{ id: "approval", sessionID: "session", action: "shell", resources: ["pwd"] }]
+        : [];
+    const replies: Parameters<V2Api["permission"]["reply"]>[0][] = [];
+    harness.api.permission.reply = async (input) => {
+      replies.push(input);
+      pending = false;
+    };
+    const client = new OpenCodeV2AgentClient({
+      logger: createTestLogger(),
+      runtime: harness.runtime,
+    });
+    const session = await client.createSession({
+      provider: "opencode",
+      cwd: "/tmp/planner",
+      internal: true,
+      providerOptions: { restrictToConfiguredMcp: true, auto_accept: true },
+      toolPolicy: { preapproved: [] },
+    });
+    try {
+      expect(replies).toEqual([
+        {
+          sessionID: "session",
+          requestID: "approval",
+          decision: "reject",
+          message: "Tools are unavailable in restricted planning sessions.",
+        },
+      ]);
+      expect(session.getPendingPermissions()).toEqual([]);
+    } finally {
+      await session.close();
+    }
+  });
+
+  test.each(["tool", "question"] as const)(
+    "settles a restricted turn after automatically denying a %s",
+    async (kind) => {
+      const harness = new V2Harness();
+      harness.autoComplete = false;
+      let pending = false;
+      const permission = {
+        id: "approval",
+        sessionID: "session",
+        action: "shell",
+        resources: ["pwd"],
+      };
+      const form = { id: "approval", sessionID: "session", title: "Continue?", fields: [] };
+      harness.api.permission.list = async () => (pending && kind === "tool" ? [permission] : []);
+      harness.api.session.form.list = async () => (pending && kind === "question" ? [form] : []);
+      const reject = async () => {
+        pending = false;
+        harness.active = false;
+        harness.push({
+          id: "denied",
+          created: 3,
+          type: "session.execution.interrupted",
+          durable: { aggregateID: "session", seq: 3, version: 1 },
+          data: { sessionID: "session", reason: "shutdown" },
+        });
+      };
+      harness.api.permission.reply = reject;
+      harness.api.session.form.cancel = reject;
+      const client = new OpenCodeV2AgentClient({
+        logger: createTestLogger(),
+        runtime: harness.runtime,
+      });
+      const session = await client.createSession({
+        provider: "opencode",
+        cwd: "/tmp/planner",
+        internal: true,
+        providerOptions: { restrictToConfiguredMcp: true },
+        toolPolicy: { preapproved: [] },
+      });
+      const events: AgentStreamEvent[] = [];
+      const terminal = () =>
+        events.filter(
+          (event) =>
+            event.type === "turn_canceled" ||
+            event.type === "turn_completed" ||
+            event.type === "turn_failed",
+        );
+      session.subscribe((event) => events.push(event));
+      try {
+        await session.startTurn("plan");
+        await expect.poll(() => harness.prompts).toEqual(["plan"]);
+        pending = true;
+        if (kind === "tool")
+          harness.push({ id: "asked", created: 2, type: "permission.asked", data: permission });
+        else harness.push({ id: "asked", created: 2, type: "form.created", data: { form } });
+        await expect.poll(terminal).toEqual([expect.objectContaining({ type: "turn_canceled" })]);
+        expect(session.getPendingPermissions()).toEqual([]);
+        await session.startTurn("retry");
+        await expect.poll(() => harness.prompts).toEqual(["plan", "retry"]);
+        harness.finishExecution();
+        await expect
+          .poll(terminal)
+          .toEqual([
+            expect.objectContaining({ type: "turn_canceled" }),
+            expect.objectContaining({ type: "turn_completed" }),
+          ]);
+      } finally {
+        await session.close();
+      }
+    },
+  );
+
   test.each<{
     response: AgentPermissionResponse;
     decision: "reject" | "once" | "always";

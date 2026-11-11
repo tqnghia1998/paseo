@@ -91,6 +91,7 @@ export class OpenCodeV2Session implements AgentSession {
       info.id,
       config,
       (event) => this.emit(event),
+      () => this.turns.requestDenied(),
     );
     this.children = new SessionChildren({
       client: () => this.client,

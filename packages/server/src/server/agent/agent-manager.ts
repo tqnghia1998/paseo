@@ -6227,13 +6227,19 @@ export class AgentManager {
     if (config.providerOptions?.restrictToConfiguredMcp === true) {
       let provider: string | null | undefined = config.provider;
       const visited = new Set<string>();
-      while (provider && provider !== "claude" && !visited.has(provider)) {
+      const supported = new Set(["claude", "codex", "opencode"]);
+      while (provider && !supported.has(provider) && !visited.has(provider)) {
         visited.add(provider);
         provider = this.providerDefinitions.get(provider)?.derivedFromProviderId;
       }
-      if (provider !== "claude") {
+      if (!provider || !supported.has(provider)) {
         throw new Error(
           `Provider '${config.provider}' does not support configured-MCP-only sessions`,
+        );
+      }
+      if (provider !== "claude" && Object.keys(config.mcpServers ?? {}).length > 0) {
+        throw new Error(
+          `Provider '${config.provider}' supports only tool-free planning in restricted sessions`,
         );
       }
     }

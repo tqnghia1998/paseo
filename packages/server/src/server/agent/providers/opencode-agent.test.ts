@@ -5288,6 +5288,45 @@ describe("OpenCode provider subagent contract", () => {
     await parent.close();
   });
 
+  test("restricted planning denies permissions even when auto-accept is configured", async () => {
+    const runtime = new TestOpenCodeHarness();
+    const native = new TestOpenCodeClient();
+    native.sessionCreateResponse = { data: { id: "ses_restricted" } };
+    runtime.enqueueClient(native);
+    const client = new OpenCodeAgentClient(createTestLogger(), undefined, {
+      serverManager: runtime,
+      createClient: runtime.createClient,
+    });
+    const session = await client.createSession({
+      provider: "opencode",
+      cwd: "/tmp/planner",
+      internal: true,
+      providerOptions: { restrictToConfiguredMcp: true, auto_accept: true },
+      toolPolicy: { preapproved: [] },
+    });
+    session.subscribe(() => undefined);
+    try {
+      native.emitEvent({
+        type: "permission.asked",
+        properties: {
+          id: "restricted-tool",
+          sessionID: "ses_restricted",
+          permission: "bash",
+          patterns: ["pwd"],
+          metadata: { command: "pwd" },
+        },
+      });
+      await vi.waitFor(() =>
+        expect(native.calls.permissionReply).toContainEqual(
+          expect.objectContaining({ requestID: "restricted-tool", reply: "reject" }),
+        ),
+      );
+      expect(session.getPendingPermissions()).toEqual([]);
+    } finally {
+      await session.close();
+    }
+  });
+
   test("auto-approves provider child permissions in the child directory", async () => {
     const runtime = new TestOpenCodeHarness();
     const parentClient = new TestOpenCodeClient();

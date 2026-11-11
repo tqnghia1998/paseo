@@ -5490,11 +5490,8 @@ class OpenCodeAgentSession implements AgentSession {
         const directory =
           (eventSessionId ? this.childSessionCwds.get(eventSessionId) : undefined) ??
           this.config.cwd;
-        const autoApproved = await this.tryAutoApproveToolPermission(
-          translatedEvent.request,
-          directory,
-        );
-        if (autoApproved) {
+        const resolved = await this.tryResolvePermission(translatedEvent.request, directory);
+        if (resolved) {
           continue;
         }
         this.pendingPermissions.set(translatedEvent.request.id, translatedEvent.request);
@@ -5528,10 +5525,23 @@ class OpenCodeAgentSession implements AgentSession {
     return true;
   }
 
-  private async tryAutoApproveToolPermission(
+  private async tryResolvePermission(
     request: AgentPermissionRequest,
     directory: string,
   ): Promise<boolean> {
+    if (this.config.providerOptions?.restrictToConfiguredMcp === true) {
+      if (request.kind === "question") {
+        await this.client.question.reject({ requestID: request.id, directory });
+      } else {
+        await this.client.permission.reply({
+          requestID: request.id,
+          directory,
+          reply: "reject",
+          message: "Tools are unavailable in restricted planning sessions.",
+        });
+      }
+      return true;
+    }
     if (!this.autoAcceptEnabled || request.kind !== "tool") {
       return false;
     }

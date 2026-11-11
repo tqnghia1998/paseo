@@ -5,7 +5,7 @@ import {
   formatAgentMessage,
   formatSystemNotificationPrompt,
 } from "./agent-messages/index.js";
-import { expect, test, vi, onTestFinished } from "vitest";
+import { describe, expect, test, vi, onTestFinished } from "vitest";
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -72,6 +72,14 @@ const DESKTOP_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("desktop-client");
 test("host-managed Chief rebinds its canonical endpoint before a real manager reload", async () => {
   class ChiefProviderSession extends TestAgentSession {
     override readonly capabilities = { ...TEST_CAPABILITIES, supportsMcpServers: true };
+    private selectedModel: string | null | undefined;
+    async setModel(model: string | null): Promise<void> {
+      this.selectedModel = model;
+    }
+    override async getRuntimeInfo() {
+      const info = await super.getRuntimeInfo();
+      return { ...info, model: this.selectedModel === undefined ? info.model : this.selectedModel };
+    }
     async applyOptions(_patch: Record<string, unknown>): Promise<void> {}
   }
   class ChiefClient extends TestAgentClient {
@@ -3921,12 +3929,12 @@ test("configured-MCP-only sessions suppress daemon and plugin tools across reloa
 });
 
 test("configured-MCP-only sessions reject unsupported providers before launch", async () => {
-  const client = new TestAgentClient("codex");
-  const manager = new AgentManager({ clients: { codex: client }, logger });
+  const client = new TestAgentClient("pi");
+  const manager = new AgentManager({ clients: { pi: client }, logger });
   await expect(
     manager.createAgent(
       {
-        provider: "codex",
+        provider: "pi",
         cwd: process.cwd(),
         providerOptions: { restrictToConfiguredMcp: true },
       },
@@ -3936,6 +3944,39 @@ test("configured-MCP-only sessions reject unsupported providers before launch", 
   ).rejects.toThrow("does not support configured-MCP-only sessions");
   expect(client.createdConfigs).toEqual([]);
 });
+
+test.each(["codex", "opencode"] as const)(
+  "%s admits a restricted planner but refuses configured tools",
+  async (provider) => {
+    const client = new TestAgentClient(provider);
+    const manager = new AgentManager({ clients: { [provider]: client }, logger });
+    const agent = await manager.createAgent(
+      {
+        provider,
+        cwd: process.cwd(),
+        internal: true,
+        providerOptions: { restrictToConfiguredMcp: true },
+        mcpServers: {},
+      },
+      undefined,
+      { workspaceId: undefined },
+    );
+    onTestFinished(() => manager.closeAgent(agent.id));
+    expect(client.createdConfigs[0]?.mcpServers).toEqual({});
+    await expect(
+      manager.createAgent(
+        {
+          provider,
+          cwd: process.cwd(),
+          providerOptions: { restrictToConfiguredMcp: true },
+          mcpServers: { injected: { type: "http", url: "http://127.0.0.1:1" } },
+        },
+        undefined,
+        { workspaceId: undefined },
+      ),
+    ).rejects.toThrow("tool-free planning");
+  },
+);
 
 test("configured-MCP-only defaults are captured before create hooks", async () => {
   const client = new TestAgentClient("claude");

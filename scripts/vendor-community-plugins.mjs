@@ -10,14 +10,6 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // public registry at vendoring time and inlined, so installs never run npm.
 const plugins = [
   {
-    id: "paseo-sidechat",
-    repository: "Moyf/paseo-sidechat",
-    revision: "e1ce6025d864a4f7768ca45e40110971b1f65e57",
-    patch: "paseo-sidechat-vibing.patch",
-    // Upstream currently distributes no license file or SPDX declaration.
-    licenseFiles: [],
-  },
-  {
     id: "paseo-bots",
     repository: "oliexe/paseo-bots",
     revision: "39a700006c204aef25de4e0db11419b6f75ac814",

@@ -3,6 +3,18 @@ import { describe, expect, test } from "vitest";
 import { controls, permissionRules, requiresDedicatedV2Server } from "./configuration.js";
 
 describe("OpenCode v2 permission rules", () => {
+  test("a restricted planner has a wildcard deny despite authored allow rules", () => {
+    expect(
+      permissionRules({
+        provider: "opencode",
+        cwd: "/tmp/planner",
+        internal: true,
+        providerOptions: { restrictToConfiguredMcp: true, permission: "allow", auto_accept: true },
+        toolPolicy: { preapproved: [] },
+      }),
+    ).toEqual([{ action: "*", resource: "*", effect: "deny" }]);
+  });
+
   test("maps authored native permissions and exact injected MCP grants", () => {
     expect(
       permissionRules({

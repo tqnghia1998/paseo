@@ -10,6 +10,7 @@ const PermissionRuleSchema = z.union([
 // OpenCode Config.permission, maintained against @opencode-ai/sdk 1.14.46.
 export const OpenCodeProviderOptionsSchema = z
   .object({
+    restrictToConfiguredMcp: z.boolean().optional(),
     // Composer control: approves permission prompts without asking.
     auto_accept: z.boolean().optional(),
     permission: z
@@ -54,6 +55,9 @@ export function buildOpenCodePermissionRules(
   options: OpenCodeProviderOptions | undefined,
   toolPolicy: ToolPolicy | undefined,
 ): OpenCodePermissionRule[] | undefined {
+  if (options?.restrictToConfiguredMcp === true) {
+    return [{ permission: "*", pattern: "*", action: "deny" }];
+  }
   const grants =
     toolPolicy?.preapproved.map((grant) => ({
       permission: `${grant.server}_${grant.tool}`,

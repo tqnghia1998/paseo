@@ -13,8 +13,9 @@ import {
 } from "@/stores/navigation-active-workspace-store";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { useEmbeddedFolderWorkspace } from "@/patches/vibing/folder-workspace";
-import { isEmbeddedChiefView } from "@/patches/vibing/focus-mode";
+import { isEmbeddedChiefView, isEmbeddedMockPickerView } from "@/patches/vibing/focus-mode";
 import { ChiefEmbeddedChat } from "@/patches/vibing/chief-chat";
+import { MockPicker } from "@/patches/vibing/mock-picker";
 
 const isDesktop = shouldUseDesktopDaemon();
 
@@ -37,12 +38,13 @@ export default function Index() {
   );
 
   const folderParam = useEmbeddedFolderWorkspace({
-    folder: isEmbeddedChiefView ? undefined : params.folder,
+    folder: isEmbeddedChiefView || isEmbeddedMockPickerView ? undefined : params.folder,
     embeddedLiveDesignMessaging: params["embedded-live-design"] === "1",
     targetServerId: anyOnlineHostServerId || hosts[0]?.serverId || null,
   });
 
   if (isEmbeddedChiefView) return <ChiefEmbeddedChat />;
+  if (isEmbeddedMockPickerView) return <MockPicker />;
 
   const startupRoute = resolveStartupRoute({
     route: { kind: "index", pathname },
