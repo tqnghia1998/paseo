@@ -115,6 +115,7 @@ const OpenBranchAck = z.discriminatedUnion("outcome", [
     .object({
       outcome: z.literal("unavailable"),
       reason: z.enum(["unknown-app", "failed"]),
+      error: z.string().min(1).max(16_000).optional(),
     })
     .strict(),
 ]);
