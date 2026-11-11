@@ -23,9 +23,9 @@ index 9d97c7f..855ce7f 100644
 -import { code, codeLine, ui } from "./typography";
 +import { ui } from "./typography";
 +import { canPickFiles, decodeUtf8, downloadBotFile, pickFileHandles } from "./web";
- 
+
  type Colors = PluginTheme["colors"];
- 
+
 @@ -23,19 +25,38 @@ export function NewBotDialog({
    onClose,
    onCreate,
@@ -146,7 +146,7 @@ index 9d97c7f..855ce7f 100644
 +  onDeleteAllChats(): Promise<void>;
    onDelete(): Promise<void>;
  }
- 
+
 @@ -264,6 +295,7 @@ export interface BotMenuActions {
  export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
    const { bot } = actions;
@@ -180,9 +180,9 @@ index 9d97c7f..855ce7f 100644
      { label: "Copy chat ID", icon: "Copy", onSelect: actions.onCopyId },
      { label: "Copy transcript", icon: "FileText", pendingLabel: "Copying...", onSelect: actions.onCopyTranscript },
 @@ -314,25 +349,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
- 
+
  // ------------------------------------------------------------------ export
- 
+
 -export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bot; onClose(): void }) {
 +export type ExportTarget = { kind: "bot"; bot: Bot } | { kind: "all"; bots: Bot[]; groups: BotGroup[] };
 +
@@ -246,7 +246,7 @@ index 9d97c7f..855ce7f 100644
      </Modal>
    );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 7533cb6..3ab22a6 100644
+index 5174b04..14e56c4 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
 @@ -1,3 +1,5 @@
@@ -262,27 +262,27 @@ index 7533cb6..3ab22a6 100644
 -import { contextMenuProps, measureAnchor } from "./ui/Menu";
 +import { contextMenuProps, measureAnchor, useMenu } from "./ui/Menu";
  import { tooltip } from "./ui/Tooltip";
- 
+
  // Paseo's sidebar, reproduced from components/left-sidebar.tsx, sidebar-workspace-list.tsx
-@@ -27,6 +29,8 @@ export interface Selection {
-   chatId: string | null;
-   /** First message to send straight away when starting a new chat. */
+@@ -29,6 +31,8 @@ export interface Selection {
    prompt?: string;
+   /** Title for the chat that `prompt` starts; Paseo derives one from the prompt otherwise. */
+   title?: string;
 +  /** Distinguishes repeated prompt starts so the chat remounts and sends again. */
 +  promptId?: string;
  }
- 
+
  export type MenuSource = "kebab" | "context";
-@@ -35,6 +39,8 @@ export interface ChatMenuContext {
+@@ -37,6 +41,8 @@ export interface ChatMenuContext {
    /** Every unpinned chat of the bot in list order, for Move up / Move down. */
    siblings: string[];
    pinned: boolean;
 +  /** Every chat of the bot in sidebar order (pins first), to pick what opens after a removal. */
 +  order: string[];
  }
- 
+
  interface BotSidebarProps {
-@@ -58,8 +64,11 @@ interface BotSidebarProps {
+@@ -60,8 +66,11 @@ interface BotSidebarProps {
    onShowArchived(): void;
    onSelect(selection: Selection): void;
    onNewBot(): void;
@@ -294,10 +294,10 @@ index 7533cb6..3ab22a6 100644
    onDisplayMenu(anchor: LayoutRectangle): void;
    onEditTeam(group: BotGroup): void;
    onTeamMap(): void;
-@@ -69,19 +78,28 @@ const noSelect = { userSelect: "none" } as object;
+@@ -71,19 +80,28 @@ const noSelect = { userSelect: "none" } as object;
  /** Paseo hardcodes the project chevron colour (project-leading-visual.tsx). */
  const CHEVRON_COLOR = "#9ca3af";
- 
+
 +/** The bot's chat IDs as the sidebar lists them: its pins in pin order, then the rest. */
 +function botChatOrder(chats: readonly PaseoAgent[], listUi: BotListUi, botId: string): string[] {
 +  const listed = new Set(chats.map((chat) => chat.id));
@@ -326,7 +326,7 @@ index 7533cb6..3ab22a6 100644
        </View>
      );
    }
-@@ -113,7 +131,7 @@ export function BotSidebar(props: BotSidebarProps) {
+@@ -115,7 +133,7 @@ export function BotSidebar(props: BotSidebarProps) {
            )
          ) : null}
        </ScrollView>
@@ -335,10 +335,10 @@ index 7533cb6..3ab22a6 100644
      </View>
    );
  }
-@@ -141,36 +159,24 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
+@@ -143,36 +161,24 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
    );
  }
- 
+
 -function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): void; onTeamMap(): void }) {
 -  const { hovered, hoverProps } = useHover();
 +function Footer({ colors, onNewBot, onImportBot, onExportAllBots, onTeamMap }: { colors: Colors; onNewBot(): void; onImportBot(): void; onExportAllBots?: () => void; onTeamMap(): void }) {
@@ -388,9 +388,9 @@ index 7533cb6..3ab22a6 100644
        <FooterIconButton colors={colors} icon="Network" label="Team map" onPress={onTeamMap} />
        <FooterIconButton colors={colors} icon="Blocks" label="Skills & Tools" onPress={() => openLibrary()} />
      </View>
-@@ -178,17 +184,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
+@@ -180,17 +186,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
  }
- 
+
  /** The sidebar footer's trailing icon buttons (Paseo's host, import and settings buttons): 32 box, 16pt icon. */
 -function FooterIconButton({ colors, icon, label, onPress }: { colors: Colors; icon: string; label: string; onPress(): void }) {
 +function FooterIconButton({ colors, icon, label, buttonRef, onPress }: { colors: Colors; icon: string; label: string; buttonRef?: RefObject<View | null>; onPress?: () => void }) {
@@ -411,7 +411,7 @@ index 7533cb6..3ab22a6 100644
          noSelect,
        ]}
      >
-@@ -232,7 +241,7 @@ function GhostButton({ colors, icon, label, onPress }: { colors: Colors; icon: s
+@@ -234,7 +243,7 @@ function GhostButton({ colors, icon, label, onPress }: { colors: Colors; icon: s
        })}
      >
        <Icon name={icon} size={14} color={tint} />
@@ -420,10 +420,10 @@ index 7533cb6..3ab22a6 100644
      </Pressable>
    );
  }
-@@ -272,11 +281,12 @@ function PinnedSection(props: PinnedProps) {
+@@ -274,11 +283,12 @@ function PinnedSection(props: PinnedProps) {
    );
  }
- 
+
 -function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touch, onSelect, onChatMenu }: PinnedProps & { bot: Bot; chatId: string }) {
 +function PinnedChatRow({ colors, tokens, bot, chatId, selection, ui: listUi, localHost, touch, onSelect, onChatMenu, onDeleteChat }: PinnedProps & { bot: Bot; chatId: string }) {
    const host = useBotHost(bot.hostId, localHost);
@@ -434,7 +434,7 @@ index 7533cb6..3ab22a6 100644
    return (
      <ChatRow
        colors={colors}
-@@ -287,7 +297,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -289,7 +299,8 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
        touch={touch}
        selected={selection?.botId === bot.id && selection.chatId === chat.id}
        onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -444,16 +444,16 @@ index 7533cb6..3ab22a6 100644
      />
    );
  }
-@@ -297,7 +308,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
+@@ -299,7 +310,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
  type GroupProps = BotSidebarProps & { bot: Bot; tokens: NativeTokens; pinnedIds: ReadonlySet<string>; /** The team's Chief of Staff. */ lead?: boolean };
- 
+
  function BotGroup(props: GroupProps) {
 -  const { colors, tokens, bot, selection, ui: listUi, localHost, touch, pinnedIds, onSelect, onChatMenu } = props;
 +  const { colors, tokens, bot, selection, ui: listUi, localHost, touch, pinnedIds, onSelect, onChatMenu, onDeleteChat } = props;
    const host = useBotHost(bot.hostId, localHost);
    const chats = useBotChats(host, bot.id);
    const [expanded, setExpanded] = useState(false);
-@@ -308,6 +319,7 @@ function BotGroup(props: GroupProps) {
+@@ -310,6 +321,7 @@ function BotGroup(props: GroupProps) {
    const unpinned = (chats.data ?? []).filter((chat) => !pinnedIds.has(chat.id));
    const ordered = orderChats(unpinned, listUi.chatSort, listUi.chatOrder[bot.id]);
    const siblings = ordered.map((chat) => chat.id);
@@ -461,7 +461,7 @@ index 7533cb6..3ab22a6 100644
    const visible = expanded ? ordered : ordered.slice(0, SIDEBAR_GROUP_LIMIT);
    const loading = !!host.api && chats.isLoading;
    // Collapsed rows carry their chats' most urgent status; open ones leave it to the rows.
-@@ -330,7 +342,8 @@ function BotGroup(props: GroupProps) {
+@@ -332,7 +344,8 @@ function BotGroup(props: GroupProps) {
                touch={touch}
                selected={botSelected && selection?.chatId === chat.id}
                onPress={() => onSelect({ botId: bot.id, chatId: chat.id })}
@@ -471,7 +471,7 @@ index 7533cb6..3ab22a6 100644
              />
            ))}
            {ordered.length > SIDEBAR_GROUP_LIMIT ? <ShowMoreRow colors={colors} expanded={expanded} onPress={() => setExpanded(!expanded)} /> : null}
-@@ -398,14 +411,14 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
+@@ -400,14 +413,14 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
              </View>
            )}
          </View>
@@ -488,7 +488,7 @@ index 7533cb6..3ab22a6 100644
            <Pressable
              accessibilityRole="button"
              accessibilityLabel={`New chat with ${bot.name}`}
-@@ -424,7 +437,7 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
+@@ -426,7 +439,7 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
            >
              {({ pressed: down }) => <Icon name="Plus" size={15} color={plus.hovered || down ? colors.foreground : colors.foregroundMuted} />}
            </Pressable>
@@ -497,20 +497,20 @@ index 7533cb6..3ab22a6 100644
          <View style={{ opacity: actionsVisible ? 1 : 0 }} pointerEvents={actionsVisible ? "auto" : "none"}>
            <KebabButton
              colors={colors}
-@@ -452,10 +465,11 @@ interface ChatRowProps {
+@@ -454,10 +467,11 @@ interface ChatRowProps {
    hoisted?: boolean;
    onPress(): void;
    onMenu(anchor: LayoutRectangle, source: MenuSource): void;
 +  onDelete(): void;
  }
- 
+
  /** Paseo's workspace row (sidebar-workspace-list.tsx workspaceRow + sidebar-workspace-row-content.tsx). */
 -const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu }: ChatRowProps) {
 +const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu, onDelete }: ChatRowProps) {
    const [hovered, setHovered] = useState(false);
    const kebabRef = useRef<View>(null);
    const bucket = chatBucket(chat);
-@@ -504,11 +518,11 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -506,11 +520,11 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
          )}
          <View style={{ flex: 1, minWidth: 0 }}>
            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
@@ -524,7 +524,7 @@ index 7533cb6..3ab22a6 100644
            </View>
            {hoisted ? (
              <Text numberOfLines={1} style={{ fontSize: ui(12), lineHeight: 16, color: colors.foregroundMuted }}>
-@@ -520,8 +534,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -522,8 +536,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
        {showKebab ? (
          <View style={{ position: "absolute", top: 8, right: 12, flexDirection: "row" }}>
            {/* A short scrim in the row's colour hides the title's tail under the kebab, as native does. */}
@@ -536,7 +536,7 @@ index 7533cb6..3ab22a6 100644
              <KebabButton colors={colors} buttonRef={kebabRef} label="Chat actions" onPress={() => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab"))} />
            </View>
          </View>
-@@ -561,7 +576,7 @@ function NewChatGhostRow({ colors, tokens, selected, onPress }: { colors: Colors
+@@ -563,7 +578,7 @@ function NewChatGhostRow({ colors, tokens, selected, onPress }: { colors: Colors
            <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
              <Icon name="Plus" size={14} color={hovered || pressed || selected ? colors.foreground : colors.foregroundMuted} />
            </View>
@@ -545,7 +545,7 @@ index 7533cb6..3ab22a6 100644
              New chat
            </Text>
          </>
-@@ -602,7 +617,7 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -604,7 +619,7 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
            <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
              <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={hovered || pressed ? colors.foreground : colors.foregroundMuted} />
            </View>
@@ -554,10 +554,10 @@ index 7533cb6..3ab22a6 100644
              {label}
            </Text>
          </>
-@@ -611,6 +626,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -613,6 +628,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
    );
  }
- 
+
 +/** Sits before the chat kebab with the same trigger geometry. */
 +function DeleteChatButton({ colors, onPress }: { colors: Colors; onPress(): void }) {
 +  const { hovered, hoverProps } = useHover();
@@ -579,17 +579,17 @@ index 7533cb6..3ab22a6 100644
  /**
   * Kebab triggers. Chat rows use Paseo's workspace trigger (padding 2, radius 4, pulled
   * onto the rail with marginRight -7); bot rows use the 24pt project kebab (`box`).
-@@ -688,7 +721,7 @@ const BADGE_SIZE = 12;
+@@ -690,7 +723,7 @@ const BADGE_SIZE = 12;
  const BADGE_OFFSET = -4;
  const RING_FRAME = 14;
- 
+
 -function StatusBadge({ colors, tokens, bucket, backdrop }: { colors: Colors; tokens: NativeTokens; bucket: ChatBucket; backdrop: string }) {
 +export function StatusBadge({ colors, tokens, bucket, backdrop }: { colors: Colors; tokens: NativeTokens; bucket: ChatBucket; backdrop: string }) {
    if (bucket === "done") return null;
    if (bucket === "running") {
      const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index ebc4ed2..7aec50f 100644
+index b96d3bb..a0d6383 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
 @@ -1,32 +1,38 @@
@@ -639,9 +639,9 @@ index ebc4ed2..7aec50f 100644
  import { ResizeHandle, SlideOver } from "./ui/Columns";
  import { fitColumns } from "../shared/layout";
 @@ -43,6 +49,9 @@ import { ui, useTypeScale } from "./typography";
- 
+
  type Colors = PluginTheme["colors"];
- 
+
 +/** How long a workspace waits for provider probes before opening on Codex anyway; Claude's can take several seconds. */
 +const DEFAULT_BOT_WAIT_MS = 15_000;
 +
@@ -651,7 +651,7 @@ index ebc4ed2..7aec50f 100644
 @@ -50,9 +59,10 @@ const SETUP_PROMPT =
  /** Autosave delay after the last edit in the settings panel. */
  const SAVE_DELAY_MS = 600;
- 
+
 -export function BotsSurface(props: PluginSurfaceProps) {
 +export function BotsSurface(props: PluginSurfaceProps & NativeChatSlot) {
    const { colors } = props.theme;
@@ -662,8 +662,8 @@ index ebc4ed2..7aec50f 100644
        <AvatarTheme dark={nativeTokens(colors).dark}>
 @@ -63,30 +73,31 @@ export function BotsSurface(props: PluginSurfaceProps) {
  }
- 
- 
+
+
 -function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfaceProps) {
 +function BotsSurfaceContent({ theme, layout, host, navigation, nativeChat, botWorkspace, workspaceBridge: WorkspaceBridge }: PluginSurfaceProps & NativeChatSlot) {
    const { colors } = theme;
@@ -678,7 +678,7 @@ index ebc4ed2..7aec50f 100644
    const exportBot = useRpc(exportBotRpc);
    const importBot = useRpc(importBotRpc);
    const importTeam = useRpc(importTeamRpc);
- 
+
 -  const [selection, setSelection] = useState<Selection | null>(null);
 +  const [selection, setSelection] = useState<(Selection & { draftId?: string }) | null>(botWorkspace ? { botId: "vibing-general", chatId: null } : null);
    const [panel, setPanel] = useState<{ open: boolean; section: SectionId | null }>({ open: false, section: null });
@@ -699,7 +699,7 @@ index ebc4ed2..7aec50f 100644
    const [uiOverride, setUiOverride] = useState<BotListUi | null>(null);
 @@ -132,6 +143,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    };
- 
+
    const patchBot = (botId: string, patch: Partial<Bot>) => {
 +    if (botId === CHIEF_BOT_ID) return;
 +    patch = chiefPersonalizationPatch(botId, patch);
@@ -707,7 +707,7 @@ index ebc4ed2..7aec50f 100644
        const base = current[botId] ?? (latest.current.status === "ready" ? latest.current.values.bots.find((bot) => bot.id === botId) : undefined);
        return base ? { ...current, [botId]: { ...base, ...patch, updatedAt: new Date().toISOString() } } : current;
 @@ -155,6 +168,8 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
- 
+
    /** Applies a patch to the saved bot and to any unsaved draft of it, so autosave can't undo it. */
    const updateBot = (botId: string, patch: Partial<Bot>, recordHistory = false) => {
 +    if (botId === CHIEF_BOT_ID) return Promise.resolve(false);
@@ -722,7 +722,7 @@ index ebc4ed2..7aec50f 100644
 -    if (intent?.kind === "new-bot") setCreating(true);
 +    if (intent?.kind === "new-bot") setCreating("new");
    }, []);
- 
+
 +  // Vibing's defaults: Codex and Claude bots (once, so deleting either sticks), and a minimum-width list.
 +  const seedingDefaults = useRef(false);
 +  // The bot a workspace opens on: Codex, or Claude when Codex can't run here or was deleted.
@@ -802,7 +802,7 @@ index ebc4ed2..7aec50f 100644
        updateUi((current) => ({ ...current, tab: tab ?? current.tab, collapsed: current.collapsed.filter((id) => id !== next.botId) }));
      }
    };
- 
+
 +  /** Opens a team tab with the chat to go back to there (chatForTab); phones stay on the bot list. */
 +  const openTeamTab = (tabId: string) => {
 +    updateUi((current) => ({ ...current, tab: tabId }));
@@ -828,7 +828,7 @@ index ebc4ed2..7aec50f 100644
      if (selection?.botId !== bot.id) select({ botId: bot.id, chatId: null });
      setPanel({ open: true, section });
 @@ -366,7 +456,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
- 
+
    const openBotMenu = (bot: Bot, anchor: LayoutRectangle, source: MenuSource) => {
      const botHost = resolveHost(bot.hostId);
 -    const chats = queryClient.getQueryData<PaseoAgent[]>(["paseo-bots", "chats", botHost.key, bot.id]) ?? [];
@@ -886,7 +886,7 @@ index ebc4ed2..7aec50f 100644
        }),
      });
    };
- 
+
 +  /** Archives or permanently deletes a chat, then moves selection off it and drops its pin. */
 +  const removeChat = async (bot: Bot, chat: PaseoAgent, context: ChatMenuContext, kind: "archive" | "delete") => {
 +    const botHost = resolveHost(bot.hostId);
@@ -998,12 +998,12 @@ index ebc4ed2..7aec50f 100644
        onTeamMap={() => setTeamMap(true)}
 @@ -537,7 +711,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
    );
- 
+
    const tabProps = openTab
 -    ? { colors, tabs, openTab, onTab: (tab: string) => updateUi((current) => ({ ...current, tab })), onTeamMenu: openTeamMenu, onNewTeam: () => setEditingTeam("new" as const) }
 +    ? { colors, tabs, openTab, onTab: openTeamTab, resolveHost, onTeamMenu: openTeamMenu, onNewTeam: () => setEditingTeam("new" as const) }
      : null;
- 
+
    const pane = teamMap ? (
 @@ -558,11 +732,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
@@ -1032,15 +1032,15 @@ index ebc4ed2..7aec50f 100644
            setPanelVersion((version) => version + 1);
            toast.show("Restored. Undo it from History if needed.", { variant: "success" });
          }}
--        onSetup={() => select({ botId: selectedBot.id, chatId: null, prompt: SETUP_PROMPT })}
-+        onSetup={() => select({ botId: selectedBot.id, chatId: null, prompt: SETUP_PROMPT, promptId: newMessageId() })}
+-        onSetup={() => select({ botId: selectedBot.id, chatId: null, prompt: SETUP_PROMPT, title: "Setup" })}
++        onSetup={() => select({ botId: selectedBot.id, chatId: null, prompt: SETUP_PROMPT, title: "Setup", promptId: newMessageId() })}
          onOpenChat={(chatId) => {
            select({ botId: selectedBot.id, chatId });
            // On phones the panel covers the chat.
 @@ -621,13 +798,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
      />
    ) : null;
- 
+
 +  // Waiting for the bots and the default choice keeps the workspace from restoring onto Codex first.
 +  const localBotIds = settings.status === "ready" && defaultBotId && !applyVibingDefaults(settings.values)
 +    ? allBots.filter(bot => bot.id !== CHIEF_BOT_ID && (!bot.hostId || bot.hostId === host.id)).map(bot => bot.id)
@@ -1052,7 +1052,7 @@ index ebc4ed2..7aec50f 100644
 -    return <View style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}>{libraryScreen}</View>;
 +    return <>{workspaceHeader}<View style={{ flex: 1, backgroundColor: colors.surface0, paddingBottom: keyboardHeight }}>{libraryScreen}</View></>;
    }
- 
+
    return (
      <>
 +    {workspaceHeader}
@@ -1087,7 +1087,7 @@ index ebc4ed2..7aec50f 100644
 @@ -721,17 +907,30 @@ function BotsSurfaceContent({ theme, layout, host, navigation }: PluginSurfacePr
          />
        ) : null}
- 
+
 -      {exporting ? <ExportDialog colors={colors} bot={exporting} onClose={() => setExporting(null)} /> : null}
 +      {renamingChat ? (
 +        <RenameDialog
@@ -1106,7 +1106,7 @@ index ebc4ed2..7aec50f 100644
      </>
    );
  }
- 
+
 -interface SelectedChatProps {
 +interface SelectedChatProps extends NativeChatSlot {
 +  onSelectChat(agentId: string | null, draftId?: string): void;
@@ -1121,7 +1121,7 @@ index ebc4ed2..7aec50f 100644
 @@ -743,9 +942,12 @@ interface SelectedChatProps {
    onStarted(chatId: string): void;
  }
- 
+
 -function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted }: SelectedChatProps) {
 +function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStarted, nativeChat, onSelectChat, botWorkspace }: SelectedChatProps) {
    const host = useBotHost(bot.hostId, localHost);
@@ -1134,8 +1134,8 @@ index ebc4ed2..7aec50f 100644
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
 @@ -754,15 +956,20 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
- 
-   const start = async (message: OutgoingMessage) => {
+
+   const start = async (message: OutgoingMessage, title?: string) => {
      if (!host.api) throw new Error(`${host.label} is offline.`);
 +    if (botWorkspace && !host.isLocal) throw new Error("Choose a local host for this worktree.");
      // The bot's folder holds its memory and skills even when it works elsewhere.
@@ -1156,7 +1156,7 @@ index ebc4ed2..7aec50f 100644
        library,
        ...(host.isLocal ? { agentId } : {}),
        plugin,
-@@ -773,13 +980,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
+@@ -774,13 +981,21 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
        attachments: message.attachments,
        clientMessageId: message.messageId,
      });
@@ -1172,7 +1172,7 @@ index ebc4ed2..7aec50f 100644
 +      .invalidateQueries({ queryKey: ["paseo-bots", "chats", host.key] })
 +      .finally(() => onStarted(id));
    };
- 
+
    // Keep the bot's workspace named after the bot.
    useEffect(() => {
 -    if (!host.api || bot.cwd || !bot.name.trim()) return;
@@ -1181,9 +1181,9 @@ index ebc4ed2..7aec50f 100644
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
 @@ -799,8 +1014,17 @@ function SelectedChat({ colors, bot, library, selection, localHost, panelOpen, l
-     // Runs once for the selection that carries the prompt.
-   }, [host.api]);
- 
+     start({ text: selection.prompt, messageId: newMessageId(), images: [], attachments: [] }, selection.title).catch((error: unknown) => toast.error(`Couldn't start: ${errorText(error)}`));
+   }, [host.api, selection]);
+
 +  if (!allowed) return <View style={{ flex: 1, padding: 16 }}>
 +    <Text style={{ color: colors.foregroundMuted }}>{!host.isLocal ? "This bot runs on another host. Choose a local host in bot settings to chat in this worktree." : chats.isLoading || chats.isFetching ? "Loading conversation…" : "This conversation is not in the current worktree."}</Text>
 +    <SettingsAction label="Bot settings" actionLabel="Open" onPress={onTogglePanel} />
@@ -1224,11 +1224,11 @@ index 7d1bf84..3004cf2 100644
 @@ -16,9 +16,13 @@ import { listenForFind } from "./web";
  import type { ChatState } from "./useChat";
  import { tooltip } from "./ui/Tooltip";
- 
+
 +import type { NativeChatSlot } from "./NativeChat";
 +
  type Colors = PluginTheme["colors"];
- 
+
 -export interface ChatPaneProps {
 +export interface ChatPaneProps extends NativeChatSlot {
 +  draftId?: string;
@@ -1247,7 +1247,7 @@ index 7d1bf84..3004cf2 100644
 +  /** Shows a session just imported into this bot. */
 +  onImported?(chatId: string): void;
  }
- 
+
  export interface OutgoingMessage {
 +  agentSettings?: ChatAgentSettings;
 +  inheritAgentSettings?: boolean;
@@ -1256,7 +1256,7 @@ index 7d1bf84..3004cf2 100644
    images: { data: string; mimeType: string }[];
    attachments: ReturnType<typeof toWire>["attachments"];
  }
- 
+
 -export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat }: ChatPaneProps) {
 +export function ChatPane({ colors, bot, host, chat, chatId, panelOpen, layout, keyboardOpen, typeVersion, onBack, onBotMenu, onTogglePanel, onStart, onOpenChat, onImported, nativeChat: NativeChat, onSelectChat, botWorkspace, draftId }: ChatPaneProps) {
    const running = chat.agent?.status === "running" || chat.agent?.status === "initializing";
@@ -1355,14 +1355,14 @@ index ea7654d..d8dbb97 100644
 +import { scopeBotChats } from "../shared/chat";
  import { BOT_LABEL } from "../shared/bot";
  import { paseoToolsState, type PaseoToolsConfig } from "../shared/paseo-tools";
- 
+
  export interface LocalHost {
    id: string;
    label: string;
 +  workspaceDirectory?: string;
 +  chatContext?: "live-design";
  }
- 
+
  export interface BotHost {
    api: PaseoApi | null;
 +  workspaceDirectory?: string;
@@ -1371,7 +1371,7 @@ index ea7654d..d8dbb97 100644
    key: string;
    label: string;
 @@ -23,15 +28,15 @@ type HostSummaries = ReturnType<typeof useHosts>;
- 
+
  function resolveHost(hostId: string | null, local: LocalHost, localApi: PaseoApi, hosts: HostSummaries): BotHost {
    if (!hostId || hostId === local.id) {
 -    return { api: localApi, key: local.id, label: local.label, isLocal: true, online: true };
@@ -1389,7 +1389,7 @@ index ea7654d..d8dbb97 100644
 +    return { api: null, key: hostId, label, isLocal: false, online: false, workspaceDirectory: local.workspaceDirectory, chatContext: local.chatContext };
    }
  }
- 
+
 @@ -44,7 +49,7 @@ export function useBotHost(hostId: string | null, local: LocalHost): BotHost {
    return useMemo(
      () => resolveHost(hostId, local, localApi, hosts),
@@ -1398,7 +1398,7 @@ index ea7654d..d8dbb97 100644
 +    [hostId, local.id, local.label, local.workspaceDirectory, local.chatContext, localApi, summary?.label, status],
    );
  }
- 
+
 @@ -60,6 +65,9 @@ export function useProviders(host: BotHost) {
      queryKey: ["paseo-bots", "providers", host.key],
      enabled: !!host.api,
@@ -1412,7 +1412,7 @@ index ea7654d..d8dbb97 100644
 @@ -92,22 +100,37 @@ export function useHostWorkspaces(host: BotHost) {
    });
  }
- 
+
 -export function useBotChats(host: BotHost, botId: string) {
 -  return useQuery({
 -    queryKey: ["paseo-bots", "chats", host.key, botId],
@@ -1448,7 +1448,7 @@ index ea7654d..d8dbb97 100644
 +    select: (agents: PaseoAgent[]) => !available ? [] : scopeBotChats(agents, { directory, isLocal: host.isLocal, chatContext: host.chatContext }, botId),
    });
  }
- 
+
 +export function useBotChats(host: BotHost, botId: string) {
 +  return useQuery(botChatsQuery(host, botId));
 +}
@@ -1509,9 +1509,9 @@ index 8938e61..b9b545a 100644
 @@ -69,7 +71,6 @@ const GROUPS: { label: string; sections: SectionEntry[] }[] = [
    },
  ];
- 
+
 -const SECTIONS = GROUPS.flatMap((group) => group.sections);
- 
+
  export interface PanelProps {
    colors: Colors;
 @@ -108,11 +109,18 @@ export function BotPanel(props: BotPanelProps) {
@@ -1529,14 +1529,14 @@ index 8938e61..b9b545a 100644
 +  const open = section ? sections.find((entry) => entry.id === section && !entry.modal) : undefined;
    const [sheet, setSheet] = useState<SectionEntry | null>(null);
    const choose = (entry: SectionEntry) => (entry.modal ? setSheet(entry) : onSection(entry.id));
- 
+
 +  if (bot.id === CHIEF_BOT_ID) return null;
 +
    if (open) {
      return (
        <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
 @@ -126,7 +134,7 @@ export function BotPanel(props: BotPanelProps) {
- 
+
    const needle = query.trim().toLowerCase();
    const matches = needle
 -    ? SECTIONS.flatMap((entry) => {
@@ -1555,7 +1555,7 @@ index 8938e61..b9b545a 100644
                {group.sections.map((entry) => (
 @@ -171,6 +179,7 @@ export function BotPanel(props: BotPanelProps) {
  }
- 
+
  function renderSection(id: SectionId, props: PanelProps): ReactNode {
 +  if (!botSectionAllowed(props.bot.id, id)) return null;
    switch (id) {
@@ -1617,7 +1617,7 @@ index 1320722..811ee49 100644
 --- a/client/panel/RoutinesSection.tsx
 +++ b/client/panel/RoutinesSection.tsx
 @@ -71,6 +71,7 @@ function runTime(at: Date, now: Date): string {
- 
+
  export function RoutinesSection({ colors, bot, localHost, onPatch, flush, onOpenChat }: PanelProps) {
    const host = useBotHost(bot.hostId, localHost);
 +  const chats = useBotChats(host, bot.id);
@@ -1640,7 +1640,7 @@ index 1320722..811ee49 100644
 +    .filter(({run}) => !localHost.workspaceDirectory || chats.data?.some(chat => chat.id === run.agentId))
      .sort((a, b) => Date.parse(b.run.startedAt) - Date.parse(a.run.startedAt))
      .slice(0, RECENT);
- 
+
 @@ -348,7 +350,7 @@ function RoutineForm({ colors, bot, host, routine, onCancel, onSubmit }: Routine
                }}
              />
@@ -1652,7 +1652,7 @@ index 1320722..811ee49 100644
                  key="once"
 @@ -397,7 +399,7 @@ function RoutineForm({ colors, bot, host, routine, onCancel, onSubmit }: Routine
  }
- 
+
  /** The routine's webhook URL with Copy, and New URL to stop the old one working. */
 -function WebhookRows({ colors, routineId }: { colors: Colors; routineId: string }) {
 +function WebhookRows({ routineId }: { routineId: string }) {
@@ -1664,7 +1664,7 @@ index 8600f6d..1ba3ca7 100644
 --- a/client/paseo.ts
 +++ b/client/paseo.ts
 @@ -6,6 +6,8 @@ import type { getPaseoClient } from "@getpaseo/plugin/client";
- 
+
  export type PaseoApi = ReturnType<typeof getPaseoClient>;
  type PaseoAgentHandle = ReturnType<PaseoApi["agents"]["ref"]>;
 +/** Vibing hosts add `delete()` and `rename()`; older hosts lack them. */
@@ -1677,7 +1677,7 @@ index e3621c0..5ffb57b 100644
 --- a/client/teams/TeamMap.tsx
 +++ b/client/teams/TeamMap.tsx
 @@ -51,7 +51,7 @@ export function TeamMap({
- 
+
    return (
      <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
 -      <View style={{ height: compact ? 56 : 36, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: compact ? 4 : 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
@@ -1702,7 +1702,7 @@ index cbd8ce5..6e5457e 100644
  import { contextMenuProps, measureAnchor, useMenu } from "../ui/Menu";
  import { tooltip } from "../ui/Tooltip";
 +import { useTabBuckets } from "./tabStatus";
- 
+
  // Team tabs as Paseo's workspace tabs: a row of tab chips over the screen on desktop
  // (workspace-desktop-tabs-row.tsx), and on phones a switcher row that opens the list
 @@ -23,25 +27,36 @@ interface TeamTabsProps {
@@ -1711,12 +1711,12 @@ index cbd8ce5..6e5457e 100644
    onNewTeam(): void;
 +  resolveHost(hostId: string | null): BotHost;
  }
- 
+
  function tabLabel(tab: TeamTab): string {
 -  return tab.group ? tab.group.name || "Untitled team" : "Other bots";
 +  return tab.group ? tab.group.name || "Untitled team" : "All bots";
  }
- 
+
 -/** The tab's icon: the team's logo, or a bot for the bots without a team. */
 -function TabIcon({ colors, tab, highlighted }: { colors: Colors; tab: TeamTab; highlighted: boolean }) {
 -  return tab.group ? <TeamLogo group={tab.group} size={16} dark={nativeTokens(colors).dark} /> : <Icon name="Bot" size={14} color={highlighted ? colors.foreground : colors.foregroundMuted} />;
@@ -1733,7 +1733,7 @@ index cbd8ce5..6e5457e 100644
 +    </View>
 +  );
  }
- 
+
 -/** The desktop row: 36 high over a divider, 28pt chips 96 to 160 wide, then an inline + for a new team. */
 -export function TeamTabsRow({ colors, tabs, openTab, onTab, onTeamMenu, onNewTeam }: TeamTabsProps) {
 +/** The desktop row: 40 high over a divider (matching Vibing's vertical feature panel header), 28pt chips 96 to 160 wide, then an inline + for a new team. */
@@ -1752,7 +1752,7 @@ index cbd8ce5..6e5457e 100644
        <View style={{ paddingHorizontal: 4 }}>
 @@ -61,14 +76,15 @@ export function TeamTabsRow({ colors, tabs, openTab, onTab, onTeamMenu, onNewTea
  }
- 
+
  /** A tab chip: muted until hovered (surface1) or open (surface2), with the team's menu on right-click. */
 -function TabChip({ colors, tab, active, onPress, onMenu }: { colors: Colors; tab: TeamTab; active: boolean; onPress(): void; onMenu?: (anchor: LayoutRectangle) => void }) {
 +function TabChip({ colors, tab, bucket, active, onPress, onMenu }: { colors: Colors; tab: TeamTab; bucket: ChatBucket | null | undefined; active: boolean; onPress(): void; onMenu?: (anchor: LayoutRectangle) => void }) {
@@ -1782,7 +1782,7 @@ index cbd8ce5..6e5457e 100644
      </Pressable>
 @@ -90,8 +106,9 @@ function TabChip({ colors, tab, active, onPress, onMenu }: { colors: Colors; tab
  }
- 
+
  /** The phone switcher: the open tab across the top with a chevron; the tabs open as a sheet. */
 -export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam }: TeamTabsProps) {
 +export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam, resolveHost }: TeamTabsProps) {
@@ -1903,7 +1903,7 @@ index 8d9b7c5..0748a12 100644
 @@ -109,6 +111,24 @@ export interface FileHandle {
  /** Native has no file picker available to plugins; web uses a hidden file input like Paseo's own composer. */
  export const canPickFiles = web;
- 
+
 +/** Download the same portable JSON accepted by the import dialog. */
 +export function downloadBotFile(name: string, json: string): void {
 +  if (!web) return;
@@ -1950,7 +1950,7 @@ index fdd8f4c..ec73cf1 100644
 +  server.handle(chiefHandoffRpc, (input, context) => { host.attach(context.paseo); return chief.handoff(input); });
    // Every handler and hook receives the plugin's Paseo API; features that start chats need it.
    const attach = ({ paseo }: PluginHandlerContext) => host.attach(paseo);
- 
+
 @@ -173,7 +179,7 @@ export default function contribute(server: PluginServerContext) {
      const shell = shellCommand(request, agent.cwd);
      if (!shell) return;
@@ -1972,14 +1972,14 @@ index 22b4d53..32efc71 100644
  import type { BotsHost } from "./host";
 @@ -9,17 +11,23 @@ import type { RoutineScheduler } from "./scheduler";
  // changes, and the daily log gets a line saying what the bot did.
- 
+
  export async function turnStarted(host: BotsHost, journal: MemoryJournal, { agent }: PluginLifecycleEvents["agent.turn_started"]): Promise<void> {
 -  const botId = await host.botIdOf(agent.id);
 -  if (botId) await journal.begin(botId);
 +  const chat = await host.chatOf(agent.id);
 +  if (chat && !isChiefReviewChat(chat)) await journal.begin(chat.botId);
  }
- 
+
  export async function turnEnded(host: BotsHost, journal: MemoryJournal, scheduler: Pick<RoutineScheduler, "finished">, { agent, outcome, timeline }: PluginLifecycleEvents["agent.turn_ended"]): Promise<void> {
    const chat = await host.chatOf(agent.id);
 -  if (!chat) return;
@@ -2011,7 +2011,7 @@ index eb3af25..8254186 100644
  import { ensureBotHome } from "./bot-home";
  import type { BotsHost } from "./host";
 @@ -8,22 +9,25 @@ import type { Relay } from "./relay";
- 
+
  /**
   * Starts a chat for a bot on this host, the way the app does: its system
 - * prompt, its folder, and the plugin's tools and connected apps. Routines and
@@ -2242,7 +2242,7 @@ index dbcea96..5e2dcf6 100644
 @@ -32,6 +34,11 @@ function validateRule(command: string, cwd: string): void {
    if (!isAbsolute(cwd) || cwd.split(/[\\/]/).includes("..")) throw new Error("The folder must be an absolute path.");
  }
- 
+
 +/** Host-managed conversations never inherit a Bot's saved command approvals. */
 +export function canAutoAllowCommands(chat: { botId: string; labels: Readonly<Record<string, string>> }): boolean {
 +  return chat.botId !== CHIEF_BOT_ID && !isChiefReviewChat(chat);
@@ -2250,7 +2250,7 @@ index dbcea96..5e2dcf6 100644
 +
  export class CommandAllowlist {
    private queue: Promise<unknown> = Promise.resolve();
- 
+
 diff --git a/server/host.ts b/server/host.ts
 index c1e0a69..52db651 100644
 --- a/server/host.ts
@@ -2262,7 +2262,7 @@ index c1e0a69..52db651 100644
  import { BOT_LABEL, EMPTY_LIBRARY, type Bot, type BotSettingsValues, type botSettings, type Library } from "../shared/bot";
 +import { CHIEF_BOT_ID, managedChiefBot } from "../shared/vibing-defaults";
  import { ROUTINE_LABEL } from "../shared/chat";
- 
+
  // What every server feature needs: the saved settings (read-only on the
 @@ -47,11 +49,12 @@ export class BotsHost {
    }
@@ -2271,13 +2271,13 @@ index c1e0a69..52db651 100644
 -    return (await this.values())?.bots ?? [];
 +    return userBots((await this.values())?.bots ?? []);
    }
- 
+
    async bot(botId: string): Promise<Bot | null> {
 -    return (await this.bots()).find((bot) => bot.id === botId) ?? null;
 +    if (botId === CHIEF_BOT_ID) return managedChiefBot();
 +    return (await this.bots()).find(bot => bot.id === botId) ?? null;
    }
- 
+
    private readonly chatBots = new Map<string, string | null>();
 diff --git a/server/relay.ts b/server/relay.ts
 index d2169a6..c169787 100644
@@ -2289,7 +2289,7 @@ index d2169a6..c169787 100644
  import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
  import { checkAppCall, type AppLimit } from "../shared/apps";
 @@ -122,6 +123,7 @@ export class Relay {
- 
+
    /** The connected-apps server for a bot's chats, or null when connected apps aren't set up. */
    async mountApps(botId: string): Promise<McpServerConfig | null> {
 +    assertOrdinaryBot(botId);
@@ -2297,7 +2297,7 @@ index d2169a6..c169787 100644
      if (!state.apiKey) return null;
      const port = await this.start();
 @@ -130,6 +132,7 @@ export class Relay {
- 
+
    /** The plugin's tools for one chat. */
    async mountTools(botId: string, agentId: string): Promise<McpServerConfig> {
 +    assertOrdinaryBot(botId);
@@ -2306,7 +2306,7 @@ index d2169a6..c169787 100644
      return { type: "http", url: `http://127.0.0.1:${port}/bots/${botId}/${agentId}`, headers: { Authorization: `Bearer ${toolsToken(state.secret, botId, agentId)}` } };
 @@ -168,6 +171,7 @@ export class Relay {
    }
- 
+
    private async handleTools(request: IncomingMessage, response: ServerResponse, botId: string, agentId: string) {
 +    assertOrdinaryBot(botId);
      const state = await readState();
@@ -2314,7 +2314,7 @@ index d2169a6..c169787 100644
        return json(response, 401, { error: "unauthorized" });
 @@ -184,6 +188,7 @@ export class Relay {
    }
- 
+
    private async handleApps(request: IncomingMessage, response: ServerResponse, botId: string) {
 +    assertOrdinaryBot(botId);
      const state = await readState();
@@ -2331,7 +2331,7 @@ index 44c55c5..71ffd1a 100644
  import type { IncomingMessage, ServerResponse } from "node:http";
 @@ -186,6 +187,7 @@ export class RoutineScheduler {
    }
- 
+
    private async find(botId: string, routineId: string): Promise<{ bot: Bot; routine: Routine }> {
 +    assertOrdinaryBot(botId);
      const bot = await this.host.bot(botId);
@@ -2356,17 +2356,17 @@ index 18d355d..c7a7662 100644
    const fresh = new Set<string>();
 @@ -191,9 +193,8 @@ export async function importBot({ botId, json }: { botId: string; json: string }
  // ---------------------------------------------------------------- team files
- 
+
  const TEAM_FORMAT = "paseo-bots-team";
 -const MAX_TEAM = 50;
- 
+
 -const TeamSchema = z.object({ format: z.literal(TEAM_FORMAT), version: z.literal(1), bots: z.array(z.unknown()).min(1).max(MAX_TEAM), teams: z.array(TeamFileTeamSchema).max(MAX_TEAM).default([]) });
 +const TeamSchema = z.object({ format: z.literal(TEAM_FORMAT), version: z.literal(1), bots: z.array(z.unknown()).min(1), teams: z.array(TeamFileTeamSchema).default([]) });
- 
+
  export function isTeamFile(json: string): boolean {
    try {
 @@ -216,10 +217,9 @@ function teamsInFile(bots: readonly Bot[], groups: readonly BotGroup[]): TeamFil
- 
+
  /** Several bots in one file, each as its own bot export, and the teams they're on. */
  export async function exportTeam({ bots, groups, includeMemory }: { bots: Bot[]; groups: BotGroup[]; includeMemory: boolean }, library: Library) {
 -  const shared = bots.slice(0, MAX_TEAM);
@@ -2376,7 +2376,7 @@ index 18d355d..c7a7662 100644
 +  for (const bot of bots) entries.push(JSON.parse((await exportBot({ bot, includeMemory }, library)).json));
 +  return { json: JSON.stringify({ format: TEAM_FORMAT, version: 1, bots: entries, teams: teamsInFile(bots, groups) }, null, 2) };
  }
- 
+
  /** Imports every bot of a team file (or a single bot file) as new bots, with its teams. */
 diff --git a/server/tools/bots.ts b/server/tools/bots.ts
 index 3c95809..d9de7ab 100644
@@ -2392,11 +2392,11 @@ index 3c95809..d9de7ab 100644
 +import { botDataPath } from "../bot-home";
  import { startChat } from "../chats";
  import { defineTool, type ToolCaller } from "./mcp";
- 
+
 @@ -69,17 +72,39 @@ function describeChat(chat: ChatState, who: string, chatId: string): string {
    }
  }
- 
+
 -/** Bots answering another bot don't ask further, so requests can't loop. */
 +/**
 + * Bots answering another bot don't ask further, so requests can't loop. Chief's handoffs
@@ -2428,7 +2428,7 @@ index 3c95809..d9de7ab 100644
 +  const context = agent.labels?.[CHAT_CONTEXT_LABEL];
 +  return { placement, agentSettings, labels: placement && context ? { [CHAT_CONTEXT_LABEL]: context } : {} };
  }
- 
+
  export const askBot = defineTool({
    name: "ask_bot",
    description:
@@ -2483,7 +2483,7 @@ index 8c4ecdd..bc522d3 100644
 +import { LIST_WIDTH } from "./layout";
  import { PASEO_MCP_NAME, PASEO_TOOLS_PROMPT } from "./paseo-tools";
  import { renderPlaybooks } from "./playbooks";
- 
+
 @@ -205,10 +206,10 @@ export const BotListUiSchema = z.object({
    chatOrder: z.record(z.string(), z.array(z.string())).default({}),
    chatSort: z.enum(["manual", "activity"]).default("manual"),
@@ -2551,7 +2551,7 @@ index cd27e0d..b797df1 100644
  import type { WireAttachment } from "./attachments";
 +import { z } from "zod";
  import { BOT_LABEL, buildAgentConfig, defaultModelId, type Bot, type Library, type PluginServers } from "./bot";
- 
+
  /** Label on chats started by a routine, carrying the routine id. */
  export const ROUTINE_LABEL = "paseo-bots.routine";
 +/** Separate entry surfaces share bot configuration, but not conversation lists. */
@@ -2560,7 +2560,7 @@ index cd27e0d..b797df1 100644
 +export const CHAT_RUNTIME_LABEL = "paseo-bots.runtime";
  /** Longest title Paseo accepts (protocol/agent-title-limits.ts). */
  const MAX_TITLE_CHARS = 200;
- 
+
  /** Older chats were titled "[Bot Name] …"; places grouped by bot show them without the prefix. */
 +/** Paseo's cap on an explicit agent title (`MAX_EXPLICIT_AGENT_TITLE_CHARS`). */
 +export const MAX_CHAT_TITLE_CHARS = 200;
@@ -2568,7 +2568,7 @@ index cd27e0d..b797df1 100644
  export function displayTitle(title: string | null | undefined): string {
    return (title ?? "").replace(/^\[[^\]]*\]\s*/, "") || "New chat";
  }
- 
+
  /** Where a bot's chats live. */
  export interface BotPlacement {
 +  workspaceId?: string;
@@ -2576,9 +2576,9 @@ index cd27e0d..b797df1 100644
    path: string;
    /** Folder of the shared Bots project, or null when the bot has its own working folder. */
 @@ -21,6 +31,29 @@ export interface BotPlacement {
- 
+
  const normalize = (path: string | null | undefined) => (path ?? "").replace(/\/+$/, "");
- 
+
 +/** Embedded workspaces also expose pre-Bots conversations through the default (Codex) bot. */
 +export function isWorkspaceBotChat(agent: { cwd?: string; labels?: Record<string, string> }, directory: string, botId: string, context = "workspace"): boolean {
 +  return normalize(agent.cwd) === normalize(directory) &&
@@ -2604,11 +2604,11 @@ index cd27e0d..b797df1 100644
 +
  // The part of Paseo's API these helpers use. Shared code may only import the plugin SDK's
  // root, so the app and the server pass their Paseo API in, and it's checked against this.
- 
+
 @@ -107,8 +140,40 @@ export async function syncBotWorkspaceTitle(api: ChatApi, bot: Bot, placement: B
    if (mine && mine.title !== bot.name) await api.workspaces.ref(mine).setTitle(bot.name);
  }
- 
+
 +export interface ChatAgentSettings extends Pick<Bot, "provider" | "model" | "modeId" | "thinkingOptionId"> {
 +  featureValues?: Record<string, unknown>;
 +}
@@ -2749,18 +2749,18 @@ index 174863a..a8e4aad 100644
 @@ -1,4 +1,5 @@
  import type { Bot, BotGroup, TeamLogo } from "./bot";
 +import { aggregateBuckets, chatBucket, type ChatBucket, type ChatBucketInput } from "./sidebar";
- 
+
  // OpenMausBot's teams: a bot belongs to at most one team, every member gets the
  // team's roster and shared instructions in its prompt, and the team's Chief of
 @@ -77,11 +78,11 @@ export function withoutBot(groups: readonly BotGroup[], botId: string, now: stri
- 
+
  // ------------------------------------------------------------------ tabs
- 
+
 -/** The tab of the bots that aren't on a team. */
 -export const OTHER_BOTS_TAB = "other";
 +/** The first tab, listing every bot, teams' included, so they can all be seen at a glance. */
 +export const ALL_BOTS_TAB = "all";
- 
+
  export interface TeamTab {
 -  /** A team id, or OTHER_BOTS_TAB. */
 +  /** A team id, or ALL_BOTS_TAB. */
@@ -2769,7 +2769,7 @@ index 174863a..a8e4aad 100644
    /** The listed bots on it; a team's lead comes first. */
 @@ -89,23 +90,54 @@ export interface TeamTab {
  }
- 
+
  /**
 - * With teams the bot list splits into tabs: one per team, then "Other bots"
 - * when some listed bots have no team. Without teams there are none.
@@ -2789,7 +2789,7 @@ index 174863a..a8e4aad 100644
 -  return others.length > 0 ? [...tabs, { id: OTHER_BOTS_TAB, group: null, bots: others }] : tabs;
 +  return [{ id: ALL_BOTS_TAB, group: null, bots: [...bots] }, ...tabs];
  }
- 
+
 -/** The tab a bot is listed under. */
 -export function tabOf(botId: string, groups: readonly BotGroup[]): string {
 -  return teamOf(botId, groups)?.id ?? OTHER_BOTS_TAB;
@@ -2881,7 +2881,7 @@ index c54be3b..0d69734 100644
 +  input: z.object({ bots: z.array(BotSchema).min(1), groups: z.array(BotGroupSchema).default([]), includeMemory: z.boolean() }),
    output: z.object({ json: z.string() }),
  });
- 
+
 @@ -386,3 +386,30 @@ export const commandRemoveRpc = defineRpc({
    input: z.object({ botId: BotId, id: z.string() }),
    output: z.object({ ok: z.boolean() }),
@@ -3119,7 +3119,7 @@ index 58b7d32..ee8df2c 100644
 @@ -134,6 +134,64 @@ describe("memory journal, daily log and search_chats", () => {
      expect((await journal.list("bot-j")).filter((entry) => entry.via === "undo")).toHaveLength(2);
    });
- 
+
 +  it("excludes review workers from journal begin/end and target Bot daily logs", async () => {
 +    const { turnStarted, turnEnded } = await import("../server/activity");
 +    const { MemoryJournal } = await import("../server/journal");
@@ -3188,7 +3188,7 @@ index 9e592cd..75845a1 100644
 @@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
  import { buildAgentConfig, EMPTY_LIBRARY } from "../shared/bot";
  import { fakeHost, makeBot } from "./helpers";
- 
+
 -const started: { botId: string; prompt: string; title: string; labels: Record<string, string> }[] = [];
 +const started: { botId: string; prompt: string; title: string; labels: Record<string, string>; placement?: unknown; agentSettings?: unknown; inheritAgentSettings?: boolean }[] = [];
  vi.mock("../server/chats", () => ({
@@ -3204,7 +3204,7 @@ index 9e592cd..75845a1 100644
 +  cwd?: string;
 +  workspaceId?: string;
  }
- 
+
  function fakePaseo(chats: Record<string, FakeChat>) {
 @@ -24,7 +26,7 @@ function fakePaseo(chats: Record<string, FakeChat>) {
        ref: (id: string) => ({
@@ -3222,7 +3222,7 @@ index 9e592cd..75845a1 100644
 +    expect(started.at(-1)!.placement).toBeUndefined();
      expect(await askBot.run({ bot: "bot-inbox", message: "Later", wait: false }, caller)).toBe("Asked Inbox in chat chat-new. Use check_chat with that id for the answer.");
      await expect(askBot.run({ bot: "Old", message: "x" }, caller)).rejects.toThrow('There\'s no other bot called "Old". Ask one of: Inbox.');
- 
+
 @@ -70,9 +73,39 @@ describe("asking other bots", () => {
      const asked = fakeHost([scout]);
      asked.attach(fakePaseo(chats));
@@ -3234,7 +3234,7 @@ index 9e592cd..75845a1 100644
 +    expect(await askBot.available!({ ...caller, host: handedOff })).toBe(true);
      expect(await askBot.available!({ ...caller, bot: { ...scout, contactBots: "off" } })).toBe(false);
    });
- 
+
 +  it("asks in the asking chat's workspace and chat context", async () => {
 +    const { askBot, ASKED_BY_LABEL } = await import("../server/tools/bots");
 +    const scout = makeBot({ id: "bot-scout", name: "Scout", cwd: "/bots/scout" });
@@ -3266,7 +3266,7 @@ index 9e592cd..75845a1 100644
 @@ -94,6 +127,43 @@ describe("asking other bots", () => {
      await expect(checkChat.run({ chat_id: "nope" }, caller)).rejects.toThrow("no chat with that id");
    });
- 
+
 +  it("inherits an explicit conversation runtime in both worktrees and the lead's own folder", async () => {
 +    const { askBot } = await import("../server/tools/bots");
 +    const runtime = { provider: "codex", model: "gpt-fixed", modeId: "full-access", thinkingOptionId: "high", featureValues: { planMode: true } };
@@ -3392,7 +3392,7 @@ index 9e592cd..75845a1 100644
 +});
 diff --git a/tests/chat-menu.test.ts b/tests/chat-menu.test.ts
 new file mode 100644
-index 0000000..52e1ad1
+index 0000000..e5e18f6
 --- /dev/null
 +++ b/tests/chat-menu.test.ts
 @@ -0,0 +1,45 @@
@@ -3433,12 +3433,12 @@ index 0000000..52e1ad1
 +});
 +
 +describe("managed Chief menu", () => {
-+  it("offers personalization without ordinary lifecycle or export actions", async () => {
++  it("hides all actions for the source-owned Chief", async () => {
 +    const { botMenuEntries } = await import("../client/BotDialogs");
 +    const { managedChiefBot } = await import("../shared/vibing-defaults");
 +    const action = vi.fn();
 +    const entries = botMenuEntries({ bot: managedChiefBot(), onOpenSettings: action, onTogglePin: action, onRename: action, onDuplicate: async () => {}, onExport: action, onCopyId: action, onSaveAsPreset: action, onToggleArchive: action, onDeleteAllChats: async () => {}, onDelete: async () => {} });
-+    expect(entries.map(entry => "label" in entry ? entry.label : "")).toEqual(["Open bot settings", "Rename bot", "Copy bot ID"]);
++    expect(entries).toEqual([]);
 +  });
 +});
 diff --git a/tests/chief.test.ts b/tests/chief.test.ts
@@ -3621,7 +3621,7 @@ index b476dd5..8e4f0bc 100644
 @@ -17,6 +17,14 @@ describe("allowed commands", () => {
      await rm(home, { recursive: true, force: true });
    });
- 
+
 +  it("does not auto-approve saved commands for Chief or review workers", async () => {
 +    const { canAutoAllowCommands } = await import("../server/commands");
 +    expect(canAutoAllowCommands({ botId: "target-bot", labels: {} })).toBe(true);
@@ -3790,11 +3790,11 @@ index a9ec359..540e302 100644
 +import { ALL_BOTS_TAB, chatForTab, groupBots, tabBuckets, saveTeam, tabsOf, teamLogoOf, teamOf, teamPrompt, teamTabs, withoutBot } from "../shared/groups";
  import { LOGO_SIZE, MOTIF_NAMES, teamLogo, type TeamLogoImage } from "../shared/team-logo";
  import { makeBot } from "./helpers";
- 
+
 @@ -47,19 +47,16 @@ describe("team tabs", () => {
      expect(teamTabs([], bots)).toEqual([]);
    });
- 
+
 -  it("gives each team a tab, lead first, then the bots without a team", () => {
 +  it("lists every bot on All bots first, then each team with its lead first", () => {
      const listed = bots.filter((bot) => !bot.archived);
@@ -3815,7 +3815,7 @@ index a9ec359..540e302 100644
 +    expect(tabsOf("solo", [team()])).toEqual([ALL_BOTS_TAB]);
    });
  });
- 
+
 @@ -92,3 +89,41 @@ describe("team logos", () => {
      }
    });
@@ -3931,7 +3931,7 @@ index 86b113a..eccaeea 100644
 @@ -56,6 +56,54 @@ describe("the routine scheduler", () => {
      await rm(home, { recursive: true, force: true });
    });
- 
+
 +  it("runs all delegated members on the frozen lead model and leaves later routine defaults alone", async () => {
 +    const { askBot } = await import("../server/tools/bots");
 +    const { startBotChat, CHAT_RUNTIME_LABEL } = await import("../shared/chat");
@@ -4166,13 +4166,13 @@ index 367000b..2b80bea 100644
  import { botSettings, BotListUiSchema, DEFAULT_BOT_LIST_UI } from "../shared/bot";
 -import { aggregateBuckets, applyStoredOrdering, chatBucket, moveKey, orderChats } from "../shared/sidebar";
 +import { aggregateBuckets, applyStoredOrdering, chatAfterRemoval, chatBucket, moveKey, orderChats } from "../shared/sidebar";
- 
+
  describe("chatBucket", () => {
    const base = { status: "idle", pendingPermissions: [], requiresAttention: false, attentionReason: null };
 @@ -69,11 +69,20 @@ describe("moveKey", () => {
    });
  });
- 
+
 +describe("chatAfterRemoval", () => {
 +  it("prefers the chat below, then the one above, then nothing", () => {
 +    expect(chatAfterRemoval(["a", "b", "c"], "b")).toBe("c");
@@ -4189,7 +4189,7 @@ index 367000b..2b80bea 100644
 -    expect(DEFAULT_BOT_LIST_UI).toEqual({ collapsed: [], pinnedCollapsed: false, pinnedChats: [], chatOrder: {}, chatSort: "manual", showArchived: false, tab: null, listWidth: 320, panelWidth: 320 });
 +    expect(DEFAULT_BOT_LIST_UI).toEqual({ collapsed: [], pinnedCollapsed: false, pinnedChats: [], chatOrder: {}, chatSort: "manual", showArchived: false, tab: null, listWidth: 200, panelWidth: 320 });
    });
- 
+
    it("rejects an unknown sort", () => {
 diff --git a/tests/vibing-defaults.test.ts b/tests/vibing-defaults.test.ts
 new file mode 100644

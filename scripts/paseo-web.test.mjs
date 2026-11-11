@@ -375,73 +375,68 @@ for (const offered of [["beautiful-chat"], ["beautiful-chat", "paseo-chat-polish
   });
 }
 
-test("the retired Quick Prompts copy Vibing installed is removed once; one from elsewhere stays", async () => {
-  const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
-  const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
-  try {
-    const { home, sourceRoot, configPath } = communityHome(root, ["genui"]);
-    const ours = path.join(home, "installed-plugins", "paseo-quick-prompts");
-    mkdirSync(ours, { recursive: true });
-    writeFileSync(
-      path.join(ours, "paseo-plugin.json"),
-      JSON.stringify({ id: "paseo-quick-prompts" }),
-    );
-    writeFileSync(
-      configPath,
-      JSON.stringify({
-        version: 1,
-        plugins: {
-          "paseo-quick-prompts": {
-            source: "directory",
-            path: ours,
-            enabled: true,
+for (const retired of ["paseo-quick-prompts", "paseo-doc-viewer"])
+  test(`the retired ${retired} copy Vibing installed is removed once; one from elsewhere stays`, async () => {
+    const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");
+    const root = mkdtempSync(path.join(os.tmpdir(), "paseo-installed-plugins-"));
+    try {
+      const { home, sourceRoot, configPath } = communityHome(root, ["genui"]);
+      const ours = path.join(home, "installed-plugins", retired);
+      mkdirSync(ours, { recursive: true });
+      writeFileSync(path.join(ours, "paseo-plugin.json"), JSON.stringify({ id: retired }));
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          version: 1,
+          plugins: {
+            [retired]: {
+              source: "directory",
+              path: ours,
+              enabled: true,
+            },
           },
-        },
-      }),
-    );
-    writeFileSync(
-      path.join(home, ".vibing-community-plugins.json"),
-      '["genui","paseo-quick-prompts"]\n',
-    );
-    prepareCommunityPlugins({
-      home,
-      sourceRoot,
-      readPersistedConfig,
-      savePersistedConfig,
-    });
-    const config = JSON.parse(readFileSync(configPath, "utf8"));
-    assert.equal(config.plugins["paseo-quick-prompts"], undefined);
-    assert.ok(!existsSync(ours));
+        }),
+      );
+      writeFileSync(
+        path.join(home, ".vibing-community-plugins.json"),
+        JSON.stringify(["genui", retired]),
+      );
+      prepareCommunityPlugins({
+        home,
+        sourceRoot,
+        readPersistedConfig,
+        savePersistedConfig,
+      });
+      const config = JSON.parse(readFileSync(configPath, "utf8"));
+      assert.equal(config.plugins[retired], undefined);
+      assert.ok(!existsSync(ours));
 
-    // A copy the user installed from elsewhere is theirs; Vibing's folder is still dropped.
-    const own = {
-      source: "directory",
-      path: "/elsewhere/paseo-quick-prompts",
-      enabled: true,
-    };
-    mkdirSync(ours, { recursive: true });
-    writeFileSync(
-      configPath,
-      JSON.stringify({
-        version: 1,
-        plugins: { ...config.plugins, "paseo-quick-prompts": own },
-      }),
-    );
-    prepareCommunityPlugins({
-      home,
-      sourceRoot,
-      readPersistedConfig,
-      savePersistedConfig,
-    });
-    assert.deepEqual(
-      JSON.parse(readFileSync(configPath, "utf8")).plugins["paseo-quick-prompts"],
-      own,
-    );
-    assert.ok(existsSync(ours));
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+      // A copy the user installed from elsewhere is theirs; Vibing's folder is still dropped.
+      const own = {
+        source: "directory",
+        path: `/elsewhere/${retired}`,
+        enabled: true,
+      };
+      mkdirSync(ours, { recursive: true });
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          version: 1,
+          plugins: { ...config.plugins, [retired]: own },
+        }),
+      );
+      prepareCommunityPlugins({
+        home,
+        sourceRoot,
+        readPersistedConfig,
+        savePersistedConfig,
+      });
+      assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")).plugins[retired], own);
+      assert.ok(existsSync(ours));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 
 test("a Beautiful Chat installed from elsewhere is left alone", async () => {
   const { prepareCommunityPlugins } = await import("./paseo-web-plugins.mjs");

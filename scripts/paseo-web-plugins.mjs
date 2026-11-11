@@ -16,7 +16,6 @@ import path from "node:path";
 export const communityPluginIds = [
   "paseo-chat-polish",
   "annotations",
-  "paseo-doc-viewer",
   "shell-yeah",
   "paseo-recap",
   "genui",
@@ -24,7 +23,7 @@ export const communityPluginIds = [
 
 // Addons Vibing no longer ships. The copy Vibing installed is dropped once on the next start; a copy
 // installed from elsewhere stays. (Beautiful Chat is retired separately above: it has a replacement.)
-const REMOVED_PLUGINS = ["paseo-quick-prompts", "paseo-sidechat"];
+const REMOVED_PLUGINS = ["paseo-quick-prompts", "paseo-sidechat", "paseo-doc-viewer"];
 
 // Chat Polish replaced Beautiful Chat as the bundled chat restyler. The Beautiful Chat copy Vibing
 // installed is swapped for Chat Polish once, keeping its enabled state; one installed from elsewhere stays.
