@@ -37,6 +37,7 @@ const NetworkPolicySchema = z
 // Codex config reference, maintained against Codex CLI 0.143+.
 export const CodexProviderOptionsSchema = z
   .object({
+    restrictToConfiguredMcp: z.boolean().optional(),
     // Composer controls, not Codex config: the provider reads them and keeps them out of `config`.
     service_tier: z.string().optional(),
     plan_mode: z.boolean().optional(),
@@ -68,7 +69,54 @@ export type CodexProviderOptions = z.infer<typeof CodexProviderOptionsSchema>;
 export function applyCodexToolPolicy(
   config: Record<string, unknown>,
   toolPolicy: ToolPolicy | undefined,
+  nativeConfig: Record<string, unknown> = {},
 ): Record<string, unknown> {
+  if (config.restrictToConfiguredMcp === true) {
+    const { restrictToConfiguredMcp: _restricted, ...connection } = config;
+    const disable = (value: unknown, requested: unknown) =>
+      Object.fromEntries(
+        [
+          ...new Set([...Object.keys(readRecord(value)), ...Object.keys(readRecord(requested))]),
+        ].map((name) => [name, { enabled: false }]),
+      );
+    const featureNames = new Set([
+      ...Object.keys(readRecord(nativeConfig.features)),
+      ...Object.keys(readRecord(config.features)),
+      "shell_tool",
+      "apps",
+      "plugins",
+      "multi_agent",
+      "multi_agent_v2",
+      "collab",
+      "js_repl",
+      "node_repl",
+      "code_mode",
+      "code_mode_only",
+      "view_image",
+      "image_generation",
+      "request_permissions_tool",
+      "default_mode_request_user_input",
+      "skill_mcp_dependency_install",
+      "tool_suggest",
+      "goals",
+      "memory_tool",
+    ]);
+    return {
+      ...connection,
+      approval_policy: "never",
+      sandbox_mode: "read-only",
+      web_search: "disabled",
+      features: Object.fromEntries([...featureNames].map((name) => [name, false])),
+      mcp_servers: disable(nativeConfig.mcp_servers, config.mcp_servers),
+      plugins: disable(nativeConfig.plugins, config.plugins),
+      apps: { ...disable(nativeConfig.apps, config.apps), _default: { enabled: false } },
+      tools: {
+        update_plan: { enabled: false },
+        experimental_request_user_input: { enabled: false },
+      },
+      project_doc_max_bytes: 0,
+    };
+  }
   if (!toolPolicy) return config;
   const mcpServers = readRecord(config.mcp_servers);
   const grantsByServer = new Map<string, string[]>();

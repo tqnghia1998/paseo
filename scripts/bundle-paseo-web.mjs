@@ -12,16 +12,31 @@ const DEST_DIR = path.resolve(
     path.join(ROOT_DIR, "..", "space-app-vibing", "scripts", "paseo-web"),
 );
 
+async function copyRunner() {
+  for (const file of ["paseo-web.js", "paseo-web-plugins.mjs"])
+    fs.copyFileSync(path.join(ROOT_DIR, "scripts", file), path.join(DEST_DIR, file));
+  // The planner runs beside the flattened daemon; bundle ws so it does not
+  // depend on a consumer checkout's node_modules or the native runtime archive.
+  await esbuild.build({
+    entryPoints: ["scripts/mock-planner.mjs"],
+    bundle: true,
+    platform: "node",
+    target: "node20",
+    format: "esm",
+    outfile: path.join(DEST_DIR, "mock-planner.mjs"),
+    external: ["bufferutil", "utf-8-validate"],
+    banner: {
+      js: "import { createRequire as __plannerRequire } from 'node:module'; const require = __plannerRequire(import.meta.url);",
+    },
+  });
+}
+
 // Runner-only fixes do not need to rebuild or replace the daemon and embedded UI.
 if (process.argv.includes("--runner-only")) {
   if (!fs.existsSync(path.join(DEST_DIR, "server.mjs"))) {
     throw new Error("--runner-only requires an existing standalone bundle");
   }
-  fs.copyFileSync(path.join(ROOT_DIR, "scripts/paseo-web.js"), path.join(DEST_DIR, "paseo-web.js"));
-  fs.copyFileSync(
-    path.join(ROOT_DIR, "scripts/paseo-web-plugins.mjs"),
-    path.join(DEST_DIR, "paseo-web-plugins.mjs"),
-  );
+  await copyRunner();
   console.log("Updated paseo-web runner in", DEST_DIR);
   process.exit(0);
 }
@@ -42,11 +57,7 @@ if (!serverOnly) {
 
 console.log("3. Bundling server backend with esbuild...");
 fs.mkdirSync(DEST_DIR, { recursive: true });
-fs.copyFileSync(path.join(ROOT_DIR, "scripts/paseo-web.js"), path.join(DEST_DIR, "paseo-web.js"));
-fs.copyFileSync(
-  path.join(ROOT_DIR, "scripts/paseo-web-plugins.mjs"),
-  path.join(DEST_DIR, "paseo-web-plugins.mjs"),
-);
+await copyRunner();
 
 const serverPackageJson = JSON.parse(
   fs.readFileSync(path.join(ROOT_DIR, "packages/server/package.json"), "utf8"),

@@ -71,10 +71,15 @@ this option does not make an arbitrary server safe.
 The restriction remains set across session reloads, including attempted generic
 option overrides. Replacing its MCP servers or tool grants requires a new
 host-authorized session binding. Provider defaults requesting the restriction
-are captured into the session before hooks run. Other provider families reject
-this Claude-specific mode rather than keeping their native tools enabled.
+are captured into the session before hooks run.
 
-Restricted sessions retain allowlisted connection/model environment values from
+Codex, OpenCode, and providers derived from them also accept this flag for
+tool-free planning, but reject nonempty configured MCP servers. Native tools and
+unexpected approvals/questions are denied. Codex also disables composer Plan
+mode so a hidden planner cannot wait for plan approval. Other provider families
+reject the flag rather than keeping their native tools enabled.
+
+Restricted Claude sessions retain allowlisted connection/model environment values from
 the user's Claude settings, with explicit runtime values taking precedence.
 They do not import settings-based tools, hooks, arbitrary environment variables,
 or project configuration. Project command execution belongs in a separately
