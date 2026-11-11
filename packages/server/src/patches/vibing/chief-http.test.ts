@@ -245,6 +245,38 @@ test("agent and host capabilities cannot substitute for one another", async () =
   ).toBe(400);
 });
 
+test("open_feature carries a preparation diagnostic through the HTTP and MCP boundaries", async () => {
+  const { url, host } = await fixture();
+  await host("/connect", { apps });
+  const client = new Client({ name: "chief-fixture", version: "1" });
+  disposals.push(() => client.close());
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(url + "/mcp"), {
+      requestInit: { headers: { Authorization: "Bearer fixture-agent-token" } },
+    }),
+  );
+  const opening = client.callTool({
+    name: "open_feature",
+    arguments: { appId: "app", branch: "feat/protocol-0.9" },
+  });
+  let request: { id: string } | undefined;
+  await vi.waitFor(async () => {
+    const body = (await (await host("/navigation/poll", { apps })).json()) as {
+      requests: Array<{ id: string }>;
+    };
+    request ??= body.requests[0];
+    expect(request).toMatchObject({ kind: "open-branch" });
+  });
+  const error = "Branch 'feat/protocol-0.9' is already checked out at '/repo-worktrees/p09'.";
+  const ack = await host(`/navigation/${request!.id}`, {
+    outcome: "unavailable",
+    reason: "failed",
+    error,
+  });
+  expect(ack.status).toBe(200);
+  expect(JSON.stringify(await opening)).toContain(error);
+});
+
 test("stateless MCP lists the host tools and navigation awaits an authenticated host ack", async () => {
   const { url, host } = await fixture();
   await host("/connect", { apps });
