@@ -8,6 +8,19 @@ import { describe, expect, test, vi } from "vitest";
 
 import { PiCliRuntime } from "./cli-runtime.js";
 import type { PiRuntimeLaunch } from "./runtime.js";
+import { buildPiLaunch } from "./runtime.js";
+
+test("restricted Pi launch refuses command overrides that could re-enable tools or extensions", () => {
+  expect(() =>
+    buildPiLaunch({
+      command: ["pi"],
+      runtimeSettings: {
+        command: { mode: "replace", argv: ["pi", "--extension", "/tmp/untrusted.mjs"] },
+      },
+      session: { cwd: "/tmp", restrictToConfiguredMcp: true },
+    }),
+  ).toThrow("without additional arguments");
+});
 
 type PiChild = ChildProcessWithoutNullStreams & {
   stdin: PassThrough;

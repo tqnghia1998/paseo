@@ -14,9 +14,7 @@ is the per-plugin reference and the upgrade procedure.
 | AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
 | Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
 | Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `a656781`                  | 0.11.0        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
-| Annotations (`annotations`)                       | [neunzig-zehn/paseo-annotations](https://github.com/neunzig-zehn/paseo-annotations) `b921586`          | 0.1.0         | Community install          | Yes: `scripts/annotations-vibing.patch`       |
 | Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`             |
-| Recap (`paseo-recap`)                             | [kingsleydon/paseo-plugins](https://github.com/kingsleydon/paseo-plugins) `plugins/recap` `ceb91be`    | 0.2.5         | Community install          | Small: `scripts/paseo-recap-vibing.patch`     |
 | Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `7f08467` | 1.4.1         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`    |
 
 - **Built in:** listed in `builtinPlugins` (`packages/server/src/server/plugins/builtin/index.ts`);
@@ -36,7 +34,7 @@ is the per-plugin reference and the upgrade procedure.
   start; a failure logs a warning and never blocks startup.
 - **Not shipped:** the other upstream provider and usage-source plugins stay in `plugins/` for
   their own tests. Beautiful Chat (replaced by Chat Polish), Fold Turns (Chat Polish already
-  merges the steps between replies), Mermaid and PDF and Office viewer are retired; do not restore them.
+  merges the steps between replies), Mermaid, Doc Viewer, Annotations, Recap and Side Chat are retired; do not restore them.
 
 The pins live in `scripts/vendor-community-plugins.mjs`, which fetches each source, applies its
 patch, inlines reviewed npm dependencies from the public registry, and writes the generated
@@ -148,23 +146,12 @@ otherwise hide its current mode (Plan mode, Auto mode).
 Covered by `test/web.test.mjs`. Native `sharp` is not bundled, so thumbnails fall back to the
 original image; the optional headless browser downloads only when a user enables page checks.
 
-### Annotations (`scripts/annotations-vibing.patch`)
-
-Always sends through Queue (`client/web.ts`) instead of reading the web send preference or
-steering, matching Vibing's queue-first active-turn policy.
-
 ### Generative UI (`scripts/genui-vibing.patch`)
 
 File cards use one press target and always open through the host's `openFile`, on web too, so
 embedded workspace and Live Design chats open worktree files in Vibing's VS Code with their line
 numbers, instead of an anchor that opens a Paseo file tab. Regressions:
 `node --test scripts/genui-file-links.test.mjs`.
-
-### Recap (`scripts/paseo-recap-vibing.patch`)
-
-The automatic Claude model is the CLI's `haiku` alias (`server/models.ts`), which honours
-`ANTHROPIC_DEFAULT_HAIKU_MODEL`. The company gateway maps Haiku to an older model and rejects the
-newest Haiku's reasoning-effort setting, so the full model ID would fail.
 
 ## Upgrading
 
