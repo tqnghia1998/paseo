@@ -1,8 +1,8 @@
 diff --git a/client/dashboard/nav.tsx b/client/dashboard/nav.tsx
-index 294e5fa..db68df4 100644
+index 699ede4..1590d57 100644
 --- a/client/dashboard/nav.tsx
 +++ b/client/dashboard/nav.tsx
-@@ -44,8 +44,6 @@ export function RestyleCard({ theme, prefs, onChange }: { theme: PluginTheme; pr
+@@ -61,8 +61,6 @@ export function RestyleCard({ theme, prefs, onChange }: { theme: PluginTheme; pr
   * Update runs `paseo plugin update`, which installs it and restarts the plugin, so the dashboard reloads on the new code.
   */
  function UpdateCard({ theme }: { theme: PluginTheme }) {
@@ -12,7 +12,7 @@ index 294e5fa..db68df4 100644
    const apply = useRpc(applyUpdate);
    const [status, setStatus] = useState<UpdateStatus>();
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index 9419086..c2cbc05 100644
+index fac29d0..3ae2849 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
 @@ -23,7 +23,6 @@ ${[4, 5, 3, 0, 2, 1].map((step, i) => `${DOT}:nth-child(${i + 1}) { animation-de
@@ -57,7 +57,7 @@ index 9419086..c2cbc05 100644
  [data-cp-part="slash-detail"] { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 4px; margin-top: 4px !important; padding: 10px 10px 8px !important; border-top: 1px solid var(--cp-rule, var(--colors-border)) !important; }
  [data-cp-part="slash-detail"] > :first-child { grid-area: 1 / 1; font-family: var(--cp-mono, ui-monospace, monospace) !important; font-size: 12px !important; color: var(--cp-accent, var(--colors-accent-bright)) !important; }
  /* Skill descriptions run to paragraphs; three lines, like the row above shows one. */
-@@ -249,7 +250,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
+@@ -252,7 +253,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
  ${PLAN} > div:last-child { padding: 10px 16px 12px !important; border-top: 1px solid var(--cp-rule) !important; }
 
  [data-testid^="chat-outline-tick-"][aria-selected="true"] > div { background-color: var(--cp-accent) !important; }
@@ -66,12 +66,15 @@ index 9419086..c2cbc05 100644
  [data-cp-part="outline-preview"] * { font-size: 13px !important; }
  /* Between ticks, a copy of the last preview glides to the hovered tick until Paseo's next one takes over (ghostOutlinePreview). */
  [data-testid="chat-outline-preview"][data-cp-ghost] { pointer-events: none; animation: none !important; transition: transform 100ms cubic-bezier(0.33, 1, 0.68, 1), opacity 100ms ease-out !important; }
-@@ -298,13 +299,27 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
+@@ -301,10 +302,21 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
  ${USAGE} > div:nth-child(4) { margin-top: -6px !important; }
  `;
 
 +// Host defaults also cover embedded clients without the sidebar that calls setNativeColors.
  export const NATIVE_CSS = `
+-/* setNativeColors sets these inline from a sidebar item, which Settings doesn't mount: after a reload into Settings, menus drew with
+-   unset colors (no fill at all). Paseo's own colors stand in until it runs. */
+-:root { --cp-fg: var(--colors-foreground); --cp-muted: var(--colors-foreground-muted); --cp-accent: var(--colors-accent); --cp-accent-fg: var(--colors-accent-foreground); --cp-raised: var(--colors-surface1); --cp-control: var(--colors-surface2); --cp-sunken: var(--colors-surface0); --cp-rule: var(--colors-border); }
 +:root {
 +  --cp-fg: var(--colors-foreground);
 +  --cp-muted: var(--colors-foreground-muted);
@@ -84,14 +87,18 @@ index 9419086..c2cbc05 100644
 +  --cp-ok: var(--colors-status-success);
 +  --cp-warn: var(--colors-status-warning);
 +}
++
  /* Settings pages (tagged by tagSettings): surfaces 12, controls 8, and one text field, 32px in a sunken well that lights up on focus.
     Settings has its own sidebar, so a reload there can come before the --cp-* colors are set: Paseo's own colors stand in. */
  [data-cp-set="card"] { border-radius: 12px !important; }
- [data-cp-set="control"] { height: 32px !important; min-height: 32px !important; padding-top: 0 !important; padding-bottom: 0 !important; border-radius: 8px !important; }
+@@ -312,7 +324,9 @@ export const NATIVE_CSS = `
  :is([data-cp-set="field"], [data-cp-set="area"]) { border: 1px solid var(--colors-border) !important; border-radius: 8px !important; background-color: var(--cp-sunken, color-mix(in srgb, var(--colors-surface0), #000 15%)) !important; transition: border-color 120ms ease-out, box-shadow 120ms ease-out; }
+ /* The stand-in above is a mid grey on a light page. */
+ :root:is(.light, .pluginLight) :is([data-cp-set="field"], [data-cp-set="area"]) { background-color: var(--cp-sunken, var(--colors-surface2)) !important; }
 -[data-cp-set="field"] { height: 32px !important; min-height: 32px !important; padding: 0 10px !important; }
 +/* A wrapper can contain a shorter input; keep its authored padding and height so text stays centered. */
 +input[data-cp-set="field"] { height: 32px !important; min-height: 32px !important; padding: 0 10px !important; }
++
  :is([data-cp-set="field"], [data-cp-set="area"]):hover { border-color: color-mix(in srgb, var(--cp-muted, var(--colors-foreground-muted)) 55%, transparent) !important; }
  :is([data-cp-set="field"], [data-cp-set="area"]):focus-within { border-color: var(--cp-accent, var(--colors-accent)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-accent, var(--colors-accent)) 25%, transparent) !important; }
  /* The field draws focus; an input inside a wrapper field stays see-through. */
@@ -126,11 +133,11 @@ index 28e9004..cb48876 100644
    server.before("agent.create", async ({ request }, { paseo }) => {
      // Off by default, so unreadable prefs mean off; internal agents (commit and PR messages) never draw.
 diff --git a/package-lock.json b/package-lock.json
-index 2c8eff2..1e557c0 100644
+index c1bb0af..8b1d42e 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -9,18 +9,18 @@
-       "version": "0.10.0",
+       "version": "0.11.0",
        "license": "MIT",
        "dependencies": {
 -        "@getpaseo/protocol": "0.13.0",
@@ -247,7 +254,7 @@ index 2c8eff2..1e557c0 100644
        "funding": {
          "url": "https://github.com/sponsors/colinhacks"
 diff --git a/package.json b/package.json
-index 3b3f326..04b727f 100644
+index 8e70e24..7f21e76 100644
 --- a/package.json
 +++ b/package.json
 @@ -32,16 +32,16 @@
