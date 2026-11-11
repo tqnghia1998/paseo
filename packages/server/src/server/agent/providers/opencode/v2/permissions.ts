@@ -18,6 +18,7 @@ export class SessionPermissions {
     private readonly id: string,
     private readonly config: AgentSessionConfig,
     private readonly emit: (event: AgentStreamEvent) => void,
+    private readonly onOwnRequestDenied: () => void,
   ) {}
   observe(event: import("@opencode/client").OpenCodeEvent) {
     if (event.type === "permission.replied") {
@@ -75,6 +76,14 @@ export class SessionPermissions {
     }
     this.resolvePending(requestId, response);
   }
+  private async denyRestrictedRequest(requestId: string) {
+    const ownRequest = this.isOwnedBy(requestId, this.id);
+    await this.respondToPermission(requestId, {
+      behavior: "deny",
+      message: "Tools are unavailable in restricted planning sessions.",
+    });
+    if (ownRequest) this.onOwnRequestDenied();
+  }
   async reconcile(sessionID: string) {
     const [permissions, forms] = await Promise.all([
       this.getClient().permission.list({ sessionID }),
@@ -96,7 +105,9 @@ export class SessionPermissions {
       };
       this.pending.set(request.id, pending);
       this.permissionOwners.set(request.id, sessionID);
-      if (!this.config.toolPolicy && this.config.providerOptions?.["auto_accept"] === true)
+      if (this.config.providerOptions?.restrictToConfiguredMcp === true)
+        await this.denyRestrictedRequest(request.id);
+      else if (!this.config.toolPolicy && this.config.providerOptions?.["auto_accept"] === true)
         await this.respondToPermission(request.id, { behavior: "allow" });
       else this.emit({ type: "permission_requested", provider: "opencode", request: pending });
     }
@@ -120,7 +131,9 @@ export class SessionPermissions {
       };
       this.forms.set(form.id, form);
       this.pending.set(form.id, pending);
-      this.emit({ type: "permission_requested", provider: "opencode", request: pending });
+      if (this.config.providerOptions?.restrictToConfiguredMcp === true)
+        await this.denyRestrictedRequest(form.id);
+      else this.emit({ type: "permission_requested", provider: "opencode", request: pending });
     }
   }
   resolvePending(requestId: string, resolution: AgentPermissionResponse) {

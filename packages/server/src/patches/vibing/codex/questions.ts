@@ -12,7 +12,7 @@ const CODEX_QUESTION_INSTRUCTIONS =
 
 type QuestionSession = Pick<
   AgentSessionConfig,
-  "systemPrompt" | "daemonAppendSystemPrompt" | "internal" | "cwd"
+  "systemPrompt" | "daemonAppendSystemPrompt" | "internal" | "cwd" | "providerOptions"
 >;
 interface DeveloperInstructionsInput {
   session: QuestionSession;
@@ -36,10 +36,12 @@ export function buildCodexDeveloperInstructions(
 }
 
 const NativeConfigSchema = z.object({
-  config: z.object({
-    developer_instructions: z.string().nullish(),
-    sandbox_workspace_write: z.unknown().optional(),
-  }),
+  config: z
+    .object({
+      developer_instructions: z.string().nullish(),
+      sandbox_workspace_write: z.unknown().optional(),
+    })
+    .passthrough(),
 });
 interface ReadNativeConfigInput {
   client: Pick<CodexAppServerClient, "request">;
@@ -57,7 +59,10 @@ export async function readNativeCodexConfig(input: ReadNativeConfigInput) {
       session.systemPrompt,
       session.daemonAppendSystemPrompt,
     );
-    if (!session.internal && !paseoInstructions) {
+    if (
+      session.providerOptions?.restrictToConfiguredMcp === true ||
+      (!session.internal && !paseoInstructions)
+    ) {
       throw new Error(
         "Cannot preserve native Codex developer instructions: configuration read failed",
         { cause: error },
