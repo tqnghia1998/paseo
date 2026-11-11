@@ -3807,6 +3807,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     CodexProviderOptions["sandbox_workspace_write"]
   > | null = null;
   private resolvedNativeDeveloperInstructions: string | undefined;
+  private resolvedNativeConfig: Record<string, unknown> = {};
   private resolvedSandboxPolicy: Record<string, unknown> | null = null;
   private currentThreadId: string | null = null;
   // Codex writes a new thread's rollout at its first turn. Until then the thread exists only
@@ -3971,6 +3972,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.codexHome = deps.codexHome ?? resolveCodexHomeDir(process.env);
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
     this.requestedServiceTier = readCodexServiceTier(this.providerOptions);
+    if (
+      this.providerOptions.restrictToConfiguredMcp === true &&
+      this.providerOptions.plan_mode === true
+    ) {
+      this.providerOptions = { ...this.providerOptions, plan_mode: false };
+      this.openOptionsPatch = { plan_mode: false };
+    }
     this.planModeEnabled = this.providerOptions.plan_mode === true;
 
     if (this.resumeHandle?.sessionId) {
@@ -4110,6 +4118,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       logger: this.logger,
     });
     if (!config) return;
+    this.resolvedNativeConfig = config;
     this.resolvedWorkspaceWrite = readSandboxWorkspaceWrite(config.sandbox_workspace_write);
     this.resolvedNativeDeveloperInstructions = config.developer_instructions ?? undefined;
   }
@@ -4199,6 +4208,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private async loadSkills(): Promise<void> {
+    if (this.config.providerOptions?.restrictToConfiguredMcp === true) return;
     if (!this.client) return;
     try {
       const response = toObjectRecord(
@@ -4311,7 +4321,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     const runs = resolved ?? "default";
     this.providerOptions = { ...this.providerOptions, service_tier: runs };
     this.requestedServiceTier = runs;
-    this.openOptionsPatch = { service_tier: runs };
+    this.openOptionsPatch = { ...this.openOptionsPatch, service_tier: runs };
   }
 
   private get serviceTier(): string | null {
@@ -4759,6 +4769,11 @@ export class CodexAppServerAgentSession implements AgentSession {
     params: Record<string, unknown>,
     preset: CodexModePreset,
   ): { approvalPolicy?: string; sandboxPolicyType?: string } {
+    if (this.config.providerOptions?.restrictToConfiguredMcp === true) {
+      params.approvalPolicy = "never";
+      params.sandboxPolicy = toSandboxPolicy("read-only");
+      return { approvalPolicy: "never", sandboxPolicyType: "read-only" };
+    }
     const approvalPolicy = this.hasWorkflowModeOverride ? preset.approvalPolicy : undefined;
     const sandboxPolicyType =
       this.providerOptions.sandbox_mode ??
@@ -5182,6 +5197,9 @@ export class CodexAppServerAgentSession implements AgentSession {
 
   /** Applies only the options the patch sets; the rest of the running options stay as they are. */
   async applyOptions(options: ProviderOptions): Promise<Record<string, unknown>> {
+    if (this.providerOptions.restrictToConfiguredMcp === true && options.plan_mode === true) {
+      throw new Error("Plan mode is unavailable in restricted planning sessions");
+    }
     // The approval policy and sandbox are sent when the thread starts, not with each turn.
     assertChangesAreLive({
       provider: "codex",
@@ -6101,6 +6119,9 @@ export class CodexAppServerAgentSession implements AgentSession {
       ...(developerInstructions ? { developerInstructions } : {}),
       ...(innerConfig ? { config: innerConfig } : {}),
       ...(this.ephemeral ? { ephemeral: true } : {}),
+      ...(this.config.providerOptions?.restrictToConfiguredMcp === true
+        ? { approvalPolicy: "never", sandbox: "read-only" }
+        : {}),
     };
     if (this.hasWorkflowModeOverride) {
       params.approvalsReviewer = preset.approvalsReviewer;
@@ -6137,7 +6158,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       }
       innerConfig.mcp_servers = mcpServers;
     }
-    const configured = applyCodexToolPolicy(innerConfig, this.config.toolPolicy);
+    const configured = applyCodexToolPolicy(
+      innerConfig,
+      this.config.toolPolicy,
+      this.resolvedNativeConfig,
+    );
     return Object.keys(configured).length > 0 ? configured : null;
   }
 
@@ -7882,6 +7907,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private handleCommandApprovalRequest(params: unknown): Promise<unknown> {
+    if (this.config.providerOptions?.restrictToConfiguredMcp === true)
+      return Promise.resolve({ decision: "decline" });
     const parsed = z
       .object({
         itemId: z.string(),
@@ -7935,6 +7962,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private async handleFileChangeApprovalRequest(params: unknown): Promise<unknown> {
+    if (this.config.providerOptions?.restrictToConfiguredMcp === true)
+      return { decision: "decline" };
     await this.pendingNotifications;
     const parsed = z
       .object({
@@ -7978,6 +8007,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private handleToolApprovalRequest(params: unknown): Promise<unknown> {
+    if (this.config.providerOptions?.restrictToConfiguredMcp === true)
+      return Promise.resolve({ answers: {} });
     const parsed = z
       .object({
         itemId: z.string(),
@@ -8029,6 +8060,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private handleMcpElicitationRequest(params: unknown, serverRequestId: number): Promise<unknown> {
+    if (this.config.providerOptions?.restrictToConfiguredMcp === true)
+      return Promise.resolve({ action: "decline", content: null, _meta: null });
     const parsed = z
       .object({
         threadId: z.string(),
