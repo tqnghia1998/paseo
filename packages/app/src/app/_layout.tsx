@@ -147,7 +147,6 @@ import { PluginCatalogSync } from "@/plugins";
 import { NotificationOpenRouter } from "@/notification-open/react";
 import { ensureOsNotificationPermission } from "@/utils/os-notifications";
 import { EmbeddedAgentActivityBridge } from "@/patches/vibing/agent-activity";
-import { useEmbeddedTheme } from "@/patches/vibing/theme";
 import { isEmbeddedFocusMode, selectEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 
 polyfillCrypto();
@@ -924,7 +923,6 @@ function WorkspaceRouteNavigationBridge() {
 }
 
 function AppShell() {
-  useEmbeddedTheme();
   useEmbeddedSettingsHandoff();
   useEffect(() => {
     if (getDesktopHost()) void ensureOsNotificationPermission();

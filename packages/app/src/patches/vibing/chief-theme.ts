@@ -2,93 +2,138 @@ import { UnistylesRuntime } from "react-native-unistyles";
 import {
   buildDarkSemanticColors,
   buildDarkTheme,
+  buildLightSemanticColors,
+  buildLightTheme,
   darkTheme,
+  lightTheme,
   REGISTERED_THEMES,
   type Theme,
 } from "@/styles/theme";
 import { isEmbeddedChiefView } from "./focus-mode";
+import type { HostThemeMode } from "./host-theme-mode";
 
 /**
- * Chief's frame palette: the same Space App Vibing colours as the host. Surfaces are
- * built through the same semantic builder as a contributed plugin theme.
+ * Chief's frame palettes, one per host mode: the same Space App Vibing colours as the host.
+ * Surfaces are built through the same semantic builders as a contributed plugin theme.
  *
- * `background`, `control` and `border` are duplicated in Space App Vibing's
- * `src/components/Chief/ChiefPanel.css` (`--chief-surface`, `--chief-control`,
- * `--chief-border`): the host popup draws the header around this frame and the two
- * must be the same colours. Change them together.
+ * `background`, `control`, `border`, `mutedForeground`, `accent` and `accentBright` are
+ * duplicated in Space App Vibing's `src/components/Chief/ChiefPanel.css` (`--chief-surface`,
+ * `--chief-control`, `--chief-border`, `--chief-text-muted`, `--chief-accent` and the resolved
+ * hex of `--chief-accent-bright`, a `color-mix` there) for the dark `.chief-root` block and the
+ * `[data-theme="light"] .chief-root` block: the host popup draws the header around this frame
+ * and the two must be the same colours. Change them together.
  */
-export const CHIEF_PALETTE = {
-  background: "#1c2025",
-  control: "#21242b",
-  border: "#21242b",
-  // Same value as the theme plugin's `raised`: composer, cards and raised surfaces.
-  raised: "#21242b",
-  ring: "#7f848e",
-  foreground: "#abb2bf",
-  mutedForeground: "#9da5b4",
-  // The theme blue, shared with the host; filled buttons use dark text (accentForeground).
-  accent: "#61afef",
-  // Links and highlights on the dark surface.
-  accentBright: "#78baf2",
-  accentForeground: "#181a1f",
-} as const;
+export const CHIEF_PALETTES = {
+  dark: {
+    background: "#24292e",
+    control: "#2f363d",
+    border: "#2f363d",
+    // The theme plugin's `raised`: composer, cards and raised surfaces.
+    raised: "#2f363d",
+    ring: "#959da5",
+    foreground: "#f6f8fa",
+    mutedForeground: "#d1d5da",
+    // The theme blue, shared with the host; filled buttons use dark text (accentForeground).
+    accent: "#79b8ff",
+    // Links and highlights: color-mix(in srgb, #79b8ff 85%, white).
+    accentBright: "#8dc3ff",
+    accentForeground: "#1d2125",
+  },
+  light: {
+    background: "#fafbfc",
+    control: "#f6f8fa",
+    border: "#f6f8fa",
+    raised: "#f6f8fa",
+    ring: "#6a737d",
+    foreground: "#24292e",
+    mutedForeground: "#586069",
+    accent: "#0366d6",
+    // color-mix(in srgb, #0366d6 85%, black): darker, so accent text keeps its contrast.
+    accentBright: "#0357b6",
+    accentForeground: "#ffffff",
+  },
+} as const satisfies Record<HostThemeMode, Record<string, string>>;
 
-/** The accent trio alone, for a light theme chosen in the shared settings. */
+/**
+ * The accent trio alone, for a light theme chosen in the shared settings while the host sent
+ * no mode (standalone use of the Chief view): the light-mode accent, readable on light surfaces.
+ */
 export const CHIEF_ACCENT_COLORS = {
-  accent: CHIEF_PALETTE.accent,
-  accentBright: CHIEF_PALETTE.accentBright,
-  accentForeground: CHIEF_PALETTE.accentForeground,
+  accent: CHIEF_PALETTES.light.accent,
+  accentBright: CHIEF_PALETTES.light.accentBright,
+  accentForeground: CHIEF_PALETTES.light.accentForeground,
 } as const;
 
-// Mirrors buildDarkPluginTheme (plugins/themes), so the Chief frame draws every surface exactly like
-// the normal Paseo frames running the Space App Vibing theme plugin.
-function buildChiefColors(): Theme["colors"] {
-  const palette = CHIEF_PALETTE;
-  const { colors } = buildDarkTheme(
-    buildDarkSemanticColors({
-      surface0: palette.background,
-      surface1: palette.raised,
-      surface2: palette.control,
-      surface3: palette.border,
-      surface4: palette.ring,
-      surfaceDiffEmpty: palette.raised,
-      surfaceSidebar: palette.background,
-      foreground: palette.foreground,
-      foregroundMuted: palette.mutedForeground,
-      foregroundExtraMuted: palette.ring,
-      border: palette.border,
-      borderAccent: palette.border,
-      accent: palette.accent,
-      accentBright: palette.accentBright,
-      accentForeground: palette.accentForeground,
-      destructive: darkTheme.colors.destructive,
-      terminalBlack: palette.control,
-      terminalBrightBlack: palette.ring,
-      ring: palette.ring,
-    }),
-  );
-  // The builder reuses the accent for success; with an indigo accent that would paint
-  // success states indigo, so keep the shared green.
-  return { ...colors, success: colors.statusSuccess };
+// Mirrors buildDarkPluginTheme / buildLightPluginTheme (plugins/themes), so the Chief frame draws
+// every surface exactly like the normal Paseo frames running the Space App Vibing theme plugin.
+export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
+  const palette = CHIEF_PALETTES[mode];
+  const shared = {
+    surface0: palette.background,
+    surface1: palette.raised,
+    surface2: palette.control,
+    surface3: palette.border,
+    surface4: palette.ring,
+    surfaceDiffEmpty: palette.raised,
+    foreground: palette.foreground,
+    foregroundMuted: palette.mutedForeground,
+    foregroundExtraMuted: palette.ring,
+    border: palette.border,
+    borderAccent: palette.border,
+    accent: palette.accent,
+    accentBright: palette.accentBright,
+    accentForeground: palette.accentForeground,
+    terminalBrightBlack: palette.ring,
+    ring: palette.ring,
+  };
+  const { colors } =
+    mode === "light"
+      ? buildLightTheme(
+          buildLightSemanticColors({
+            ...shared,
+            surfaceSidebar: palette.control,
+            primary: palette.foreground,
+            primaryForeground: palette.background,
+            destructive: lightTheme.colors.destructive,
+            terminalBlack: palette.foreground,
+          }),
+        )
+      : buildDarkTheme(
+          buildDarkSemanticColors({
+            ...shared,
+            surfaceSidebar: palette.background,
+            destructive: darkTheme.colors.destructive,
+            terminalBlack: palette.control,
+          }),
+        );
+  // The builders reuse the accent for success; keep success states the shared green.
+  return { ...colors, success: colors.statusSuccess } as Theme["colors"];
 }
 
-export const CHIEF_COLORS = buildChiefColors();
+const CHIEF_COLORS_BY_MODE: Record<HostThemeMode, Theme["colors"]> = {
+  dark: buildChiefColors("dark"),
+  light: buildChiefColors("light"),
+};
+/** The dark-mode colour set (the default when the host sends no mode). */
+export const CHIEF_COLORS = CHIEF_COLORS_BY_MODE.dark;
 
 /**
  * Replace the colour tokens, keeping everything the appearance step set (fonts, sizes,
  * content width, and the syntax palette the user chose).
  */
-export function withChiefTheme(theme: Theme): Theme {
+export function withChiefTheme(theme: Theme, mode: HostThemeMode | null = null): Theme {
   // `Theme` is a union of literal theme shapes that a spread cannot satisfy; the result
-  // only swaps colour values, so its shape is unchanged.
-  if (theme.colorScheme === "light")
+  // only swaps colour values (and, for a host mode, the matching colour scheme).
+  if (mode === null && theme.colorScheme === "light")
     return {
       ...theme,
       colors: { ...theme.colors, ...CHIEF_ACCENT_COLORS },
     } as Theme;
+  const resolved = mode ?? "dark";
   return {
     ...theme,
-    colors: { ...CHIEF_COLORS, syntax: theme.colors.syntax },
+    colorScheme: resolved,
+    colors: { ...CHIEF_COLORS_BY_MODE[resolved], syntax: theme.colors.syntax },
   } as Theme;
 }
 
@@ -100,7 +145,11 @@ const ALL_THEME_KEYS = Object.keys(REGISTERED_THEMES) as (keyof typeof REGISTERE
  * instead. Call it after every theme or appearance update: those replace the stored
  * theme and would otherwise bring the host's colours back.
  */
-export function applyChiefTheme(enabled: boolean = isEmbeddedChiefView): void {
+export function applyChiefTheme(
+  mode: HostThemeMode | null,
+  enabled: boolean = isEmbeddedChiefView,
+): void {
   if (!enabled) return;
-  for (const key of ALL_THEME_KEYS) UnistylesRuntime.updateTheme(key, withChiefTheme);
+  for (const key of ALL_THEME_KEYS)
+    UnistylesRuntime.updateTheme(key, (theme) => withChiefTheme(theme, mode));
 }

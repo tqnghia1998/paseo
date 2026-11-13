@@ -1,6 +1,8 @@
 import { usePathname } from "expo-router";
 import { resolveChatContentMaxWidth } from "@/patches/vibing/chat-appearance";
 import { applyChiefTheme } from "@/patches/vibing/chief-theme";
+import { useHostThemeMode } from "@/patches/vibing/host-theme-mode";
+import { resolveEmbeddedThemeInput } from "@/patches/vibing/theme";
 import {
   createContext,
   type ReactNode,
@@ -64,10 +66,21 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     if (settings.theme !== PLUGIN_THEME_PREFERENCE) return null;
     return options.find((option) => option.id === settings.pluginThemeId) ?? null;
   }, [options, settings.pluginThemeId, settings.theme]);
+  // Embedded frames follow the host's light/dark mode in memory (never saved).
+  const hostMode = useHostThemeMode();
+  const themeInput = useMemo(
+    () =>
+      resolveEmbeddedThemeInput(
+        { preference: settings.theme, contributedTheme: selected },
+        options,
+        hostMode,
+      ),
+    [settings.theme, selected, options, hostMode],
+  );
 
   useEffect(() => {
     if (isLoading) return;
-    applyTheme({ preference: settings.theme, contributedTheme: selected });
+    applyTheme(themeInput);
     applyAppearance({
       uiFontFamily: settings.uiFontFamily,
       monoFontFamily: settings.monoFontFamily,
@@ -78,12 +91,12 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
       syntaxTheme: settings.syntaxTheme,
     });
     // Chief frame only: re-apply its look after every update, which restores the host colours.
-    applyChiefTheme();
+    applyChiefTheme(hostMode);
     setHasAppliedAppearance(true);
   }, [
     isLoading,
-    selected,
-    settings.theme,
+    themeInput,
+    hostMode,
     settings.uiFontFamily,
     settings.monoFontFamily,
     settings.uiBaseFontSize,
