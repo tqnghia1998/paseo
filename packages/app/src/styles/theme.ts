@@ -1,5 +1,8 @@
 import { Platform } from "react-native";
-import { resolveDefaultDarkTint } from "@/patches/vibing/default-dark-tint";
+import {
+  resolveDefaultDarkTint,
+  resolveDefaultLightTint,
+} from "@/patches/vibing/default-dark-tint";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
 import { deriveSurfaceStates } from "./derive-colors";
 
@@ -323,27 +326,30 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
   };
 }
 
-const lightSemanticColors = buildLightSemanticColors({
-  surface0: "#ffffff",
-  surface1: "#fafafa",
-  surface2: "#f4f4f5",
-  surface3: "#e4e4e7",
-  surface4: "#d4d4d8",
-  surfaceSidebar: "#f4f4f5",
-  foreground: "#1a1a1e",
-  foregroundMuted: "#71717a",
-  foregroundExtraMuted: "#a1a1aa",
-  border: "#e4e4e7",
-  borderAccent: "#ececf1",
-  accent: "#20744A",
-  accentBright: "#239956",
-  accentForeground: "#ffffff",
-  primary: "#18181b",
-  primaryForeground: "#fafafa",
-  destructive: "#b04138",
-  terminalBlack: "#1a1a1e",
-  terminalBrightBlack: "#3f3f46",
-});
+const lightSemanticColors = buildLightSemanticColors(
+  resolveDefaultLightTint({
+    surface0: "#ffffff",
+    surface1: "#fafafa",
+    surface2: "#f4f4f5",
+    surface3: "#e4e4e7",
+    surface4: "#d4d4d8",
+    surfaceSidebar: "#f4f4f5",
+    foreground: "#1a1a1e",
+    foregroundMuted: "#71717a",
+    foregroundExtraMuted: "#a1a1aa",
+    border: "#e4e4e7",
+    borderAccent: "#ececf1",
+    accent: "#20744A",
+    accentBright: "#239956",
+    accentForeground: "#ffffff",
+    primary: "#18181b",
+    primaryForeground: "#fafafa",
+    destructive: "#b04138",
+    terminalBlack: "#1a1a1e",
+    terminalBrightBlack: "#3f3f46",
+  }),
+);
+
 
 // ---------------------------------------------------------------------------
 // Dark theme variant builder
