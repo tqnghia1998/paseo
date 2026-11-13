@@ -3460,7 +3460,10 @@ describe("Codex app-server provider", () => {
       {
         threadId: "thread-1",
         beforeTurnId: "turn-second",
-        config: { features: { default_mode_request_user_input: true } },
+        config: {
+          features: { default_mode_request_user_input: true },
+          suppress_unstable_features_warning: true,
+        },
         cwd: "/workspace/project",
         model: "gpt-5.4",
         serviceTier: null,
@@ -3596,7 +3599,10 @@ describe("Codex app-server provider", () => {
       {
         threadId: "thread-1",
         beforeTurnId: "turn-first",
-        config: { features: { default_mode_request_user_input: true } },
+        config: {
+          features: { default_mode_request_user_input: true },
+          suppress_unstable_features_warning: true,
+        },
         cwd: "/workspace/project",
         model: "gpt-5.4",
         serviceTier: null,
@@ -3760,6 +3766,7 @@ describe("Codex app-server provider", () => {
     });
     expect(capturedThreadStartConfig(capturedRequests)).toEqual({
       features: { default_mode_request_user_input: true },
+      suppress_unstable_features_warning: true,
       model_provider: "paseo:codex-iisb",
       model_providers: {
         "paseo:codex-iisb": {
@@ -3781,6 +3788,7 @@ describe("Codex app-server provider", () => {
 
     expect(capturedThreadStartConfig(capturedRequests)).toEqual({
       features: { default_mode_request_user_input: true },
+      suppress_unstable_features_warning: true,
       model_provider: "paseo:codex-custom",
       model_providers: {
         "paseo:codex-custom": expect.objectContaining({
@@ -3797,6 +3805,7 @@ describe("Codex app-server provider", () => {
 
     expect(capturedThreadStartConfig(capturedRequests)).toEqual({
       features: { default_mode_request_user_input: true },
+      suppress_unstable_features_warning: true,
       model_provider: "paseo:ollama",
       model_providers: {
         "paseo:ollama": expect.objectContaining({
@@ -7377,7 +7386,10 @@ describe("Codex app-server provider", () => {
         params: {
           threadId: "archived-thread-id",
           excludeTurns: true,
-          config: { features: { default_mode_request_user_input: true } },
+          config: {
+            features: { default_mode_request_user_input: true },
+            suppress_unstable_features_warning: true,
+          },
           developerInstructions: expect.stringContaining(
             "Use request_user_input for user questions",
           ),
