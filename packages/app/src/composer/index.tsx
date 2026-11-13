@@ -1475,7 +1475,6 @@ function ComposerContentImpl({
   );
   const isInputLive = useIsInputLive(messageInputRef);
   const isPanelActive = useRetainedPanelActive();
-  const { isActiveComposer } = useComposerKeyboardScope();
   const inputRevealed = isPanelActive && isActiveComposer;
   const isActiveComposerRef = useRef(isActiveComposer);
   isActiveComposerRef.current = isActiveComposer;
