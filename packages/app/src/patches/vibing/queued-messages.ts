@@ -23,6 +23,7 @@ export interface QueuedMessage {
   attachments: ComposerAttachment[];
 }
 export interface QueuedMessageStorage {
+  getAllKeys(): Promise<readonly string[]>;
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
@@ -36,6 +37,23 @@ export function createQueuedMessagePersistence(storage: QueuedMessageStorage) {
   let write = Promise.resolve();
 
   return {
+    async collectAttachmentIds(): Promise<ReadonlySet<string>> {
+      await write;
+      const ids = new Set<string>();
+      const keys = await storage.getAllKeys();
+      for (const key of keys) {
+        if (!key.startsWith(QUEUED_MESSAGE_STORAGE_PREFIX)) continue;
+        const raw = await storage.getItem(key);
+        if (!raw) continue;
+        const queue = QueueSchema.parse(JSON.parse(raw));
+        for (const message of Object.values(queue).flat()) {
+          for (const attachment of message.attachments) {
+            if (attachment.kind === "image") ids.add(attachment.metadata.id);
+          }
+        }
+      }
+      return ids;
+    },
     async load(serverId: string): Promise<Map<string, QueuedMessage[]>> {
       const key = storageKey(serverId);
       try {

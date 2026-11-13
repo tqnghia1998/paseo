@@ -9,6 +9,7 @@ import {
   persistAttachmentFromFileUri,
 } from "@/attachments/service";
 import { collectRetainedAttachmentIds } from "@/attachments/gc-retention";
+import { queuedMessagePersistence } from "@/patches/vibing/queued-messages";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore, type SessionState } from "@/stores/session-store";
 import { useWorkspaceAttachmentsStore } from "@/attachments/workspace-attachments-store";
@@ -157,6 +158,18 @@ const migrateLegacyImages: MigrateLegacyImages = async (images) => {
 
 async function runAttachmentGc(): Promise<void> {
   gcScheduled = false;
+  // Queues restore after draft hydration. Other workspace frames also share
+  // attachment bytes, so an in-memory snapshot cannot authorize their deletion.
+  let persistedQueueIds: ReadonlySet<string>;
+  try {
+    persistedQueueIds = await queuedMessagePersistence.collectAttachmentIds();
+  } catch (error) {
+    console.warn(
+      "[DraftStore] Could not read queued attachments; skipping garbage collection",
+      error,
+    );
+    return;
+  }
   const nowMs = Date.now();
 
   useDraftStore.setState((state) => {
@@ -170,7 +183,7 @@ async function runAttachmentGc(): Promise<void> {
     };
   });
 
-  const referencedIds = new Set<string>();
+  const referencedIds = new Set(persistedQueueIds);
   for (const id of useDraftStore.getState().collectActiveAttachmentIds()) {
     referencedIds.add(id);
   }

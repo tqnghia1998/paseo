@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { resolveDefaultDarkTint } from "@/patches/vibing/default-dark-tint";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
 
 export const baseColors = {
@@ -457,24 +458,26 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
 // ---------------------------------------------------------------------------
 
 // Paseo — subtle teal-green tint (default)
-const paseoDarkColors = buildDarkSemanticColors({
-  surface0: "#181B1A",
-  surface1: "#1E2120",
-  surface2: "#272A29",
-  surface3: "#434645",
-  surface4: "#595B5B",
-  surfaceDiffEmpty: "#252827",
-  surfaceSidebar: "#141716",
-  foregroundMuted: "#A1A5A4",
-  foregroundExtraMuted: "#717574",
-  border: "#252B2A",
-  borderAccent: "#2F3534",
-  accent: "#20744A",
-  accentBright: "#7ccba0",
-  destructive: "#c64f43", // warm red, hue ~7 — reads as red (not pink) against the green tint
-  terminalBlack: "#141716",
-  terminalBrightBlack: "#434645",
-});
+const paseoDarkColors = buildDarkSemanticColors(
+  resolveDefaultDarkTint({
+    surface0: "#181B1A",
+    surface1: "#1E2120",
+    surface2: "#272A29",
+    surface3: "#434645",
+    surface4: "#595B5B",
+    surfaceDiffEmpty: "#252827",
+    surfaceSidebar: "#141716",
+    foregroundMuted: "#A1A5A4",
+    foregroundExtraMuted: "#717574",
+    border: "#252B2A",
+    borderAccent: "#2F3534",
+    accent: "#20744A",
+    accentBright: "#7ccba0",
+    destructive: "#c64f43", // warm red, hue ~7 — reads as red (not pink) against the green tint
+    terminalBlack: "#141716",
+    terminalBrightBlack: "#434645",
+  }),
+);
 
 // Zinc — neutral gray, no tint
 const zincDarkColors = buildDarkSemanticColors({

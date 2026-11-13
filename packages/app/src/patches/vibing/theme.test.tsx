@@ -40,7 +40,7 @@ const option: PluginThemeOption = {
   id: "space-app-vibing-theme/theme/dark",
   serverId: "server",
   name: "Space App Vibing",
-  swatch: "#1a1a1a",
+  swatch: "#282c34",
   theme: darkTheme,
 };
 
