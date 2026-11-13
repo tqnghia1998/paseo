@@ -19,9 +19,15 @@ import { isEmbeddedChiefView } from "./focus-mode";
  * must be the same colours. Change them together.
  */
 export const CHIEF_PALETTE = {
-  background: "#141a29",
-  control: "#1f2739",
-  border: "#2a344a",
+  background: "#0b0f19",
+  control: "#131a29",
+  border: "#263048",
+  // Hover, pressed and selected fills, and stronger fills (chips, toggles). Chat-only,
+  // so the host popup has no matching token: kept below the border so they stay dark.
+  fill: "#1a2234",
+  strongFill: "#2b3550",
+  // Code and diff wells.
+  well: "#0e1320",
   ring: "#6f7a94",
   foreground: "#ffffff",
   mutedForeground: "#a3adc2",
@@ -47,9 +53,9 @@ function buildChiefColors(): Theme["colors"] {
       surface0: palette.background,
       surface1: palette.background,
       surface2: palette.control,
-      surface3: palette.border,
-      surface4: palette.ring,
-      surfaceDiffEmpty: palette.background,
+      surface3: palette.fill,
+      surface4: palette.strongFill,
+      surfaceDiffEmpty: palette.well,
       surfaceSidebar: palette.background,
       foreground: palette.foreground,
       foregroundMuted: palette.mutedForeground,
