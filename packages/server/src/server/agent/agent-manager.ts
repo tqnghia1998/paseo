@@ -6545,7 +6545,6 @@ export class AgentManager {
       metadata?: AgentMetadata;
     },
     pluginLifecycle: PluginLifecycle | undefined = this.pluginLifecycle,
-
   ): Promise<AgentLaunchContext> {
     // A plugin changing during this open must still make the resulting session stale.
     const generation = this.sessionOpenGeneration;
