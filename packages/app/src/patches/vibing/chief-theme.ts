@@ -9,8 +9,7 @@ import {
 import { isEmbeddedChiefView } from "./focus-mode";
 
 /**
- * Chief's own look inside its frame: dark navy surfaces and an indigo accent, so the
- * chat is unmistakably Chief's next to the host's neutral grey and lighter blue. Surfaces are
+ * Chief's frame palette: the same Space App Vibing colours as the host. Surfaces are
  * built through the same semantic builder as a contributed plugin theme.
  *
  * `background`, `control` and `border` are duplicated in Space App Vibing's
@@ -19,24 +18,19 @@ import { isEmbeddedChiefView } from "./focus-mode";
  * must be the same colours. Change them together.
  */
 export const CHIEF_PALETTE = {
-  background: "#0b0f19",
-  control: "#131a29",
-  border: "#263048",
-  // Hover, pressed and selected fills, and stronger fills (chips, toggles). Chat-only,
-  // so the host popup has no matching token: kept below the border so they stay dark.
-  fill: "#1a2234",
-  strongFill: "#2b3550",
-  // Code and diff wells.
-  well: "#0e1320",
-  ring: "#6f7a94",
-  foreground: "#ffffff",
-  mutedForeground: "#a3adc2",
-  // An indigo blue, deeper than the host's primary blue (#3a96dd). Deep enough that
-  // white text on filled buttons keeps WCAG AA (4.5:1).
-  accent: "#4a6cd8",
+  background: "#1c2025",
+  control: "#21242b",
+  border: "#21242b",
+  // Same value as the theme plugin's `raised`: composer, cards and raised surfaces.
+  raised: "#21242b",
+  ring: "#7f848e",
+  foreground: "#abb2bf",
+  mutedForeground: "#9da5b4",
+  // The theme blue, shared with the host; filled buttons use dark text (accentForeground).
+  accent: "#61afef",
   // Links and highlights on the dark surface.
-  accentBright: "#8fa8ff",
-  accentForeground: "#ffffff",
+  accentBright: "#78baf2",
+  accentForeground: "#181a1f",
 } as const;
 
 /** The accent trio alone, for a light theme chosen in the shared settings. */
@@ -46,16 +40,18 @@ export const CHIEF_ACCENT_COLORS = {
   accentForeground: CHIEF_PALETTE.accentForeground,
 } as const;
 
+// Mirrors buildDarkPluginTheme (plugins/themes), so the Chief frame draws every surface exactly like
+// the normal Paseo frames running the Space App Vibing theme plugin.
 function buildChiefColors(): Theme["colors"] {
   const palette = CHIEF_PALETTE;
   const { colors } = buildDarkTheme(
     buildDarkSemanticColors({
       surface0: palette.background,
-      surface1: palette.background,
+      surface1: palette.raised,
       surface2: palette.control,
-      surface3: palette.fill,
-      surface4: palette.strongFill,
-      surfaceDiffEmpty: palette.well,
+      surface3: palette.border,
+      surface4: palette.ring,
+      surfaceDiffEmpty: palette.raised,
       surfaceSidebar: palette.background,
       foreground: palette.foreground,
       foregroundMuted: palette.mutedForeground,
@@ -86,8 +82,14 @@ export function withChiefTheme(theme: Theme): Theme {
   // `Theme` is a union of literal theme shapes that a spread cannot satisfy; the result
   // only swaps colour values, so its shape is unchanged.
   if (theme.colorScheme === "light")
-    return { ...theme, colors: { ...theme.colors, ...CHIEF_ACCENT_COLORS } } as Theme;
-  return { ...theme, colors: { ...CHIEF_COLORS, syntax: theme.colors.syntax } } as Theme;
+    return {
+      ...theme,
+      colors: { ...theme.colors, ...CHIEF_ACCENT_COLORS },
+    } as Theme;
+  return {
+    ...theme,
+    colors: { ...CHIEF_COLORS, syntax: theme.colors.syntax },
+  } as Theme;
 }
 
 const ALL_THEME_KEYS = Object.keys(REGISTERED_THEMES) as (keyof typeof REGISTERED_THEMES)[];

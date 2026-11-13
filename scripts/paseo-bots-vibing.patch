@@ -246,7 +246,7 @@ index 9d97c7f..855ce7f 100644
      </Modal>
    );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 5174b04..14e56c4 100644
+index 5174b04..8240e42 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
 @@ -1,3 +1,5 @@
@@ -262,7 +262,7 @@ index 5174b04..14e56c4 100644
 -import { contextMenuProps, measureAnchor } from "./ui/Menu";
 +import { contextMenuProps, measureAnchor, useMenu } from "./ui/Menu";
  import { tooltip } from "./ui/Tooltip";
-
+ 
  // Paseo's sidebar, reproduced from components/left-sidebar.tsx, sidebar-workspace-list.tsx
 @@ -29,6 +31,8 @@ export interface Selection {
    prompt?: string;
@@ -271,7 +271,7 @@ index 5174b04..14e56c4 100644
 +  /** Distinguishes repeated prompt starts so the chat remounts and sends again. */
 +  promptId?: string;
  }
-
+ 
  export type MenuSource = "kebab" | "context";
 @@ -37,6 +41,8 @@ export interface ChatMenuContext {
    /** Every unpinned chat of the bot in list order, for Move up / Move down. */
@@ -280,7 +280,7 @@ index 5174b04..14e56c4 100644
 +  /** Every chat of the bot in sidebar order (pins first), to pick what opens after a removal. */
 +  order: string[];
  }
-
+ 
  interface BotSidebarProps {
 @@ -60,8 +66,11 @@ interface BotSidebarProps {
    onShowArchived(): void;
@@ -297,7 +297,7 @@ index 5174b04..14e56c4 100644
 @@ -71,19 +80,28 @@ const noSelect = { userSelect: "none" } as object;
  /** Paseo hardcodes the project chevron colour (project-leading-visual.tsx). */
  const CHEVRON_COLOR = "#9ca3af";
-
+ 
 +/** The bot's chat IDs as the sidebar lists them: its pins in pin order, then the rest. */
 +function botChatOrder(chats: readonly PaseoAgent[], listUi: BotListUi, botId: string): string[] {
 +  const listed = new Set(chats.map((chat) => chat.id));
@@ -338,7 +338,7 @@ index 5174b04..14e56c4 100644
 @@ -143,36 +161,24 @@ function SectionHeader({ colors, onDisplayMenu }: { colors: Colors; onDisplayMen
    );
  }
-
+ 
 -function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): void; onTeamMap(): void }) {
 -  const { hovered, hoverProps } = useHover();
 +function Footer({ colors, onNewBot, onImportBot, onExportAllBots, onTeamMap }: { colors: Colors; onNewBot(): void; onImportBot(): void; onExportAllBots?: () => void; onTeamMap(): void }) {
@@ -390,7 +390,7 @@ index 5174b04..14e56c4 100644
      </View>
 @@ -180,17 +186,20 @@ function Footer({ colors, onNewBot, onTeamMap }: { colors: Colors; onNewBot(): v
  }
-
+ 
  /** The sidebar footer's trailing icon buttons (Paseo's host, import and settings buttons): 32 box, 16pt icon. */
 -function FooterIconButton({ colors, icon, label, onPress }: { colors: Colors; icon: string; label: string; onPress(): void }) {
 +function FooterIconButton({ colors, icon, label, buttonRef, onPress }: { colors: Colors; icon: string; label: string; buttonRef?: RefObject<View | null>; onPress?: () => void }) {
@@ -423,7 +423,7 @@ index 5174b04..14e56c4 100644
 @@ -274,11 +283,12 @@ function PinnedSection(props: PinnedProps) {
    );
  }
-
+ 
 -function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touch, onSelect, onChatMenu }: PinnedProps & { bot: Bot; chatId: string }) {
 +function PinnedChatRow({ colors, tokens, bot, chatId, selection, ui: listUi, localHost, touch, onSelect, onChatMenu, onDeleteChat }: PinnedProps & { bot: Bot; chatId: string }) {
    const host = useBotHost(bot.hostId, localHost);
@@ -446,7 +446,7 @@ index 5174b04..14e56c4 100644
  }
 @@ -299,7 +310,7 @@ function PinnedChatRow({ colors, tokens, bot, chatId, selection, localHost, touc
  type GroupProps = BotSidebarProps & { bot: Bot; tokens: NativeTokens; pinnedIds: ReadonlySet<string>; /** The team's Chief of Staff. */ lead?: boolean };
-
+ 
  function BotGroup(props: GroupProps) {
 -  const { colors, tokens, bot, selection, ui: listUi, localHost, touch, pinnedIds, onSelect, onChatMenu } = props;
 +  const { colors, tokens, bot, selection, ui: listUi, localHost, touch, pinnedIds, onSelect, onChatMenu, onDeleteChat } = props;
@@ -503,7 +503,7 @@ index 5174b04..14e56c4 100644
    onMenu(anchor: LayoutRectangle, source: MenuSource): void;
 +  onDelete(): void;
  }
-
+ 
  /** Paseo's workspace row (sidebar-workspace-list.tsx workspaceRow + sidebar-workspace-row-content.tsx). */
 -const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu }: ChatRowProps) {
 +const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu, onDelete }: ChatRowProps) {
@@ -515,7 +515,7 @@ index 5174b04..14e56c4 100644
          <View style={{ flex: 1, minWidth: 0 }}>
            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
 -            <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: ui(14), fontWeight: "400", lineHeight: 20, color: colors.foreground, opacity: hovered ? 1 : 0.76 }}>
-+            <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: ui(13), fontWeight: "400", lineHeight: 20, color: colors.foreground, opacity: hovered ? 1 : 0.76 }}>
++            <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: ui(13), fontWeight: "400", lineHeight: 20, color: colors.foreground, opacity: selected || hovered ? 1 : 0.76 }}>
                {title}
              </Text>
              {/* On touch the kebab stays, so its space is reserved; on desktop it overlays the title's tail. */}
@@ -557,7 +557,7 @@ index 5174b04..14e56c4 100644
 @@ -613,6 +628,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
    );
  }
-
+ 
 +/** Sits before the chat kebab with the same trigger geometry. */
 +function DeleteChatButton({ colors, onPress }: { colors: Colors; onPress(): void }) {
 +  const { hovered, hoverProps } = useHover();
@@ -582,7 +582,7 @@ index 5174b04..14e56c4 100644
 @@ -690,7 +723,7 @@ const BADGE_SIZE = 12;
  const BADGE_OFFSET = -4;
  const RING_FRAME = 14;
-
+ 
 -function StatusBadge({ colors, tokens, bucket, backdrop }: { colors: Colors; tokens: NativeTokens; bucket: ChatBucket; backdrop: string }) {
 +export function StatusBadge({ colors, tokens, bucket, backdrop }: { colors: Colors; tokens: NativeTokens; bucket: ChatBucket; backdrop: string }) {
    if (bucket === "done") return null;
@@ -1483,6 +1483,21 @@ index 2b79473..1c571f7 100644
        showTitle={showTitle}
        onToggleBot={(bot, on) => toggleApp(app.slug, bot, on)}
        onDisconnected={() => setTarget(compact ? null : { kind: "apps" })}
+diff --git a/client/native.ts b/client/native.ts
+index 5d97e59..65fb4e3 100644
+--- a/client/native.ts
++++ b/client/native.ts
+@@ -112,8 +112,8 @@ export function nativeTokens(colors: Colors): NativeTokens {
+   const surface3 = mix(colors.surface2, colors.foreground, dark ? 0.87 : 0.93);
+   const tokens: NativeTokens = {
+     dark,
+-    surfaceSidebar: dark ? mix(colors.surface0, "#000000", 0.83) : colors.surface2,
+-    surfaceSidebarSelected: dark ? colors.surface2 : surface3,
++    surfaceSidebar: dark ? colors.surface0 : colors.surface2,
++    surfaceSidebarSelected: dark ? mix(colors.surface1, colors.foreground, 0.865) : surface3,
+     surface3,
+     surface4: mix(colors.surface2, colors.foreground, dark ? 0.76 : 0.85),
+     borderAccent: dark ? mix(colors.border, colors.foreground, 0.95) : mix(colors.border, colors.surface0, 0.7),
 diff --git a/client/panel/AgentSections.tsx b/client/panel/AgentSections.tsx
 index ee24cd8..c0cf7b4 100644
 --- a/client/panel/AgentSections.tsx
@@ -1686,7 +1701,7 @@ index e3621c0..5ffb57b 100644
            <Pressable accessibilityRole="button" accessibilityLabel="Back to bots" {...tooltip("Back to bots", "bottom")} onPress={onBack} style={({ pressed }) => ({ padding: 12, borderRadius: 8, backgroundColor: pressed ? tokens.interactionHighlight : "transparent" })}>
              <Icon name="ArrowLeft" size={20} color={colors.foregroundMuted} />
 diff --git a/client/teams/TeamTabs.tsx b/client/teams/TeamTabs.tsx
-index cbd8ce5..6e5457e 100644
+index cbd8ce5..a4ee4cf 100644
 --- a/client/teams/TeamTabs.tsx
 +++ b/client/teams/TeamTabs.tsx
 @@ -4,11 +4,15 @@ import { useRef } from "react";
@@ -1702,7 +1717,7 @@ index cbd8ce5..6e5457e 100644
  import { contextMenuProps, measureAnchor, useMenu } from "../ui/Menu";
  import { tooltip } from "../ui/Tooltip";
 +import { useTabBuckets } from "./tabStatus";
-
+ 
  // Team tabs as Paseo's workspace tabs: a row of tab chips over the screen on desktop
  // (workspace-desktop-tabs-row.tsx), and on phones a switcher row that opens the list
 @@ -23,25 +27,36 @@ interface TeamTabsProps {
@@ -1711,12 +1726,12 @@ index cbd8ce5..6e5457e 100644
    onNewTeam(): void;
 +  resolveHost(hostId: string | null): BotHost;
  }
-
+ 
  function tabLabel(tab: TeamTab): string {
 -  return tab.group ? tab.group.name || "Untitled team" : "Other bots";
 +  return tab.group ? tab.group.name || "Untitled team" : "All bots";
  }
-
+ 
 -/** The tab's icon: the team's logo, or a bot for the bots without a team. */
 -function TabIcon({ colors, tab, highlighted }: { colors: Colors; tab: TeamTab; highlighted: boolean }) {
 -  return tab.group ? <TeamLogo group={tab.group} size={16} dark={nativeTokens(colors).dark} /> : <Icon name="Bot" size={14} color={highlighted ? colors.foreground : colors.foregroundMuted} />;
@@ -1733,7 +1748,7 @@ index cbd8ce5..6e5457e 100644
 +    </View>
 +  );
  }
-
+ 
 -/** The desktop row: 36 high over a divider, 28pt chips 96 to 160 wide, then an inline + for a new team. */
 -export function TeamTabsRow({ colors, tabs, openTab, onTab, onTeamMenu, onNewTeam }: TeamTabsProps) {
 +/** The desktop row: 40 high over a divider (matching Vibing's vertical feature panel header), 28pt chips 96 to 160 wide, then an inline + for a new team. */
@@ -1742,7 +1757,7 @@ index cbd8ce5..6e5457e 100644
 +  const buckets = useTabBuckets(tabs, resolveHost);
    return (
 -    <View accessibilityRole="tablist" style={{ height: 36, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface0 }}>
-+    <View accessibilityRole="tablist" style={{ height: 40, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface0 }}>
++    <View accessibilityRole="tablist" style={{ height: 40, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: nativeTokens(colors).surfaceSidebar }}>
        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }}>
          {tabs.map((tab) => (
 -          <TabChip key={tab.id} colors={colors} tab={tab} active={tab.id === openTab.id} onPress={() => onTab(tab.id)} onMenu={tab.group ? (anchor) => onTeamMenu(tab.group!, anchor) : undefined} />
@@ -1750,16 +1765,19 @@ index cbd8ce5..6e5457e 100644
          ))}
        </ScrollView>
        <View style={{ paddingHorizontal: 4 }}>
-@@ -61,14 +76,15 @@ export function TeamTabsRow({ colors, tabs, openTab, onTab, onTeamMenu, onNewTea
+@@ -60,29 +75,31 @@ export function TeamTabsRow({ colors, tabs, openTab, onTab, onTeamMenu, onNewTea
+   );
  }
-
- /** A tab chip: muted until hovered (surface1) or open (surface2), with the team's menu on right-click. */
+ 
+-/** A tab chip: muted until hovered (surface1) or open (surface2), with the team's menu on right-click. */
 -function TabChip({ colors, tab, active, onPress, onMenu }: { colors: Colors; tab: TeamTab; active: boolean; onPress(): void; onMenu?: (anchor: LayoutRectangle) => void }) {
++/** A tab chip: muted until hovered (surface1) or open (the shared selected tone), with the team's menu on right-click. */
 +function TabChip({ colors, tab, bucket, active, onPress, onMenu }: { colors: Colors; tab: TeamTab; bucket: ChatBucket | null | undefined; active: boolean; onPress(): void; onMenu?: (anchor: LayoutRectangle) => void }) {
    const { hovered, hoverProps } = useHover();
    const label = tabLabel(tab);
    const highlighted = active || hovered;
-+  const background = active ? colors.surface2 : hovered ? colors.surface1 : colors.surface0;
++  const selected = nativeTokens(colors).surfaceSidebarSelected;
++  const background = active ? selected : hovered ? colors.surface1 : nativeTokens(colors).surfaceSidebar;
    return (
      <Pressable
        accessibilityRole="tab"
@@ -1768,7 +1786,12 @@ index cbd8ce5..6e5457e 100644
        accessibilityState={{ selected: active }}
        {...tooltip(label, "bottom", { delay: 400 })}
        onPress={onPress}
-@@ -80,9 +96,9 @@ function TabChip({ colors, tab, active, onPress, onMenu }: { colors: Colors; tab
+       {...(onMenu ? contextMenuProps(onMenu) : {})}
+       {...hoverProps}
+       style={[
+-        { height: 28, minWidth: 96, maxWidth: 160, marginHorizontal: 2, paddingHorizontal: 8, borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: active ? colors.surface2 : hovered ? colors.surface1 : "transparent" },
++        { height: 30, minWidth: 96, maxWidth: 160, marginHorizontal: 2, paddingHorizontal: 8, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: active ? selected : hovered ? colors.surface1 : "transparent" },
+         { userSelect: "none" } as object,
        ]}
      >
        <View style={{ width: 16, height: 16, flexShrink: 0, alignItems: "center", justifyContent: "center" }}>
@@ -1780,9 +1803,9 @@ index cbd8ce5..6e5457e 100644
          {label}
        </Text>
      </Pressable>
-@@ -90,8 +106,9 @@ function TabChip({ colors, tab, active, onPress, onMenu }: { colors: Colors; tab
+@@ -90,8 +107,9 @@ function TabChip({ colors, tab, active, onPress, onMenu }: { colors: Colors; tab
  }
-
+ 
  /** The phone switcher: the open tab across the top with a chevron; the tabs open as a sheet. */
 -export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam }: TeamTabsProps) {
 +export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam, resolveHost }: TeamTabsProps) {
@@ -1791,7 +1814,7 @@ index cbd8ce5..6e5457e 100644
    const ref = useRef<View>(null);
    const open = () =>
      void measureAnchor(ref).then((anchor) =>
-@@ -99,7 +116,7 @@ export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam }: Tea
+@@ -99,7 +117,7 @@ export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam }: Tea
          anchor: anchor ?? { x: 0, y: 0, width: 0, height: 0 },
          title: "Teams",
          entries: [
@@ -1800,7 +1823,7 @@ index cbd8ce5..6e5457e 100644
            { kind: "separator" as const },
            { label: "New team", icon: "Plus", onSelect: onNewTeam },
          ],
-@@ -116,9 +133,9 @@ export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam }: Tea
+@@ -116,9 +134,9 @@ export function TeamTabSwitcher({ colors, tabs, openTab, onTab, onNewTeam }: Tea
        >
          <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 4 }}>
            <View style={{ flexShrink: 0 }}>

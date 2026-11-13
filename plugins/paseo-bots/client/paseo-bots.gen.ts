@@ -3458,8 +3458,8 @@ function nativeTokens(colors2) {
   const surface3 = mix(colors2.surface2, colors2.foreground, dark ? 0.87 : 0.93);
   const tokens = {
     dark,
-    surfaceSidebar: dark ? mix(colors2.surface0, "#000000", 0.83) : colors2.surface2,
-    surfaceSidebarSelected: dark ? colors2.surface2 : surface3,
+    surfaceSidebar: dark ? colors2.surface0 : colors2.surface2,
+    surfaceSidebarSelected: dark ? mix(colors2.surface1, colors2.foreground, 0.865) : surface3,
     surface3,
     surface4: mix(colors2.surface2, colors2.foreground, dark ? 0.76 : 0.85),
     borderAccent: dark ? mix(colors2.border, colors2.foreground, 0.95) : mix(colors2.border, colors2.surface0, 0.7),
@@ -5414,7 +5414,7 @@ var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selec
           ] }) }) : /* @__PURE__ */ jsx6(ChatStatusSlot, { colors: colors2, tokens, bucket }),
           /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, minWidth: 0 }, children: [
             /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "flex-start", gap: 8 }, children: [
-              /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(13), fontWeight: "400", lineHeight: 20, color: colors2.foreground, opacity: hovered ? 1 : 0.76 }, children: title }),
+              /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(13), fontWeight: "400", lineHeight: 20, color: colors2.foreground, opacity: selected || hovered ? 1 : 0.76 }, children: title }),
               touch ? /* @__PURE__ */ jsx6(View6, { style: { width: 40, height: 20 } }) : null
             ] }),
             hoisted ? /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { fontSize: ui(12), lineHeight: 16, color: colors2.foregroundMuted }, children: bot.name }) : null
@@ -12234,7 +12234,7 @@ function TabIcon({ colors: colors2, tab, highlighted, bucket, backdrop }) {
 function TeamTabsRow({ colors: colors2, tabs, openTab, onTab, onTeamMenu, onNewTeam, resolveHost: resolveHost2 }) {
   const add = useHover();
   const buckets = useTabBuckets(tabs, resolveHost2);
-  return /* @__PURE__ */ jsxs35(View37, { accessibilityRole: "tablist", style: { height: 40, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors2.border, backgroundColor: colors2.surface0 }, children: [
+  return /* @__PURE__ */ jsxs35(View37, { accessibilityRole: "tablist", style: { height: 40, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: colors2.border, backgroundColor: nativeTokens(colors2).surfaceSidebar }, children: [
     /* @__PURE__ */ jsx37(ScrollView8, { horizontal: true, showsHorizontalScrollIndicator: false, style: { flexGrow: 0, flexShrink: 1 }, contentContainerStyle: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }, children: tabs.map((tab) => /* @__PURE__ */ jsx37(TabChip, { colors: colors2, tab, bucket: buckets[tab.id], active: tab.id === openTab.id, onPress: () => onTab(tab.id), onMenu: tab.group ? (anchor) => onTeamMenu(tab.group, anchor) : void 0 }, tab.id)) }),
     /* @__PURE__ */ jsx37(View37, { style: { paddingHorizontal: 4 }, children: /* @__PURE__ */ jsx37(
       Pressable21,
@@ -12254,7 +12254,8 @@ function TabChip({ colors: colors2, tab, bucket, active, onPress, onMenu }) {
   const { hovered, hoverProps } = useHover();
   const label = tabLabel(tab);
   const highlighted = active || hovered;
-  const background = active ? colors2.surface2 : hovered ? colors2.surface1 : colors2.surface0;
+  const selected = nativeTokens(colors2).surfaceSidebarSelected;
+  const background = active ? selected : hovered ? colors2.surface1 : nativeTokens(colors2).surfaceSidebar;
   return /* @__PURE__ */ jsxs35(
     Pressable21,
     {
@@ -12266,7 +12267,7 @@ function TabChip({ colors: colors2, tab, bucket, active, onPress, onMenu }) {
       ...onMenu ? contextMenuProps(onMenu) : {},
       ...hoverProps,
       style: [
-        { height: 28, minWidth: 96, maxWidth: 160, marginHorizontal: 2, paddingHorizontal: 8, borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: active ? colors2.surface2 : hovered ? colors2.surface1 : "transparent" },
+        { height: 30, minWidth: 96, maxWidth: 160, marginHorizontal: 2, paddingHorizontal: 8, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: active ? selected : hovered ? colors2.surface1 : "transparent" },
         { userSelect: "none" }
       ],
       children: [
