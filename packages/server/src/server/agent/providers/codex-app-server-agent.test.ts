@@ -9273,3 +9273,61 @@ describe("Codex background terminals", () => {
     ]);
   });
 });
+
+describe("Codex catalog context windows", () => {
+  test("preserves app-server context metadata through model validation", async () => {
+    const appServer = createFakeCodexAppServer({
+      "model/list": () => ({
+        data: [{ id: "reported-context-model", contextWindowMaxTokens: 256000 }],
+      }),
+    });
+    const provider = createProviderWithFakeAppServer(appServer);
+    const catalog = await provider.fetchCatalog({ cwd: tmpdir() });
+    expect(catalog.models[0].contextWindowMaxTokens).toBe(256000);
+    appServer.assertNoErrors();
+  });
+  test("uses an explicit configured ceiling and clamps larger reported windows", async () => {
+    const appServer = createFakeCodexAppServer({
+      "model/list": () => ({
+        data: [{ id: "selected" }, { id: "reported", contextWindowMaxTokens: 256000 }],
+      }),
+      "config/read": () => ({ config: { model_context_window: 64000 } }),
+    });
+    const provider = createProviderWithFakeAppServer(appServer);
+    const catalog = await provider.fetchCatalog({ cwd: tmpdir() });
+    expect(catalog.models.map((model) => model.contextWindowMaxTokens)).toEqual([64000, 64000]);
+    appServer.assertNoErrors();
+  });
+});
+
+test.each(["static catalog", "derived profile"])(
+  "does not borrow remote context for a %s",
+  async (reason) => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      const appServer = createFakeCodexAppServer({
+        "model/list": () => ({ data: [{ id: "selected" }] }),
+        "config/read": () => ({
+          config: {
+            model_provider: "custom",
+            model_providers: { custom: { base_url: "https://gateway.example.test/v1" } },
+            ...(reason === "static catalog" ? { model_catalog_json: "/fixture/models.json" } : {}),
+          },
+        }),
+      });
+      const provider = createProviderWithFakeAppServer(
+        appServer,
+        reason === "derived profile"
+          ? { customProvider: { id: "derived", label: "Derived", extends: "codex" } }
+          : undefined,
+      );
+      const catalog = await provider.fetchCatalog({ cwd: tmpdir() });
+      expect(catalog.models[0].contextWindowMaxTokens).toBeUndefined();
+      expect(fetcher).not.toHaveBeenCalled();
+      appServer.assertNoErrors();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  },
+);

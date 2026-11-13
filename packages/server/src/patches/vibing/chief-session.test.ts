@@ -118,18 +118,19 @@ test("the first connection creates one durable background plain agent in the wor
     protocol: 1,
     status: "ready",
     policy: "chief-v1",
-    provider: "claude",
+    provider: "codex",
     cwd: workdir,
   });
   expect(manager.createAgent).toHaveBeenCalledTimes(1);
   const [config, id, options] = manager.createAgent.mock.calls[0]!;
   expect(config).toMatchObject({
-    provider: "claude",
-    model: "sonnet",
+    provider: "codex",
+    model: "gpt-6.1-sol",
+    thinkingOptionId: "high",
     cwd: workdir,
   });
   // A plain agent: full access, and not restricted to its own MCP server.
-  expect(config.modeId).toBe("bypassPermissions");
+  expect(config.modeId).toBe("full-access");
   expect(config.providerOptions?.restrictToConfiguredMcp).toBeUndefined();
   expect(options).toMatchObject({
     background: true,
@@ -483,6 +484,21 @@ test("a Chief from the private folder starts over in the working folder", async 
   expect(revived.agentId()).toBe(next.agentId);
 });
 
+test("a Chief saved on another provider starts over on the source-owned one", async () => {
+  const { service, records, dependencies } = await fixture();
+  const first = await service.connect(URL_A);
+  // Make it look like the earlier Claude Chief.
+  records.get(first.agentId)!.provider = "claude";
+  await service.close();
+  const revived = createChiefSession(dependencies as never);
+  services.push(revived);
+  await revived.initialize();
+  const next = await revived.connect(URL_A);
+  expect(next.agentId).not.toBe(first.agentId);
+  expect(next.provider).toBe("codex");
+  expect(records.has(first.agentId)).toBe(false);
+});
+
 test("deleted history is never silently recreated", async () => {
   const { service, records, manager } = await fixture();
   const first = await service.connect(URL_A);
@@ -495,7 +511,7 @@ test("deleted history is never silently recreated", async () => {
 test("an unavailable provider is reported distinctly and creates nothing", async () => {
   const { service, manager } = await fixture();
   manager.getProviderAvailability.mockResolvedValueOnce({
-    provider: "claude",
+    provider: "codex",
     available: false,
     error: "missing",
   });

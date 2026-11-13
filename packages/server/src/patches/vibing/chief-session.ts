@@ -31,6 +31,12 @@ const StateSchema = z
   .strict();
 type State = z.infer<typeof StateSchema>;
 
+/** Chief's source-owned runtime defaults: Codex GPT-6.1 Sol, high reasoning, Full Access. */
+const CHIEF_PROVIDER = "codex";
+const CHIEF_MODEL = "gpt-6.1-sol";
+const CHIEF_THINKING = "high";
+const CHIEF_MODE = "full-access";
+
 const NAVIGATION_CHIEF_TOOLS = ["list_apps", "list_workspaces", "open_workspace"] as const;
 const HANDOFF_CHIEF_TOOLS = [
   ...NAVIGATION_CHIEF_TOOLS,
@@ -93,7 +99,7 @@ export interface ChiefDescriptor {
   provider: string;
 }
 
-/** The provider cannot run on this machine; the host shows its own "Chief needs Claude" notice. */
+/** The provider cannot run on this machine; the host shows its own "provider isn't available" notice. */
 export class ChiefProviderUnavailableError extends Error {
   constructor() {
     super("Chief's provider is not available");
@@ -187,10 +193,11 @@ export function createChiefSession(deps: Dependencies) {
     if (!state || !url) throw new Error("Chief session is not initialized");
     if (botPrompt === null) throw new Error("Chief Bot infrastructure unavailable");
     return {
-      provider: "claude",
-      model: "sonnet",
-      // Claude's "Full access": Chief is a plain agent, not a sealed one.
-      modeId: "bypassPermissions",
+      provider: CHIEF_PROVIDER,
+      model: CHIEF_MODEL,
+      thinkingOptionId: CHIEF_THINKING,
+      // Codex's "Full Access": Chief is a plain agent, not a sealed one.
+      modeId: CHIEF_MODE,
       cwd,
       mcpServers: { chief: hostServer(url) },
       toolPolicy: chiefToolPolicy(CHIEF_TOOLS),
@@ -350,14 +357,18 @@ export function createChiefSession(deps: Dependencies) {
     }
   }
 
-  /** A fresh identity (and workspace) for a Chief that was bound to another folder. */
+  /**
+   * A fresh identity (and workspace) for a Chief bound to another folder, or running on a
+   * provider other than the source-owned one: a saved session cannot change provider.
+   */
   async function migrateToWorkingFolder() {
     if (!state || state.state !== "created") return;
     const record = await deps.agentStorage.get(state.agentId);
     const workspace = await deps.workspaceRegistry.get(state.workspaceId);
     const elsewhere =
       (record && path.resolve(record.cwd) !== cwd) ||
-      (workspace && path.resolve(workspace.cwd) !== cwd);
+      (workspace && path.resolve(workspace.cwd) !== cwd) ||
+      (record && record.provider !== CHIEF_PROVIDER);
     if (!elsewhere) return;
     await ensureRetirementCapacity();
     state = {

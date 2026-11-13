@@ -103,8 +103,8 @@ installed). It is harmless without the addon.
 The daemon owns Chief's single agent (`chief-session.ts`). Chief is a plain Full access
 agent with source-owned provider, tool configuration and instructions. It works
 in `PASEO_CHIEF_WORKDIR` (the Vibing backend's `GIT_BASE_DIR`; without it the daemon falls back to
-`~/Documents/space-app-vibing`, created when missing) and runs on Claude Sonnet in Full access
-(`bypassPermissions`) by default in `config()`. Its system prompt is the Bots broker's prepared prompt
+`~/Documents/space-app-vibing`, created when missing) and runs on Codex GPT-6.1 Sol (high reasoning) in Full Access
+(`full-access`) by default in `config()`. A Chief saved on another provider starts over on it. Its system prompt is the Bots broker's prepared prompt
 followed by `CHIEF_PERSONA`.
 The source config keeps host tools, folder and persona canonical at create/resume/rebind,
 while preserving the conversation's model, mode, thinking level and feature values. Private
@@ -152,7 +152,7 @@ timeout 110 s, catalog 15 s, result wait + 10 s). Responses are evidence, never 
 Host protocol (`chief-http.ts`, `chief-tools.ts`), loopback and host-token gated (the
 `x-paseo-worktree-cleanup-token` header): `POST /api/chief/connect` takes the app inventory and
 answers the session descriptor, `{ status: "starting" }` until the Bots plugin has loaded, or
-`{ status: "unavailable", reason: "provider-unavailable" }` when Claude cannot run. Chief's own
+`{ status: "unavailable", reason: "provider-unavailable" }` when Chief's provider (Codex) cannot run. Chief's own
 MCP endpoint (`/api/chief/mcp`, Bearer of its private capability) serves `list_apps`,
 `list_workspaces`, `open_workspace`, the Bots broker tools, `resolve_merge_request`,
 `open_feature`, `start_feature_task`, `check_feature_task` and the three `vibing_api*` tools.
