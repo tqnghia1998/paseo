@@ -21,7 +21,10 @@ import path from "node:path";
 import test from "node:test";
 import { createTestPaseoDaemon } from "../packages/server/dist/server/server/test-utils/paseo-daemon.js";
 import { readMockPlannerCatalog } from "./mock-planner.mjs";
-import { createTestAgentClient } from "../packages/server/dist/server/server/test-utils/fake-agent-client.js";
+import {
+  createTestAgentClient,
+  createTestAgentClients,
+} from "../packages/server/dist/server/server/test-utils/fake-agent-client.js";
 import {
   readPersistedConfig,
   savePersistedConfig,
@@ -36,7 +39,13 @@ test("mock planner catalog includes configured providers over the daemon connect
   };
   const daemon = await createTestPaseoDaemon({
     providerOverrides,
-    agentClients: { "mock-codex": createTestAgentClient("mock-codex") },
+    agentClients: {
+      ...createTestAgentClients(),
+      pi: createTestAgentClient("pi"),
+      copilot: createTestAgentClient("copilot"),
+      omp: createTestAgentClient("omp"),
+      "mock-codex": createTestAgentClient("mock-codex"),
+    },
   });
   try {
     const entries = await readMockPlannerCatalog(daemon.port, providerOverrides);
