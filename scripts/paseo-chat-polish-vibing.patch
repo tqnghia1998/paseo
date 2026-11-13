@@ -1,8 +1,8 @@
 diff --git a/client/dashboard/nav.tsx b/client/dashboard/nav.tsx
-index 699ede4..1590d57 100644
+index 08b8e39..d59f6d9 100644
 --- a/client/dashboard/nav.tsx
 +++ b/client/dashboard/nav.tsx
-@@ -61,8 +61,6 @@ export function RestyleCard({ theme, prefs, onChange }: { theme: PluginTheme; pr
+@@ -68,8 +68,6 @@ export function RestyleCard({ theme, prefs, onChange }: { theme: PluginTheme; pr
   * Update runs `paseo plugin update`, which installs it and restarts the plugin, so the dashboard reloads on the new code.
   */
  function UpdateCard({ theme }: { theme: PluginTheme }) {
@@ -12,7 +12,7 @@ index 699ede4..1590d57 100644
    const apply = useRpc(applyUpdate);
    const [status, setStatus] = useState<UpdateStatus>();
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index fac29d0..3ae2849 100644
+index 05edb75..ae2b637 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
 @@ -23,7 +23,6 @@ ${[4, 5, 3, 0, 2, 1].map((step, i) => `${DOT}:nth-child(${i + 1}) { animation-de
@@ -23,7 +23,7 @@ index fac29d0..3ae2849 100644
  const LOADERS = `
  ${WORKING_BOX} { position: relative; }
  :root[data-cp-rt-loader-size="m"] ${WORKING_BOX} { transform: scale(1.15); }
-@@ -85,10 +84,11 @@ ${LOADERS}
+@@ -86,10 +85,11 @@ ${LOADERS}
  [data-cp-part="queued"] > div:last-child > * * { background-color: transparent !important; }
  [data-cp-part="queued"] > div:last-child > *:hover { background-color: var(--cp-control) !important; }
  [data-cp-part="queued"] > div:last-child svg { width: 14px !important; height: 14px !important; }
@@ -37,8 +37,8 @@ index fac29d0..3ae2849 100644
 +[data-cp-part="queued"] > div:last-child > :is(*):last-child:is(:disabled, [aria-disabled="true"]) :is(svg, svg *) { stroke: var(--cp-muted) !important; }
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]) { opacity: 0.45 !important; }
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]):hover { background-color: transparent !important; }
-
-@@ -176,13 +176,14 @@ ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-c
+ 
+@@ -177,13 +177,14 @@ ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-c
  ${SLASH} > div { background-color: var(--cp-raised, var(--colors-surface1)) !important; border: 1px solid var(--cp-rule, var(--colors-border)) !important; border-radius: 16px !important; padding: 4px !important; gap: 0 !important; flex-direction: column-reverse !important; overflow: hidden !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35) !important; }
  ${SLASH} > div > div { background-color: transparent !important; border-width: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
  ${SLASH} > div[data-cp-glide] { transition: height ${SLASH_GLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1) !important; }
@@ -57,19 +57,19 @@ index fac29d0..3ae2849 100644
  [data-cp-part="slash-detail"] { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 4px; margin-top: 4px !important; padding: 10px 10px 8px !important; border-top: 1px solid var(--cp-rule, var(--colors-border)) !important; }
  [data-cp-part="slash-detail"] > :first-child { grid-area: 1 / 1; font-family: var(--cp-mono, ui-monospace, monospace) !important; font-size: 12px !important; color: var(--cp-accent, var(--colors-accent-bright)) !important; }
  /* Skill descriptions run to paragraphs; three lines, like the row above shows one. */
-@@ -252,7 +253,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
+@@ -253,7 +254,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
  ${PLAN} > div:last-child { padding: 10px 16px 12px !important; border-top: 1px solid var(--cp-rule) !important; }
-
+ 
  [data-testid^="chat-outline-tick-"][aria-selected="true"] > div { background-color: var(--cp-accent) !important; }
 -[data-testid="chat-outline-preview"] { background-color: var(--cp-raised) !important; border-radius: 12px !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
 +[data-testid="chat-outline-preview"] { background-color: var(--cp-raised, var(--colors-surface2)) !important; border-radius: 12px !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
  [data-cp-part="outline-preview"] * { font-size: 13px !important; }
  /* Between ticks, a copy of the last preview glides to the hovered tick until Paseo's next one takes over (ghostOutlinePreview). */
  [data-testid="chat-outline-preview"][data-cp-ghost] { pointer-events: none; animation: none !important; transition: transform 100ms cubic-bezier(0.33, 1, 0.68, 1), opacity 100ms ease-out !important; }
-@@ -301,10 +302,21 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
+@@ -303,10 +304,21 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
  ${USAGE} > div:nth-child(4) { margin-top: -6px !important; }
  `;
-
+ 
 +// Host defaults also cover embedded clients without the sidebar that calls setNativeColors.
  export const NATIVE_CSS = `
 -/* setNativeColors sets these inline from a sidebar item, which Settings doesn't mount: after a reload into Settings, menus drew with
@@ -91,7 +91,7 @@ index fac29d0..3ae2849 100644
  /* Settings pages (tagged by tagSettings): surfaces 12, controls 8, and one text field, 32px in a sunken well that lights up on focus.
     Settings has its own sidebar, so a reload there can come before the --cp-* colors are set: Paseo's own colors stand in. */
  [data-cp-set="card"] { border-radius: 12px !important; }
-@@ -312,7 +324,9 @@ export const NATIVE_CSS = `
+@@ -314,7 +326,9 @@ export const NATIVE_CSS = `
  :is([data-cp-set="field"], [data-cp-set="area"]) { border: 1px solid var(--colors-border) !important; border-radius: 8px !important; background-color: var(--cp-sunken, color-mix(in srgb, var(--colors-surface0), #000 15%)) !important; transition: border-color 120ms ease-out, box-shadow 120ms ease-out; }
  /* The stand-in above is a mid grey on a light page. */
  :root:is(.light, .pluginLight) :is([data-cp-set="field"], [data-cp-set="area"]) { background-color: var(--cp-sunken, var(--colors-surface2)) !important; }
@@ -117,7 +117,7 @@ index 950e307..7e60db5 100644
  export const PLAN = '[data-testid="permission-plan-card"]';
  export const CTX = '[data-cp-part="context"]';
 diff --git a/index.server.ts b/index.server.ts
-index 28e9004..cb48876 100644
+index 27fb94a..07c5af6 100644
 --- a/index.server.ts
 +++ b/index.server.ts
 @@ -35,7 +35,10 @@ export default function contribute(server: PluginServerContext) {
@@ -133,11 +133,11 @@ index 28e9004..cb48876 100644
    server.before("agent.create", async ({ request }, { paseo }) => {
      // Off by default, so unreadable prefs mean off; internal agents (commit and PR messages) never draw.
 diff --git a/package-lock.json b/package-lock.json
-index c1bb0af..8b1d42e 100644
+index 13c5aa9..dee0dad 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -9,18 +9,18 @@
-       "version": "0.11.0",
+       "version": "0.14.0",
        "license": "MIT",
        "dependencies": {
 -        "@getpaseo/protocol": "0.13.0",
@@ -254,7 +254,7 @@ index c1bb0af..8b1d42e 100644
        "funding": {
          "url": "https://github.com/sponsors/colinhacks"
 diff --git a/package.json b/package.json
-index 8e70e24..7f21e76 100644
+index 4323f86..0aa4c1e 100644
 --- a/package.json
 +++ b/package.json
 @@ -32,16 +32,16 @@
@@ -278,13 +278,14 @@ index 8e70e24..7f21e76 100644
      "sharp": "0.35.5"
    }
 diff --git a/server/update.ts b/server/update.ts
-index 26e59a7..c80e240 100644
+index 3ec4de5..c80e240 100644
 --- a/server/update.ts
 +++ b/server/update.ts
-@@ -1,69 +1,14 @@
+@@ -1,70 +1,14 @@
 -import { spawn } from "node:child_process";
+-import { translate, type Language } from "../shared/i18n";
  import type { UpdateStatus } from "../shared/update";
-
+ 
 -// Paseo hands plugin processes its CLI's path; a daemon started from the CLI has it on PATH.
 -const CLI = process.env.PASEO_CLI || "paseo";
 -const NAME = "Chat Polish";
@@ -332,27 +333,29 @@ index 26e59a7..c80e240 100644
 -const short = (r: Revision | undefined) => (r?.kind === "git" ? r.commit.slice(0, 7) : r?.version);
 -const shortRevision = (rev: string | undefined) => (rev && /^[0-9a-f]{40}$/.test(rev) ? rev.slice(0, 7) : rev);
 -
-+// This vendored directory copy follows Vibing's bundle updates. Do not invoke a
-+// separately installed Paseo CLI: it may target another daemon or predate plugins.
- export async function checkForUpdate(): Promise<UpdateStatus> {
+-export async function checkForUpdate(lang: Language = "en"): Promise<UpdateStatus> {
 -  try {
 -    const [item] = (await plugin(["update", await ownId(), "--check"])) as Preview[];
--    if (!item) return { state: "error", links: [], error: "No result from paseo" };
+-    if (!item) return { state: "error", links: [], error: translate(lang, "server.noResult") };
 -    const state = item.outcome === "installed-newer" ? "current" : item.outcome;
 -    return { state, current: shortRevision(item.current?.currentRevision), target: short(item.target), links: item.links ?? [], error: item.error };
 -  } catch (error) {
 -    return { state: "error", links: [], error: error instanceof Error ? error.message : String(error) };
 -  }
++// This vendored directory copy follows Vibing's bundle updates. Do not invoke a
++// separately installed Paseo CLI: it may target another daemon or predate plugins.
++export async function checkForUpdate(): Promise<UpdateStatus> {
 +  return { state: "local", links: [] };
  }
-
- export async function installUpdate(): Promise<{ error?: string }> {
+ 
+-export async function installUpdate(lang: Language = "en"): Promise<{ error?: string }> {
 -  try {
 -    const [result] = (await plugin(["update", await ownId(), "--yes"])) as Array<{ outcome: string; error?: string }>;
--    return result?.outcome === "error" ? { error: result.error ?? "Update failed" } : {};
+-    return result?.outcome === "error" ? { error: result.error ?? translate(lang, "server.updateFailed") } : {};
 -  } catch (error) {
 -    return { error: error instanceof Error ? error.message : String(error) };
 -  }
++export async function installUpdate(): Promise<{ error?: string }> {
 +  return {
 +    error:
 +      "This bundled copy is managed by Space App Vibing. Update Space App Vibing to update Chat Polish.",
@@ -391,10 +394,10 @@ index 0000000..a4a535c
 +  await assert.rejects(access(marker));
 +});
 diff --git a/test/web.test.mjs b/test/web.test.mjs
-index c46f32c..e765173 100644
+index ef6a88a..5b8dd3e 100644
 --- a/test/web.test.mjs
 +++ b/test/web.test.mjs
-@@ -21,7 +21,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
+@@ -23,7 +23,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
  __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{value:!0}),e.AttachmentLightbox=function(h){const u={a:{b:1}},x=[1,2];return null};var t=r(d[0])},4021,[1008,472]);`;
      const mermaidDoc = "<!doctype html>\n<p class=\"x\" title='y'><!-- __PASEO_MERMAID_RUNTIME_RECEIVE__ \\x41 A \u{1F600} \v / --></p>";
      const html = `<!doctype html><html><head><title>pending</title><script type="text/plain" src="/bundle.js"></script></head><body><img src="/hold" hidden>
@@ -407,7 +410,7 @@ index c46f32c..e765173 100644
        <div data-testid="context-window-details" style="position:absolute;border:1px solid black;border-radius:12px;background:white"><div><span>Context</span><span>35% used</span></div><div data-testid="usage-report-test" style="height:180px">Usage</div></div>
        <div data-testid="assistant-message"><div data-paseo-markdown-tag="blockquote"><span id="marker">[!NO</span></div></div>
        <div><div data-testid="permission-request-deny" style="color:#888"><div><span>Deny</span></div></div><div data-testid="permission-request-action-always" style="color:#888"><div><span>Allow always</span></div></div><div data-testid="permission-request-action-once" style="color:#eee"><div><span>Allow once</span></div></div></div>
-@@ -63,6 +67,43 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
+@@ -65,6 +69,43 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
            const restyle = web.restyleNative(() => true); const clamp = web.clampUserMessages(() => true);
            window.__r = (id) => (id === 4021 ? { AttachmentLightbox: function Lightbox() {} } : {});
            checks.paseoLightboxFromBundle = (await web.loadPaseoLightbox())?.name === 'Lightbox';
@@ -451,7 +454,7 @@ index c46f32c..e765173 100644
            checks.mermaidDocFromBundle = (await web.loadMermaidDoc()) === new TextDecoder().decode(Uint8Array.from(atob("${Buffer.from(mermaidDoc).toString("base64")}"), (ch) => ch.charCodeAt(0)));
            await wait(); checks.observerSettles = !capped;
            // Paseo 0.14 wraps a prompt's rows and text in a message preview that clamps long prompts itself.
-@@ -284,7 +325,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
+@@ -286,7 +327,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
      assert.equal(report.error, undefined, report.error);
      assert.deepEqual(report.errors, []);
      for (const [check, passed] of Object.entries(report.checks)) assert.equal(passed, true, check);
