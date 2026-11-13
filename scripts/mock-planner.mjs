@@ -86,6 +86,130 @@ export function readMockPlannerCatalog(port, providerOverrides = {}, timeoutMs =
   });
 }
 
+function decodePartialJsonString(rawSlice) {
+  let clean = rawSlice;
+  let trailingBackslashes = 0;
+  for (let idx = clean.length - 1; idx >= 0 && clean[idx] === "\\"; idx -= 1) {
+    trailingBackslashes += 1;
+  }
+  if (trailingBackslashes % 2 === 1) {
+    clean = clean.slice(0, -1);
+  }
+  const trailingUnicode = /\\u[0-9a-fA-F]{0,3}$/.exec(clean);
+  if (trailingUnicode) {
+    clean = clean.slice(0, trailingUnicode.index);
+  }
+  try {
+    return JSON.parse(`"${clean}"`);
+  } catch {
+    return clean
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\");
+  }
+}
+
+function applyPlanStringField(top, rawValue, currentView, currentUnresolved) {
+  if (top?.kind !== "object" || !top.lastKey) return;
+  const key = top.lastKey;
+  top.lastKey = null;
+  const trimmed = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!trimmed) return;
+  switch (top.role) {
+    case "view":
+      if (key === "title" && currentView) currentView.title = trimmed;
+      break;
+    case "case":
+      if (key === "purpose" && currentView) currentView.purposes.push(trimmed);
+      break;
+    case "unresolvedItem":
+      if (currentUnresolved && ["file", "reason"].includes(key)) currentUnresolved[key] = trimmed;
+      break;
+  }
+}
+
+function readPlanString(source, start) {
+  let end = start + 1;
+  while (end < source.length) {
+    if (source[end] === "\\") {
+      end += 2;
+      continue;
+    }
+    if (source[end] === '"')
+      return { value: JSON.parse(source.slice(start, end + 1)), end, complete: true };
+    end += 1;
+  }
+  return {
+    value: decodePartialJsonString(source.slice(start + 1)),
+    end,
+    complete: false,
+  };
+}
+
+function planContainerRole(top, kind) {
+  if (kind === "array") {
+    const roles = { "root:views": "views", "view:cases": "cases", "root:unresolved": "unresolved" };
+    return roles[`${top?.role}:${top?.lastKey}`] ?? "other";
+  }
+  if (!top) return "root";
+  return { views: "view", cases: "case", unresolved: "unresolvedItem" }[top.role] ?? "other";
+}
+
+function extractPartialPlanProgress(source) {
+  const views = [];
+  const unresolved = [];
+  const stack = [];
+  let currentView = null;
+  let currentUnresolved = null;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    const top = stack[stack.length - 1];
+    if (ch === '"') {
+      let token;
+      try {
+        token = readPlanString(source, i);
+      } catch {
+        break;
+      }
+      if (!token.complete) {
+        applyPlanStringField(top, token.value, currentView, currentUnresolved);
+        break;
+      }
+      i = token.end;
+      let k = token.end + 1;
+      while (k < source.length && /\s/.test(source[k])) k += 1;
+      if (source[k] === ":" && top?.kind === "object") {
+        top.lastKey = token.value;
+        i = k;
+        continue;
+      }
+      applyPlanStringField(top, token.value, currentView, currentUnresolved);
+      continue;
+    }
+    if (ch === "{") {
+      const role = planContainerRole(top, "object");
+      if (role === "view") {
+        currentView = { title: "", purposes: [] };
+        views.push(currentView);
+      } else if (role === "unresolvedItem") {
+        currentUnresolved = { file: "", reason: "" };
+        unresolved.push(currentUnresolved);
+      }
+      if (top?.kind === "object") top.lastKey = null;
+      stack.push({ kind: "object", role, lastKey: null });
+    } else if (ch === "[") {
+      const role = planContainerRole(top, "array");
+      if (top?.kind === "object") top.lastKey = null;
+      stack.push({ kind: "array", role, lastKey: null });
+    } else if (ch === "}" || ch === "]") {
+      stack.pop();
+    }
+  }
+  return { views, unresolved };
+}
+
 export function createMockPlannerBridge({ manager, structured, catalog, providerOverrides }) {
   const active = new Map();
   const supported = (id) => supportedProvider(id, providerOverrides);
@@ -102,12 +226,23 @@ export function createMockPlannerBridge({ manager, structured, catalog, provider
           : (entry.error ?? (entry.status === "ready" ? "" : "Harness unavailable.")),
         models: (entry.models ?? [])
           .filter((model) => model.isSelectable !== false)
-          .map(({ id, label, isDefault, thinkingOptions, defaultThinkingOptionId }) => {
-            const value = { id, label, isDefault: isDefault === true };
-            if (thinkingOptions) value.thinkingOptions = thinkingOptions;
-            if (defaultThinkingOptionId) value.defaultThinkingOptionId = defaultThinkingOptionId;
-            return value;
-          }),
+          .map(
+            ({
+              id,
+              label,
+              isDefault,
+              thinkingOptions,
+              defaultThinkingOptionId,
+              contextWindowMaxTokens,
+            }) => {
+              const value = { id, label, isDefault: isDefault === true };
+              if (Number.isSafeInteger(contextWindowMaxTokens) && contextWindowMaxTokens > 0)
+                value.contextWindowMaxTokens = contextWindowMaxTokens;
+              if (thinkingOptions) value.thinkingOptions = thinkingOptions;
+              if (defaultThinkingOptionId) value.defaultThinkingOptionId = defaultThinkingOptionId;
+              return value;
+            },
+          ),
       }));
   return {
     list,
@@ -117,7 +252,7 @@ export function createMockPlannerBridge({ manager, structured, catalog, provider
       entry.cancelled = true;
       await manager.cancelAgentRun(entry.agentId).catch(() => {});
     },
-    async generate(id, input) {
+    async generate(id, input, onProgress) {
       if (active.has(id)) throw new Error("Planner request already running");
       const entry = { agentId: randomUUID(), cancelled: false };
       active.set(id, entry);
@@ -161,9 +296,135 @@ export function createMockPlannerBridge({ manager, structured, catalog, provider
           maxRetries: 0,
           schemaName: "MockPlan",
           caller: async (prompt) => {
-            const result = await manager.runAgent(entry.agentId, prompt);
+            const emitted = new Map();
+            const pending = new Map();
+            let flushTimer = null;
+            let reasoningText = "";
+            let assistantText = "";
+            let sawStreamEvent = false;
+            let toolCallDetected = false;
+            const sendProgress = (progressId, role, text) => {
+              if (entry.cancelled || toolCallDetected || !onProgress) return;
+              if (emitted.get(progressId) === text) return;
+              emitted.set(progressId, text);
+              onProgress({ id: progressId, role, text });
+            };
+            const flushPending = () => {
+              if (flushTimer) {
+                clearTimeout(flushTimer);
+                flushTimer = null;
+              }
+              for (const [progressId, item] of pending) {
+                pending.delete(progressId);
+                sendProgress(progressId, item.role, item.text);
+              }
+            };
+            const emit = (progressId, role, text) => {
+              if (entry.cancelled || toolCallDetected || !onProgress) return;
+              const trimmed = text.trim();
+              if (!trimmed || emitted.get(progressId) === trimmed) return;
+              if (!emitted.has(progressId)) {
+                flushPending();
+                sendProgress(progressId, role, trimmed);
+                return;
+              }
+              pending.set(progressId, { role, text: trimmed });
+              if (!flushTimer) {
+                flushTimer = setTimeout(flushPending, 100);
+                flushTimer.unref?.();
+              }
+            };
+            const consumeTimelineItem = (item) => {
+              if (!item || entry.cancelled || toolCallDetected) return;
+              if (item.type === "tool_call") {
+                toolCallDetected = true;
+                pending.clear();
+                return;
+              }
+              if (item.type === "reasoning" && typeof item.text === "string" && item.text) {
+                reasoningText += item.text;
+                const paragraphs = reasoningText
+                  .replace(/\r\n/g, "\n")
+                  .split(/\n{2,}/)
+                  .map((part) => part.trim())
+                  .filter(Boolean);
+                paragraphs.forEach((paragraph, index) => {
+                  emit(`reasoning-${index}`, "assistant", paragraph);
+                });
+                return;
+              }
+              if (item.type === "assistant_message" && typeof item.text === "string" && item.text) {
+                assistantText += item.text;
+                const fenceIndex = assistantText.indexOf("```");
+                const braceIndex = assistantText.indexOf("{");
+                const jsonStart =
+                  fenceIndex >= 0 && (braceIndex < 0 || fenceIndex < braceIndex)
+                    ? fenceIndex
+                    : braceIndex;
+                const proseSource =
+                  jsonStart >= 0 ? assistantText.slice(0, jsonStart) : assistantText;
+                const proseParagraphs = proseSource
+                  .replace(/\r\n/g, "\n")
+                  .split(/\n{2,}/)
+                  .map((part) => part.trim())
+                  .filter(Boolean);
+                proseParagraphs.forEach((paragraph, index) => {
+                  emit(`assistant-${index}`, "assistant", paragraph);
+                });
+                if (braceIndex >= 0) {
+                  const partial = extractPartialPlanProgress(assistantText.slice(braceIndex));
+                  partial.views.forEach((view, index) => {
+                    if (view.title) {
+                      emit(`view-${index}`, "assistant", [view.title, ...view.purposes].join("\n"));
+                    }
+                  });
+                  const streamedUnresolved = partial.unresolved.filter(
+                    (entryItem) => entryItem.file && entryItem.reason,
+                  );
+                  if (streamedUnresolved.length) {
+                    emit(
+                      "unresolved",
+                      "assistant",
+                      `Unresolved needs\n${streamedUnresolved.map((entryItem) => `${entryItem.file}: ${entryItem.reason}`).join("\n")}`,
+                    );
+                  }
+                }
+              }
+            };
+            const unsubscribe =
+              typeof manager.subscribe === "function"
+                ? manager.subscribe(
+                    (event) => {
+                      if (
+                        event?.type === "agent_stream" &&
+                        event.agentId === entry.agentId &&
+                        event.event?.type === "timeline"
+                      ) {
+                        sawStreamEvent = true;
+                        consumeTimelineItem(event.event.item);
+                      }
+                    },
+                    { agentId: entry.agentId, replayState: false },
+                  )
+                : null;
+            let result;
+            try {
+              result = await manager.runAgent(entry.agentId, prompt);
+              if (
+                !sawStreamEvent &&
+                !entry.cancelled &&
+                !result?.canceled &&
+                Array.isArray(result?.timeline) &&
+                !result.timeline.some((item) => item.type === "tool_call")
+              ) {
+                for (const item of result.timeline) consumeTimelineItem(item);
+              }
+            } finally {
+              unsubscribe?.();
+              flushPending();
+            }
             if (entry.cancelled || result.canceled) throw new Error("Planning cancelled");
-            if (result.timeline?.some((item) => item.type === "tool_call"))
+            if (toolCallDetected || result.timeline?.some((item) => item.type === "tool_call"))
               throw new Error(
                 "Planner attempted a tool call. Planning must use only the supplied evidence.",
               );
@@ -197,7 +458,10 @@ export function attachMockPlannerIpc(bridge) {
       if (message.action === "catalog") value = await bridge.list();
       else if (message.action === "cancel") value = await bridge.cancel(message.targetId);
       else if (message.action === "generate")
-        value = await bridge.generate(message.id, message.input);
+        value = await bridge.generate(message.id, message.input, (progress) => {
+          if (process.connected)
+            process.send({ channel: "mock-planner", id: message.id, progress });
+        });
       else throw new Error("Unknown planner action");
       if (process.connected) process.send({ channel: "mock-planner", id: message.id, value });
     } catch (error) {
