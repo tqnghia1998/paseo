@@ -3464,6 +3464,7 @@ function nativeTokens(colors2) {
     surface4: mix(colors2.surface2, colors2.foreground, dark ? 0.76 : 0.85),
     borderAccent: dark ? mix(colors2.border, colors2.foreground, 0.95) : mix(colors2.border, colors2.surface0, 0.7),
     foregroundExtraMuted: mix(colors2.foregroundMuted, colors2.surface0, 0.65),
+    foregroundSelected: mix(colors2.foreground, "#ffffff", 0.25),
     accentBright: mix(colors2.accent, "#ffffff", dark ? 0.37 : 0.75),
     interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
     statusDotRunning: dark ? "#5caaf6" : "#268ae0",
@@ -5414,7 +5415,7 @@ var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selec
           ] }) }) : /* @__PURE__ */ jsx6(ChatStatusSlot, { colors: colors2, tokens, bucket }),
           /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, minWidth: 0 }, children: [
             /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "flex-start", gap: 8 }, children: [
-              /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(13), fontWeight: "400", lineHeight: 20, color: colors2.foreground, opacity: selected || hovered ? 1 : 0.76 }, children: title }),
+              /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { flex: 1, minWidth: 0, fontSize: ui(13), fontWeight: "400", lineHeight: 20, color: selected ? tokens.foregroundSelected : colors2.foreground, opacity: selected || hovered ? 1 : 0.76 }, children: title }),
               touch ? /* @__PURE__ */ jsx6(View6, { style: { width: 40, height: 20 } }) : null
             ] }),
             hoisted ? /* @__PURE__ */ jsx6(Text5, { numberOfLines: 1, style: { fontSize: ui(12), lineHeight: 16, color: colors2.foregroundMuted }, children: bot.name }) : null
@@ -12272,7 +12273,7 @@ function TabChip({ colors: colors2, tab, bucket, active, onPress, onMenu }) {
       ],
       children: [
         /* @__PURE__ */ jsx37(View37, { style: { width: 16, height: 16, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx37(TabIcon, { colors: colors2, tab, highlighted, bucket, backdrop: background }) }),
-        /* @__PURE__ */ jsx37(Text29, { numberOfLines: 1, style: { flexShrink: 1, minWidth: 0, fontSize: ui(13), color: highlighted ? colors2.foreground : colors2.foregroundMuted }, children: label })
+        /* @__PURE__ */ jsx37(Text29, { numberOfLines: 1, style: { flexShrink: 1, minWidth: 0, fontSize: ui(13), color: active ? nativeTokens(colors2).foregroundSelected : highlighted ? colors2.foreground : colors2.foregroundMuted }, children: label })
       ]
     }
   );
