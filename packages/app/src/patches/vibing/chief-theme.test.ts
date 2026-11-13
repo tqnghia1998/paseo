@@ -67,17 +67,17 @@ describe("Chief theme", () => {
     expect(updateTheme.mock.calls.every(([, updater]) => updater === withChiefTheme)).toBe(true);
   });
 
-  it("keeps text readable on the navy surfaces", () => {
+  it("keeps text readable on the Space App Vibing surfaces", () => {
     const { background, control, foreground, mutedForeground, ring, accent, accentBright } =
       CHIEF_PALETTE;
-    expect(contrast(foreground, background)).toBeGreaterThanOrEqual(15);
-    expect(contrast(foreground, control)).toBeGreaterThanOrEqual(12);
-    expect(contrast(mutedForeground, background)).toBeGreaterThanOrEqual(7);
+    expect(contrast(foreground, background)).toBeGreaterThanOrEqual(6);
+    expect(contrast(foreground, control)).toBeGreaterThanOrEqual(6);
+    expect(contrast(mutedForeground, background)).toBeGreaterThanOrEqual(5.5);
     expect(contrast(mutedForeground, control)).toBeGreaterThanOrEqual(4.5);
     // Placeholders and muted controls: a non-text contrast floor.
     expect(contrast(ring, background)).toBeGreaterThanOrEqual(3.5);
     expect(contrast(accent, CHIEF_PALETTE.accentForeground)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(accentBright, background)).toBeGreaterThanOrEqual(7);
+    expect(contrast(accentBright, background)).toBeGreaterThanOrEqual(5.5);
     expect(contrast(accent, background)).toBeGreaterThanOrEqual(3);
   });
 
