@@ -5,16 +5,18 @@ export default function contribute(client: PluginClientContext) {
     id: "dark",
     name: "Space App Vibing",
     appearance: "dark",
+    // Values come from the host palette in Space App Vibing (docs/theme.md): base, hover tone,
+    // raised and subtle border. Keep them equal to --palette-neutral-* in src/index.css.
     colors: {
-      background: "#1a1a1a",
-      foreground: "#ffffff",
-      raised: "#1a1a1a",
-      control: "#252526",
-      border: "#222225",
-      accent: "#3a96dd",
-      mutedForeground: "#a0a0a0",
+      background: "#181a1f",
+      foreground: "#abb2bf",
+      raised: "#21242b",
+      control: "#1c2025",
+      border: "#21242b",
+      accent: "#61afef",
+      mutedForeground: "#9da5b4",
       // Paseo also uses ring for placeholders, muted controls and terminal bright black.
-      ring: "#6e6e6e",
+      ring: "#7f848e",
     },
   });
   return removeTheme;

@@ -537,12 +537,16 @@ Do not label these patches as installed plugins merely to make them discoverable
   the policy. Preserve synchronous draft clearing and queue checkpoint merging
   and deduplication. Explicit send controls and alternate-send keyboard behavior
   follow upstream. Native saved provider/model preferences own selection.
+  Attachment cleanup reads image references from every saved queue checkpoint
+  before collecting bytes, including hosts whose sessions have not restored and
+  queues owned by other workspace frames. Pending checkpoint writes finish first;
+  unreadable checkpoints skip cleanup rather than delete potentially queued images.
 - The native Appearance content-width setting controls transcript and composer.
   Bots routes default to 1200px and use 48px desktop transcript gutters to clear
   the outline rail; normal chats retain the upstream 820px default and gutters.
-  Explicit saved widths persist. The bundled theme uses the native `addTheme`
-  palette and is selected once only on embedded Bots routes; later explicit
-  appearance choices persist. The theme needs an explicit Paseo version range
+  Explicit saved widths persist. The bundled theme supplies the Space App Vibing
+  palette through the native `addTheme` API and is selected once only on
+  embedded Bots routes; later explicit appearance choices persist. The theme needs an explicit Paseo version range
   and a server entry to load independently of the user-plugin switch.
 - Worktree APIs stay loopback-only and host-token-gated. Startup pruning,
   archive/close/flush/delete ordering, directory-boundary matching and capability
