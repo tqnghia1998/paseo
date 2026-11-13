@@ -2,6 +2,7 @@ import type { ProviderOptions } from "@getpaseo/protocol/agent-types";
 import { applyProviderOptionsPatch } from "../option-controls.js";
 import { assertChangesAreLive, validateProviderOptions } from "../provider-options.js";
 import { CodexBackgroundInventory } from "./codex/background-inventory.js";
+import { fetchCodexModelContexts } from "./codex/model-context.js";
 import {
   AgentTurnStartCanceledError,
   getAgentStreamEventTurnId,
@@ -1049,6 +1050,7 @@ interface CodexReasoningEffortEntry {
 
 interface CodexModel {
   id: string;
+  contextWindowMaxTokens?: number;
   displayName?: string;
   description?: string;
   isDefault?: boolean;
@@ -1063,6 +1065,7 @@ const CodexModelListResponseSchema = z.object({
     .array(
       z.object({
         id: z.string(),
+        contextWindowMaxTokens: z.number().int().positive().optional().catch(undefined),
         serviceTiers: z.array(CodexServiceTierSchema).optional(),
         displayName: z.string().optional(),
         description: z.string().optional(),
@@ -8557,17 +8560,70 @@ export class CodexAppServerAgentClient implements AgentClient {
         typeof configuredDefaultModelId === "string"
           ? models.some((model) => model?.id === configuredDefaultModelId)
           : false;
-      return models.map((model) =>
-        buildCodexModelDefinition(model, {
-          configuredDefaultModelId,
-          configuredDefaultThinkingOptionId,
-          hasConfiguredDefaultModel,
-        }),
+      const { reportedContexts, configuredContext } = await this.fetchModelContexts(
+        client,
+        models.some((model) => model.contextWindowMaxTokens === undefined),
+        context,
       );
+      return models.map((model) => {
+        const reported = model.contextWindowMaxTokens ?? reportedContexts.get(model.id);
+        return buildCodexModelDefinition(
+          {
+            ...model,
+            contextWindowMaxTokens:
+              reported === undefined
+                ? configuredContext
+                : Math.min(reported, configuredContext ?? reported),
+          },
+          {
+            configuredDefaultModelId,
+            configuredDefaultThinkingOptionId,
+            hasConfiguredDefaultModel,
+          },
+        );
+      });
     } finally {
       context?.signal.removeEventListener("abort", handleAbort);
       await dispose();
     }
+  }
+
+  private async fetchModelContexts(
+    client: CodexAppServerClient,
+    needsRemote: boolean,
+    context?: ProviderRefreshContext,
+  ) {
+    let reportedContexts = new Map<string, number>();
+    let configuredContext: number | undefined;
+    try {
+      const response = toObjectRecord(await client.request("config/read", {}));
+      const config = toObjectRecord(response?.config);
+      const limit = config?.model_context_window;
+      if (typeof limit === "number" && Number.isSafeInteger(limit) && limit > 0)
+        configuredContext = limit;
+      // A static catalog overrides remote discovery. Derived profiles keep their own metadata.
+      if (!config || config.model_catalog_json || this.deps.customProvider || !needsRemote)
+        return { reportedContexts, configuredContext };
+      const providers = toObjectRecord(config.model_providers);
+      const selected = typeof config.model_provider === "string" ? config.model_provider : "openai";
+      const provider = toObjectRecord(providers?.[selected]);
+      if (provider) {
+        const prefix = await resolveCodexLaunchPrefix(this.runtimeSettings);
+        const version = await resolveBinaryVersion(prefix.command, context?.signal);
+        const env = buildCodexAppServerEnv(this.runtimeSettings);
+        reportedContexts = await fetchCodexModelContexts({
+          provider,
+          env,
+          home: codexStartupStateDirKey(env),
+          originator: CODEX_NON_ORIGINATING_APP_SERVER_CLIENT_INFO.name,
+          clientVersion: version.match(/\d+\.\d+\.\d+/)?.[0],
+          signal: context?.signal,
+        });
+      }
+    } catch {
+      // Missing optional metadata leaves context unknown.
+    }
+    return { reportedContexts, configuredContext };
   }
 
   async archiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
@@ -8673,6 +8729,9 @@ function buildCodexModelDefinition(
   return {
     provider: CODEX_PROVIDER,
     id: model.id,
+    ...(model.contextWindowMaxTokens !== undefined
+      ? { contextWindowMaxTokens: model.contextWindowMaxTokens }
+      : {}),
     label: normalizeCodexModelLabel(model.displayName ?? ""),
     description: model.description,
     isDefault: isDefaultModel,
