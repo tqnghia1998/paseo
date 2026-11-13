@@ -1,23 +1,45 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 
+// Values come from the host palette in Space App Vibing (docs/theme.md, Desktop Plus colours).
+// Keep them equal to --palette-neutral-* and --palette-blue in src/index.css for each mode:
+// background = neutral-850 surface, raised and border = neutral-750 hover tone,
+// control = neutral-800 raised, accent = blue, foreground = neutral-200 text,
+// mutedForeground = neutral-300 subdued text, ring = neutral-400 faint text (Paseo also uses
+// ring for placeholders, muted controls and terminal bright black).
+// Embedded frames pick the theme of the host's mode in memory; see patches/vibing/theme.ts.
 export default function contribute(client: PluginClientContext) {
-  const removeTheme = client.addTheme({
+  const removeDark = client.addTheme({
     id: "dark",
     name: "Space App Vibing",
     appearance: "dark",
-    // Values come from the host palette in Space App Vibing (docs/theme.md): base, hover tone,
-    // raised and subtle border. Keep them equal to --palette-neutral-* in src/index.css.
     colors: {
-      background: "#181a1f",
-      foreground: "#abb2bf",
-      raised: "#21242b",
-      control: "#1c2025",
-      border: "#21242b",
-      accent: "#61afef",
-      mutedForeground: "#9da5b4",
-      // Paseo also uses ring for placeholders, muted controls and terminal bright black.
-      ring: "#7f848e",
+      background: "#1d2125",
+      foreground: "#f6f8fa",
+      raised: "#2f363d",
+      control: "#24292e",
+      border: "#2f363d",
+      accent: "#79b8ff",
+      mutedForeground: "#d1d5da",
+      ring: "#959da5",
     },
   });
-  return removeTheme;
+  const removeLight = client.addTheme({
+    id: "light",
+    name: "Space App Vibing Light",
+    appearance: "light",
+    colors: {
+      background: "#ffffff",
+      foreground: "#24292e",
+      raised: "#f6f8fa",
+      control: "#fafbfc",
+      border: "#f6f8fa",
+      accent: "#0366d6",
+      mutedForeground: "#586069",
+      ring: "#6a737d",
+    },
+  });
+  return async () => {
+    await removeLight();
+    await removeDark();
+  };
 }

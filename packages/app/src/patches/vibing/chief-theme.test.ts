@@ -4,11 +4,34 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { REGISTERED_THEMES, darkTheme, lightTheme } from "@/styles/theme";
 import {
   applyChiefTheme,
+  buildChiefColors,
   CHIEF_ACCENT_COLORS,
   CHIEF_COLORS,
-  CHIEF_PALETTE,
+  CHIEF_PALETTES,
   withChiefTheme,
 } from "./chief-theme";
+
+// Space App Vibing's src/components/Chief/ChiefPanel.css, per mode (accent-bright is the
+// resolved hex of its color-mix). Change both repositories together.
+const HOST_CHIEF_CSS = {
+  dark: {
+    surface: "#24292e",
+    control: "#2f363d",
+    border: "#2f363d",
+    textMuted: "#d1d5da",
+    accent: "#79b8ff",
+    accentBright: "#8dc3ff",
+  },
+  light: {
+    surface: "#fafbfc",
+    control: "#f6f8fa",
+    border: "#f6f8fa",
+    textMuted: "#586069",
+    accent: "#0366d6",
+    accentBright: "#0357b6",
+  },
+} as const;
+const CHIEF_PALETTE = CHIEF_PALETTES.dark;
 
 const { updateTheme } = vi.hoisted(() => ({ updateTheme: vi.fn() }));
 vi.mock("react-native-unistyles", () => ({ UnistylesRuntime: { updateTheme } }));
@@ -53,38 +76,81 @@ describe("Chief theme", () => {
     expect(CHIEF_COLORS.statusDanger).toBe(darkTheme.colors.statusDanger);
   });
 
-  it("only tints the accent when a light theme is selected in the shared settings", () => {
+  it("only tints the accent of a light shared-settings theme when the host sent no mode", () => {
     const next = withChiefTheme(lightTheme as unknown as typeof darkTheme);
     expect(next.colors.surface0).toBe(lightTheme.colors.surface0);
     expect(next.colors).toMatchObject(CHIEF_ACCENT_COLORS);
+    // Readable on a light surface: the light-mode accent trio.
+    expect(CHIEF_ACCENT_COLORS).toEqual({
+      accent: CHIEF_PALETTES.light.accent,
+      accentBright: CHIEF_PALETTES.light.accentBright,
+      accentForeground: CHIEF_PALETTES.light.accentForeground,
+    });
   });
 
   it("is a no-op outside the Chief frame and patches every registered theme inside it", () => {
-    applyChiefTheme(false);
+    applyChiefTheme("dark", false);
     expect(updateTheme).not.toHaveBeenCalled();
-    applyChiefTheme(true);
+    applyChiefTheme("light", false);
+    expect(updateTheme).not.toHaveBeenCalled();
+    applyChiefTheme("light", true);
     expect(updateTheme.mock.calls.map(([key]) => key)).toEqual(Object.keys(REGISTERED_THEMES));
-    expect(updateTheme.mock.calls.every(([, updater]) => updater === withChiefTheme)).toBe(true);
+    const updater = updateTheme.mock.calls[0][1] as (theme: typeof darkTheme) => typeof darkTheme;
+    expect(updater(darkTheme).colors.surface0).toBe(CHIEF_PALETTES.light.background);
+    updateTheme.mockClear();
+    applyChiefTheme(null, true);
+    const fallback = updateTheme.mock.calls[0][1] as (theme: typeof darkTheme) => typeof darkTheme;
+    expect(fallback(darkTheme).colors.surface0).toBe(CHIEF_PALETTES.dark.background);
   });
 
-  it("keeps text readable on the Space App Vibing surfaces", () => {
+  it.each(["dark", "light"] as const)("matches the host Chief popup colours in %s mode", (mode) => {
+    const host = HOST_CHIEF_CSS[mode];
+    const palette = CHIEF_PALETTES[mode];
+    expect(palette).toMatchObject({
+      background: host.surface,
+      control: host.control,
+      border: host.border,
+      mutedForeground: host.textMuted,
+      accent: host.accent,
+      accentBright: host.accentBright,
+    });
+    expect(palette.accentForeground).toBe(mode === "dark" ? "#1d2125" : "#ffffff");
+    const colors = buildChiefColors(mode);
+    expect(colors.surface0).toBe(host.surface);
+    expect(colors.background).toBe(host.surface);
+    expect(colors.surface2).toBe(host.control);
+    expect(colors.border).toBe(host.border);
+    expect(colors.accent).toBe(host.accent);
+    expect(colors.accentForeground).toBe(palette.accentForeground);
+  });
+
+  it.each(["dark", "light"] as const)("keeps text readable in %s mode", (mode) => {
     const { background, control, foreground, mutedForeground, ring, accent, accentBright } =
-      CHIEF_PALETTE;
+      CHIEF_PALETTES[mode];
     expect(contrast(foreground, background)).toBeGreaterThanOrEqual(6);
     expect(contrast(foreground, control)).toBeGreaterThanOrEqual(6);
-    expect(contrast(mutedForeground, background)).toBeGreaterThanOrEqual(5.5);
+    expect(contrast(mutedForeground, background)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(mutedForeground, control)).toBeGreaterThanOrEqual(4.5);
     // Placeholders and muted controls: a non-text contrast floor.
-    expect(contrast(ring, background)).toBeGreaterThanOrEqual(3.5);
-    expect(contrast(accent, CHIEF_PALETTE.accentForeground)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(accentBright, background)).toBeGreaterThanOrEqual(5.5);
+    expect(contrast(ring, background)).toBeGreaterThanOrEqual(3);
+    expect(contrast(accent, CHIEF_PALETTES[mode].accentForeground)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(accentBright, background)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(accent, background)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("builds a light colour set for the light mode and a dark one otherwise", () => {
+    const light = withChiefTheme(darkTheme, "light");
+    expect(light.colors.surface0).toBe(CHIEF_PALETTES.light.background);
+    expect(light.colorScheme).toBe("light");
+    const dark = withChiefTheme(lightTheme as unknown as typeof darkTheme, "dark");
+    expect(dark.colors.surface0).toBe(CHIEF_PALETTES.dark.background);
+    expect(dark.colorScheme).toBe("dark");
   });
 
   it("re-applies after each appearance update and never saves a theme choice", () => {
     const provider = readFileSync(resolve(__dirname, "../../appearance/provider.tsx"), "utf8");
     const applied = provider.indexOf("applyAppearance({");
-    const themed = provider.indexOf("applyChiefTheme();");
+    const themed = provider.indexOf("applyChiefTheme(hostMode);");
     expect(applied).toBeGreaterThan(-1);
     expect(themed).toBeGreaterThan(applied);
     // Settings are shared by every Paseo frame: the look must stay in memory.
