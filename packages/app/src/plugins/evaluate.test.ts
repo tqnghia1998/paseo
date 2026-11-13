@@ -70,7 +70,7 @@ describe("evaluatePluginClientBundle", () => {
     },
   );
 
-  it("registers only the Vibing palette and releases it on cleanup", async () => {
+  it("registers only the Vibing dark and light palettes and releases them on cleanup", async () => {
     const root = new URL("../../../../plugins/space-app-vibing-theme/", import.meta.url);
     const { clientBundle } = await compilePlugin({
       client: fileURLToPath(new URL("index.client.ts", root)),
@@ -80,7 +80,9 @@ describe("evaluatePluginClientBundle", () => {
     expect(plugin.settingsScreens).toEqual([]);
     expect(plugin.themes.map(({ id, name }) => ({ id, name }))).toEqual([
       { id: "dark", name: "Space App Vibing" },
+      { id: "light", name: "Space App Vibing Light" },
     ]);
+    expect(plugin.themes.map(({ appearance }) => appearance)).toEqual(["dark", "light"]);
     await plugin.cleanup();
     expect(plugin.settingsScreens).toEqual([]);
     expect(plugin.themes).toEqual([]);
