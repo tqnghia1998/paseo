@@ -13,7 +13,7 @@ const runtime = {
   paseo: {
     agents: {
       async list() {
-        return { subscription: { subscribe() {} } };
+        return { subscription: { subscribe() {}, async release() {} } };
       },
     },
   },
@@ -45,7 +45,7 @@ function bundle(body: string): string {
 }
 
 describe("evaluatePluginClientBundle", () => {
-  it.each(["paseo-bots", "annotations"])(
+  it.each(["paseo-bots", "shell-yeah"])(
     "loads the bundled %s client and releases its contributions",
     async (id) => {
       const root = new URL(`../../../../plugins/${id}/`, import.meta.url);
@@ -58,11 +58,14 @@ describe("evaluatePluginClientBundle", () => {
         if (id === "paseo-bots") {
           expect(plugin.settingsScreens.map(({ title }) => title)).toEqual(["Bots"]);
           expect(plugin.surfaces.map(({ id: surfaceId }) => surfaceId)).toEqual(["bots"]);
+        } else {
+          expect(plugin.timelineRenderers).not.toHaveLength(0);
         }
       } finally {
         await plugin.cleanup();
       }
       expect(plugin.timelineTransformers).toEqual([]);
+      expect(plugin.timelineRenderers).toEqual([]);
       expect(plugin.settingsScreens).toEqual([]);
     },
   );
