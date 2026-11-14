@@ -134,10 +134,10 @@ It is edited in place because upstream ships it in this repository; keep it on e
 `ais-switch-usage-source` reports the company gateway's shared monthly Claude/Codex allowance by
 reading the installed macOS AIS Switch app's login, read-only (see its README).
 `space-app-vibing-theme` registers two themes, `dark` and `light`, with the Space App Vibing
-(Desktop Plus) palette of each mode; keep them equal to `--palette-*` in Vibing's `src/index.css`.
-Its `border` is the palette's own border value (`--palette-border`: `#2b3137` dark, `#e1e4e8`
-light), not the hover tone that `raised` uses; `default-dark-tint.ts` and Chief's `CHIEF_PALETTES` match it.
-It also sets the optional `raisedStrong` (`surface3`) to the hover tone (`#2f363d` / `#f6f8fa`):
+palette of each mode (dark is Desktop Plus, light is Tokyo Night Light); keep them equal to `--palette-*` in
+Vibing's `src/index.css`. Its `border` is the palette's own border value (`--palette-border`: `#2b3137` dark,
+`#c1c2c7` light), not the hover tone that `raised` uses; `default-dark-tint.ts` and Chief's `CHIEF_PALETTES` match it.
+It also sets the optional `raisedStrong` (`surface3`) to the hover tone (`#2f363d` / `#dcdee3`):
 without it the theme builder would derive `surface3`, and with it secondary buttons, selected
 segments, switch tracks and the light sidebar hover, from the border. `raisedStrong` is a fork
 addition to the theme contract (`PluginThemeColors`, the theme schema and builders in

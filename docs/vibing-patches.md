@@ -247,7 +247,7 @@ chat when it belongs to the frame's worktree and ordinary chat context, and answ
 `{ type: "paseo:open-chat-ack", requestId, ok }`, repeating its answer for re-sent requests.
 
 The Chief frame (`/?view=chief`) uses the Space App Vibing palette of the host's light/dark
-mode, one step toward the foreground of the canvas so the popup stands out. `chief-theme.ts`
+mode (dark: Desktop Plus, light: Tokyo Night Light), one step toward the foreground of the canvas so the popup stands out. `chief-theme.ts`
 holds one palette per mode (`CHIEF_PALETTES.dark` / `.light`) and builds the whole colour set with
 the same semantic builders as a contributed plugin theme, then swaps it into the live Unistyles
 theme in memory, keeping fonts, sizes, content width and the user's syntax palette; success stays
@@ -548,7 +548,8 @@ Do not label these patches as installed plugins merely to make them discoverable
   Bots routes default to 1200px and use 48px desktop transcript gutters to clear
   the outline rail; normal chats retain the upstream 820px default and gutters.
   Explicit saved widths persist. The bundled theme registers two Space App Vibing
-  palettes (ids `dark` and `light`, from Desktop Plus colours) through the native
+  palettes (ids `dark` and `light`; dark is Desktop Plus colours, light is the Tokyo Night Light
+  colour set) through the native
   `addTheme` API. Every embedded frame (Bots, Chief, Live Design Agent) shows the one
   matching the host's light/dark mode: `host-theme-mode.ts` reads the `themeMode` query
   synchronously for the first paint and then follows `{ type: "space:theme-mode", mode }`

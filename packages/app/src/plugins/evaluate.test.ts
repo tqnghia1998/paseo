@@ -86,7 +86,7 @@ describe("evaluatePluginClientBundle", () => {
     // Borders have their own value; raisedStrong (surface3) keeps the hover tone.
     expect(plugin.themes.map(({ colors }) => [colors.border, colors.raisedStrong])).toEqual([
       ["#2b3137", "#2f363d"],
-      ["#e1e4e8", "#f6f8fa"],
+      ["#c1c2c7", "#dcdee3"],
     ]);
     await plugin.cleanup();
     expect(plugin.settingsScreens).toEqual([]);
