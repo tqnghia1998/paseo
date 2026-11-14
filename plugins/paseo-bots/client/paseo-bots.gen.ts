@@ -3455,7 +3455,7 @@ function nativeTokens(colors2) {
   const cached = cache.get(colors2);
   if (cached) return cached;
   const dark = isDark(colors2);
-  const selected = mix(colors2.surface1, colors2.foreground, dark ? 0.865 : 0.955);
+  const selected = mix(colors2.surface1, colors2.foreground, dark ? 0.865 : 0.97);
   const surface3 = dark ? mix(colors2.surface2, colors2.foreground, 0.87) : selected;
   const tokens = {
     dark,

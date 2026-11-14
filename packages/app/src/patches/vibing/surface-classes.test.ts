@@ -26,7 +26,9 @@ const CLASSES = {
   light: {
     canvas: "#d6d8df",
     raised: "#e6e7ed",
-    hover: "#cbd1df",
+    // Neutral grey, the 50/50 mix of the canvas and the border (#d6d8df, #c1c2c7): the light tone of the
+    // plugin's `raised`/`raisedStrong`. The host's hover primitive (#cbd1df) reads blue and stays host-only.
+    hover: "#cbcdd3",
     selected: "#bfc9df",
     faint: "#686a77",
   },
@@ -93,6 +95,21 @@ describe("Space App Vibing surface classes (light equals dark)", () => {
     expect(table).toEqual(
       table.map(({ slot, expected }) => ({ slot, expected, dark: expected, light: expected })),
     );
+  });
+
+  it("derives the light neutral tone as the mix of the canvas and the border", () => {
+    const mix = (a: string, b: string) =>
+      `#${[1, 3, 5]
+        .map((i) =>
+          // The red midpoint is 203.5; it is truncated, so the tone is #cbcdd3.
+          Math.floor(
+            (Number.parseInt(a.slice(i, i + 2), 16) + Number.parseInt(b.slice(i, i + 2), 16)) / 2,
+          )
+            .toString(16)
+            .padStart(2, "0"),
+        )
+        .join("")}`;
+    expect(mix("#d6d8df", "#c1c2c7")).toBe(CLASSES.light.hover);
   });
 
   it("keeps the dark values byte for byte", async () => {

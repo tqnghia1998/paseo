@@ -23,8 +23,8 @@ function ratio(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-// Space App Vibing light surfaces (docs/theme.md): canvas, hover tone, raised.
-const SURFACES = ["#d6d8df", "#cbd1df", "#e6e7ed"];
+// Space App Vibing light surfaces (docs/theme.md): canvas, neutral raised tone, raised card.
+const SURFACES = ["#d6d8df", "#cbcdd3", "#e6e7ed"];
 
 describe("readableOnSurfaces", () => {
   it("leaves a colour that already passes alone", () => {

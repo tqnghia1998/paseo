@@ -83,10 +83,10 @@ describe("evaluatePluginClientBundle", () => {
       { id: "light", name: "Space App Vibing Light" },
     ]);
     expect(plugin.themes.map(({ appearance }) => appearance)).toEqual(["dark", "light"]);
-    // Borders have their own value; raisedStrong (surface3) keeps the hover tone.
+    // Borders have their own value; raisedStrong (surface3) is the dark hover tone and, in light, a neutral grey (not the blue hover primitive).
     expect(plugin.themes.map(({ colors }) => [colors.border, colors.raisedStrong])).toEqual([
       ["#2b3137", "#2f363d"],
-      ["#c1c2c7", "#cbd1df"],
+      ["#c1c2c7", "#cbcdd3"],
     ]);
     // The sidebar is the canvas and the popover the raised card in both modes.
     expect(plugin.themes.map(({ colors }) => [colors.background, colors.sidebar])).toEqual([

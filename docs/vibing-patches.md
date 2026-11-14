@@ -560,10 +560,11 @@ Do not label these patches as installed plugins merely to make them discoverable
   keeps its own saved appearance. Until the plugin catalog loads, embedded frames use
   built-in dark and light themes tinted to the same palettes (`default-dark-tint.ts`). Borders use
   the palette's own border value while `surface3` (secondary fills, light sidebar hover) stays on
-  the hover tone, through the fork's optional `raisedStrong` theme color (plugin contract,
+  the raised tone (dark hover `#2f363d`; light the neutral grey `#cbcdd3`, derived from the canvas and border so it
+  is not blue), through the fork's optional `raisedStrong` theme color (plugin contract,
   `plugins/themes/index.ts`; omitted, it falls back to `border`), Chief's `CHIEF_PALETTES.raisedStrong`
   and the tints' `surface3`. In light, `light-readable.ts` darkens upstream's status, diff, syntax
-  and terminal ANSI colours (written for a white page) to 4.5:1 on the canvas, hover and raised
+  and terminal ANSI colours (written for a white page) to 4.5:1 on the canvas, the neutral raised tone and raised
   surfaces through `buildLightSemanticColors` and `buildLightTheme`, in the embedded build only.
   A container that is the canvas in dark is the canvas in light (`surfaceSidebar`), and the classes
   that are raised in dark stay raised in light (`popover`): the fork's optional `sidebar` and `popover`

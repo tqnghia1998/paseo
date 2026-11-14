@@ -2,8 +2,10 @@ import type { PluginClientContext } from "@getpaseo/plugin/client";
 
 // Values come from the host palette in Space App Vibing (docs/theme.md: dark is Desktop Plus, light follows the SeaTalk light theme arrangement of Tokyo Night Light tones).
 // Keep them equal to --palette-neutral-* and --palette-blue in src/index.css for each mode:
-// background = neutral-850 surface, raised and raisedStrong = neutral-750 hover tone (raisedStrong
-// keeps Paseo's secondary fills and light sidebar hover on the hover tone), sidebar = neutral-850 (the list, tab strip
+// background = neutral-850 surface, raised and raisedStrong = neutral-750 hover tone in dark and, in light, the
+// neutral grey #cbcdd3 (the 50/50 mix of the canvas #d6d8df and the border #c1c2c7, derived and not a palette
+// primitive: the light hover primitive #cbd1df reads blue on the composer, user bubbles and badges; raisedStrong
+// keeps Paseo's secondary fills and light sidebar hover on the same tone), sidebar = neutral-850 (the list, tab strip
 // and settings navigation are the canvas in both modes; a light plugin theme that omits it paints control there),
 // popover = neutral-800 (tooltips and hover cards are the raised card in both modes), border = --palette-border
 // (its own value, never the hover tone), control = neutral-800 raised, accent = blue, foreground = neutral-200 text,
@@ -36,10 +38,10 @@ export default function contribute(client: PluginClientContext) {
     colors: {
       background: "#d6d8df",
       foreground: "#343b59",
-      raised: "#cbd1df",
+      raised: "#cbcdd3",
       control: "#e6e7ed",
       border: "#c1c2c7",
-      raisedStrong: "#cbd1df",
+      raisedStrong: "#cbcdd3",
       sidebar: "#d6d8df",
       popover: "#e6e7ed",
       accent: "#395d99",

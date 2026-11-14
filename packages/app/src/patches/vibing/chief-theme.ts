@@ -44,10 +44,11 @@ export const CHIEF_PALETTES = {
   },
   light: {
     background: "#e6e7ed",
-    control: "#cbd1df",
+    // The neutral grey #cbcdd3 (50/50 mix of #d6d8df and #c1c2c7), not the blue-tinted hover tone.
+    control: "#cbcdd3",
     border: "#c1c2c7",
-    raised: "#cbd1df",
-    raisedStrong: "#cbd1df",
+    raised: "#cbcdd3",
+    raisedStrong: "#cbcdd3",
     ring: "#686a77",
     foreground: "#343b59",
     mutedForeground: "#4c505e",

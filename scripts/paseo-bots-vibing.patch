@@ -1612,9 +1612,9 @@ index 5d97e59..0b34818 100644
    if (cached) return cached;
    const dark = isDark(colors);
 -  const surface3 = mix(colors.surface2, colors.foreground, dark ? 0.87 : 0.93);
-+  // The selected tone: the hover tone mixed toward the text. Dark and light are the same class (a step past hover that is
-+  // not lighter than the canvas); mixing toward the canvas in light made the pill and the toggle tracks lighter than it.
-+  const selected = mix(colors.surface1, colors.foreground, dark ? 0.865 : 0.955);
++  // The selected tone: the raised tone mixed toward the text, a step past it and never lighter than the canvas (dark and light
++  // are the same class). Light 0.97 on the neutral raised tone #cbcdd3 keeps muted text and status dots at 4.5:1 and 3:1.
++  const selected = mix(colors.surface1, colors.foreground, dark ? 0.865 : 0.97);
 +  const surface3 = dark ? mix(colors.surface2, colors.foreground, 0.87) : selected;
    const tokens: NativeTokens = {
      dark,
