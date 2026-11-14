@@ -116,4 +116,10 @@ describe("resolveComposerPillHover", () => {
     expect(source).toContain("backgroundColor: theme.colors.composerPillHover");
     expect(source).not.toContain("resolveComposerPillHover");
   });
+
+  it("reaches the Run pill: the plugin composer button hovers with the pill style, not its own surface2 fill", () => {
+    const source = readFileSync(resolve(__dirname, "../../plugins/buttons/view.tsx"), "utf8");
+    expect(source).toContain("(input ? styles.inputActive : composerPillStyles.bodyActive)");
+    expect(source).not.toContain("(input ? styles.inputActive : styles.active)");
+  });
 });
