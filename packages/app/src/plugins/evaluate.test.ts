@@ -83,6 +83,11 @@ describe("evaluatePluginClientBundle", () => {
       { id: "light", name: "Space App Vibing Light" },
     ]);
     expect(plugin.themes.map(({ appearance }) => appearance)).toEqual(["dark", "light"]);
+    // Borders have their own value; raisedStrong (surface3) keeps the hover tone.
+    expect(plugin.themes.map(({ colors }) => [colors.border, colors.raisedStrong])).toEqual([
+      ["#2b3137", "#2f363d"],
+      ["#e1e4e8", "#f6f8fa"],
+    ]);
     await plugin.cleanup();
     expect(plugin.settingsScreens).toEqual([]);
     expect(plugin.themes).toEqual([]);

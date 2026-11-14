@@ -1190,6 +1190,7 @@ export default function contribute(client: PluginClientContext) {
 | `sidebar`              | 侧边栏背景。可选；深色主题默认为 `background`，浅色为 `control` |
 | `sidebarHover`         | 可选的侧边栏行悬停背景                                          |
 | `sidebarSelected`      | 可选的侧边栏行选中背景                                          |
+| `raisedStrong` | Vibing fallback for `surface3` when omitted. |
 | `surface3`             | 可选的消息气泡、次要按钮和芯片中性填充                          |
 | `surface4`             | 可选的轨道和其他状态的较强中性填充                              |
 | `foregroundExtraMuted` | 可选的三级文字颜色，包括侧边栏时间戳                            |
@@ -1197,6 +1198,7 @@ export default function contribute(client: PluginClientContext) {
 可选覆盖颜色按原值使用。省略的状态、填充和三级文字颜色分别由调色板推导。覆盖颜色时，请确保它与对应的背景或文字有足够对比度。
 
 `sidebar` 和以上五个覆盖颜色需要 Paseo 0.16.0 或更高版本。较旧的应用会拒绝包含未知颜色的主题，该插件的其他贡献也会随之加载失败，因此使用其中任何一个时请提高 `requirements.paseo`。
+
 
 `appearance` 为 `"light"` 或 `"dark"`。Paseo 用它选择对应的表面、状态、diff、语法高亮、终端和阴影的推导方式。
 
