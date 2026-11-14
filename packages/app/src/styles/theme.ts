@@ -4,7 +4,10 @@ import {
   resolveDefaultDarkTint,
   resolveDefaultLightTint,
 } from "@/patches/vibing/default-dark-tint";
-import { resolveComposerPillHover } from "@/patches/vibing/composer-pill-hover";
+import {
+  resolveComposerPillHover,
+  resolveComposerSurface,
+} from "@/patches/vibing/composer-pill-hover";
 import { resolveLightReadable } from "@/patches/vibing/light-readable";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
 import { deriveSurfaceStates } from "./derive-colors";
@@ -281,6 +284,10 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
   const statusColors = resolveLightReadable(lightStatusColors, surfaces, 4.5);
   const statusDotColors = resolveLightReadable(lightStatusDotColors, surfaces, 3);
   const terminalAnsi = resolveLightReadable(lightTerminalAnsi, [tint.surface0], 4.5);
+  const composerSurface = resolveComposerSurface({
+    colorScheme: "light",
+    colors: { surface0: tint.surface0, surface1: tint.surface1, surface2: tint.surface2 },
+  });
 
   return {
     surface0: tint.surface0,
@@ -288,10 +295,13 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     surface2: tint.surface2,
     surface3: tint.surface3,
     surface4: tint.surface4,
-    // Hover fill of the composer pills (Run, diff stat); a token so web style sheets read the per-theme CSS variable.
+    // Rest tone of the composer shell and pills, and the pills' hover fill; tokens so web style sheets read
+    // the per-theme CSS variable (they only see var() references, so nothing can be computed there).
+    composerSurface,
+
     composerPillHover: resolveComposerPillHover({
       colorScheme: "light",
-      colors: { surface1: tint.surface1, surface2: tint.surface2, foreground: tint.foreground },
+      colors: { composerSurface, surface2: tint.surface2, foreground: tint.foreground },
     }),
 
     surfaceSidebar: tint.surfaceSidebar,
@@ -428,6 +438,8 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surface2: tint.surface2,
     surface3: tint.surface3,
     surface4: tint.surface4,
+    composerSurface: tint.surface1,
+
     composerPillHover: tint.surface2,
 
     surfaceSidebar: tint.surfaceSidebar,
