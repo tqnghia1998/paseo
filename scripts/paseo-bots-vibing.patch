@@ -246,7 +246,7 @@ index 9d97c7f..855ce7f 100644
      </Modal>
    );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 5174b04..d4276e1 100644
+index 5174b04..39396db 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
 @@ -1,3 +1,5 @@
@@ -471,6 +471,15 @@ index 5174b04..d4276e1 100644
              />
            ))}
            {ordered.length > SIDEBAR_GROUP_LIMIT ? <ShowMoreRow colors={colors} expanded={expanded} onPress={() => setExpanded(!expanded)} /> : null}
+@@ -392,7 +405,7 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
+       <View pointerEvents="none" style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+         <View style={{ width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }}>
+           {hovered ? (
+-            <Icon name={isOpen ? "ChevronDown" : "ChevronRight"} size={14} color={CHEVRON_COLOR} />
++            <Icon name={isOpen ? "ChevronDown" : "ChevronRight"} size={14} color={tokens.dark ? CHEVRON_COLOR : tokens.foregroundExtraMuted} />
+           ) : (
+             <View style={{ position: "relative", width: 16, height: 16 }}>
+               <Avatar avatar={bot.avatar} size={16} />
 @@ -400,14 +413,14 @@ function BotRow({ colors, tokens, bot, lead, touch, isOpen, aggregate, hostLabel
              </View>
            )}
@@ -1342,6 +1351,108 @@ index 0000000..1f1bc75
 +  botWorkspace?: BotWorkspace;
 +  workspaceBridge?: ComponentType<BotWorkspaceBridgeProps>;
 +}
+diff --git a/client/chat/Composer.tsx b/client/chat/Composer.tsx
+index aff5897..7d0f3fd 100644
+--- a/client/chat/Composer.tsx
++++ b/client/chat/Composer.tsx
+@@ -469,7 +469,7 @@ function ChatComposer({ colors, bot, host, agentId, running, layout, keyboardOpe
+           </View>
+         ) : null}
+         {sendError ? (
+-          <Text accessibilityRole="alert" style={{ color: RED_500, fontSize: ui(14) }}>
++          <Text accessibilityRole="alert" style={{ color: nativeTokens(colors).dark ? RED_500 : colors.statusDanger, fontSize: ui(14) }}>
+             {sendError}
+           </Text>
+         ) : null}
+diff --git a/client/chat/composer/ContextMeter.tsx b/client/chat/composer/ContextMeter.tsx
+index 5a8d768..4c0c430 100644
+--- a/client/chat/composer/ContextMeter.tsx
++++ b/client/chat/composer/ContextMeter.tsx
+@@ -32,7 +32,7 @@ export function ContextMeter({ colors, usage, pending, glyphSize }: { colors: Co
+   }
+   const rounded = Math.round(usage.percent);
+   const tone = meterTone(usage.percent);
+-  const progress = tone === "danger" ? colors.statusDanger : tone === "warning" ? AMBER_500 : colors.foregroundMuted;
++  const progress = tone === "danger" ? colors.statusDanger : tone === "warning" ? (tokens.dark ? AMBER_500 : tokens.statusDotWarning) : colors.foregroundMuted;
+   const cost = usage.costUsd !== null ? formatSessionCost(usage.costUsd) : null;
+   const tokensLine = `${formatTokenCount(usage.used)} / ${formatTokenCount(usage.max)} tokens`;
+   const costLine = cost ? `Session cost ${cost}` : null;
+diff --git a/client/chat/stream/rows.tsx b/client/chat/stream/rows.tsx
+index d87a3bd..ff0118c 100644
+--- a/client/chat/stream/rows.tsx
++++ b/client/chat/stream/rows.tsx
+@@ -327,12 +327,15 @@ const NOTIFICATION_STYLES = {
+ 
+ const Notification = memo(function Notification({ colors, level, message }: { colors: Colors; level: "info" | "warning" | "error"; message: string }) {
+   const style = NOTIFICATION_STYLES[level];
++  const tokens = nativeTokens(colors);
++  // The dark tints are pastel; in light the status dot hues keep the icon at 3:1.
++  const tint = tokens.dark ? style.tint : level === "info" ? tokens.statusDotRunning : level === "warning" ? tokens.statusDotWarning : style.tint;
+   return (
+     <View style={{ borderRadius: 6, overflow: "hidden", backgroundColor: style.background }}>
+       <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
+         <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+           <View style={{ flexShrink: 0, height: 20, justifyContent: "center" }}>
+-            <Icon name={style.icon} size={16} color={style.tint || colors.statusDanger} />
++            <Icon name={style.icon} size={16} color={tint || colors.statusDanger} />
+           </View>
+           <View style={{ flex: 1 }}>
+             <Text selectable style={{ color: colors.foreground, fontSize: ui(14), lineHeight: 20 }}>
+@@ -354,11 +357,12 @@ function compactionLabel(status: "loading" | "completed", trigger?: "auto" | "ma
+ }
+ 
+ const CompactionMarker = memo(function CompactionMarker({ colors, status, trigger, preTokens }: { colors: Colors; status: "loading" | "completed"; trigger?: "auto" | "manual"; preTokens?: number }) {
++  const glyph = nativeTokens(colors).dark ? "#a1a1aa" : colors.foregroundMuted;
+   return (
+     <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16, gap: 8 }}>
+       <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+-        {status === "loading" ? <Spinner color="#a1a1aa" /> : <Icon name="Scissors" size={12} color="#a1a1aa" />}
++        {status === "loading" ? <Spinner color={glyph} /> : <Icon name="Scissors" size={12} color={glyph} />}
+         <Text style={{ fontSize: METADATA_SIZE, color: colors.foregroundMuted }}>{compactionLabel(status, trigger, preTokens)}</Text>
+       </View>
+       <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+diff --git a/client/chat/stream/ui.tsx b/client/chat/stream/ui.tsx
+index bd71e8d..33f04ec 100644
+--- a/client/chat/stream/ui.tsx
++++ b/client/chat/stream/ui.tsx
+@@ -55,7 +55,7 @@ const SHIMMER_CSS = `
+ @keyframes pbot-toolcall-shimmer { 0% { background-position: 120% 0; } 100% { background-position: -20% 0; } }
+ [data-pbot-shimmer] {
+   color: inherit;
+-  background-image: linear-gradient(90deg, currentColor 0%, currentColor 38%, #ffffff 50%, currentColor 62%, currentColor 100%);
++  background-image: linear-gradient(90deg, currentColor 0%, currentColor 38%, var(--pbot-shimmer-highlight, #ffffff) 50%, currentColor 62%, currentColor 100%);
+   background-size: 300% 100%;
+   background-repeat: no-repeat;
+   -webkit-background-clip: text;
+@@ -79,7 +79,7 @@ function shimmerDuration(label: string, secondary?: string): number {
+  * (a clipped gradient); phones pulse its opacity instead, since plugins have no
+  * masked views.
+  */
+-function useShimmer(active: boolean, duration: number): { textProps: object; style: StyleProp<TextStyle> } {
++function useShimmer(active: boolean, duration: number, highlight?: string): { textProps: object; style: StyleProp<TextStyle> } {
+   const opacity = useRef(new Animated.Value(1)).current;
+   useEffect(() => {
+     if (!active) return;
+@@ -101,7 +101,7 @@ function useShimmer(active: boolean, duration: number): { textProps: object; sty
+   }, [active, duration, opacity]);
+   if (!active) return { textProps: {}, style: null };
+   if (isWeb) {
+-    return { textProps: { dataSet: { pbotShimmer: "" } }, style: { animationDuration: `${duration.toFixed(2)}s` } as TextStyle };
++    return { textProps: { dataSet: { pbotShimmer: "" } }, style: { animationDuration: `${duration.toFixed(2)}s`, ...(highlight ? { "--pbot-shimmer-highlight": highlight } : {}) } as TextStyle };
+   }
+   return { textProps: {}, style: { opacity } as unknown as TextStyle };
+ }
+@@ -239,7 +239,8 @@ export const ExpandableBadge = memo(function ExpandableBadge({ colors, label, se
+   const interactive = Boolean(onToggle);
+   const active = hovered || isExpanded;
+   const duration = shimmerDuration(label, secondaryLabel);
+-  const shimmer = useShimmer(isLoading, duration);
++  // The sweep brightens the text in dark; in light it darkens it (a white band would erase the label).
++  const shimmer = useShimmer(isLoading, duration, nativeTokens(colors).dark ? undefined : "#000000");
+   const details = isExpanded && renderDetails ? renderDetails() : null;
+   const labelStyle: TextStyle = {
+     color: isLoading || active ? colors.foreground : colors.foregroundMuted,
 diff --git a/client/data.ts b/client/data.ts
 index ea7654d..d8dbb97 100644
 --- a/client/data.ts
@@ -1484,19 +1595,19 @@ index 2b79473..1c571f7 100644
        onToggleBot={(bot, on) => toggleApp(app.slug, bot, on)}
        onDisconnected={() => setTarget(compact ? null : { kind: "apps" })}
 diff --git a/client/native.ts b/client/native.ts
-index 5d97e59..ce072b9 100644
+index 5d97e59..a1fb261 100644
 --- a/client/native.ts
 +++ b/client/native.ts
 @@ -95,6 +95,8 @@ export interface NativeTokens {
    surface4: string;
    borderAccent: string;
    foregroundExtraMuted: string;
-+  /** Text on a selected tab or row: lighter than the default foreground. */
++  /** Text on a selected tab or row: lighter than the default foreground in dark, the foreground itself in light. */
 +  foregroundSelected: string;
    accentBright: string;
    interactionHighlight: string;
    statusDotRunning: string;
-@@ -112,12 +114,13 @@ export function nativeTokens(colors: Colors): NativeTokens {
+@@ -112,18 +114,25 @@ export function nativeTokens(colors: Colors): NativeTokens {
    const surface3 = mix(colors.surface2, colors.foreground, dark ? 0.87 : 0.93);
    const tokens: NativeTokens = {
      dark,
@@ -1505,13 +1616,32 @@ index 5d97e59..ce072b9 100644
 +    surfaceSidebar: dark ? colors.surface0 : colors.surface2,
 +    surfaceSidebarSelected: dark ? mix(colors.surface1, colors.foreground, 0.865) : surface3,
      surface3,
-     surface4: mix(colors.surface2, colors.foreground, dark ? 0.76 : 0.85),
+-    surface4: mix(colors.surface2, colors.foreground, dark ? 0.76 : 0.85),
++    // Placeholder text: in light, a tone of the muted foreground (4.5:1 on the canvas and on raised).
++    surface4: dark ? mix(colors.surface2, colors.foreground, 0.76) : mix(colors.foregroundMuted, colors.surface0, 0.9),
      borderAccent: dark ? mix(colors.border, colors.foreground, 0.95) : mix(colors.border, colors.surface0, 0.7),
-     foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, 0.65),
-+    foregroundSelected: mix(colors.foreground, "#ffffff", 0.25),
-     accentBright: mix(colors.accent, "#ffffff", dark ? 0.37 : 0.75),
+-    foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, 0.65),
+-    accentBright: mix(colors.accent, "#ffffff", dark ? 0.37 : 0.75),
++    // Light mixes toward the canvas by less: 0.65 leaves 2.6 to 3.2:1, 0.95 keeps 4.5:1 on every light surface.
++    foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, dark ? 0.65 : 0.95),
++    // Dark lightens the text; mixing 75% white into a light-mode foreground made it 1.1:1 on its own pill.
++    foregroundSelected: dark ? mix(colors.foreground, "#ffffff", 0.25) : colors.foreground,
++    // Link text: light mixes toward black (white over the accent was 2.6:1 on the canvas).
++    accentBright: dark ? mix(colors.accent, "#ffffff", 0.37) : mix(colors.accent, "#000000", 0.85),
      interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-     statusDotRunning: dark ? "#5caaf6" : "#268ae0",
+-    statusDotRunning: dark ? "#5caaf6" : "#268ae0",
+-    statusDotSuccess: dark ? "#35c264" : "#299f51",
+-    statusDotWarning: dark ? "#db932e" : "#b37824",
+-    statusDotDanger: dark ? "#f7796d" : "#f12e2f",
++    // Light dots are the original hues darkened just enough for 3:1 on every light surface (the canvas, raised,
++    // hover and selected tones); the previous values were 2.2 to 2.9:1 there.
++    statusDotRunning: dark ? "#5caaf6" : "#2178c3",
++    statusDotSuccess: dark ? "#35c264" : "#228644",
++    statusDotWarning: dark ? "#db932e" : "#9e6a20",
++    statusDotDanger: dark ? "#f7796d" : "#e02b2c",
+   };
+   cache.set(colors, tokens);
+   return tokens;
 diff --git a/client/panel/AgentSections.tsx b/client/panel/AgentSections.tsx
 index ee24cd8..c0cf7b4 100644
 --- a/client/panel/AgentSections.tsx
