@@ -43,17 +43,17 @@ export const CHIEF_PALETTES = {
     accentForeground: "#1d2125",
   },
   light: {
-    background: "#fafbfc",
-    control: "#f6f8fa",
-    border: "#e1e4e8",
-    raised: "#f6f8fa",
-    raisedStrong: "#f6f8fa",
-    ring: "#6a737d",
-    foreground: "#24292e",
-    mutedForeground: "#586069",
-    accent: "#0366d6",
-    // color-mix(in srgb, #0366d6 85%, black): darker, so accent text keeps its contrast.
-    accentBright: "#0357b6",
+    background: "#e1e2e8",
+    control: "#dcdee3",
+    border: "#c1c2c7",
+    raised: "#dcdee3",
+    raisedStrong: "#dcdee3",
+    ring: "#707280",
+    foreground: "#343b59",
+    mutedForeground: "#484c61",
+    accent: "#2959aa",
+    // color-mix(in srgb, #2959aa 85%, black): darker, so accent text keeps its contrast.
+    accentBright: "#234c91",
     accentForeground: "#ffffff",
   },
 } as const satisfies Record<HostThemeMode, Record<string, string>>;
