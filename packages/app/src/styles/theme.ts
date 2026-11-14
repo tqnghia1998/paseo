@@ -4,6 +4,7 @@ import {
   resolveDefaultDarkTint,
   resolveDefaultLightTint,
 } from "@/patches/vibing/default-dark-tint";
+import { resolveLightReadable } from "@/patches/vibing/light-readable";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
 import { deriveSurfaceStates } from "./derive-colors";
 
@@ -178,7 +179,6 @@ function statusTints(colors: typeof lightStatusColors, alphaHex: string) {
   };
 }
 
-const lightStatusTints = statusTints(lightStatusColors, "1f"); // 12%
 const darkStatusTints = statusTints(darkStatusColors, "29"); // 16%
 
 // Status *dot* colors — the small filled discs on a sidebar row, and the glyphs that stand in
@@ -271,6 +271,13 @@ const lightTerminalAnsi = {
 
 export function buildLightSemanticColors(tint: LightThemeConfig) {
   const sidebarStates = deriveSurfaceStates(tint.surfaceSidebar, tint.foreground, "light");
+  // Space App Vibing: upstream's light status, diff and terminal colours assume a white page.
+  const surfaces = [tint.surface0, tint.surface1, tint.surface2];
+  const diffColors = resolveLightReadable(lightDiffColors, surfaces, 4.5);
+  const statusColors = resolveLightReadable(lightStatusColors, surfaces, 4.5);
+  const statusDotColors = resolveLightReadable(lightStatusDotColors, surfaces, 3);
+  const terminalAnsi = resolveLightReadable(lightTerminalAnsi, [tint.surface0], 4.5);
+
   return {
     surface0: tint.surface0,
     surface1: tint.surface1,
@@ -308,10 +315,10 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     mutedForeground: tint.foregroundMuted,
     ring: tint.ring ?? tint.accent,
 
-    ...lightDiffColors,
-    ...lightStatusColors,
-    ...lightStatusTints,
-    ...lightStatusDotColors,
+    ...diffColors,
+    ...statusColors,
+    ...statusTints(statusColors, "1f"), // 12%
+    ...statusDotColors,
 
     terminal: {
       background: tint.surface0,
@@ -321,7 +328,7 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
       selectionBackground: "rgba(0, 0, 0, 0.15)",
       selectionForeground: tint.foreground,
       black: tint.terminalBlack,
-      ...lightTerminalAnsi,
+      ...terminalAnsi,
       brightBlack: tint.terminalBrightBlack,
     },
   };
@@ -785,7 +792,11 @@ export function buildLightTheme(semanticColors: ReturnType<typeof buildLightSema
     colors: {
       ...semanticColors,
       palette: baseColors,
-      syntax: lightHighlightColors,
+      syntax: resolveLightReadable(
+        lightHighlightColors,
+        [semanticColors.surface0, semanticColors.surface1, semanticColors.surface2],
+        4.5,
+      ),
     },
     shadow: lightShadow,
     ...commonTheme,
