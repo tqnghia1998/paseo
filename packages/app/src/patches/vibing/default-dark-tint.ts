@@ -13,6 +13,7 @@ const VIBING_DARK_TINT: DarkThemeConfig = {
   surface4: "#959da5",
   surfaceDiffEmpty: "#2f363d",
   surfaceSidebar: "#1d2125",
+  popover: "#24292e",
   foreground: "#f6f8fa",
   foregroundMuted: "#d1d5da",
   foregroundExtraMuted: "#959da5",
@@ -34,7 +35,10 @@ const VIBING_LIGHT_TINT: LightThemeConfig = {
   surface3: "#cbd1df",
   surface4: "#686a77",
   surfaceDiffEmpty: "#cbd1df",
-  surfaceSidebar: "#e6e7ed",
+  // The canvas, as in dark: the sidebar, tab strip and settings navigation are never the raised control tone.
+  surfaceSidebar: "#d6d8df",
+  // Tooltips and hover cards are the raised card in both modes.
+  popover: "#e6e7ed",
   foreground: "#343b59",
   foregroundMuted: "#4c505e",
   foregroundExtraMuted: "#686a77",

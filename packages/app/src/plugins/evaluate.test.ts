@@ -88,6 +88,15 @@ describe("evaluatePluginClientBundle", () => {
       ["#2b3137", "#2f363d"],
       ["#c1c2c7", "#cbd1df"],
     ]);
+    // The sidebar is the canvas and the popover the raised card in both modes.
+    expect(plugin.themes.map(({ colors }) => [colors.background, colors.sidebar])).toEqual([
+      ["#1d2125", "#1d2125"],
+      ["#d6d8df", "#d6d8df"],
+    ]);
+    expect(plugin.themes.map(({ colors }) => [colors.control, colors.popover])).toEqual([
+      ["#24292e", "#24292e"],
+      ["#e6e7ed", "#e6e7ed"],
+    ]);
     await plugin.cleanup();
     expect(plugin.settingsScreens).toEqual([]);
     expect(plugin.themes).toEqual([]);
