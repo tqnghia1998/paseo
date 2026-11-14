@@ -27,7 +27,7 @@ export const CHIEF_PALETTES = {
   dark: {
     background: "#24292e",
     control: "#2f363d",
-    border: "#2f363d",
+    border: "#2b3137",
     // The theme plugin's `raised`: composer, cards and raised surfaces.
     raised: "#2f363d",
     ring: "#959da5",
@@ -42,7 +42,7 @@ export const CHIEF_PALETTES = {
   light: {
     background: "#fafbfc",
     control: "#f6f8fa",
-    border: "#f6f8fa",
+    border: "#e1e4e8",
     raised: "#f6f8fa",
     ring: "#6a737d",
     foreground: "#24292e",
