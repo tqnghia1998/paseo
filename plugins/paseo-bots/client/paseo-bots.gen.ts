@@ -3455,28 +3455,31 @@ function nativeTokens(colors2) {
   const cached = cache.get(colors2);
   if (cached) return cached;
   const dark = isDark(colors2);
-  const surface3 = mix(colors2.surface2, colors2.foreground, dark ? 0.87 : 0.93);
+  const selected = mix(colors2.surface1, colors2.foreground, dark ? 0.865 : 0.955);
+  const surface3 = dark ? mix(colors2.surface2, colors2.foreground, 0.87) : selected;
   const tokens = {
     dark,
-    surfaceSidebar: dark ? colors2.surface0 : colors2.surface2,
-    surfaceSidebarSelected: dark ? mix(colors2.surface1, colors2.foreground, 0.865) : surface3,
+    // The list, the tab strip and the splash are the canvas in both modes (never the raised control tone).
+    surfaceSidebar: colors2.surface0,
+    surfaceSidebarSelected: selected,
     surface3,
     // Placeholder text: in light, a tone of the muted foreground (4.5:1 on the canvas and on raised).
     surface4: dark ? mix(colors2.surface2, colors2.foreground, 0.76) : mix(colors2.foregroundMuted, colors2.surface0, 0.9),
     borderAccent: dark ? mix(colors2.border, colors2.foreground, 0.95) : mix(colors2.border, colors2.surface0, 0.7),
-    // Light mixes toward the canvas by less: 0.65 leaves 2.6 to 3.2:1, 0.95 keeps 4.5:1 on every light surface.
-    foregroundExtraMuted: mix(colors2.foregroundMuted, colors2.surface0, dark ? 0.65 : 0.95),
+    // Light mixes toward the canvas by less: 0.65 leaves 2.6 to 3.2:1, 0.97 keeps 4.5:1 on every light surface
+    // (the canvas, raised, hover, the selected tone and the host's selected tone).
+    foregroundExtraMuted: mix(colors2.foregroundMuted, colors2.surface0, dark ? 0.65 : 0.97),
     // Dark lightens the text; mixing 75% white into a light-mode foreground made it 1.1:1 on its own pill.
     foregroundSelected: dark ? mix(colors2.foreground, "#ffffff", 0.25) : colors2.foreground,
     // Link text: light mixes toward black (white over the accent was 2.6:1 on the canvas).
     accentBright: dark ? mix(colors2.accent, "#ffffff", 0.37) : mix(colors2.accent, "#000000", 0.85),
     interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
     // Light dots are the original hues darkened just enough for 3:1 on every light surface (the canvas, raised,
-    // hover and selected tones); the previous values were 2.2 to 2.9:1 there.
-    statusDotRunning: dark ? "#5caaf6" : "#2178c3",
-    statusDotSuccess: dark ? "#35c264" : "#228644",
-    statusDotWarning: dark ? "#db932e" : "#9e6a20",
-    statusDotDanger: dark ? "#f7796d" : "#e02b2c"
+    // hover and both selected tones); the previous values were 2.2 to 2.9:1 there.
+    statusDotRunning: dark ? "#5caaf6" : "#1f72b9",
+    statusDotSuccess: dark ? "#35c264" : "#207f41",
+    statusDotWarning: dark ? "#db932e" : "#97651f",
+    statusDotDanger: dark ? "#f7796d" : "#d6292a"
   };
   cache.set(colors2, tokens);
   return tokens;
@@ -3835,7 +3838,7 @@ function installTooltips() {
       borderWidth: "1px",
       borderStyle: "solid",
       borderColor: tokens?.borderAccent ?? "#3a3d42",
-      backgroundColor: theme ? dark ? theme.surface2 : theme.surface0 : "#202225",
+      backgroundColor: theme ? theme.surface2 : "#202225",
       color: theme?.foreground ?? "#e6e6e6",
       boxShadow: dark ? "0 4px 8px rgba(0, 0, 0, 0.20)" : "0 4px 16px rgba(0, 0, 0, 0.04)",
       fontFamily: window.getComputedStyle(target).fontFamily || UI_FONT,
