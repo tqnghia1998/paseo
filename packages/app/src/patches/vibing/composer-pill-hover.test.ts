@@ -10,15 +10,23 @@ vi.mock("./focus-mode", () => ({
   isEmbeddedChiefView: false,
 }));
 
-const { resolveComposerPillHover } = await import("./composer-pill-hover");
+const { resolveComposerPillHover, resolveComposerSurface } = await import("./composer-pill-hover");
 
 const light = {
   colorScheme: "light",
-  colors: { surface1: "#cbcdd3", surface2: "#e6e7ed", foreground: "#343b59" },
+  colors: { composerSurface: "#dddfe5", surface2: "#e6e7ed", foreground: "#343b59" },
 } as const;
 const dark = {
   colorScheme: "dark",
-  colors: { surface1: "#2f363d", surface2: "#24292e", foreground: "#f6f8fa" },
+  colors: { composerSurface: "#2f363d", surface2: "#24292e", foreground: "#f6f8fa" },
+} as const;
+const lightSurfaces = {
+  colorScheme: "light",
+  colors: { surface0: "#d6d8df", surface1: "#cbcdd3", surface2: "#e6e7ed" },
+} as const;
+const darkSurfaces = {
+  colorScheme: "dark",
+  colors: { surface0: "#1d2125", surface1: "#2f363d", surface2: "#24292e" },
 } as const;
 
 function channels(hex: string): number[] {
@@ -36,6 +44,53 @@ function ratio(a: string, b: string): number {
   return (hi! + 0.05) / (lo! + 0.05);
 }
 
+describe("resolveComposerSurface", () => {
+  beforeEach(() => {
+    focus.embedded = true;
+  });
+
+  it("is the Details box tone in embedded light: the canvas mixed 45% toward the control colour", () => {
+    const surface = resolveComposerSurface(lightSurfaces);
+    expect(surface).toBe("#dddfe5");
+    // Neutral like the grey it replaces (#cbcdd3): the same r/g/b spread of 8, not a blue-leaning tint.
+    const spread = (hex: string) => Math.max(...channels(hex)) - Math.min(...channels(hex));
+    expect(spread(surface)).toBeLessThanOrEqual(spread("#cbcdd3"));
+    expect(luminance(surface)).toBeGreaterThan(luminance("#d6d8df"));
+    expect(luminance(surface)).toBeLessThan(luminance("#e6e7ed"));
+  });
+
+  it("keeps text, accents and placeholders readable on it", () => {
+    const surface = resolveComposerSurface(lightSurfaces);
+    expect(ratio("#343b59", surface)).toBeGreaterThanOrEqual(7);
+    expect(ratio("#4c505e", surface)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio("#686a77", surface)).toBeGreaterThanOrEqual(3);
+    expect(ratio("#395d99", surface)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio("#c1c2c7", surface)).toBeGreaterThanOrEqual(1.25);
+  });
+
+  it("leaves dark byte-identical (surface1)", () => {
+    expect(resolveComposerSurface(darkSurfaces)).toBe("#2f363d");
+  });
+
+  it("leaves standalone light on surface1", () => {
+    focus.embedded = false;
+    expect(resolveComposerSurface(lightSurfaces)).toBe("#cbcdd3");
+  });
+
+  it("mixes any other CSS colour in the browser (web style sheets only see var() references)", () => {
+    expect(
+      resolveComposerSurface({
+        colorScheme: "light",
+        colors: {
+          surface0: "var(--colors-surface0)",
+          surface1: "var(--colors-surface1)",
+          surface2: "var(--colors-surface2)",
+        },
+      }),
+    ).toBe("color-mix(in srgb, var(--colors-surface0) 55%, var(--colors-surface2))");
+  });
+});
+
 describe("resolveComposerPillHover", () => {
   beforeEach(() => {
     focus.embedded = true;
@@ -43,14 +98,14 @@ describe("resolveComposerPillHover", () => {
 
   it("is a neutral step darker than the resting pill in embedded light", () => {
     const hover = resolveComposerPillHover(light);
-    expect(hover).toBe("#c3c6cd");
-    expect(luminance(hover)).toBeLessThan(luminance(light.colors.surface1));
+    expect(hover).toBe("#d5d7de");
+    expect(luminance(hover)).toBeLessThan(luminance(light.colors.composerSurface));
     expect(luminance(hover)).toBeLessThan(luminance("#d6d8df"));
   });
 
   it("keeps the label contrast on the hovered pill", () => {
     const hover = resolveComposerPillHover(light);
-    expect(ratio("#343b59", hover)).toBeGreaterThanOrEqual(6);
+    expect(ratio("#343b59", hover)).toBeGreaterThanOrEqual(7);
     expect(ratio("#4c505e", hover)).toBeGreaterThanOrEqual(4.5);
   });
 
@@ -68,23 +123,17 @@ describe("resolveComposerPillHover", () => {
       resolveComposerPillHover({
         colorScheme: "light",
         colors: {
-          surface1: "var(--colors-surface1)",
+          composerSurface: "var(--colors-composer-surface)",
           surface2: "var(--colors-surface2)",
           foreground: "var(--colors-foreground)",
         },
       }),
-    ).toBe("color-mix(in srgb, var(--colors-surface1) 95%, var(--colors-foreground))");
-    expect(
-      resolveComposerPillHover({
-        colorScheme: "light",
-        colors: { surface1: "rgba(0,0,0,0.1)", surface2: "#e6e7ed", foreground: "#343b59" },
-      }),
-    ).toBe("color-mix(in srgb, rgba(0,0,0,0.1) 95%, #343b59)");
+    ).toBe("color-mix(in srgb, var(--colors-composer-surface) 95%, var(--colors-foreground))");
   });
 
   it("keeps surface2 for dark and standalone builds whatever the colour format", () => {
     const vars = {
-      surface1: "var(--colors-surface1)",
+      composerSurface: "var(--colors-composer-surface)",
       surface2: "var(--colors-surface2)",
       foreground: "var(--colors-foreground)",
     };
@@ -96,8 +145,14 @@ describe("resolveComposerPillHover", () => {
       "var(--colors-surface2)",
     );
   });
+});
 
-  it("is a theme token with real values: dark is surface2, embedded light the mix", async () => {
+describe("composer theme tokens", () => {
+  beforeEach(() => {
+    focus.embedded = true;
+  });
+
+  it("are real values: dark is surface1 and surface2, embedded light the Details box tone and its hover", async () => {
     const { buildDarkSemanticColors, buildLightSemanticColors } = await import("@/styles/theme");
     const { resolveDefaultDarkTint, resolveDefaultLightTint } = await import("./default-dark-tint");
     const lightColors = buildLightSemanticColors(
@@ -106,18 +161,42 @@ describe("resolveComposerPillHover", () => {
     const darkColors = buildDarkSemanticColors(
       resolveDefaultDarkTint({} as Parameters<typeof resolveDefaultDarkTint>[0]),
     );
-    expect(lightColors.composerPillHover).toBe("#c3c6cd");
-    expect(darkColors.composerPillHover).toBe(darkColors.surface2);
+    expect(lightColors.composerSurface).toBe("#dddfe5");
+    expect(lightColors.composerPillHover).toBe("#d5d7de");
+    // surface1, surface3 and the selected tone derived from them are untouched.
+    expect(lightColors.surface1).toBe("#cbcdd3");
+    expect(lightColors.surface3).toBe("#cbcdd3");
+    expect(darkColors.composerSurface).toBe(darkColors.surface1);
+    expect(darkColors.composerSurface).toBe("#2f363d");
     expect(darkColors.composerPillHover).toBe("#24292e");
   });
 
-  it("is what the pill style sheet reads, not a value computed from the theme object", () => {
-    const source = readFileSync(resolve(__dirname, "../../composer/pill-styles.ts"), "utf8");
-    expect(source).toContain("backgroundColor: theme.colors.composerPillHover");
-    expect(source).not.toContain("resolveComposerPillHover");
+  it("keep Chief's own look: raised, and its hover from it", async () => {
+    const { buildChiefColors } = await import("./chief-theme");
+    const light = buildChiefColors("light");
+    expect(light.composerSurface).toBe(light.surface1);
+    expect(light.composerSurface).toBe("#cbcdd3");
+    expect(light.composerPillHover).toBe("#c3c6cd");
+    const dark = buildChiefColors("dark");
+    expect(dark.composerSurface).toBe(dark.surface1);
+    expect(dark.composerPillHover).toBe(dark.surface2);
   });
 
-  it("reaches the Run pill: the plugin composer button hovers with the pill style, not its own surface2 fill", () => {
+  it("are what the style sheets read, not values computed from the theme object", () => {
+    const pills = readFileSync(resolve(__dirname, "../../composer/pill-styles.ts"), "utf8");
+    expect(pills).toContain("backgroundColor: theme.colors.composerSurface");
+    expect(pills).toContain("backgroundColor: theme.colors.composerPillHover");
+    expect(pills).not.toContain("composer-pill-hover");
+    const input = readFileSync(resolve(__dirname, "../../composer/input/input.tsx"), "utf8");
+    const wrapper = input.slice(
+      input.indexOf("  inputWrapper: {"),
+      input.indexOf("  inputWrapperCompact: {"),
+    );
+    expect(wrapper).toContain("backgroundColor: theme.colors.composerSurface");
+    expect(wrapper).not.toContain("backgroundColor: theme.colors.surface1");
+  });
+
+  it("reach the Run pill: the plugin composer button hovers with the pill style, not its own surface2 fill", () => {
     const source = readFileSync(resolve(__dirname, "../../plugins/buttons/view.tsx"), "utf8");
     expect(source).toContain("(input ? styles.inputActive : composerPillStyles.bodyActive)");
     expect(source).not.toContain("(input ? styles.inputActive : styles.active)");

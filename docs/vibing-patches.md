@@ -571,12 +571,16 @@ Do not label these patches as installed plugins merely to make them discoverable
   theme colors, `default-dark-tint.ts` and Chief's light builder set them, and
   `patches/vibing/surface-classes.test.ts` checks every background slot against the palette classes in
   both modes.
-  The composer track pills (Run, a plugin composer button that reuses `composerPillStyles.bodyActive` in `plugins/buttons/view.tsx`; the diff-stat chip, the subagents chip) rest on
-  `surface1` and, in the embedded light build only, hover to `surface1` mixed 5% toward the foreground
-  (`#cbcdd3` + `#343b59` = `#c3c6cd`, `patches/vibing/composer-pill-hover.ts`) instead of the near-white
-  `surface2`; dark and standalone builds keep `surface2`. The value is the theme token `composerPillHover`, computed in
-  `buildLightSemanticColors` from real hex colours: on web, Unistyles gives `StyleSheet.create` functions the CSS-variable
-  theme (every string, `colorScheme` too, is a `var(--...)` reference), so nothing can be computed or branched on there.
+  The composer shell (`inputWrapper`) and the composer pills (Import session, Run, a plugin composer button that
+  reuses `composerPillStyles` in `plugins/buttons/view.tsx`; the diff-stat chip, the subagents chip) rest on the theme
+  token `composerSurface`: in the embedded light build the Details box tone (the canvas mixed 45% toward the control
+  colour, `#d6d8df` + `#e6e7ed` = `#dddfe5`, `patches/vibing/composer-pill-hover.ts`), `surface1` in dark and standalone
+  builds. The pills hover to `composerPillHover`, the rest tone mixed 5% toward the foreground (`#dddfe5` + `#343b59` =
+  `#d5d7de`) instead of the near-white `surface2`; dark and standalone keep `surface2`. Chief keeps its own look
+  (`composerSurface` = its raised tone). Both are computed in `buildLightSemanticColors` from real hex colours: on web,
+  Unistyles gives `StyleSheet.create` functions the CSS-variable theme (every string, `colorScheme` too, is a
+  `var(--...)` reference), so nothing can be computed or branched on there. `surface1`, `surface3` and the Bots
+  selected tone derived from them are unchanged (`#cbcdd3`, `#c6c9cf`).
   The Bots patch's `nativeTokens` branches on `dark` for its text and icon colours
   (`foregroundSelected`, `accentBright`, `foregroundExtraMuted`, the placeholder, status dots).
   The theme needs an explicit Paseo version range

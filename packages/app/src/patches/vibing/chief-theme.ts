@@ -9,6 +9,7 @@ import {
   REGISTERED_THEMES,
   type Theme,
 } from "@/styles/theme";
+import { resolveComposerPillHover } from "./composer-pill-hover";
 import { isEmbeddedChiefView } from "./focus-mode";
 import type { HostThemeMode } from "./host-theme-mode";
 
@@ -114,8 +115,24 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
             terminalBlack: palette.control,
           }),
         );
+  // The composer shell and pills keep the Chief raised tone: the builders' composerSurface is the canvas mixed toward
+  // the control colour (the host's Details box tone), which on the Chief popup surface (the raised card, lighter
+  // than that canvas) would be a different relation, so Chief's look is the one it had (raised, and its hover).
+  const composerSurface = colors.surface1;
+  const composerPillHover =
+    mode === "light"
+      ? resolveComposerPillHover({
+          colorScheme: "light",
+          colors: { composerSurface, surface2: colors.surface2, foreground: colors.foreground },
+        })
+      : colors.composerPillHover;
   // The builders reuse the accent for success; keep success states the shared green.
-  return { ...colors, success: colors.statusSuccess } as Theme["colors"];
+  return {
+    ...colors,
+    composerSurface,
+    composerPillHover,
+    success: colors.statusSuccess,
+  } as Theme["colors"];
 }
 
 const CHIEF_COLORS_BY_MODE: Record<HostThemeMode, Theme["colors"]> = {
