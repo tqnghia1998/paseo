@@ -1,5 +1,6 @@
 import { StyleSheet } from "react-native-unistyles";
 import { SPACING } from "@/styles/theme";
+import { resolveComposerPillHover } from "@/patches/vibing/composer-pill-hover";
 
 export const COMPOSER_PILL_CLEARANCE = {
   compact: SPACING[2],
@@ -39,7 +40,8 @@ export const composerPillStyles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface1,
   },
   bodyActive: {
-    backgroundColor: theme.colors.surface2,
+    // Embedded light hovers a step darker than the resting grey instead of the near-white surface2.
+    backgroundColor: resolveComposerPillHover(theme),
   },
   label: {
     fontSize: theme.fontSize.sm,
