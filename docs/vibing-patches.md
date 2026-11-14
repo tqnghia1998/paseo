@@ -571,7 +571,7 @@ Do not label these patches as installed plugins merely to make them discoverable
   theme colors, `default-dark-tint.ts` and Chief's light builder set them, and
   `patches/vibing/surface-classes.test.ts` checks every background slot against the palette classes in
   both modes.
-  The composer track pills (Run, the diff-stat chip, the subagents chip; `composerPillStyles.bodyActive`) rest on
+  The composer track pills (Run, a plugin composer button that reuses `composerPillStyles.bodyActive` in `plugins/buttons/view.tsx`; the diff-stat chip, the subagents chip) rest on
   `surface1` and, in the embedded light build only, hover to `surface1` mixed 5% toward the foreground
   (`#cbcdd3` + `#343b59` = `#c3c6cd`, `patches/vibing/composer-pill-hover.ts`) instead of the near-white
   `surface2`; dark and standalone builds keep `surface2`. The value is the theme token `composerPillHover`, computed in
