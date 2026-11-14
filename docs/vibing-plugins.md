@@ -137,6 +137,11 @@ reading the installed macOS AIS Switch app's login, read-only (see its README).
 (Desktop Plus) palette of each mode; keep them equal to `--palette-*` in Vibing's `src/index.css`.
 Its `border` is the palette's own border value (`--palette-border`: `#2b3137` dark, `#e1e4e8`
 light), not the hover tone that `raised` uses; `default-dark-tint.ts` and Chief's `CHIEF_PALETTES` match it.
+It also sets the optional `raisedStrong` (`surface3`) to the hover tone (`#2f363d` / `#f6f8fa`):
+without it the theme builder would derive `surface3`, and with it secondary buttons, selected
+segments, switch tracks and the light sidebar hover, from the border. `raisedStrong` is a fork
+addition to the theme contract (`PluginThemeColors`, the theme schema and builders in
+`plugins/themes/index.ts`); themes that omit it keep `surface3 = border`.
 Embedded frames show the theme of the host's light/dark mode, chosen in memory from the
 `themeMode` query and `space:theme-mode` messages (`patches/vibing/host-theme-mode.ts` and
 `theme.ts`); the choice is never saved to the shared settings.

@@ -557,7 +557,11 @@ Do not label these patches as installed plugins merely to make them discoverable
   in memory, so a host switch repaints the frame live through Unistyles without a remount
   and is never written to the shared settings store or `localStorage`; standalone Paseo
   keeps its own saved appearance. Until the plugin catalog loads, embedded frames use
-  built-in dark and light themes tinted to the same palettes (`default-dark-tint.ts`). The theme needs an explicit Paseo version range
+  built-in dark and light themes tinted to the same palettes (`default-dark-tint.ts`). Borders use
+  the palette's own border value while `surface3` (secondary fills, light sidebar hover) stays on
+  the hover tone, through the fork's optional `raisedStrong` theme color (plugin contract,
+  `plugins/themes/index.ts`; omitted, it falls back to `border`), Chief's `CHIEF_PALETTES.raisedStrong`
+  and the tints' `surface3`. The theme needs an explicit Paseo version range
   and a server entry to load independently of the user-plugin switch.
 - Worktree APIs stay loopback-only and host-token-gated. Startup pruning,
   archive/close/flush/delete ordering, directory-boundary matching and capability
