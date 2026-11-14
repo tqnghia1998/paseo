@@ -24,7 +24,7 @@ const HOST_CHIEF_CSS = {
   },
   light: {
     surface: "#e6e7ed",
-    control: "#cbd1df",
+    control: "#cbcdd3",
     border: "#c1c2c7",
     textMuted: "#4c505e",
     accent: "#395d99",
@@ -147,9 +147,9 @@ describe("Chief theme", () => {
   });
 
   it.each(["dark", "light"] as const)(
-    "keeps surface3 and the sidebar hover on the hover tone in %s mode",
+    "keeps surface3 and the sidebar hover on the raised tone (neutral grey in light) in %s mode",
     (mode) => {
-      const hover = mode === "dark" ? "#2f363d" : "#cbd1df";
+      const hover = mode === "dark" ? "#2f363d" : "#cbcdd3";
       const colors = buildChiefColors(mode);
       expect(CHIEF_PALETTES[mode].raisedStrong).toBe(hover);
       expect(colors.surface3).toBe(hover);

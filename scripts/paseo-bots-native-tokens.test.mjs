@@ -36,10 +36,10 @@ vm.runInContext(
 );
 const nativeTokens = (colors) => context.nativeTokens({ ...colors });
 
-// Light: docs/theme.md (canvas #d6d8df, raised #e6e7ed, hover #cbd1df, text #343b59, subdued #4c505e).
+// Light: docs/theme.md (canvas #d6d8df, raised #e6e7ed, plugin raised tone #cbcdd3 as surface1, text #343b59, subdued #4c505e).
 const LIGHT = {
   surface0: "#d6d8df",
-  surface1: "#cbd1df",
+  surface1: "#cbcdd3",
   surface2: "#e6e7ed",
   border: "#c1c2c7",
   foreground: "#343b59",
@@ -157,13 +157,13 @@ test("the list, tab strip and splash are the canvas in both modes", () => {
 
 test("selected and strong fills are the same class in both modes (never lighter than the canvas in light)", () => {
   const light = nativeTokens(LIGHT);
-  // Light: a step past hover, darker than the canvas, near the host's selected tone #bfc9df.
+  // Light: a step past hover, darker than the canvas, near the host's selected tone #bfc9df (within 1.1:1; the neutral raised tone is a derived grey).
   for (const key of ["surfaceSidebarSelected", "surface3"]) {
     assert.ok(luminance(light[key]) < luminance(LIGHT.surface0), `${key} darker than the canvas`);
     assert.ok(luminance(light[key]) < luminance(LIGHT.surface1), `${key} darker than hover`);
     assert.ok(contrast(light[key], HOST_SELECTED) < 1.1, `${key} near the selected tone`);
   }
-  assert.equal(light.surfaceSidebarSelected, "#c4cad9");
+  assert.equal(light.surfaceSidebarSelected, "#c6c9cf");
   // Dark: the exact values that shipped before (the selected tone and the strong fill).
   const dark = nativeTokens(DARK);
   assert.equal(dark.surfaceSidebarSelected, "#4a5057");
