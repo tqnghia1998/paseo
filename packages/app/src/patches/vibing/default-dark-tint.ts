@@ -28,13 +28,16 @@ const VIBING_DARK_TINT: DarkThemeConfig = {
   ring: "#959da5",
 };
 
+// Light surface1 and surface3 (the theme plugin's `raised` and `raisedStrong`: composer, user bubbles,
+// badges, secondary fills) are the neutral grey #cbcdd3, the 50/50 mix of the canvas #d6d8df and the
+// border #c1c2c7. It is not a palette primitive: the host's hover tone stays #cbd1df, which reads blue.
 const VIBING_LIGHT_TINT: LightThemeConfig = {
   surface0: "#d6d8df",
-  surface1: "#cbd1df",
+  surface1: "#cbcdd3",
   surface2: "#e6e7ed",
-  surface3: "#cbd1df",
+  surface3: "#cbcdd3",
   surface4: "#686a77",
-  surfaceDiffEmpty: "#cbd1df",
+  surfaceDiffEmpty: "#cbcdd3",
   // The canvas, as in dark: the sidebar, tab strip and settings navigation are never the raised control tone.
   surfaceSidebar: "#d6d8df",
   // Tooltips and hover cards are the raised card in both modes.
@@ -49,9 +52,9 @@ const VIBING_LIGHT_TINT: LightThemeConfig = {
   accentForeground: "#ffffff",
   primary: "#343b59",
   primaryForeground: "#ffffff",
-  // The upstream light destructive (#b04138) is 4.03:1 on the canvas and 3.75:1 on the hover tone;
-  // this is the least darkening that reaches 4.5:1 on canvas, raised and hover.
-  destructive: "#9b3931",
+  // The upstream light destructive (#b04138) is 4.03:1 on the canvas and 3.6:1 on the neutral raised
+  // tone; this is the least darkening that reaches 4.5:1 on canvas, raised (#e6e7ed) and that tone.
+  destructive: "#973830",
   terminalBlack: "#343b58",
   terminalBrightBlack: "#686a77",
   ring: "#686a77",

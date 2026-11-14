@@ -18,16 +18,16 @@ describe("Space App Vibing default tints", () => {
       border: "#c1c2c7",
       borderAccent: "#c1c2c7",
       surface0: "#d6d8df",
-      surface1: "#cbd1df",
+      surface1: "#cbcdd3",
       surface2: "#e6e7ed",
-      surface3: "#cbd1df",
+      surface3: "#cbcdd3",
       foreground: "#343b59",
       accent: "#395d99",
-      destructive: "#9b3931",
+      destructive: "#973830",
     });
   });
 
-  it("keeps the light destructive colour readable on the canvas, raised and hover tones", () => {
+  it("keeps the light destructive colour readable on the canvas, raised and neutral raised tones", () => {
     const light = resolveDefaultLightTint({} as Parameters<typeof resolveDefaultLightTint>[0]);
     const lum = (hex: string) => {
       const [r, g, b] = [1, 3, 5].map((i) => {
