@@ -1346,17 +1346,19 @@ Every color is a hex string; anything else fails to load. Paseo expands the pale
 token set the built-in dark themes use, so a contributed theme covers panels, menus, diffs, status
 colors, and the terminal without listing them.
 
-| Color             | Becomes                                                           |
-| ----------------- | ----------------------------------------------------------------- |
-| `background`      | App, workspace, and terminal background                           |
-| `foreground`      | Primary text, terminal foreground and cursor                      |
-| `raised`          | Cards, popovers, and hovered rows                                 |
-| `control`         | Inputs, secondary fills, and the light-theme sidebar              |
-| `border`          | Borders, and `raisedStrong` when that is omitted                  |
-| `raisedStrong`    | Highest raised-surface tint. Optional; `border` if omitted.       |
-| `accent`          | Buttons, selection, and focus. Optional; `foreground` if omitted. |
-| `mutedForeground` | Secondary text                                                    |
-| `ring`            | Focus rings, scrollbars, and terminal bright black                |
+| Color             | Becomes                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| `background`      | App, workspace, and terminal background                                                       |
+| `foreground`      | Primary text, terminal foreground and cursor                                                  |
+| `raised`          | Cards, popovers, and hovered rows                                                             |
+| `control`         | Inputs, secondary fills, and the light-theme sidebar                                          |
+| `border`          | Borders, and `raisedStrong` when that is omitted                                              |
+| `raisedStrong`    | Highest raised-surface tint. Optional; `border` if omitted.                                   |
+| `sidebar`         | Sidebar and tab-strip surface. Optional; `background` (dark) or `control` (light) if omitted. |
+| `popover`         | Tooltips and hover cards. Optional; `control` (dark) or `background` (light) if omitted.      |
+| `accent`          | Buttons, selection, and focus. Optional; `foreground` if omitted.                             |
+| `mutedForeground` | Secondary text                                                                                |
+| `ring`            | Focus rings, scrollbars, and terminal bright black                                            |
 
 `appearance` is `"light"` or `"dark"`. Paseo uses it to select the matching surface, status,
 diff, syntax, terminal, and shadow derivation.

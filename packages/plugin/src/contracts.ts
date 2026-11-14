@@ -89,6 +89,10 @@ export interface PluginThemeColors {
   border: string;
   /** The highest raised-surface tint (secondary buttons, selected segments, switch tracks). Defaults to `border`. */
   raisedStrong?: string;
+  /** The sidebar and tab-strip surface. Defaults to `background` in a dark theme and to `control` in a light one. */
+  sidebar?: string;
+  /** Tooltips and hover cards. Defaults to `control` in a dark theme and to `background` in a light one. */
+  popover?: string;
   accent?: string;
   mutedForeground: string;
   ring: string;

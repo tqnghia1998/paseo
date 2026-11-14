@@ -155,6 +155,26 @@ describe("plugin theme palettes", () => {
     expect(light.colors.surfaceSidebarHover).toBe("#abcdef");
   });
 
+  it("paints the sidebar and popover from optional colors and keeps the old defaults", () => {
+    const build = (contribution: PluginThemeContribution) =>
+      collectPluginThemes([installed("host-a", [contribution])], new Set(["host-a"]))[0].theme
+        .colors;
+    // Omitted: dark sidebar = background, light sidebar = control; dark popover = control, light = background.
+    expect(build(MOCHA).surfaceSidebar).toBe(MOCHA.colors.background);
+    expect(build(MOCHA).popover).toBe(MOCHA.colors.control);
+    expect(build(LATTE).surfaceSidebar).toBe(LATTE.colors.control);
+    expect(build(LATTE).popover).toBe(LATTE.colors.background);
+    // Given: both modes take them (a palette whose light control is lighter than the canvas).
+    for (const contribution of [MOCHA, LATTE]) {
+      const colors = build({
+        ...contribution,
+        colors: { ...contribution.colors, sidebar: "#123456", popover: "#654321" },
+      });
+      expect(colors.surfaceSidebar).toBe("#123456");
+      expect(colors.popover).toBe("#654321");
+    }
+  });
+
   it("carries the accent on the foreground when no accent is given", () => {
     const { accent: _accent, ...colors } = MOCHA.colors;
     const contribution = { ...MOCHA, colors };

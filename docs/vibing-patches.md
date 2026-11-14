@@ -565,6 +565,11 @@ Do not label these patches as installed plugins merely to make them discoverable
   and the tints' `surface3`. In light, `light-readable.ts` darkens upstream's status, diff, syntax
   and terminal ANSI colours (written for a white page) to 4.5:1 on the canvas, hover and raised
   surfaces through `buildLightSemanticColors` and `buildLightTheme`, in the embedded build only.
+  A container that is the canvas in dark is the canvas in light (`surfaceSidebar`), and the classes
+  that are raised in dark stay raised in light (`popover`): the fork's optional `sidebar` and `popover`
+  theme colors, `default-dark-tint.ts` and Chief's light builder set them, and
+  `patches/vibing/surface-classes.test.ts` checks every background slot against the palette classes in
+  both modes.
   The Bots patch's `nativeTokens` branches on `dark` for its text and icon colours
   (`foregroundSelected`, `accentBright`, `foregroundExtraMuted`, the placeholder, status dots).
   The theme needs an explicit Paseo version range

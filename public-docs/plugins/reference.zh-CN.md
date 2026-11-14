@@ -1117,17 +1117,19 @@ export default function contribute(client: PluginClientContext) {
 
 每种颜色都是十六进制字符串；其他格式会导致加载失败。Paseo 会把调色板扩展为内置深色主题所使用的完整令牌集合，因此贡献的主题无需逐一列出，就能覆盖面板、菜单、diff、状态颜色和终端。
 
-| 颜色              | 用作                                              |
-| ----------------- | ------------------------------------------------- |
-| `background`      | 应用、工作区和终端的背景                          |
-| `foreground`      | 主要文字、终端前景色和光标                        |
-| `raised`          | 卡片、弹出框和悬停的行                            |
-| `control`         | 输入框、次要填充以及浅色主题的侧边栏              |
-| `border`          | 边框；省略 `raisedStrong` 时也用作它              |
-| `raisedStrong`    | 最高层凸起表面的色调。可选；省略时使用 `border`。 |
-| `accent`          | 按钮、选中和焦点。可选；省略时使用 `foreground`。 |
-| `mutedForeground` | 次要文字                                          |
-| `ring`            | 焦点环、滚动条以及终端的亮黑色                    |
+| 颜色              | 用作                                                                    |
+| ----------------- | ----------------------------------------------------------------------- |
+| `background`      | 应用、工作区和终端的背景                                                |
+| `foreground`      | 主要文字、终端前景色和光标                                              |
+| `raised`          | 卡片、弹出框和悬停的行                                                  |
+| `control`         | 输入框、次要填充以及浅色主题的侧边栏                                    |
+| `border`          | 边框；省略 `raisedStrong` 时也用作它                                    |
+| `raisedStrong`    | 最高层凸起表面的色调。可选；省略时使用 `border`。                       |
+| `sidebar`         | 侧边栏和标签栏表面。可选；省略时深色用 `background`，浅色用 `control`。 |
+| `popover`         | 工具提示和悬停卡片。可选；省略时深色用 `control`，浅色用 `background`。 |
+| `accent`          | 按钮、选中和焦点。可选；省略时使用 `foreground`。                       |
+| `mutedForeground` | 次要文字                                                                |
+| `ring`            | 焦点环、滚动条以及终端的亮黑色                                          |
 
 `appearance` 为 `"light"` 或 `"dark"`。Paseo 用它选择对应的表面、状态、diff、语法高亮、终端和阴影的推导方式。
 
