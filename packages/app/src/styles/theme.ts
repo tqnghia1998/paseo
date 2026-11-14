@@ -3,6 +3,7 @@ import {
   resolveDefaultDarkTint,
   resolveDefaultLightTint,
 } from "@/patches/vibing/default-dark-tint";
+import { resolveComposerPillHover } from "@/patches/vibing/composer-pill-hover";
 import { resolveLightReadable } from "@/patches/vibing/light-readable";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
 import { deriveSurfaceStates } from "./derive-colors";
@@ -286,6 +287,12 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     surface2: tint.surface2,
     surface3: tint.surface3,
     surface4: tint.surface4,
+    // Hover fill of the composer pills (Run, diff stat); a token so web style sheets read the per-theme CSS variable.
+    composerPillHover: resolveComposerPillHover({
+      colorScheme: "light",
+      colors: { surface1: tint.surface1, surface2: tint.surface2, foreground: tint.foreground },
+    }),
+
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: tint.surfaceSidebarHover ?? sidebarStates.hover,
     surfaceSidebarSelected: tint.surfaceSidebarSelected ?? sidebarStates.selected,
@@ -420,6 +427,8 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surface2: tint.surface2,
     surface3: tint.surface3,
     surface4: tint.surface4,
+    composerPillHover: tint.surface2,
+
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: tint.surfaceSidebarHover ?? sidebarStates.hover,
     surfaceSidebarSelected: tint.surfaceSidebarSelected ?? sidebarStates.selected,
