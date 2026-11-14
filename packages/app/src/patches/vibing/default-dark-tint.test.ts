@@ -15,10 +15,13 @@ describe("Space App Vibing default tints", () => {
     });
     const light = resolveDefaultLightTint({} as Parameters<typeof resolveDefaultLightTint>[0]);
     expect(light).toMatchObject({
-      border: "#e1e4e8",
-      borderAccent: "#e1e4e8",
-      surface1: "#f6f8fa",
-      surface3: "#f6f8fa",
+      border: "#c1c2c7",
+      borderAccent: "#c1c2c7",
+      surface0: "#e6e7ed",
+      surface1: "#dcdee3",
+      surface3: "#dcdee3",
+      foreground: "#343b59",
+      accent: "#2959aa",
     });
   });
 });
