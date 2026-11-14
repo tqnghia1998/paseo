@@ -106,6 +106,18 @@ to one worktree per frame and to the host's native chat.
   source-defined `managedChiefBot`; its internal memory remains available through the
   host broker. Ordinary Bots remain user-configurable. This lives in the maintained
   Bots vendor patch and requires a permitted plugin refresh to activate.
+- **Light-mode text colours.** `nativeTokens` (`client/native.ts`) branches on `dark` for every
+  colour that is text or an icon, because the dark values assume a dark canvas: the selected tab
+  and row text (`foregroundSelected`) is the foreground itself in light (dark mixes 25% white
+  into it; in light that left `#ccced6`, 1.14:1 on the selected pill), the link colour
+  (`accentBright`) mixes the accent toward black (`#304f82`; white over the accent was 2.6:1),
+  `foregroundExtraMuted` mixes 5% toward the canvas instead of 35% (4.7:1 or better on every
+  light surface instead of 2.6 to 3.2), the placeholder (`surface4`) is a tone of the muted
+  foreground, and the four status dots are the original hues darkened to 3:1 on the canvas,
+  raised, hover and selected tones. The hard-coded chevron, error text, amber progress,
+  notice icons, compaction icons and shimmer highlight of the plugin's own chat UI use the same
+  tokens in light. Dark values are unchanged; `scripts/paseo-bots-native-tokens.test.mjs` checks
+  both.
 - **Managed Chief.** `vibing-chief` is a reserved, host-managed persona: ordinary launches,
   routines and relay tools reject it (`assertOrdinaryBot`). The daemon-only broker
   (`server/chief.ts`, `bots.chief.prepare|call|handoff`, bridge-token gated) serves Chief's
@@ -143,6 +155,10 @@ without it the theme builder would derive `surface3`, and with it secondary butt
 segments, switch tracks and the light sidebar hover, from the border. `raisedStrong` is a fork
 addition to the theme contract (`PluginThemeColors`, the theme schema and builders in
 `plugins/themes/index.ts`); themes that omit it keep `surface3 = border`.
+Upstream's light status, diff, syntax and terminal ANSI colours assume a white page, so in the
+embedded build `patches/vibing/light-readable.ts` darkens each toward black by the least amount
+that reaches 4.5:1 (3:1 for status dots, and for terminal ANSI colours against the canvas only) on
+the light canvas, hover and raised surfaces; passing colours, dark and standalone Paseo are untouched.
 Embedded frames show the theme of the host's light/dark mode, chosen in memory from the
 `themeMode` query and `space:theme-mode` messages (`patches/vibing/host-theme-mode.ts` and
 `theme.ts`); the choice is never saved to the shared settings.

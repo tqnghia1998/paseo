@@ -3461,16 +3461,22 @@ function nativeTokens(colors2) {
     surfaceSidebar: dark ? colors2.surface0 : colors2.surface2,
     surfaceSidebarSelected: dark ? mix(colors2.surface1, colors2.foreground, 0.865) : surface3,
     surface3,
-    surface4: mix(colors2.surface2, colors2.foreground, dark ? 0.76 : 0.85),
+    // Placeholder text: in light, a tone of the muted foreground (4.5:1 on the canvas and on raised).
+    surface4: dark ? mix(colors2.surface2, colors2.foreground, 0.76) : mix(colors2.foregroundMuted, colors2.surface0, 0.9),
     borderAccent: dark ? mix(colors2.border, colors2.foreground, 0.95) : mix(colors2.border, colors2.surface0, 0.7),
-    foregroundExtraMuted: mix(colors2.foregroundMuted, colors2.surface0, 0.65),
-    foregroundSelected: mix(colors2.foreground, "#ffffff", 0.25),
-    accentBright: mix(colors2.accent, "#ffffff", dark ? 0.37 : 0.75),
+    // Light mixes toward the canvas by less: 0.65 leaves 2.6 to 3.2:1, 0.95 keeps 4.5:1 on every light surface.
+    foregroundExtraMuted: mix(colors2.foregroundMuted, colors2.surface0, dark ? 0.65 : 0.95),
+    // Dark lightens the text; mixing 75% white into a light-mode foreground made it 1.1:1 on its own pill.
+    foregroundSelected: dark ? mix(colors2.foreground, "#ffffff", 0.25) : colors2.foreground,
+    // Link text: light mixes toward black (white over the accent was 2.6:1 on the canvas).
+    accentBright: dark ? mix(colors2.accent, "#ffffff", 0.37) : mix(colors2.accent, "#000000", 0.85),
     interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-    statusDotRunning: dark ? "#5caaf6" : "#268ae0",
-    statusDotSuccess: dark ? "#35c264" : "#299f51",
-    statusDotWarning: dark ? "#db932e" : "#b37824",
-    statusDotDanger: dark ? "#f7796d" : "#f12e2f"
+    // Light dots are the original hues darkened just enough for 3:1 on every light surface (the canvas, raised,
+    // hover and selected tones); the previous values were 2.2 to 2.9:1 there.
+    statusDotRunning: dark ? "#5caaf6" : "#2178c3",
+    statusDotSuccess: dark ? "#35c264" : "#228644",
+    statusDotWarning: dark ? "#db932e" : "#9e6a20",
+    statusDotDanger: dark ? "#f7796d" : "#e02b2c"
   };
   cache.set(colors2, tokens);
   return tokens;
@@ -5324,7 +5330,7 @@ function BotRow({ colors: colors2, tokens, bot, lead, touch, isOpen, aggregate, 
           }
         ),
         /* @__PURE__ */ jsxs5(View6, { pointerEvents: "none", style: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }, children: [
-          /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: hovered ? /* @__PURE__ */ jsx6(Icon4, { name: isOpen ? "ChevronDown" : "ChevronRight", size: 14, color: CHEVRON_COLOR }) : /* @__PURE__ */ jsxs5(View6, { style: { position: "relative", width: 16, height: 16 }, children: [
+          /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: hovered ? /* @__PURE__ */ jsx6(Icon4, { name: isOpen ? "ChevronDown" : "ChevronRight", size: 14, color: tokens.dark ? CHEVRON_COLOR : tokens.foregroundExtraMuted }) : /* @__PURE__ */ jsxs5(View6, { style: { position: "relative", width: 16, height: 16 }, children: [
             /* @__PURE__ */ jsx6(Avatar, { avatar: bot.avatar, size: 16 }),
             aggregate ? /* @__PURE__ */ jsx6(StatusBadge2, { colors: colors2, tokens, bucket: aggregate, backdrop }) : null
           ] }) }),
@@ -6184,7 +6190,7 @@ function ContextMeter({ colors: colors2, usage, pending: pending2, glyphSize }) 
   }
   const rounded = Math.round(usage.percent);
   const tone = meterTone(usage.percent);
-  const progress = tone === "danger" ? colors2.statusDanger : tone === "warning" ? AMBER_500 : colors2.foregroundMuted;
+  const progress = tone === "danger" ? colors2.statusDanger : tone === "warning" ? tokens.dark ? AMBER_500 : tokens.statusDotWarning : colors2.foregroundMuted;
   const cost = usage.costUsd !== null ? formatSessionCost(usage.costUsd) : null;
   const tokensLine = `${formatTokenCount(usage.used)} / ${formatTokenCount(usage.max)} tokens`;
   const costLine = cost ? `Session cost ${cost}` : null;
@@ -6744,7 +6750,7 @@ function ChatComposer({ colors: colors2, bot, host: host2, agentId, running, lay
   return /* @__PURE__ */ jsxs9(View10, { ref: outerRef, collapsable: false, style: { width: "100%", minHeight: 75, alignItems: "center", paddingHorizontal: 16, paddingBottom: 16 + bottomInset, flexShrink: 1 }, children: [
     /* @__PURE__ */ jsxs9(View10, { style: { width: "100%", maxWidth: CONTENT_MAX_WIDTH, gap: 12, flexShrink: 1 }, children: [
       queue.length > 0 ? /* @__PURE__ */ jsx10(View10, { style: { gap: 8 }, children: queue.map((item) => /* @__PURE__ */ jsx10(QueuedRow, { colors: colors2, item, onEdit: () => editQueued(item), onSendNow: () => void sendQueuedNow(item) }, item.id)) }) : null,
-      sendError ? /* @__PURE__ */ jsx10(Text8, { accessibilityRole: "alert", style: { color: RED_500, fontSize: ui(14) }, children: sendError }) : null,
+      sendError ? /* @__PURE__ */ jsx10(Text8, { accessibilityRole: "alert", style: { color: nativeTokens(colors2).dark ? RED_500 : colors2.statusDanger, fontSize: ui(14) }, children: sendError }) : null,
       /* @__PURE__ */ jsxs9(View10, { style: { position: "relative", width: "100%", flexShrink: 1 }, children: [
         commandsVisible ? /* @__PURE__ */ jsx10(
           CommandMenu,
@@ -7428,7 +7434,7 @@ var SHIMMER_CSS = `
 @keyframes pbot-toolcall-shimmer { 0% { background-position: 120% 0; } 100% { background-position: -20% 0; } }
 [data-pbot-shimmer] {
   color: inherit;
-  background-image: linear-gradient(90deg, currentColor 0%, currentColor 38%, #ffffff 50%, currentColor 62%, currentColor 100%);
+  background-image: linear-gradient(90deg, currentColor 0%, currentColor 38%, var(--pbot-shimmer-highlight, #ffffff) 50%, currentColor 62%, currentColor 100%);
   background-size: 300% 100%;
   background-repeat: no-repeat;
   -webkit-background-clip: text;
@@ -7444,7 +7450,7 @@ function shimmerDuration(label, secondary) {
   const adjust = chars <= 12 ? 0.25 : 0;
   return Math.max(1, Math.min(2.3, 1.25 + chars * 8e-3 - adjust));
 }
-function useShimmer(active, duration) {
+function useShimmer(active, duration, highlight) {
   const opacity = useRef7(new Animated2.Value(1)).current;
   useEffect11(() => {
     if (!active) return;
@@ -7466,7 +7472,7 @@ function useShimmer(active, duration) {
   }, [active, duration, opacity]);
   if (!active) return { textProps: {}, style: null };
   if (isWeb2) {
-    return { textProps: { dataSet: { pbotShimmer: "" } }, style: { animationDuration: `${duration.toFixed(2)}s` } };
+    return { textProps: { dataSet: { pbotShimmer: "" } }, style: { animationDuration: `${duration.toFixed(2)}s`, ...highlight ? { "--pbot-shimmer-highlight": highlight } : {} } };
   }
   return { textProps: {}, style: { opacity } };
 }
@@ -7565,7 +7571,7 @@ var ExpandableBadge = memo2(function ExpandableBadge2({ colors: colors2, label, 
   const interactive = Boolean(onToggle);
   const active = hovered || isExpanded;
   const duration = shimmerDuration(label, secondaryLabel);
-  const shimmer = useShimmer(isLoading, duration);
+  const shimmer = useShimmer(isLoading, duration, nativeTokens(colors2).dark ? void 0 : "#000000");
   const details = isExpanded && renderDetails ? renderDetails() : null;
   const labelStyle = {
     color: isLoading || active ? colors2.foreground : colors2.foregroundMuted,
@@ -10502,8 +10508,10 @@ var NOTIFICATION_STYLES = {
 };
 var Notification = memo5(function Notification2({ colors: colors2, level, message: message2 }) {
   const style = NOTIFICATION_STYLES[level];
+  const tokens = nativeTokens(colors2);
+  const tint = tokens.dark ? style.tint : level === "info" ? tokens.statusDotRunning : level === "warning" ? tokens.statusDotWarning : style.tint;
   return /* @__PURE__ */ jsx24(View24, { style: { borderRadius: 6, overflow: "hidden", backgroundColor: style.background }, children: /* @__PURE__ */ jsx24(View24, { style: { paddingHorizontal: 12, paddingVertical: 10 }, children: /* @__PURE__ */ jsxs23(View24, { style: { flexDirection: "row", alignItems: "flex-start", gap: 8 }, children: [
-    /* @__PURE__ */ jsx24(View24, { style: { flexShrink: 0, height: 20, justifyContent: "center" }, children: /* @__PURE__ */ jsx24(Icon14, { name: style.icon, size: 16, color: style.tint || colors2.statusDanger }) }),
+    /* @__PURE__ */ jsx24(View24, { style: { flexShrink: 0, height: 20, justifyContent: "center" }, children: /* @__PURE__ */ jsx24(Icon14, { name: style.icon, size: 16, color: tint || colors2.statusDanger }) }),
     /* @__PURE__ */ jsx24(View24, { style: { flex: 1 }, children: /* @__PURE__ */ jsx24(Text22, { selectable: true, style: { color: colors2.foreground, fontSize: ui(14), lineHeight: 20 }, children: message2 }) })
   ] }) }) });
 });
@@ -10515,10 +10523,11 @@ function compactionLabel(status, trigger, preTokens) {
   return "Context compacted";
 }
 var CompactionMarker = memo5(function CompactionMarker2({ colors: colors2, status, trigger, preTokens }) {
+  const glyph = nativeTokens(colors2).dark ? "#a1a1aa" : colors2.foregroundMuted;
   return /* @__PURE__ */ jsxs23(View24, { style: { flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16, gap: 8 }, children: [
     /* @__PURE__ */ jsx24(View24, { style: { flex: 1, height: 1, backgroundColor: colors2.border } }),
     /* @__PURE__ */ jsxs23(View24, { style: { flexDirection: "row", alignItems: "center", gap: 8 }, children: [
-      status === "loading" ? /* @__PURE__ */ jsx24(Spinner, { color: "#a1a1aa" }) : /* @__PURE__ */ jsx24(Icon14, { name: "Scissors", size: 12, color: "#a1a1aa" }),
+      status === "loading" ? /* @__PURE__ */ jsx24(Spinner, { color: glyph }) : /* @__PURE__ */ jsx24(Icon14, { name: "Scissors", size: 12, color: glyph }),
       /* @__PURE__ */ jsx24(Text22, { style: { fontSize: METADATA_SIZE, color: colors2.foregroundMuted }, children: compactionLabel(status, trigger, preTokens) })
     ] }),
     /* @__PURE__ */ jsx24(View24, { style: { flex: 1, height: 1, backgroundColor: colors2.border } })
