@@ -1,6 +1,6 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 
-// Values come from the host palette in Space App Vibing (docs/theme.md: dark is Desktop Plus, light is Tokyo Night Light).
+// Values come from the host palette in Space App Vibing (docs/theme.md: dark is Desktop Plus, light follows the SeaTalk light theme arrangement of Tokyo Night Light tones).
 // Keep them equal to --palette-neutral-* and --palette-blue in src/index.css for each mode:
 // background = neutral-850 surface, raised and raisedStrong = neutral-750 hover tone (raisedStrong
 // keeps Paseo's secondary fills and light sidebar hover on the hover tone), border = --palette-border
@@ -30,15 +30,15 @@ export default function contribute(client: PluginClientContext) {
     name: "Space App Vibing Light",
     appearance: "light",
     colors: {
-      background: "#e6e7ed",
+      background: "#d6d8df",
       foreground: "#343b59",
-      raised: "#dcdee3",
-      control: "#e1e2e8",
+      raised: "#cbd1df",
+      control: "#e6e7ed",
       border: "#c1c2c7",
-      raisedStrong: "#dcdee3",
-      accent: "#2959aa",
-      mutedForeground: "#484c61",
-      ring: "#707280",
+      raisedStrong: "#cbd1df",
+      accent: "#395d99",
+      mutedForeground: "#4c505e",
+      ring: "#686a77",
     },
   });
   return async () => {
