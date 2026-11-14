@@ -576,8 +576,10 @@ Do not label these patches as installed plugins merely to make them discoverable
   token `composerSurface`: in the embedded light build the Details box tone (the canvas mixed 45% toward the control
   colour, `#d6d8df` + `#e6e7ed` = `#dddfe5`, `patches/vibing/composer-pill-hover.ts`), `surface1` in dark and standalone
   builds. The pills hover to `composerPillHover`, the rest tone mixed 5% toward the foreground (`#dddfe5` + `#343b59` =
-  `#d5d7de`) instead of the near-white `surface2`; dark and standalone keep `surface2`. Chief keeps its own look
-  (`composerSurface` = its raised tone). Both are computed in `buildLightSemanticColors` from real hex colours: on web,
+  `#d5d7de`) instead of the near-white `surface2`; dark and standalone keep `surface2`. The Chief frame carries the
+  same light tone in `CHIEF_PALETTES.light.composerSurface` (`#dddfe5`, kept by hand because its palette has no canvas
+  to mix; the composer box reads on the `#e6e7ed` popup through its 1px border), dark its raised tone; Chief's user
+  bubbles and other raised fills stay `#cbcdd3`. Both are computed in `buildLightSemanticColors` from real hex colours: on web,
   Unistyles gives `StyleSheet.create` functions the CSS-variable theme (every string, `colorScheme` too, is a
   `var(--...)` reference), so nothing can be computed or branched on there. `surface1`, `surface3` and the Bots
   selected tone derived from them are unchanged (`#cbcdd3`, `#c6c9cf`).
