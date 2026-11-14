@@ -34,6 +34,8 @@ export const CHIEF_PALETTES = {
     // The theme plugin's `raisedStrong` (surface3): secondary fills and the light sidebar hover
     // stay on the hover tone while borders use their own value.
     raisedStrong: "#2f363d",
+    // The composer box and its pills: the raised tone, as for every embedded frame in dark.
+    composerSurface: "#2f363d",
     ring: "#959da5",
     foreground: "#f6f8fa",
     mutedForeground: "#d1d5da",
@@ -50,6 +52,10 @@ export const CHIEF_PALETTES = {
     border: "#c1c2c7",
     raised: "#cbcdd3",
     raisedStrong: "#cbcdd3",
+    // The composer box and its pills: the Details box tone (the canvas #d6d8df mixed 45% toward #e6e7ed), the same as
+    // the Bots composer; the user bubbles and other controls stay on `raised`. On the #e6e7ed popup the box reads through
+    // its 1px border (the border colour is 1.33:1 against it).
+    composerSurface: "#dddfe5",
     ring: "#686a77",
     foreground: "#343b59",
     mutedForeground: "#4c505e",
@@ -115,10 +121,10 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
             terminalBlack: palette.control,
           }),
         );
-  // The composer shell and pills keep the Chief raised tone: the builders' composerSurface is the canvas mixed toward
-  // the control colour (the host's Details box tone), which on the Chief popup surface (the raised card, lighter
-  // than that canvas) would be a different relation, so Chief's look is the one it had (raised, and its hover).
-  const composerSurface = colors.surface1;
+  // The composer shell and pills rest on the palette's own composerSurface (light: the Details box tone #dddfe5 like the
+  // Bots composer, whose builder token mixes the canvas, which the Chief palette does not carry), and the pills hover a
+  // step darker (5% toward the foreground). Dark keeps the raised tone and surface2.
+  const composerSurface = palette.composerSurface;
   const composerPillHover =
     mode === "light"
       ? resolveComposerPillHover({

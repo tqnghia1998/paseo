@@ -171,14 +171,25 @@ describe("composer theme tokens", () => {
     expect(darkColors.composerPillHover).toBe("#24292e");
   });
 
-  it("keep Chief's own look: raised, and its hover from it", async () => {
-    const { buildChiefColors } = await import("./chief-theme");
+  it("give Chief's composer and pills the Details box tone too, keeping its raised bubbles", async () => {
+    const { buildChiefColors, CHIEF_PALETTES } = await import("./chief-theme");
     const light = buildChiefColors("light");
-    expect(light.composerSurface).toBe(light.surface1);
-    expect(light.composerSurface).toBe("#cbcdd3");
-    expect(light.composerPillHover).toBe("#c3c6cd");
+    expect(light.composerSurface).toBe(CHIEF_PALETTES.light.composerSurface);
+    expect(light.composerSurface).toBe("#dddfe5");
+    expect(light.composerPillHover).toBe("#d5d7de");
+    // The user bubbles (surface3) and raised cards stay the grey #cbcdd3.
+    expect(light.surface1).toBe("#cbcdd3");
+    expect(light.surface3).toBe("#cbcdd3");
+    // The box sits on the #e6e7ed popup: lighter than the grey, darker than the popup, with a visible border.
+    expect(luminance(light.composerSurface)).toBeLessThan(luminance(light.surface0));
+    expect(ratio(light.border, light.composerSurface)).toBeGreaterThanOrEqual(1.25);
+    expect(ratio(light.border, light.surface0)).toBeGreaterThanOrEqual(1.15);
+    expect(ratio(light.foregroundMuted, light.composerSurface)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(light.accent, light.composerSurface)).toBeGreaterThanOrEqual(4.5);
+    // Dark keeps the raised tone and surface2.
     const dark = buildChiefColors("dark");
     expect(dark.composerSurface).toBe(dark.surface1);
+    expect(dark.composerSurface).toBe("#2f363d");
     expect(dark.composerPillHover).toBe(dark.surface2);
   });
 
