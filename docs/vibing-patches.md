@@ -247,7 +247,7 @@ chat when it belongs to the frame's worktree and ordinary chat context, and answ
 `{ type: "paseo:open-chat-ack", requestId, ok }`, repeating its answer for re-sent requests.
 
 The Chief frame (`/?view=chief`) uses the Space App Vibing palette of the host's light/dark
-mode (dark: Desktop Plus, light: the SeaTalk light arrangement of Tokyo Night Light tones; the light popup is the lighter raised tone), one step toward the foreground of the canvas so the popup stands out. `chief-theme.ts`
+mode (dark: Desktop Plus, light: the SeaTalk light arrangement of Tokyo Night Light tones; the light popup is the lighter raised tone), one step off the canvas so the popup stands out. `chief-theme.ts`
 holds one palette per mode (`CHIEF_PALETTES.dark` / `.light`) and builds the whole colour set with
 the same semantic builders as a contributed plugin theme, then swaps it into the live Unistyles
 theme in memory, keeping fonts, sizes, content width and the user's syntax palette; success stays
@@ -562,7 +562,12 @@ Do not label these patches as installed plugins merely to make them discoverable
   the palette's own border value while `surface3` (secondary fills, light sidebar hover) stays on
   the hover tone, through the fork's optional `raisedStrong` theme color (plugin contract,
   `plugins/themes/index.ts`; omitted, it falls back to `border`), Chief's `CHIEF_PALETTES.raisedStrong`
-  and the tints' `surface3`. The theme needs an explicit Paseo version range
+  and the tints' `surface3`. In light, `light-readable.ts` darkens upstream's status, diff, syntax
+  and terminal ANSI colours (written for a white page) to 4.5:1 on the canvas, hover and raised
+  surfaces through `buildLightSemanticColors` and `buildLightTheme`, in the embedded build only.
+  The Bots patch's `nativeTokens` branches on `dark` for its text and icon colours
+  (`foregroundSelected`, `accentBright`, `foregroundExtraMuted`, the placeholder, status dots).
+  The theme needs an explicit Paseo version range
   and a server entry to load independently of the user-plugin switch.
 - Worktree APIs stay loopback-only and host-token-gated. Startup pruning,
   archive/close/flush/delete ordering, directory-boundary matching and capability
