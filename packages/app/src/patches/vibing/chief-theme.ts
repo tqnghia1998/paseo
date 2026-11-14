@@ -95,7 +95,10 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
       ? buildLightTheme(
           buildLightSemanticColors({
             ...shared,
-            surfaceSidebar: palette.control,
+            // The Chief surface in both modes (dark: palette.background), never the control tone.
+            surfaceSidebar: palette.background,
+            // Tooltips and hover cards sit one step off the Chief surface, as in dark (control).
+            popover: palette.control,
             primary: palette.foreground,
             primaryForeground: palette.background,
             destructive: lightTheme.colors.destructive,

@@ -57,6 +57,9 @@ const DARK = {
   accent: "#79b8ff",
 };
 
+// The host's selected tone (docs/theme.md): the pill and rows are derived near it, so text must also hold on it.
+const HOST_SELECTED = "#bfc9df";
+
 function luminance(hex) {
   const channel = (i) => {
     const c = Number.parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
@@ -91,7 +94,13 @@ test("dark: selected text and the other pinned dark values are unchanged", () =>
 
 test("light: text tokens keep 4.5:1 on every light surface they sit on", () => {
   const t = nativeTokens(LIGHT);
-  const surfaces = [LIGHT.surface0, LIGHT.surface2, LIGHT.surface1, t.surfaceSidebarSelected];
+  const surfaces = [
+    LIGHT.surface0,
+    LIGHT.surface2,
+    LIGHT.surface1,
+    t.surfaceSidebarSelected,
+    HOST_SELECTED,
+  ];
   for (const surface of surfaces) {
     assert.ok(contrast(t.foregroundExtraMuted, surface) >= 4.5, `extra muted on ${surface}`);
     assert.ok(contrast(t.accentBright, surface) >= 4.5, `link on ${surface}`);
@@ -104,7 +113,13 @@ test("light: text tokens keep 4.5:1 on every light surface they sit on", () => {
 
 test("light: status dots keep 3:1 on every light surface", () => {
   const t = nativeTokens(LIGHT);
-  const surfaces = [LIGHT.surface0, LIGHT.surface2, LIGHT.surface1, t.surfaceSidebarSelected];
+  const surfaces = [
+    LIGHT.surface0,
+    LIGHT.surface2,
+    LIGHT.surface1,
+    t.surfaceSidebarSelected,
+    HOST_SELECTED,
+  ];
   for (const surface of surfaces) {
     for (const key of [
       "statusDotRunning",
@@ -129,4 +144,35 @@ test("only the generated plugin carries these light constants", () => {
       source,
     ),
   );
+});
+
+test("the list, tab strip and splash are the canvas in both modes", () => {
+  // Light used surface2 (the raised control tone, lighter than the canvas), so the Bots list sat
+  // lighter than the chat area. Dark was already the canvas and must stay byte for byte.
+  assert.equal(nativeTokens(LIGHT).surfaceSidebar, LIGHT.surface0);
+  assert.equal(nativeTokens(LIGHT).surfaceSidebar, "#d6d8df");
+  assert.equal(nativeTokens(DARK).surfaceSidebar, DARK.surface0);
+  assert.equal(nativeTokens(DARK).surfaceSidebar, "#1d2125");
+});
+
+test("selected and strong fills are the same class in both modes (never lighter than the canvas in light)", () => {
+  const light = nativeTokens(LIGHT);
+  // Light: a step past hover, darker than the canvas, near the host's selected tone #bfc9df.
+  for (const key of ["surfaceSidebarSelected", "surface3"]) {
+    assert.ok(luminance(light[key]) < luminance(LIGHT.surface0), `${key} darker than the canvas`);
+    assert.ok(luminance(light[key]) < luminance(LIGHT.surface1), `${key} darker than hover`);
+    assert.ok(contrast(light[key], HOST_SELECTED) < 1.1, `${key} near the selected tone`);
+  }
+  assert.equal(light.surfaceSidebarSelected, "#c4cad9");
+  // Dark: the exact values that shipped before (the selected tone and the strong fill).
+  const dark = nativeTokens(DARK);
+  assert.equal(dark.surfaceSidebarSelected, "#4a5057");
+  assert.equal(dark.surface3, "#3f4449");
+  assert.ok(luminance(dark.surfaceSidebarSelected) > luminance(DARK.surface1));
+});
+
+test("the tooltip bubble is the raised card in both modes", () => {
+  // It was surface0 (the canvas) in light and surface2 (raised) in dark.
+  assert.ok(/backgroundColor: theme \? theme\.surface2 : "#202225"/.test(source));
+  assert.ok(!/dark \? theme\.surface2 : theme\.surface0/.test(source));
 });
