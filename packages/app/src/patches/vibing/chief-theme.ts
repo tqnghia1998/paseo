@@ -30,6 +30,9 @@ export const CHIEF_PALETTES = {
     border: "#2b3137",
     // The theme plugin's `raised`: composer, cards and raised surfaces.
     raised: "#2f363d",
+    // The theme plugin's `raisedStrong` (surface3): secondary fills and the light sidebar hover
+    // stay on the hover tone while borders use their own value.
+    raisedStrong: "#2f363d",
     ring: "#959da5",
     foreground: "#f6f8fa",
     mutedForeground: "#d1d5da",
@@ -44,6 +47,7 @@ export const CHIEF_PALETTES = {
     control: "#f6f8fa",
     border: "#e1e4e8",
     raised: "#f6f8fa",
+    raisedStrong: "#f6f8fa",
     ring: "#6a737d",
     foreground: "#24292e",
     mutedForeground: "#586069",
@@ -72,7 +76,7 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
     surface0: palette.background,
     surface1: palette.raised,
     surface2: palette.control,
-    surface3: palette.border,
+    surface3: palette.raisedStrong,
     surface4: palette.ring,
     surfaceDiffEmpty: palette.raised,
     foreground: palette.foreground,

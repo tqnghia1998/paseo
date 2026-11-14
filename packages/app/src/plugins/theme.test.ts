@@ -127,6 +127,34 @@ describe("plugin theme palettes", () => {
     });
   });
 
+  it("tints surface3 with the border unless raisedStrong is given", () => {
+    for (const contribution of [MOCHA, LATTE]) {
+      const theme = collectPluginThemes(
+        [installed("host-a", [contribution])],
+        new Set(["host-a"]),
+      )[0].theme;
+      expect(theme.colors.surface3).toBe(contribution.colors.border);
+      expect(theme.colors.border).toBe(contribution.colors.border);
+      expect(theme.colors.borderAccent).toBe(contribution.colors.border);
+    }
+    for (const contribution of [MOCHA, LATTE]) {
+      const withStrong = {
+        ...contribution,
+        colors: { ...contribution.colors, raisedStrong: "#abcdef" },
+      };
+      const theme = collectPluginThemes([installed("host-a", [withStrong])], new Set(["host-a"]))[0]
+        .theme;
+      expect(theme.colors.surface3).toBe("#abcdef");
+      expect(theme.colors.border).toBe(contribution.colors.border);
+      expect(theme.colors.borderAccent).toBe(contribution.colors.border);
+    }
+    const light = collectPluginThemes(
+      [installed("host-a", [{ ...LATTE, colors: { ...LATTE.colors, raisedStrong: "#abcdef" } }])],
+      new Set(["host-a"]),
+    )[0].theme;
+    expect(light.colors.surfaceSidebarHover).toBe("#abcdef");
+  });
+
   it("carries the accent on the foreground when no accent is given", () => {
     const { accent: _accent, ...colors } = MOCHA.colors;
     const contribution = { ...MOCHA, colors };

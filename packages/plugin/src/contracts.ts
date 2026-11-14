@@ -87,6 +87,8 @@ export interface PluginThemeColors {
   raised: string;
   control: string;
   border: string;
+  /** The highest raised-surface tint (secondary buttons, selected segments, switch tracks). Defaults to `border`. */
+  raisedStrong?: string;
   accent?: string;
   mutedForeground: string;
   ring: string;

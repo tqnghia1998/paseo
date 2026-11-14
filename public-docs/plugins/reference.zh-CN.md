@@ -1123,7 +1123,8 @@ export default function contribute(client: PluginClientContext) {
 | `foreground`      | 主要文字、终端前景色和光标                        |
 | `raised`          | 卡片、弹出框和悬停的行                            |
 | `control`         | 输入框、次要填充以及浅色主题的侧边栏              |
-| `border`          | 边框以及最高层凸起表面的色调                      |
+| `border`          | 边框；省略 `raisedStrong` 时也用作它              |
+| `raisedStrong`    | 最高层凸起表面的色调。可选；省略时使用 `border`。 |
 | `accent`          | 按钮、选中和焦点。可选；省略时使用 `foreground`。 |
 | `mutedForeground` | 次要文字                                          |
 | `ring`            | 焦点环、滚动条以及终端的亮黑色                    |

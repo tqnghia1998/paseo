@@ -146,6 +146,19 @@ describe("Chief theme", () => {
     expect(contrast(border, background)).toBeGreaterThanOrEqual(1.1);
   });
 
+  it.each(["dark", "light"] as const)(
+    "keeps surface3 and the sidebar hover on the hover tone in %s mode",
+    (mode) => {
+      const hover = mode === "dark" ? "#2f363d" : "#f6f8fa";
+      const colors = buildChiefColors(mode);
+      expect(CHIEF_PALETTES[mode].raisedStrong).toBe(hover);
+      expect(colors.surface3).toBe(hover);
+      expect(colors.border).toBe(CHIEF_PALETTES[mode].border);
+      expect(colors.borderAccent).toBe(CHIEF_PALETTES[mode].border);
+      if (mode === "light") expect(colors.surfaceSidebarHover).toBe(hover);
+    },
+  );
+
   it("builds a light colour set for the light mode and a dark one otherwise", () => {
     const light = withChiefTheme(darkTheme, "light");
     expect(light.colors.surface0).toBe(CHIEF_PALETTES.light.background);

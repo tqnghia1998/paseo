@@ -1352,7 +1352,8 @@ colors, and the terminal without listing them.
 | `foreground`      | Primary text, terminal foreground and cursor                      |
 | `raised`          | Cards, popovers, and hovered rows                                 |
 | `control`         | Inputs, secondary fills, and the light-theme sidebar              |
-| `border`          | Borders and the highest raised-surface tint                       |
+| `border`          | Borders, and `raisedStrong` when that is omitted                  |
+| `raisedStrong`    | Highest raised-surface tint. Optional; `border` if omitted.       |
 | `accent`          | Buttons, selection, and focus. Optional; `foreground` if omitted. |
 | `mutedForeground` | Secondary text                                                    |
 | `ring`            | Focus rings, scrollbars, and terminal bright black                |
