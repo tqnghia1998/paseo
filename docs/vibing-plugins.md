@@ -135,6 +135,8 @@ It is edited in place because upstream ships it in this repository; keep it on e
 reading the installed macOS AIS Switch app's login, read-only (see its README).
 `space-app-vibing-theme` registers two themes, `dark` and `light`, with the Space App Vibing
 (Desktop Plus) palette of each mode; keep them equal to `--palette-*` in Vibing's `src/index.css`.
+Its `border` is the palette's own border value (`--palette-border`: `#2b3137` dark, `#e1e4e8`
+light), not the hover tone that `raised` uses; `default-dark-tint.ts` and Chief's `CHIEF_PALETTES` match it.
 Embedded frames show the theme of the host's light/dark mode, chosen in memory from the
 `themeMode` query and `space:theme-mode` messages (`patches/vibing/host-theme-mode.ts` and
 `theme.ts`); the choice is never saved to the shared settings.
