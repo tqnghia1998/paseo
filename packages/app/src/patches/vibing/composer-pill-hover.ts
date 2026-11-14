@@ -5,6 +5,11 @@ import { isEmbeddedFocusMode } from "./focus-mode";
 // hover (surface2) jumped to white. Embedded light hovers instead go a step darker than the rest tone:
 // surface1 mixed 5% toward the foreground (#cbcdd3 + #343b59 -> #c3c6cd; foreground text keeps 6.4:1 and the
 // muted label 4.69:1 on it). Dark and standalone builds keep surface2.
+//
+// This runs while the theme is built (buildLightSemanticColors), where the colours are real values, and the
+// result is the theme token `composerPillHover`. It must not run inside a StyleSheet.create function: on web
+// Unistyles hands those functions the CSS-variable theme, where every string, `colorScheme` included, is a
+// `var(--...)` reference, so a hex test or a `colorScheme` check there never matches.
 export const COMPOSER_PILL_HOVER_MIX = 0.05;
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -27,6 +32,10 @@ export function resolveComposerPillHover(theme: {
 }): string {
   const { surface1, surface2, foreground } = theme.colors;
   if (!isEmbeddedFocusMode || theme.colorScheme !== "light") return surface2;
-  if (!HEX.test(surface1) || !HEX.test(foreground)) return surface2;
+  if (!HEX.test(surface1) || !HEX.test(foreground)) {
+    // Any other CSS value (var(), rgb(), ...): the browser does the same mix.
+    const share = Math.round(COMPOSER_PILL_HOVER_MIX * 100);
+    return `color-mix(in srgb, ${surface1} ${100 - share}%, ${foreground})`;
+  }
   return mixHex(surface1, foreground, COMPOSER_PILL_HOVER_MIX);
 }
