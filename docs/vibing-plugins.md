@@ -125,16 +125,17 @@ to one worktree per frame and to the host's native chat.
   is right when control is darker than the page and wrong for this palette, where control is the
   raised card. `nativeTokens` therefore sets `surfaceSidebar` (the Bots list, tab strip and
   splash) to `surface0` in both modes, derives the selected tone (`surfaceSidebarSelected`, and
-  `surface3` in light) as the hover tone mixed toward the text (dark 0.865, light 0.955:
-  `#4a5057` and `#c4cad9`, near the palette's selected tones `#444d56` and `#bfc9df`; light had
-  mixed toward the canvas and ended up lighter than it), and the tooltip bubble is `surface2`
+  `surface3` in light) as the raised tone (surface1) mixed toward the text (dark 0.865, light 0.97:
+  `#4a5057` and `#c6c9cf`, near the palette's selected tones `#444d56` and `#bfc9df`; light had
+  mixed toward the canvas and ended up lighter than it; light was 0.955 on the blue hover tone
+  `#cbd1df` and became 0.97 on the neutral tone `#cbcdd3` below), and the tooltip bubble is `surface2`
   in both modes (it was the canvas in light). Moving the pill onto the darker selected tone cost
   contrast, so the light `foregroundExtraMuted` mixes 3% toward the canvas (was 5%) and the light
   status dots are `#1f72b9`, `#207f41`, `#97651f` and `#d6292a`; both hold 4.5:1 and 3:1 on the
-  canvas, raised, hover and both selected tones. Chat Polish's light overrides of its popup surface
+  canvas, raised, the neutral raised tone and both selected tones. Chat Polish's light overrides of its popup surface
   (menus, listboxes, the Command Center, the selection menu and the scroll-to-bottom button) are
-  removed so they use `control` as dark does, and a hovered or lit row is the hover tone
-  (`--cp-raised`) instead of a mix on it (`scripts/paseo-chat-polish-surfaces.test.mjs`).
+  removed so they use `control` as dark does, and a hovered or lit row is the neutral raised tone
+  (`--cp-raised`, `#cbcdd3`, 1.29:1 on the menu) instead of a mix on it (`scripts/paseo-chat-polish-surfaces.test.mjs`).
 - **Managed Chief.** `vibing-chief` is a reserved, host-managed persona: ordinary launches,
   routines and relay tools reject it (`assertOrdinaryBot`). The daemon-only broker
   (`server/chief.ts`, `bots.chief.prepare|call|handoff`, bridge-token gated) serves Chief's
@@ -167,7 +168,11 @@ palette of each mode (dark is Desktop Plus; light follows the SeaTalk light them
 cards are lighter than the canvas); keep them equal to `--palette-*` in
 Vibing's `src/index.css`. Its `border` is the palette's own border value (`--palette-border`: `#2b3137` dark,
 `#c1c2c7` light), not the hover tone that `raised` uses; `default-dark-tint.ts` and Chief's `CHIEF_PALETTES` match it.
-It also sets the optional `raisedStrong` (`surface3`) to the hover tone (`#2f363d` / `#cbd1df`):
+In light, `raised` and `raisedStrong` (the composer, user bubbles, badges, secondary fills and the light sidebar
+hover) are the neutral grey `#cbcdd3`, the 50/50 mix of the canvas `#d6d8df` and the border `#c1c2c7`
+(derived, not a palette primitive; the red midpoint 203.5 is truncated). The host's hover primitive `#cbd1df` read blue there
+and stays host-only; dark is unchanged (`#2f363d`).
+It also sets the optional `raisedStrong` (`surface3`) to the same tone as `raised` (`#2f363d` dark; `#cbcdd3` light):
 without it the theme builder would derive `surface3`, and with it secondary buttons, selected
 segments, switch tracks and the light sidebar hover, from the border. `raisedStrong` is a fork
 addition to the theme contract (`PluginThemeColors`, the theme schema and builders in
