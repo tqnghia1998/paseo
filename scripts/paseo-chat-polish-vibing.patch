@@ -12,7 +12,7 @@ index 08b8e39..d59f6d9 100644
    const apply = useRpc(applyUpdate);
    const [status, setStatus] = useState<UpdateStatus>();
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index 05edb75..ae2b637 100644
+index 05edb75..7183ae5 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
 @@ -23,7 +23,6 @@ ${[4, 5, 3, 0, 2, 1].map((step, i) => `${DOT}:nth-child(${i + 1}) { animation-de
@@ -38,7 +38,38 @@ index 05edb75..ae2b637 100644
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]) { opacity: 0.45 !important; }
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]):hover { background-color: transparent !important; }
  
-@@ -177,13 +177,14 @@ ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-c
+@@ -104,9 +104,8 @@ ${SURFACE}:is([hidden], [aria-hidden="true"], [data-state="closed"], [style*="op
+ /* Every floating surface shares one shape: all pickers, menus/listboxes, and Command Center. */
+ ${SURFACE} { border-radius: 12px !important; border-color: var(--colors-border) !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
+ [data-cp-setting-menu] { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22) !important; }
+-/* Dark raised sits too close to the page (1.15:1), so dark themes lift surfaces to control; light themes keep raised (white), as control is darker than the page there. */
++/* Dark raised sits too close to the page (1.15:1), so surfaces use control in both modes (a host whose light control is the raised card, lighter than the page, keeps the dark mapping); a hovered row is the raised tone in light. */
+ ${SURFACE} { background-color: var(--cp-control) !important; }
+-:root:is(.light, .pluginLight) ${SURFACE} { background-color: var(--cp-raised) !important; }
+ ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]) { border-radius: 16px !important; }
+ /* Reset inherited cursor styles throughout the popup; restore pointer only across active rows. */
+ ${SURFACE}, ${IN_SURFACE} * { cursor: default !important; }
+@@ -114,16 +113,16 @@ ${IN_SURFACE} :is(input, textarea, [contenteditable="true"]) { cursor: text !imp
+ ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]):not(:disabled):not([aria-disabled="true"]),
+ ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]):not(:disabled):not([aria-disabled="true"]) * { cursor: pointer !important; }
+ ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible, [aria-selected="true"]) { background-color: color-mix(in srgb, var(--cp-control), var(--cp-fg) 12%) !important; }
+-:root:is(.light, .pluginLight) ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible, [aria-selected="true"]) { background-color: color-mix(in srgb, var(--cp-raised), var(--cp-fg) 8%) !important; }
++:root:is(.light, .pluginLight) ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible, [aria-selected="true"]) { background-color: var(--cp-raised) !important; }
+ /* The composer's track panels (subagents, tasks) light a row on a child inset 4px; the fill goes there, not on the full-width row, or both show. */
+ :root ${TRACK_PANEL} [role="menuitem"]:not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible, [aria-selected="true"]) { background-color: transparent !important; }
+ ${TRACK_PANEL} [role="menuitem"] > div { border-radius: 11px !important; }
+ @supports (corner-shape: squircle) { ${TRACK_PANEL} [role="menuitem"] > div { corner-shape: squircle; } }
+ ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-color: color-mix(in srgb, var(--cp-control), var(--cp-fg) 12%) !important; }
+-:root:is(.light, .pluginLight) ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-color: color-mix(in srgb, var(--cp-raised), var(--cp-fg) 8%) !important; }
++:root:is(.light, .pluginLight) ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-color: var(--cp-raised) !important; }
+ /* Paseo lights a row with the raised color, which would vanish on a raised surface; markLitRows tags it to draw it a step up. */
+ [data-cp-lit] { background-color: color-mix(in srgb, var(--cp-control), var(--cp-fg) 12%) !important; }
+-:root:is(.light, .pluginLight) [data-cp-lit] { background-color: color-mix(in srgb, var(--cp-raised), var(--cp-fg) 8%) !important; }
++:root:is(.light, .pluginLight) [data-cp-lit] { background-color: var(--cp-raised) !important; }
+ /* The sidebar's workspace hover card is a menu too (role=menu), but its rows ran edge to edge, so their 16px hover fill missed the
+    card's corners. Inset them 4px like menu rows: 28px tall, 13px text, 14px icons, title 13/600, divider inset too. */
+ [data-cp-part="ws-card"] { padding: 4px !important; }
+@@ -177,13 +176,14 @@ ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-c
  ${SLASH} > div { background-color: var(--cp-raised, var(--colors-surface1)) !important; border: 1px solid var(--cp-rule, var(--colors-border)) !important; border-radius: 16px !important; padding: 4px !important; gap: 0 !important; flex-direction: column-reverse !important; overflow: hidden !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35) !important; }
  ${SLASH} > div > div { background-color: transparent !important; border-width: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
  ${SLASH} > div[data-cp-glide] { transition: height ${SLASH_GLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1) !important; }
@@ -57,7 +88,19 @@ index 05edb75..ae2b637 100644
  [data-cp-part="slash-detail"] { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 4px; margin-top: 4px !important; padding: 10px 10px 8px !important; border-top: 1px solid var(--cp-rule, var(--colors-border)) !important; }
  [data-cp-part="slash-detail"] > :first-child { grid-area: 1 / 1; font-family: var(--cp-mono, ui-monospace, monospace) !important; font-size: 12px !important; color: var(--cp-accent, var(--colors-accent-bright)) !important; }
  /* Skill descriptions run to paragraphs; three lines, like the row above shows one. */
-@@ -253,7 +254,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
+@@ -209,9 +209,9 @@ button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !impo
+ /* Scroll to bottom: a 36px floating control like the plugin's surfaces (rule border, lifted fill), not Paseo's 48px disc. Its margin keeps
+    it centered in the 48px box Paseo positions. */
+ [data-testid="scroll-to-bottom-button"] { width: 36px !important; height: 36px !important; margin: 6px !important; border: 1px solid var(--cp-rule) !important; background-color: var(--cp-control) !important; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3) !important; transition: background-color 120ms ease-out; }
+-:root:is(.light, .pluginLight) [data-testid="scroll-to-bottom-button"] { background-color: var(--cp-raised) !important; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12) !important; }
++:root:is(.light, .pluginLight) [data-testid="scroll-to-bottom-button"] { background-color: var(--cp-control) !important; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12) !important; }
+ [data-testid="scroll-to-bottom-button"]:hover { background-color: color-mix(in srgb, var(--cp-control), var(--cp-fg) 12%) !important; }
+-:root:is(.light, .pluginLight) [data-testid="scroll-to-bottom-button"]:hover { background-color: color-mix(in srgb, var(--cp-raised), var(--cp-fg) 8%) !important; }
++:root:is(.light, .pluginLight) [data-testid="scroll-to-bottom-button"]:hover { background-color: var(--cp-raised) !important; }
+ [data-testid="scroll-to-bottom-button"] svg { width: 16px !important; height: 16px !important; }
+ /* Tooltips read as captions: 12px text in a tighter box than menus. */
+ [role="tooltip"] { padding: 4px 8px !important; border-radius: 8px !important; border-color: var(--cp-rule, var(--colors-border)) !important; }
+@@ -253,7 +253,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
  ${PLAN} > div:last-child { padding: 10px 16px 12px !important; border-top: 1px solid var(--cp-rule) !important; }
  
  [data-testid^="chat-outline-tick-"][aria-selected="true"] > div { background-color: var(--cp-accent) !important; }
@@ -66,7 +109,7 @@ index 05edb75..ae2b637 100644
  [data-cp-part="outline-preview"] * { font-size: 13px !important; }
  /* Between ticks, a copy of the last preview glides to the hovered tick until Paseo's next one takes over (ghostOutlinePreview). */
  [data-testid="chat-outline-preview"][data-cp-ghost] { pointer-events: none; animation: none !important; transition: transform 100ms cubic-bezier(0.33, 1, 0.68, 1), opacity 100ms ease-out !important; }
-@@ -303,10 +304,21 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
+@@ -303,10 +303,21 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
  ${USAGE} > div:nth-child(4) { margin-top: -6px !important; }
  `;
  
@@ -91,7 +134,7 @@ index 05edb75..ae2b637 100644
  /* Settings pages (tagged by tagSettings): surfaces 12, controls 8, and one text field, 32px in a sunken well that lights up on focus.
     Settings has its own sidebar, so a reload there can come before the --cp-* colors are set: Paseo's own colors stand in. */
  [data-cp-set="card"] { border-radius: 12px !important; }
-@@ -314,7 +326,9 @@ export const NATIVE_CSS = `
+@@ -314,7 +325,9 @@ export const NATIVE_CSS = `
  :is([data-cp-set="field"], [data-cp-set="area"]) { border: 1px solid var(--colors-border) !important; border-radius: 8px !important; background-color: var(--cp-sunken, color-mix(in srgb, var(--colors-surface0), #000 15%)) !important; transition: border-color 120ms ease-out, box-shadow 120ms ease-out; }
  /* The stand-in above is a mid grey on a light page. */
  :root:is(.light, .pluginLight) :is([data-cp-set="field"], [data-cp-set="area"]) { background-color: var(--cp-sunken, var(--colors-surface2)) !important; }
@@ -102,6 +145,18 @@ index 05edb75..ae2b637 100644
  :is([data-cp-set="field"], [data-cp-set="area"]):hover { border-color: color-mix(in srgb, var(--cp-muted, var(--colors-foreground-muted)) 55%, transparent) !important; }
  :is([data-cp-set="field"], [data-cp-set="area"]):focus-within { border-color: var(--cp-accent, var(--colors-accent)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-accent, var(--colors-accent)) 25%, transparent) !important; }
  /* The field draws focus; an input inside a wrapper field stays see-through. */
+diff --git a/client/web/selection-copy.ts b/client/web/selection-copy.ts
+index 251e126..93472ef 100644
+--- a/client/web/selection-copy.ts
++++ b/client/web/selection-copy.ts
+@@ -9,7 +9,6 @@ declare const innerWidth: number;
+ 
+ const SELECT_CSS = `
+ [data-cp-select] { position: fixed; z-index: 10000; display: flex; align-items: center; gap: 1px; padding: 3px; border: 1px solid var(--colors-border); border-radius: 8px; background-color: var(--cp-control, var(--colors-surface2)); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); animation: cp-pop 40ms ease-out; }
+-:root:is(.light, .pluginLight) [data-cp-select] { background-color: var(--cp-raised, var(--colors-surface1)); }
+ [data-cp-select] > span { padding: 0 4px 0 7px; color: var(--cp-muted, var(--colors-foreground-muted)); font-size: 12px; }
+ [data-cp-select] > button { height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--cp-fg, var(--colors-foreground)); font-family: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+ [data-cp-select] > button:hover { background-color: color-mix(in srgb, var(--cp-control, var(--colors-surface2)), var(--cp-fg, var(--colors-foreground)) 12%); }
 diff --git a/client/web/selectors.ts b/client/web/selectors.ts
 index 950e307..7e60db5 100644
 --- a/client/web/selectors.ts

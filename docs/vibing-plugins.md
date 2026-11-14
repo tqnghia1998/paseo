@@ -114,10 +114,27 @@ to one worktree per frame and to the host's native chat.
   `foregroundExtraMuted` mixes 5% toward the canvas instead of 35% (4.7:1 or better on every
   light surface instead of 2.6 to 3.2), the placeholder (`surface4`) is a tone of the muted
   foreground, and the four status dots are the original hues darkened to 3:1 on the canvas,
-  raised, hover and selected tones. The hard-coded chevron, error text, amber progress,
+  raised, hover and both selected tones. The hard-coded chevron, error text, amber progress,
   notice icons, compaction icons and shimmer highlight of the plugin's own chat UI use the same
   tokens in light. Dark values are unchanged; `scripts/paseo-bots-native-tokens.test.mjs` checks
   both.
+- **One canvas, the same classes in both modes.** A container that is the canvas in dark is the
+  canvas in light; only the classes that are raised in dark (cards, menus, popovers, the composer)
+  are the raised card (`#e6e7ed`) in light, and hover and selected map by class too. Upstream's
+  light themes paint the sidebar with `surface2` and the selected tone with a mix toward it, which
+  is right when control is darker than the page and wrong for this palette, where control is the
+  raised card. `nativeTokens` therefore sets `surfaceSidebar` (the Bots list, tab strip and
+  splash) to `surface0` in both modes, derives the selected tone (`surfaceSidebarSelected`, and
+  `surface3` in light) as the hover tone mixed toward the text (dark 0.865, light 0.955:
+  `#4a5057` and `#c4cad9`, near the palette's selected tones `#444d56` and `#bfc9df`; light had
+  mixed toward the canvas and ended up lighter than it), and the tooltip bubble is `surface2`
+  in both modes (it was the canvas in light). Moving the pill onto the darker selected tone cost
+  contrast, so the light `foregroundExtraMuted` mixes 3% toward the canvas (was 5%) and the light
+  status dots are `#1f72b9`, `#207f41`, `#97651f` and `#d6292a`; both hold 4.5:1 and 3:1 on the
+  canvas, raised, hover and both selected tones. Chat Polish's light overrides of its popup surface
+  (menus, listboxes, the Command Center, the selection menu and the scroll-to-bottom button) are
+  removed so they use `control` as dark does, and a hovered or lit row is the hover tone
+  (`--cp-raised`) instead of a mix on it (`scripts/paseo-chat-polish-surfaces.test.mjs`).
 - **Managed Chief.** `vibing-chief` is a reserved, host-managed persona: ordinary launches,
   routines and relay tools reject it (`assertOrdinaryBot`). The daemon-only broker
   (`server/chief.ts`, `bots.chief.prepare|call|handoff`, bridge-token gated) serves Chief's
@@ -155,6 +172,14 @@ without it the theme builder would derive `surface3`, and with it secondary butt
 segments, switch tracks and the light sidebar hover, from the border. `raisedStrong` is a fork
 addition to the theme contract (`PluginThemeColors`, the theme schema and builders in
 `plugins/themes/index.ts`); themes that omit it keep `surface3 = border`.
+It also sets the optional `sidebar` (`surfaceSidebar`) to the canvas and `popover` (tooltips and
+hover cards) to the raised card in both modes (`#1d2125` / `#24292e` and `#d6d8df` / `#e6e7ed`):
+the theme contract paints a light sidebar with `control` and a light popover with `background`,
+which for this palette (control is the lighter raised card) made them the wrong class compared
+with dark. `sidebar` and `popover` are fork additions too; omitted, they keep the old defaults
+(dark sidebar `background`, light sidebar `control`, dark popover `control`, light popover
+`background`). `surfaceSidebarSelected` and `surfaceWorkspace` only paint the native workspace
+sidebar and screen, which an embedded frame never mounts, so they stay as upstream builds them.
 Upstream's light status, diff, syntax and terminal ANSI colours assume a white page, so in the
 embedded build `patches/vibing/light-readable.ts` darkens each toward black by the least amount
 that reaches 4.5:1 (3:1 for status dots, and for terminal ANSI colours against the canvas only) on

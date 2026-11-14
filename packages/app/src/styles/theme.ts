@@ -236,6 +236,9 @@ export interface LightThemeConfig {
   surfaceSidebarSelected?: string;
   foregroundSidebarHover?: string;
   foregroundSidebarSelected?: string;
+  /** Tooltips and hover cards; the page surface (`surface0`) when omitted. */
+  popover?: string;
+
   foreground: string;
   foregroundMuted: string;
   foregroundExtraMuted: string;
@@ -308,7 +311,7 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     success: tint.accent,
 
     background: tint.surface0,
-    popover: tint.surface0,
+    popover: tint.popover ?? tint.surface0,
     popoverForeground: tint.foreground,
     primary: tint.primary,
     primaryForeground: tint.primaryForeground,
@@ -374,6 +377,9 @@ export interface DarkThemeConfig {
   surfaceSidebarSelected?: string;
   foregroundSidebarHover?: string;
   foregroundSidebarSelected?: string;
+  /** Tooltips and hover cards; `surface2` when omitted. */
+  popover?: string;
+
   foregroundMuted: string;
   foregroundExtraMuted: string;
   border: string;
@@ -440,7 +446,7 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
 
     // Legacy aliases (for gradual migration)
     background: tint.surface0,
-    popover: tint.surface2,
+    popover: tint.popover ?? tint.surface2,
     popoverForeground: foreground,
     primary: foreground,
     primaryForeground: tint.surface0,
