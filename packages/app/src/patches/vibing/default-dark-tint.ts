@@ -28,27 +28,29 @@ const VIBING_DARK_TINT: DarkThemeConfig = {
 };
 
 const VIBING_LIGHT_TINT: LightThemeConfig = {
-  surface0: "#e6e7ed",
-  surface1: "#dcdee3",
-  surface2: "#e1e2e8",
-  surface3: "#dcdee3",
-  surface4: "#707280",
-  surfaceDiffEmpty: "#dcdee3",
-  surfaceSidebar: "#e1e2e8",
+  surface0: "#d6d8df",
+  surface1: "#cbd1df",
+  surface2: "#e6e7ed",
+  surface3: "#cbd1df",
+  surface4: "#686a77",
+  surfaceDiffEmpty: "#cbd1df",
+  surfaceSidebar: "#e6e7ed",
   foreground: "#343b59",
-  foregroundMuted: "#484c61",
-  foregroundExtraMuted: "#707280",
+  foregroundMuted: "#4c505e",
+  foregroundExtraMuted: "#686a77",
   border: "#c1c2c7",
   borderAccent: "#c1c2c7",
-  accent: "#2959aa",
-  accentBright: "#2959aa",
+  accent: "#395d99",
+  accentBright: "#395d99",
   accentForeground: "#ffffff",
   primary: "#343b59",
   primaryForeground: "#ffffff",
-  destructive: "#b04138",
+  // The upstream light destructive (#b04138) is 4.03:1 on the canvas and 3.75:1 on the hover tone;
+  // this is the least darkening that reaches 4.5:1 on canvas, raised and hover.
+  destructive: "#9b3931",
   terminalBlack: "#343b58",
-  terminalBrightBlack: "#707280",
-  ring: "#707280",
+  terminalBrightBlack: "#686a77",
+  ring: "#686a77",
 };
 
 export function resolveDefaultDarkTint(upstream: DarkThemeConfig): DarkThemeConfig {
