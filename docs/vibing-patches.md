@@ -574,7 +574,9 @@ Do not label these patches as installed plugins merely to make them discoverable
   The composer track pills (Run, the diff-stat chip, the subagents chip; `composerPillStyles.bodyActive`) rest on
   `surface1` and, in the embedded light build only, hover to `surface1` mixed 5% toward the foreground
   (`#cbcdd3` + `#343b59` = `#c3c6cd`, `patches/vibing/composer-pill-hover.ts`) instead of the near-white
-  `surface2`; dark and standalone builds keep `surface2`.
+  `surface2`; dark and standalone builds keep `surface2`. The value is the theme token `composerPillHover`, computed in
+  `buildLightSemanticColors` from real hex colours: on web, Unistyles gives `StyleSheet.create` functions the CSS-variable
+  theme (every string, `colorScheme` too, is a `var(--...)` reference), so nothing can be computed or branched on there.
   The Bots patch's `nativeTokens` branches on `dark` for its text and icon colours
   (`foregroundSelected`, `accentBright`, `foregroundExtraMuted`, the placeholder, status dots).
   The theme needs an explicit Paseo version range
