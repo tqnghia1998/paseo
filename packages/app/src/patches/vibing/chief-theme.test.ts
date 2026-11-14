@@ -17,7 +17,7 @@ const HOST_CHIEF_CSS = {
   dark: {
     surface: "#24292e",
     control: "#2f363d",
-    border: "#2f363d",
+    border: "#2b3137",
     textMuted: "#d1d5da",
     accent: "#79b8ff",
     accentBright: "#8dc3ff",
@@ -25,7 +25,7 @@ const HOST_CHIEF_CSS = {
   light: {
     surface: "#fafbfc",
     control: "#f6f8fa",
-    border: "#f6f8fa",
+    border: "#e1e4e8",
     textMuted: "#586069",
     accent: "#0366d6",
     accentBright: "#0357b6",
@@ -136,6 +136,14 @@ describe("Chief theme", () => {
     expect(contrast(accent, CHIEF_PALETTES[mode].accentForeground)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(accentBright, background)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(accent, background)).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(["dark", "light"] as const)("gives borders their own colour in %s mode", (mode) => {
+    const { background, control, border } = CHIEF_PALETTES[mode];
+    // The border is the palette's own value, no longer the hover (control) tone.
+    expect(border).not.toBe(control);
+    expect(border).not.toBe(background);
+    expect(contrast(border, background)).toBeGreaterThanOrEqual(1.1);
   });
 
   it("builds a light colour set for the light mode and a dark one otherwise", () => {
