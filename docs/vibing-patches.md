@@ -578,11 +578,19 @@ Do not label these patches as installed plugins merely to make them discoverable
   builds. The pills hover to `composerPillHover`, the rest tone mixed 5% toward the foreground (`#dddfe5` + `#343b59` =
   `#d5d7de`) instead of the near-white `surface2`; dark and standalone keep `surface2`. The Chief frame carries the
   same light tone in `CHIEF_PALETTES.light.composerSurface` (`#dddfe5`, kept by hand because its palette has no canvas
-  to mix; the composer box reads on the `#e6e7ed` popup through its 1px border), dark its raised tone; Chief's user
-  bubbles and other raised fills stay `#cbcdd3`. Both are computed in `buildLightSemanticColors` from real hex colours: on web,
+  to mix; the composer box reads on the `#e6e7ed` popup through its 1px border), dark its raised tone; Chief's other
+  raised fills stay `#cbcdd3`. Both are computed in `buildLightSemanticColors` from real hex colours: on web,
   Unistyles gives `StyleSheet.create` functions the CSS-variable theme (every string, `colorScheme` too, is a
   `var(--...)` reference), so nothing can be computed or branched on there. `surface1`, `surface3` and the Bots
   selected tone derived from them are unchanged (`#cbcdd3`, `#c6c9cf`).
+  The user message bubbles (the Bots, Live Design Agent and Chief frames, one build) follow the composer in the embedded
+  light build: the theme tokens `chatFillSurface` (the composer tone `#dddfe5`) and `chatFillRing` (a 1px inset ring in
+  `borderAccent`, `#c1c2c7`, as a CSS box-shadow so it adds no layout space and does not double up with any border; Chat
+  Polish restyles the bubble's padding and radius only). Dark and standalone keep `surface3` and `none`. `surface3`
+  itself (toggle tracks, skeletons, secondary buttons, sidebar hover, the Bots selected row) is unchanged. The Bots
+  plugin's muted `StatusBadge` (the routine card's Running, Skipped, Paused) fills with the same tone in light
+  (`mutedBadgeFill` in `scripts/paseo-bots-vibing.patch`, `client/panel/controls.tsx`); the app's own `StatusBadge`
+  (settings pages) is not a chat surface and stays on `surface3`.
   The Bots patch's `nativeTokens` branches on `dark` for its text and icon colours
   (`foregroundSelected`, `accentBright`, `foregroundExtraMuted`, the placeholder, status dots).
   The theme needs an explicit Paseo version range
