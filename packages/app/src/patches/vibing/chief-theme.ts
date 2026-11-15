@@ -90,10 +90,11 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
     surface2: palette.control,
     surface3: palette.raisedStrong,
     surface4: palette.ring,
-    surfaceDiffEmpty: palette.raised,
     selected: palette.selected,
     // The Chief surface in both modes, never the control tone.
     surfaceSidebar: palette.background,
+    surfaceSidebarHover: palette.raised,
+    surfaceSidebarSelected: palette.control,
     foreground: palette.foreground,
     foregroundMuted: palette.mutedForeground,
     foregroundExtraMuted: palette.ring,

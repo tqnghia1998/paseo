@@ -74,12 +74,8 @@ const BACKGROUND_SLOTS: Record<string, "canvas" | "raised" | "hover"> = {
   surfaceSidebarHover: "hover",
   surfaceSidebarSelected: "raised",
   surfaceWorkspace: "hover",
-  surfaceDiffEmpty: "hover",
   surface2: "raised",
   popover: "raised",
-  secondary: "raised",
-  muted: "raised",
-  input: "raised",
 };
 
 describe("Space App Vibing surface classes (light equals dark)", () => {

@@ -112,7 +112,6 @@ export interface PluginThemeColors {
   accent?: string;
   mutedForeground: string;
   ring: string;
-  sidebar?: string;
   sidebarHover?: string;
   sidebarSelected?: string;
   surface3?: string;

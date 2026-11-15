@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("./focus-mode", () => ({ isEmbeddedFocusMode: false, isEmbeddedChiefView: false }));
 
 const { resolveLightRoles } = await import("./default-dark-tint");
+const { deriveSurfaceStates } = await import("@/styles/derive-colors");
 const { buildDarkSemanticColors, buildLightSemanticColors } = await import("@/styles/theme");
 
 const UPSTREAM_ROLES = {
@@ -21,7 +22,6 @@ const TINT = {
   surface2: "#f4f4f5",
   surface3: "#e4e4e7",
   surface4: "#d4d4d8",
-  surfaceDiffEmpty: "#f6f6f6",
   surfaceSidebar: "#f4f4f5",
   foreground: "#1a1a1e",
   foregroundMuted: "#71717a",
@@ -48,8 +48,9 @@ describe("standalone light and dark builders", () => {
 
   it("keeps upstream's role mapping, destructive colour and status dots", () => {
     const colors = buildLightSemanticColors(tint);
-    expect(colors.surfaceSidebarHover).toBe(TINT.surface3);
-    expect(colors.surfaceSidebarSelected).toBe(TINT.surface4);
+    const states = deriveSurfaceStates(TINT.surfaceSidebar, TINT.foreground, "light");
+    expect(colors.surfaceSidebarHover).toBe(states.hover);
+    expect(colors.surfaceSidebarSelected).toBe(states.selected);
     expect(colors.surfaceWorkspace).toBe(TINT.surface0);
     expect(colors.destructive).toBe("#b04138");
     expect(colors.destructiveForeground).toBe(TINT.surface0);

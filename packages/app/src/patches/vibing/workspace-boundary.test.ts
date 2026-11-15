@@ -56,6 +56,8 @@ it("allows shared settings but blocks other workspaces, hosts and project manage
     "/settings/hosts/local/terminals",
     "/settings/hosts/local/projects/repo",
     "/settings/hosts/local/plugins",
+    "/settings/hosts/local/plugins/example",
+    "/settings/hosts/local/plugin-directory/owner/example",
     "/settings/hosts/local/plugins/example/config",
     "/settings/hosts/local/plugins/space-app-vibing-theme/customizations",
   ]) {
@@ -73,6 +75,8 @@ it("allows shared settings but blocks other workspaces, hosts and project manage
     "/open-project",
     "/settings/vibing-customizations",
     "/settings/hosts/remote/plugins",
+    "/settings/hosts/remote/plugins/example",
+    "/settings/hosts/remote/plugin-directory/owner/example",
     "/settings/hosts/local/projects",
     "/settings/hosts/local/projects/other",
     "/settings/hosts/local/workspaces",
