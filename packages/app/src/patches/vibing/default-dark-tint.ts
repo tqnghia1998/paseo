@@ -38,7 +38,9 @@ const VIBING_DARK_TINT: Omit<DarkThemeConfig, "destructive"> = {
 };
 
 // Light adds the fields only its builder asks for (primary and its foreground, the same roles dark's builder
-// derives from `foreground` and `surface0`). ANSI black stays the default text: it is a terminal colour, not a surface.
+// derives from `foreground` and `surface0`). ANSI black is the one documented exception to "same role in both modes": dark
+// uses the raised card, light the default text, because black is the terminal's darkest colour and a raised card would
+// be unreadable on a light canvas (tested in default-dark-tint.test.ts; upstream's own plugin builders differ the same way).
 const VIBING_LIGHT_TINT: Omit<LightThemeConfig, "destructive"> = {
   ...vibingTint(VIBING_PALETTES.light),
   primary: VIBING_PALETTES.light.text,

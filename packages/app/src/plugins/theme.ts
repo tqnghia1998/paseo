@@ -1,6 +1,16 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import type { Theme } from "@/styles/theme";
 
+// Optional colours are only present when the theme has them (standalone and third-party themes have no `selected`, and the
+// Bots plugin reads its presence to tell a palette-aware host from upstream's themes).
+function present<K extends string>(
+  values: Record<K, string | undefined>,
+): Partial<Record<K, string>> {
+  return Object.fromEntries(
+    Object.entries(values).filter(([, value]) => value !== undefined),
+  ) as Partial<Record<K, string>>;
+}
+
 export function toPluginTheme(theme: Theme): PluginTheme {
   return {
     colors: {
@@ -15,12 +25,14 @@ export function toPluginTheme(theme: Theme): PluginTheme {
       statusSuccess: theme.colors.statusSuccess,
       statusWarning: theme.colors.statusWarning,
       statusDanger: theme.colors.statusDanger,
-      selected: theme.colors.selected,
-      foregroundExtraMuted: theme.colors.foregroundExtraMuted,
-      statusDotRunning: theme.colors.statusDotRunning,
-      statusDotSuccess: theme.colors.statusDotSuccess,
-      statusDotWarning: theme.colors.statusDotWarning,
-      statusDotDanger: theme.colors.statusDotDanger,
+      ...present({
+        selected: theme.colors.selected,
+        foregroundExtraMuted: theme.colors.foregroundExtraMuted,
+        statusDotRunning: theme.colors.statusDotRunning,
+        statusDotSuccess: theme.colors.statusDotSuccess,
+        statusDotWarning: theme.colors.statusDotWarning,
+        statusDotDanger: theme.colors.statusDotDanger,
+      }),
     },
   };
 }

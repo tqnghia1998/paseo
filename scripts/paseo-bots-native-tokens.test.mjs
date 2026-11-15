@@ -4,10 +4,10 @@ import { test } from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
-// The Bots plugin's `nativeTokens` colours text and icons on the host's surfaces. Every token derives from the theme
-// colours by ONE expression for both modes (light differs from dark only in the palette's values, docs/theme-sites.md);
-// the dark values are pinned so nothing can move them. Contrast of the light values is the controller's concern
-// (palette-align report), not asserted here.
+// The Bots plugin's `nativeTokens` colours text and icons on the host's surfaces. With the Space App Vibing palette (the host
+// passes `selected`) every token derives from the theme colours by ONE expression for both modes (light differs from dark
+// only in the palette's values, docs/theme-sites.md), the contrast floors hold in both modes and the dark values are pinned.
+// Without it (standalone Paseo, third-party themes) the tokens are upstream's, unchanged.
 const source = readFileSync(
   new URL("../plugins/paseo-bots/client/paseo-bots.gen.ts", import.meta.url),
   "utf8",
@@ -36,8 +36,8 @@ vm.runInContext(
 );
 const nativeTokens = (colors) => context.nativeTokens({ ...colors });
 
-// The theme plugin's colours as the Bots plugin sees them (plugins/space-app-vibing-theme: canvas, hover as `raised`,
-// the raised card as `control`, text, subdued text, blue) plus the host's faint text (`ring`) as foregroundExtraMuted.
+// The theme plugin's colours as the Bots plugin sees them (plugins/space-app-vibing-theme: canvas, hover as `raised`, the
+// raised card as `control`, text, subdued text, blue) plus the host's faint text (`ring`) and selected tone.
 const DARK = {
   surface0: "#1d2125",
   surface1: "#2f363d",
@@ -48,8 +48,11 @@ const DARK = {
   accent: "#79b8ff",
   foregroundExtraMuted: "#959da5",
   selected: "#444d56",
+  statusDotRunning: "#5caaf6",
+  statusDotSuccess: "#35c264",
+  statusDotWarning: "#db932e",
+  statusDotDanger: "#f7796d",
 };
-// Two light sets: the current primitives and the target ones (raised `#dddfe5`, hover `#e3e4ea`).
 const LIGHT = {
   surface0: "#d6d8df",
   surface1: "#e3e4ea",
@@ -60,9 +63,33 @@ const LIGHT = {
   accent: "#395d99",
   foregroundExtraMuted: "#686a77",
   selected: "#c6c9cf",
+  // The host's light dots after its readability pass (3:1 on the canvas, hover, raised and selected tones).
+  statusDotRunning: "#1f71b8",
+  statusDotSuccess: "#217f41",
+  statusDotWarning: "#96651e",
+  statusDotDanger: "#d6292a",
 };
-const LIGHT_TARGET = { ...LIGHT, surface1: "#e3e4ea", surface2: "#dddfe5" };
-const SELECTED_PRIMITIVE = { dark: "#444d56", light: "#c6c9cf" };
+// Upstream's own themes (standalone Paseo): no `selected`, so the plugin keeps its upstream tokens.
+const UPSTREAM_LIGHT = {
+  surface0: "#ffffff",
+  surface1: "#fafafa",
+  surface2: "#f4f4f5",
+  border: "#e4e4e7",
+  foreground: "#1a1a1e",
+  foregroundMuted: "#71717a",
+  accent: "#20744a",
+  foregroundExtraMuted: "#a1a1aa",
+};
+const UPSTREAM_DARK = {
+  surface0: "#181b1a",
+  surface1: "#1e2120",
+  surface2: "#272a29",
+  border: "#252b2a",
+  foreground: "#fafafa",
+  foregroundMuted: "#a1a5a4",
+  accent: "#20744a",
+  foregroundExtraMuted: "#717574",
+};
 
 function luminance(hex) {
   const channel = (i) => {
@@ -83,92 +110,173 @@ const drift = (a, b) =>
   );
 
 const nativeTokensSource = declaration("nativeTokens");
+const dots = (t) => [t.statusDotRunning, t.statusDotSuccess, t.statusDotWarning, t.statusDotDanger];
 
-test("dark: every derived value stays within 2/255 of the values that shipped before", () => {
+test("dark with the palette: every derived value stays within 2/255 of the values that shipped, except the documented changes", () => {
   const t = nativeTokens(DARK);
-  const before = {
+  // Within 2/255 of the previous release.
+  for (const [key, value] of Object.entries({
     surfaceSidebar: "#1d2125",
-    surfaceSidebarSelected: "#4a5057", // the old derived mix; the host's selected primitive is #444d56
     surface3: "#3f4449",
-    surface4: "#565b5f",
     foregroundSelected: "#fdfdfe",
-    accentBright: "#cde5ff",
-  };
-  for (const [key, value] of Object.entries(before)) {
-    if (key === "surfaceSidebarSelected") continue; // now the host's selected primitive (accepted drift 6/3/1)
+  })) {
     assert.ok(drift(t[key], value) <= 2, `${key} ${t[key]} vs ${value}`);
   }
-  // The unchanged expressions are exact.
-  // The selected tone is the palette's selected primitive in both modes.
-  assert.equal(t.surfaceSidebarSelected, "#444d56");
   assert.equal(t.surface3, "#3f4449");
-  assert.equal(t.surface4, "#565b5f");
   assert.equal(t.interactionHighlight, "rgba(255, 255, 255, 0.08)");
-  // Faint text and the status dots are the host's own values.
+  // Documented changes: the selected row is the palette's selected primitive (was the derived #4a5057), the placeholder is
+  // the host's faint colour (was #565b5f, 2.36:1 on the canvas), the link is the accent (was #cde5ff) and underlined.
+  assert.equal(t.surfaceSidebarSelected, "#444d56");
+  assert.equal(t.surface4, "#959da5");
+  assert.equal(t.accentBright, "#79b8ff");
+  assert.equal(t.linkDecoration, "underline");
   assert.equal(t.foregroundExtraMuted, "#959da5");
-  assert.deepEqual(
-    [t.statusDotRunning, t.statusDotSuccess, t.statusDotWarning, t.statusDotDanger],
-    ["#5caaf6", "#35c264", "#db932e", "#f7796d"],
-  );
+  assert.deepEqual(dots(t), ["#5caaf6", "#35c264", "#db932e", "#f7796d"]);
 });
 
-test("one expression per token in both modes (only the highlight overlay branches on dark)", () => {
+test("with the palette there is one expression per token: no mode branch except the highlight overlay", () => {
+  const start = nativeTokensSource.indexOf("const tokens = aware");
+  const end = nativeTokensSource.indexOf(": (() =>");
+  assert.ok(start > 0 && end > start, "found the palette branch");
   const branching = nativeTokensSource
+    .slice(start, end)
     .split("\n")
-    .filter((line) => /\bdark\b\s*\?/.test(line) && !line.includes("interactionHighlight"));
+    .filter((line) => /\bdark\b\s*\?/.test(line));
   assert.deepEqual(branching, []);
-  for (const colors of [LIGHT, LIGHT_TARGET]) {
-    const light = nativeTokens(colors);
-    assert.equal(light.surfaceSidebarSelected, colors.selected);
-    assert.equal(light.foregroundSelected, context.lift(colors.foreground, colors.surface0, 0.03));
-    assert.equal(light.interactionHighlight, "rgba(0, 0, 0, 0.06)");
-  }
+  const light = nativeTokens(LIGHT);
+  assert.equal(light.surfaceSidebarSelected, LIGHT.selected);
+  assert.equal(light.foregroundSelected, context.lift(LIGHT.foreground, LIGHT.surface0, 0.03));
+  assert.equal(light.surface3, context.mix(LIGHT.surface2, LIGHT.foreground, 0.87));
+  assert.equal(light.interactionHighlight, "rgba(0, 0, 0, 0.06)");
+  assert.equal(light.linkDecoration, "underline");
+  assert.equal(light.accentBright, LIGHT.accent);
+  // The shimmer sweep is the pole opposite the canvas: white in dark (upstream's band), black in light.
+  assert.equal(nativeTokens(DARK).shimmerHighlight, "#ffffff");
+  assert.equal(light.shimmerHighlight, "#000000");
 });
 
-test("light: selected text, links and faint text keep their floors on every surface they are drawn on", () => {
-  for (const colors of [LIGHT, LIGHT_TARGET]) {
+test("with the palette every text, placeholder and dot colour holds its floor on each surface it is drawn on, in both modes", () => {
+  const failures = [];
+  for (const [mode, colors] of [
+    ["dark", DARK],
+    ["light", LIGHT],
+  ]) {
     const t = nativeTokens(colors);
-    const surfaces = [
-      colors.surface0,
-      colors.surface2,
-      colors.surface1,
-      t.surfaceSidebarSelected,
-      SELECTED_PRIMITIVE.light,
-    ];
-    for (const surface of surfaces) {
-      assert.ok(contrast(t.accentBright, surface) >= 4.5, `link ${t.accentBright} on ${surface}`);
-      assert.ok(
-        contrast(t.foregroundExtraMuted, surface) >= 3 ||
-          (colors === LIGHT && surface === t.surfaceSidebarSelected),
-        `faint on ${surface}`,
-      );
-    }
-    for (const surface of [colors.surface0, t.surfaceSidebarSelected, SELECTED_PRIMITIVE.light]) {
-      assert.ok(contrast(t.foregroundSelected, surface) >= 4.5, `selected text on ${surface}`);
+    const canvas = colors.surface0;
+    const raised = colors.surface2;
+    const hover = colors.surface1;
+    const selected = colors.selected;
+    const check = (name, color, surfaces, floor) => {
+      for (const [label, surface] of Object.entries(surfaces)) {
+        const ratio = contrast(color, surface);
+        if (ratio < floor)
+          failures.push(`${mode} ${name} on ${label}: ${ratio.toFixed(2)} < ${floor}`);
+      }
+    };
+    // Links are drawn in chat on the canvas and on raised and hover fills; selected text on the canvas and the selected row.
+    check("link", t.accentBright, { canvas, raised, hover }, 4.5);
+    check("selected text", t.foregroundSelected, { canvas, selected }, 4.5);
+    // Faint text, the placeholder and the dots are UI tones: 3:1 on the canvas, raised, hover and the selected row.
+    for (const [name, color] of [
+      ["faint", t.foregroundExtraMuted],
+      ["placeholder", t.surface4],
+      ["dot running", t.statusDotRunning],
+      ["dot success", t.statusDotSuccess],
+      ["dot warning", t.statusDotWarning],
+      ["dot danger", t.statusDotDanger],
+    ]) {
+      check(name, color, { canvas, raised, hover, selected }, 3);
     }
   }
+  // Dark's faint text on the selected row (3.13) is the only floor that dark's own palette leaves under 3 elsewhere; none here.
+  assert.deepEqual(failures, []);
 });
 
-test("dark: links and selected text keep their floors", () => {
-  const t = nativeTokens(DARK);
-  for (const surface of [DARK.surface0, DARK.surface2, DARK.surface1, t.surfaceSidebarSelected]) {
-    assert.ok(contrast(t.accentBright, surface) >= 4.5);
-    assert.ok(contrast(t.foregroundSelected, surface) >= 4.5);
-  }
+test("light: the placeholder is the host's faint colour at its measured ratios", () => {
+  const t = nativeTokens(LIGHT);
+  assert.equal(t.surface4, LIGHT.foregroundExtraMuted);
+  assert.ok(Math.abs(contrast(t.surface4, LIGHT.surface0) - 3.77) < 0.02);
+  assert.ok(Math.abs(contrast(t.surface4, LIGHT.surface2) - 4.02) < 0.02);
+  assert.ok(Math.abs(contrast(t.surface4, LIGHT.selected) - 3.23) < 0.02);
 });
 
-test("hosts that predate the faint, selected and status dot colours fall back to one expression/set", () => {
-  const { foregroundExtraMuted: _faint, selected: _selected, ...old } = LIGHT;
-  const t = nativeTokens(old);
-  assert.equal(t.surfaceSidebarSelected, context.mix(old.surface1, old.foreground, 0.865));
-  assert.equal(t.foregroundExtraMuted, context.mix(old.foregroundMuted, old.surface0, 0.65));
+test("standalone and third-party themes (no `selected`) keep upstream's tokens exactly", () => {
+  const light = nativeTokens(UPSTREAM_LIGHT);
+  assert.equal(light.aware, false);
   assert.deepEqual(
-    [t.statusDotRunning, t.statusDotSuccess, t.statusDotWarning, t.statusDotDanger],
-    ["#5caaf6", "#35c264", "#db932e", "#f7796d"],
+    {
+      surfaceSidebar: light.surfaceSidebar,
+      surfaceSidebarSelected: light.surfaceSidebarSelected,
+      surface3: light.surface3,
+      surface4: light.surface4,
+      borderAccent: light.borderAccent,
+      foregroundExtraMuted: light.foregroundExtraMuted,
+      foregroundSelected: light.foregroundSelected,
+      accentBright: light.accentBright,
+      linkDecoration: light.linkDecoration,
+      shimmerHighlight: light.shimmerHighlight,
+    },
+    {
+      surfaceSidebar: "#f4f4f5",
+      surfaceSidebarSelected: "#e5e5e6",
+      surface3: "#e5e5e6",
+      surface4: "#d3d3d5",
+      borderAccent: "#ececee",
+      foregroundExtraMuted: "#a3a3a9",
+      foregroundSelected: "#1a1a1e",
+      accentBright: "#589777",
+      linkDecoration: "none",
+      shimmerHighlight: undefined,
+    },
   );
+  assert.deepEqual(dots(light), ["#268ae0", "#299f51", "#b37824", "#f12e2f"]);
+  const dark = nativeTokens(UPSTREAM_DARK);
+  assert.equal(dark.aware, false);
+  assert.deepEqual(
+    {
+      surfaceSidebar: dark.surfaceSidebar,
+      surfaceSidebarSelected: dark.surfaceSidebarSelected,
+      surface3: dark.surface3,
+      surface4: dark.surface4,
+      borderAccent: dark.borderAccent,
+      foregroundExtraMuted: dark.foregroundExtraMuted,
+      foregroundSelected: dark.foregroundSelected,
+      accentBright: dark.accentBright,
+      linkDecoration: dark.linkDecoration,
+      shimmerHighlight: dark.shimmerHighlight,
+    },
+    {
+      surfaceSidebar: "#141616",
+      surfaceSidebarSelected: "#272a29",
+      surface3: "#424544",
+      surface4: "#5a5c5b",
+      borderAccent: "#303534",
+      foregroundExtraMuted: "#717574",
+      foregroundSelected: "#fafafa",
+      accentBright: "#acccbc",
+      linkDecoration: "none",
+      shimmerHighlight: undefined,
+    },
+  );
+  assert.deepEqual(dots(dark), ["#5caaf6", "#35c264", "#db932e", "#f7796d"]);
 });
 
-test("the list, tab strip and splash are the canvas in both modes", () => {
+test("hosts that carry the palette but not the faint or dot colours fall back to one expression", () => {
+  const {
+    foregroundExtraMuted: _faint,
+    statusDotRunning: _a,
+    statusDotSuccess: _b,
+    statusDotWarning: _c,
+    statusDotDanger: _d,
+    ...old
+  } = LIGHT;
+  const t = nativeTokens(old);
+  assert.equal(t.foregroundExtraMuted, context.mix(old.foregroundMuted, old.surface0, 0.65));
+  assert.equal(t.surface4, t.foregroundExtraMuted);
+  assert.deepEqual(dots(t), ["#268ae0", "#299f51", "#b37824", "#f12e2f"]);
+});
+
+test("the list, tab strip and splash are the canvas with the palette", () => {
   assert.equal(nativeTokens(LIGHT).surfaceSidebar, LIGHT.surface0);
   assert.equal(nativeTokens(DARK).surfaceSidebar, DARK.surface0);
 });
@@ -180,4 +288,29 @@ test("the tooltip bubble is the raised card in both modes", () => {
 
 test("the muted badge is surface3 in both modes (no light-only fill)", () => {
   assert.ok(!source.includes("mutedBadgeFill"));
+});
+
+test("the plugin's remaining mode branches are the documented exceptions only", () => {
+  // Each branch below is listed in docs/vibing-patches.md (accepted exceptions); a new one must be added there.
+  const lines = source
+    .split("\n")
+    .filter(
+      (line) => /(?:tokens|nativeTokens\(colors\))\.dark\b/.test(line) || /\bdark \? /.test(line),
+    );
+  const normalised = lines
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter((line) => !line.startsWith("//"));
+  const known = [
+    /RED_500/, // error text: upstream's red in dark, the theme's statusDanger on a light palette
+    /AMBER_500/, // context meter warning
+    /style\.tint/, // notification icon tint
+    /CHEVRON_COLOR/, // bot row chevron on upstream's dark theme
+    /"#a1a1aa"/, // compaction glyph on upstream's dark theme
+    /shadowColor: tokens\.dark|shadowRadius: tokens\.dark/, // upstream's shadows
+    /tokens\.dark \? 0\.16 : 0\.12/, // upstream's status badge tint strength
+    /dark=\{|dark: tokens\.dark/, // avatar and logo artwork variants
+    /dark \?/, // the standalone token set and the highlight overlay inside nativeTokens
+  ];
+  const unknown = normalised.filter((line) => !known.some((pattern) => pattern.test(line)));
+  assert.deepEqual(unknown, []);
 });

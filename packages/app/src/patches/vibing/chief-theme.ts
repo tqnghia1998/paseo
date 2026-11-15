@@ -115,6 +115,7 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
             primary: palette.foreground,
             primaryForeground: palette.background,
             destructive: lightTheme.colors.destructive,
+            // ANSI black: the documented exception to one role mapping (the default text in light, the control tone in dark).
             terminalBlack: palette.foreground,
           }),
         )
