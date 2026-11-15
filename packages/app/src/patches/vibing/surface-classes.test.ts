@@ -24,11 +24,11 @@ const CLASSES = {
     faint: "#959da5",
   },
   light: {
-    canvas: "#d6d8df",
-    raised: "#dddfe5",
-    hover: "#e3e4ea",
-    selected: "#c6c9cf",
-    faint: "#686a77",
+    canvas: "#f2f2f6",
+    raised: "#ffffff",
+    hover: "#e9e9f4",
+    selected: "#dbdbe4",
+    faint: "#7b7d7f",
   },
 } as const;
 
