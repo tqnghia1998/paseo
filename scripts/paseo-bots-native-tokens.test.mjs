@@ -31,7 +31,9 @@ function declaration(name) {
 }
 const context = vm.createContext({ WeakMap, Math, parseFloat, parseInt, Number, String });
 vm.runInContext(
-  ["parseColor", "mix", "isDark", "cache", "nativeTokens"].map(declaration).join("\n"),
+  ["parseColor", "mix", "isDark", "cache", "nativeTokens", "mutedBadgeFill"]
+    .map(declaration)
+    .join("\n"),
   context,
 );
 const nativeTokens = (colors) => context.nativeTokens({ ...colors });
@@ -175,4 +177,19 @@ test("the tooltip bubble is the raised card in both modes", () => {
   // It was surface0 (the canvas) in light and surface2 (raised) in dark.
   assert.ok(/backgroundColor: theme \? theme\.surface2 : "#202225"/.test(source));
   assert.ok(!/dark \? theme\.surface2 : theme\.surface0/.test(source));
+});
+
+test("the muted badge is the composer tone in light and surface3 in dark", () => {
+  // Light: the canvas mixed 45% toward the raised card (#d6d8df, #e6e7ed) = #dddfe5, the Bots composer tone; dark keeps surface3.
+  const light = nativeTokens(LIGHT);
+  assert.equal(context.mutedBadgeFill({ ...LIGHT }, light.surface3, false), "#dddfe5");
+  assert.ok(contrast(LIGHT.foregroundMuted, "#dddfe5") >= 4.5);
+  assert.ok(contrast(LIGHT.border, "#dddfe5") >= 1.25);
+  const dark = nativeTokens(DARK);
+  assert.equal(context.mutedBadgeFill({ ...DARK }, dark.surface3, true), dark.surface3);
+  // A colour that is not a six-digit hex keeps surface3.
+  assert.equal(
+    context.mutedBadgeFill({ ...LIGHT, surface0: "var(--x)" }, "#123456", false),
+    "#123456",
+  );
 });

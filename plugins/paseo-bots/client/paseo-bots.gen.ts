@@ -4111,6 +4111,12 @@ function Alert2({ colors: colors2, variant = "default", title, description }) {
     (title ? body : body.slice(1)).length ? /* @__PURE__ */ jsx3(View3, { style: { marginLeft: icon ? 26 : 0 }, children: title ? body : body.slice(1) }) : null
   ] });
 }
+function mutedBadgeFill(colors2, surface3, dark) {
+  const hex = /^#[0-9a-f]{6}$/i;
+  if (dark || !hex.test(colors2.surface0) || !hex.test(colors2.surface2)) return surface3;
+  const channel = (i) => Math.round(parseInt(colors2.surface0.slice(1 + i * 2, 3 + i * 2), 16) * 0.55 + parseInt(colors2.surface2.slice(1 + i * 2, 3 + i * 2), 16) * 0.45).toString(16).padStart(2, "0");
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
+}
 function StatusBadge({ colors: colors2, label, variant = "muted" }) {
   const tokens = nativeTokens(colors2);
   const status = variant === "success" ? colors2.statusSuccess : variant === "warning" ? colors2.statusWarning : variant === "error" ? colors2.statusDanger : null;
@@ -4124,7 +4130,7 @@ function StatusBadge({ colors: colors2, label, variant = "muted" }) {
         borderRadius: 999,
         borderWidth: 1,
         borderColor: status ? "transparent" : colors2.border,
-        backgroundColor: status ? withAlpha(status, tokens.dark ? 0.16 : 0.12) : tokens.surface3,
+        backgroundColor: status ? withAlpha(status, tokens.dark ? 0.16 : 0.12) : mutedBadgeFill(colors2, tokens.surface3, tokens.dark),
         paddingHorizontal: 8,
         paddingVertical: 3
       },
