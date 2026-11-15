@@ -586,6 +586,18 @@ Do not label these patches as installed plugins merely to make them discoverable
   selected text is the text pushed 3% further from the canvas; links are the accent, underlined; the shimmer sweep is
   the text lifted a full difference from the canvas (white in dark, black in light); the status dots are the host's.
   Chief's `accentBright` is the accent mixed 17% toward the default text in both modes.
+  Scrims (the black dimmers behind the command center, add-project and host-chooser modals, the adaptive modal sheet,
+  the agent list's action sheet, bottom-sheet backdrops and the mobile panel dimmer) are one expression in both modes:
+  each site keeps its own alpha and multiplies it by `theme.scrimStrength` (`styles/scrim.ts`, computed in
+  `buildDarkTheme`/`buildLightTheme` from `16/15 - 0.48 * g / 255` of the canvas green channel, so x1.005 over the dark
+  canvas and x0.587 over the white one, which turns a 0.5 scrim into about #b4b4b4 over white instead of #808080 while dark
+  stays within 1/255). A fixed black alpha cannot be lighter in light without changing dark, and a mix of the canvas
+  toward black scales both modes by the same factor, so the strength follows the canvas. Only themes that carry the
+  palette's `selected` colour have it (standalone Paseo keeps strength 1 and its old alphas). Backdrops that animate their
+  own opacity (Gorhom's sheet backdrop, the mobile panel dimmer) are wrapped in a themed view whose opacity is the
+  strength (`scrimOpacity`); the rest use `scrimColor(theme.scrimStrength, alpha)` inside `StyleSheet.create`. Desktop
+  Plus uses the same expression for `--overlay-background-color`. The image lightbox (0.9), the terminal attach overlay and
+  the file-drop surface wash are not modal scrims and are unchanged.
   **Accepted exceptions to "one expression in both modes"** (each is a colour whose dark value is an upstream constant
   that no single expression reproduces while dark stays unchanged; the list is mirrored in `docs/theme.md` and a test
   fails when a new one appears):

@@ -1,8 +1,10 @@
 import { useId, useMemo, type ComponentProps, type ReactNode } from "react";
-import { Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { GestureDetector, type GestureType } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import { StyleSheet as ThemedStyleSheet } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
+import { scrimOpacity } from "@/styles/scrim";
 import { WindowChromeRootRegion } from "@/utils/desktop-window";
 import { usePanelStore, type MobilePanelView } from "@/stores/panel-store";
 import { getMobilePanelFrame } from "./model";
@@ -113,7 +115,9 @@ export function MobilePanelOverlay({
             style={[StyleSheet.absoluteFill, docked && { display: "none" }]}
             testID={isOpen ? `${panel}-backdrop` : undefined}
           >
-            <Animated.View pointerEvents="none" style={backdropStyle} />
+            <View pointerEvents="none" style={themedStyles.scrimStrength}>
+              <Animated.View pointerEvents="none" style={backdropStyle} />
+            </View>
           </Pressable>
 
           <Animated.View pointerEvents={isOpen ? "auto" : "none"} style={combinedPanelStyle}>
@@ -152,3 +156,11 @@ const styles = StyleSheet.create({
     right: 0,
   },
 });
+
+// The black backdrop above animates its own opacity; this themed wrapper scales it with the canvas (styles/scrim.ts).
+const themedStyles = ThemedStyleSheet.create((theme) => ({
+  scrimStrength: {
+    ...ThemedStyleSheet.absoluteFill,
+    opacity: scrimOpacity(theme.scrimStrength),
+  },
+}));

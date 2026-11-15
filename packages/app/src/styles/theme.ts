@@ -5,6 +5,7 @@ import {
   resolveLightRoles,
 } from "@/patches/vibing/default-dark-tint";
 import { resolveLightReadable } from "@/patches/vibing/light-readable";
+import { scrimStrengthForCanvas } from "@/styles/scrim";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
 import { deriveSurfaceStates } from "./derive-colors";
 
@@ -744,6 +745,9 @@ export function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemant
       syntax: darkHighlightColors,
     },
     shadow: darkShadow,
+    // Only palette themes (they carry `selected`) soften their scrim with the canvas; the rest keep upstream's.
+    scrimStrength:
+      semanticColors.selected === undefined ? 1 : scrimStrengthForCanvas(semanticColors.surface0),
     ...commonTheme,
   } as const;
 }
@@ -811,6 +815,9 @@ export function buildLightTheme(semanticColors: ReturnType<typeof buildLightSema
       ),
     },
     shadow: lightShadow,
+    // Only palette themes (they carry `selected`) soften their scrim with the canvas; the rest keep upstream's.
+    scrimStrength:
+      semanticColors.selected === undefined ? 1 : scrimStrengthForCanvas(semanticColors.surface0),
     ...commonTheme,
   } as const;
 }
