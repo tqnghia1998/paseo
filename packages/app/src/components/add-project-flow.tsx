@@ -1,4 +1,5 @@
 import { useOverlayRegistration, type KeyboardInputEvent } from "@/keyboard";
+import { scrimColor } from "@/styles/scrim";
 import { useAddHost } from "@/hosts/add-host";
 import { Modal } from "@/components/ui/modal";
 import { usePanelStore } from "@/stores/panel-store";
@@ -976,7 +977,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: scrimColor(theme.scrimStrength, 0.5),
   },
   panel: {
     width: 640,
