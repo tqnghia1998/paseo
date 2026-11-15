@@ -47,6 +47,7 @@ const DARK = {
   foregroundMuted: "#d1d5da",
   accent: "#79b8ff",
   foregroundExtraMuted: "#959da5",
+  selected: "#444d56",
 };
 // Two light sets: the current primitives and the target ones (raised `#dddfe5`, hover `#e3e4ea`).
 const LIGHT = {
@@ -58,6 +59,7 @@ const LIGHT = {
   foregroundMuted: "#4c505e",
   accent: "#395d99",
   foregroundExtraMuted: "#686a77",
+  selected: "#c6c9cf",
 };
 const LIGHT_TARGET = { ...LIGHT, surface1: "#e3e4ea", surface2: "#dddfe5" };
 const SELECTED_PRIMITIVE = { dark: "#444d56", light: "#c6c9cf" };
@@ -86,17 +88,19 @@ test("dark: every derived value stays within 2/255 of the values that shipped be
   const t = nativeTokens(DARK);
   const before = {
     surfaceSidebar: "#1d2125",
-    surfaceSidebarSelected: "#4a5057",
+    surfaceSidebarSelected: "#4a5057", // the old derived mix; the host's selected primitive is #444d56
     surface3: "#3f4449",
     surface4: "#565b5f",
     foregroundSelected: "#fdfdfe",
     accentBright: "#cde5ff",
   };
   for (const [key, value] of Object.entries(before)) {
+    if (key === "surfaceSidebarSelected") continue; // now the host's selected primitive (accepted drift 6/3/1)
     assert.ok(drift(t[key], value) <= 2, `${key} ${t[key]} vs ${value}`);
   }
   // The unchanged expressions are exact.
-  assert.equal(t.surfaceSidebarSelected, "#4a5057");
+  // The selected tone is the palette's selected primitive in both modes.
+  assert.equal(t.surfaceSidebarSelected, "#444d56");
   assert.equal(t.surface3, "#3f4449");
   assert.equal(t.surface4, "#565b5f");
   assert.equal(t.interactionHighlight, "rgba(255, 255, 255, 0.08)");
@@ -115,10 +119,7 @@ test("one expression per token in both modes (only the highlight overlay branche
   assert.deepEqual(branching, []);
   for (const colors of [LIGHT, LIGHT_TARGET]) {
     const light = nativeTokens(colors);
-    assert.equal(
-      light.surfaceSidebarSelected,
-      context.mix(colors.surface1, colors.foreground, 0.865),
-    );
+    assert.equal(light.surfaceSidebarSelected, colors.selected);
     assert.equal(light.foregroundSelected, context.lift(colors.foreground, colors.surface0, 0.03));
     assert.equal(light.interactionHighlight, "rgba(0, 0, 0, 0.06)");
   }
@@ -156,9 +157,10 @@ test("dark: links and selected text keep their floors", () => {
   }
 });
 
-test("hosts that predate the faint and status dot colours fall back to one expression/set", () => {
-  const { foregroundExtraMuted: _faint, ...old } = LIGHT;
+test("hosts that predate the faint, selected and status dot colours fall back to one expression/set", () => {
+  const { foregroundExtraMuted: _faint, selected: _selected, ...old } = LIGHT;
   const t = nativeTokens(old);
+  assert.equal(t.surfaceSidebarSelected, context.mix(old.surface1, old.foreground, 0.865));
   assert.equal(t.foregroundExtraMuted, context.mix(old.foregroundMuted, old.surface0, 0.65));
   assert.deepEqual(
     [t.statusDotRunning, t.statusDotSuccess, t.statusDotWarning, t.statusDotDanger],

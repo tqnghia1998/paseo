@@ -17,6 +17,8 @@ export interface PluginTheme {
     readonly statusSuccess: string;
     readonly statusWarning: string;
     readonly statusDanger: string;
+    /** The selected-row tone; hosts that predate it omit it. */
+    readonly selected?: string;
     /** Faint text (hints, group labels); hosts that predate it omit it. */
     readonly foregroundExtraMuted?: string;
     /** The status dot hues (a sidebar row's state disc); hosts that predate them omit them. */

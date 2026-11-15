@@ -15,6 +15,7 @@ export function toPluginTheme(theme: Theme): PluginTheme {
       statusSuccess: theme.colors.statusSuccess,
       statusWarning: theme.colors.statusWarning,
       statusDanger: theme.colors.statusDanger,
+      selected: theme.colors.selected,
       foregroundExtraMuted: theme.colors.foregroundExtraMuted,
       statusDotRunning: theme.colors.statusDotRunning,
       statusDotSuccess: theme.colors.statusDotSuccess,

@@ -100,6 +100,7 @@ describe("toPluginTheme", () => {
         statusSuccess: lightTheme.colors.statusSuccess,
         statusWarning: lightTheme.colors.statusWarning,
         statusDanger: lightTheme.colors.statusDanger,
+        selected: lightTheme.colors.selected,
         foregroundExtraMuted: lightTheme.colors.foregroundExtraMuted,
         statusDotRunning: lightTheme.colors.statusDotRunning,
         statusDotSuccess: lightTheme.colors.statusDotSuccess,
