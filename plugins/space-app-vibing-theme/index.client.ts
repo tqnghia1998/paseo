@@ -62,7 +62,8 @@ const PALETTES = {
 
 // One role mapping for both modes: background = canvas; raised and raisedStrong = hover (Paseo's surface1 and surface3:
 // composer, bubbles, secondary fills); control = the raised card (surface2); sidebar = canvas (the list, tab strip
-// and settings navigation); popover = the raised card (tooltips and hover cards); border = its own value;
+// and settings navigation); popover = the raised card (tooltips and hover cards); selected = the selected tone
+// (light status dots stay readable on it); border = its own value;
 // accent = blue; foreground = the default text; mutedForeground = subdued text; ring = faint text (Paseo also
 // uses ring for placeholders, muted controls and terminal bright black).
 // Embedded frames pick the theme of the host's mode in memory; see patches/vibing/theme.ts.
@@ -76,6 +77,7 @@ function colorsFor(p: Primitives) {
     raisedStrong: p.hover,
     sidebar: p.canvas,
     popover: p.raised,
+    selected: p.selected,
     accent: p.blue,
     mutedForeground: p.subdued,
     ring: p.faint,

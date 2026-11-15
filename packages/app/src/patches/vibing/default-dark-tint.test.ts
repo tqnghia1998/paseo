@@ -50,7 +50,8 @@ describe("Space App Vibing default tints", () => {
       "light",
     );
     // Light adds primary and its foreground (the roles dark's builder derives itself) and a text-coloured ANSI black.
-    const { primary, primaryForeground, ...lightShared } = light;
+    const { primary, primaryForeground, selected, ...lightShared } = light;
+    expect(selected).toBe("selected");
     expect(primary).toBe("text");
     expect(primaryForeground).toBe("canvas");
     expect({ ...lightShared, terminalBlack: undefined }).toEqual({
@@ -78,6 +79,38 @@ describe("Space App Vibing default tints", () => {
     };
     for (const surface of [light.surface0, light.surface2, light.surface1]) {
       expect(ratio(light.destructive, surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps the light status dots at 3:1 on the canvas, raised, hover and selected tones (current and target values)", async () => {
+    const { buildLightSemanticColors } = await import("@/styles/theme");
+    const base = resolveDefaultLightTint(UPSTREAM as Parameters<typeof resolveDefaultLightTint>[0]);
+    const lum = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => {
+        const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a: string, b: string) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    // The target values the palette moves to: raised #dddfe5, hover #e3e4ea (surface1 is the hover tone).
+    for (const tint of [
+      base,
+      { ...base, surface1: "#e3e4ea", surface3: "#e3e4ea", surface2: "#dddfe5" },
+    ]) {
+      const colors = buildLightSemanticColors(tint);
+      const surfaces = [tint.surface0, tint.surface1, tint.surface2, tint.selected!];
+      for (const dot of [
+        colors.statusDotRunning,
+        colors.statusDotSuccess,
+        colors.statusDotWarning,
+        colors.statusDotDanger,
+      ])
+        for (const surface of surfaces)
+          expect(ratio(dot, surface), `${dot} on ${surface}`).toBeGreaterThanOrEqual(3);
     }
   });
 });

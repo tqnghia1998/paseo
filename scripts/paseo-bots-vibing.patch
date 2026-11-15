@@ -1595,10 +1595,26 @@ index 2b79473..1c571f7 100644
        onToggleBot={(bot, on) => toggleApp(app.slug, bot, on)}
        onDisconnected={() => setTarget(compact ? null : { kind: "apps" })}
 diff --git a/client/native.ts b/client/native.ts
-index 5d97e59..a5f212c 100644
+index 5d97e59..b97df36 100644
 --- a/client/native.ts
 +++ b/client/native.ts
-@@ -89,12 +89,14 @@ function isDark(colors: Colors): boolean {
+@@ -70,6 +70,15 @@ function mix(a: string, b: string, weight: number): string {
+   return `#${channel(0)}${channel(1)}${channel(2)}`;
+ }
+ 
++/** Move a colour away from a surface by `amount` of their difference (clamped); the opposite of mixing toward the surface. */
++function lift(color: string, surface: string, amount: number): string {
++  const x = parseColor(color);
++  const y = parseColor(surface);
++  if (!x || !y) return color;
++  const channel = (i: number) => Math.round(Math.min(255, Math.max(0, x[i]! + (x[i]! - y[i]!) * amount))).toString(16).padStart(2, "0");
++  return `#${channel(0)}${channel(1)}${channel(2)}`;
++}
++
+ export function withAlpha(color: string, alpha: number): string {
+   const c = parseColor(color);
+   return c ? `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})` : color;
+@@ -89,12 +98,14 @@ function isDark(colors: Colors): boolean {
  export interface NativeTokens {
    dark: boolean;
    surfaceSidebar: string;
@@ -1609,12 +1625,12 @@ index 5d97e59..a5f212c 100644
    surface4: string;
    borderAccent: string;
    foregroundExtraMuted: string;
-+  /** Text on a selected tab or row: the default text mixed toward white, in both modes. */
++  /** Text on a selected tab or row: the default text pushed 3% further from the canvas, in both modes. */
 +  foregroundSelected: string;
    accentBright: string;
    interactionHighlight: string;
    statusDotRunning: string;
-@@ -109,21 +111,27 @@ export function nativeTokens(colors: Colors): NativeTokens {
+@@ -109,21 +120,30 @@ export function nativeTokens(colors: Colors): NativeTokens {
    const cached = cache.get(colors);
    if (cached) return cached;
    const dark = isDark(colors);
@@ -1629,27 +1645,31 @@ index 5d97e59..a5f212c 100644
 -    surface3,
 -    surface4: mix(colors.surface2, colors.foreground, dark ? 0.76 : 0.85),
 -    borderAccent: dark ? mix(colors.border, colors.foreground, 0.95) : mix(colors.border, colors.surface0, 0.7),
+-    foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, 0.65),
+-    accentBright: mix(colors.accent, "#ffffff", dark ? 0.37 : 0.75),
 +    // The list, the tab strip and the splash are the canvas.
 +    surfaceSidebar: colors.surface0,
 +    surfaceSidebarSelected: selected,
 +    surface3: mix(colors.surface2, colors.foreground, 0.87),
 +    surface4: mix(colors.surface2, colors.foreground, 0.76),
 +    borderAccent: mix(colors.border, colors.foreground, 0.95),
-     foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, 0.65),
--    accentBright: mix(colors.accent, "#ffffff", dark ? 0.37 : 0.75),
-+    foregroundSelected: mix(colors.foreground, "#ffffff", 0.25),
-+    accentBright: mix(colors.accent, "#ffffff", 0.37),
++    // Faint text: the host's own faint colour (older hosts: the muted foreground mixed toward the canvas).
++    foregroundExtraMuted: colors.foregroundExtraMuted ?? mix(colors.foregroundMuted, colors.surface0, 0.65),
++    // Selected text is the default text pushed 3% further from the canvas, in both modes.
++    foregroundSelected: lift(colors.foreground, colors.surface0, 0.03),
++    // Links: the accent pulled toward the default text, then pushed 2% from the canvas; it lightens in dark and darkens in light.
++    accentBright: lift(mix(colors.foreground, colors.accent, 0.64), colors.surface0, 0.02),
 +    // An overlay of the opposite pole of the canvas: white over dark, black over light (a translucent value, not a palette colour).
      interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
 -    statusDotRunning: dark ? "#5caaf6" : "#268ae0",
 -    statusDotSuccess: dark ? "#35c264" : "#299f51",
 -    statusDotWarning: dark ? "#db932e" : "#b37824",
 -    statusDotDanger: dark ? "#f7796d" : "#f12e2f",
-+    // The status dot hues (Paseo's darkStatusDotColors), the same in both modes.
-+    statusDotRunning: "#5caaf6",
-+    statusDotSuccess: "#35c264",
-+    statusDotWarning: "#db932e",
-+    statusDotDanger: "#f7796d",
++    // The host's status dot hues, which already keep their contrast on each mode's surfaces (older hosts: the dark hues).
++    statusDotRunning: colors.statusDotRunning ?? "#5caaf6",
++    statusDotSuccess: colors.statusDotSuccess ?? "#35c264",
++    statusDotWarning: colors.statusDotWarning ?? "#db932e",
++    statusDotDanger: colors.statusDotDanger ?? "#f7796d",
    };
    cache.set(colors, tokens);
    return tokens;

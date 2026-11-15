@@ -17,6 +17,13 @@ export interface PluginTheme {
     readonly statusSuccess: string;
     readonly statusWarning: string;
     readonly statusDanger: string;
+    /** Faint text (hints, group labels); hosts that predate it omit it. */
+    readonly foregroundExtraMuted?: string;
+    /** The status dot hues (a sidebar row's state disc); hosts that predate them omit them. */
+    readonly statusDotRunning?: string;
+    readonly statusDotSuccess?: string;
+    readonly statusDotWarning?: string;
+    readonly statusDotDanger?: string;
   };
 }
 
@@ -98,6 +105,8 @@ export interface PluginThemeColors {
   sidebar?: string;
   /** Tooltips and hover cards. Defaults to `control` in a dark theme and to `background` in a light one. */
   popover?: string;
+  /** The selected-row tone. Optional; a light theme darkens its status dots until they stay readable on it. */
+  selected?: string;
   accent?: string;
   mutedForeground: string;
   ring: string;

@@ -579,8 +579,11 @@ Do not label these patches as installed plugins merely to make them discoverable
   surface or text colour taken from the palette. `patches/vibing/surface-classes.test.ts` checks every background slot
   against the palette classes in both modes.
   The Bots patch's `nativeTokens` derives its extra tokens with one expression for both modes (the selected tone is
-  `surface1` mixed toward the text, 0.865); only `interactionHighlight` (white over dark, black over light, a
-  translucent overlay) and the plugin's own icon/glyph colours that branch on `tokens.dark` differ by mode.
+  `surface1` mixed toward the text, 0.865; selected text and links push or pull relative to the canvas and the text, so
+  they lighten in dark and darken in light; faint text and the status dots are the host's own, carried by the optional
+  `PluginTheme.colors` fields); only `interactionHighlight` (white over dark, black over light, a translucent overlay)
+  and the plugin's own icon/glyph colours that branch on `tokens.dark` differ by mode. Chief's `accentBright` is the
+  accent mixed 17% toward the default text in both modes.
   The theme needs an explicit Paseo version range
   and a server entry to load independently of the user-plugin switch.
 - Worktree APIs stay loopback-only and host-token-gated. Startup pruning,
