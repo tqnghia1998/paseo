@@ -7,8 +7,8 @@ frame derives from them by ONE role mapping that is identical in light and dark;
 | ---------- | --------- | --------- |
 | `canvas`   | `#1d2125` | `#ffffff` |
 | `raised`   | `#24292e` | `#f8f8fa` |
-| `hover`    | `#2f363d` | `#e8e8eb` |
-| `selected` | `#444d56` | `#d9d9dd` |
+| `hover`    | `#2f363d` | `#f4f4f7` |
+| `selected` | `#444d56` | `#ebebef` |
 | `faint`    | `#959da5` | `#6d6f71` |
 | `subdued`  | `#d1d5da` | `#5c5e63` |
 | `text`     | `#f6f8fa` | `#202325` |
@@ -77,8 +77,8 @@ excluded from the scan and from any substitution).
 | 45   | `#b392f0` | dark.purple    |
 | 48   | `#ffffff` | light.canvas   |
 | 49   | `#f8f8fa` | light.raised   |
-| 50   | `#e8e8eb` | light.hover    |
-| 51   | `#d9d9dd` | light.selected |
+| 50   | `#f4f4f7` | light.hover    |
+| 51   | `#ebebef` | light.selected |
 | 52   | `#6d6f71` | light.faint    |
 | 53   | `#5c5e63` | light.subdued  |
 | 54   | `#202325` | light.text     |
@@ -108,8 +108,8 @@ excluded from the scan and from any substitution).
 | 44   | `#b392f0` | dark.purple    |
 | 47   | `#ffffff` | light.canvas   |
 | 48   | `#f8f8fa` | light.raised   |
-| 49   | `#e8e8eb` | light.hover    |
-| 50   | `#d9d9dd` | light.selected |
+| 49   | `#f4f4f7` | light.hover    |
+| 50   | `#ebebef` | light.selected |
 | 51   | `#6d6f71` | light.faint    |
 | 52   | `#5c5e63` | light.subdued  |
 | 53   | `#202325` | light.text     |
@@ -134,7 +134,7 @@ These pin the palette or an expected relation and must follow a value change.
 | 22   | `#d1d5da` | dark.subdued  |
 | 23   | `#79b8ff` | dark.blue     |
 | 27   | `#f8f8fa` | light.raised  |
-| 28   | `#e8e8eb` | light.hover   |
+| 28   | `#f4f4f7` | light.hover   |
 | 29   | `#dddde2` | light.border  |
 | 30   | `#5c5e63` | light.subdued |
 | 31   | `#1571be` | light.blue    |
@@ -161,9 +161,9 @@ These pin the palette or an expected relation and must follow a value change.
 | 36   | `#dddde2` | light.border |
 | 37   | `#dddde2` | light.border |
 | 38   | `#ffffff` | light.canvas |
-| 39   | `#e8e8eb` | light.hover  |
+| 39   | `#f4f4f7` | light.hover  |
 | 40   | `#f8f8fa` | light.raised |
-| 41   | `#e8e8eb` | light.hover  |
+| 41   | `#f4f4f7` | light.hover  |
 | 42   | `#202325` | light.text   |
 | 43   | `#1571be` | light.blue   |
 
@@ -172,7 +172,7 @@ These pin the palette or an expected relation and must follow a value change.
 | Line | Hex       | Mode.role    |
 | ---- | --------- | ------------ |
 | 27   | `#ffffff` | light.canvas |
-| 27   | `#e8e8eb` | light.hover  |
+| 27   | `#f4f4f7` | light.hover  |
 | 27   | `#f8f8fa` | light.raised |
 | 31   | `#202325` | light.text   |
 | 31   | `#202325` | light.text   |
@@ -196,8 +196,8 @@ These pin the palette or an expected relation and must follow a value change.
 | 24   | `#959da5` | dark.faint     |
 | 27   | `#ffffff` | light.canvas   |
 | 28   | `#f8f8fa` | light.raised   |
-| 29   | `#e8e8eb` | light.hover    |
-| 30   | `#d9d9dd` | light.selected |
+| 29   | `#f4f4f7` | light.hover    |
+| 30   | `#ebebef` | light.selected |
 | 31   | `#6d6f71` | light.faint    |
 | 101  | `#1d2125` | dark.canvas    |
 | 102  | `#24292e` | dark.raised    |
@@ -220,7 +220,7 @@ These pin the palette or an expected relation and must follow a value change.
 | 88   | `#2b3137` | dark.border  |
 | 88   | `#2f363d` | dark.hover   |
 | 89   | `#dddde2` | light.border |
-| 89   | `#e8e8eb` | light.hover  |
+| 89   | `#f4f4f7` | light.hover  |
 | 93   | `#1d2125` | dark.canvas  |
 | 93   | `#1d2125` | dark.canvas  |
 | 94   | `#ffffff` | light.canvas |
@@ -234,8 +234,8 @@ These pin the palette or an expected relation and must follow a value change.
 
 | Line | Hex       | Mode.role      |
 | ---- | --------- | -------------- |
-| 122  | `#d9d9dd` | light.selected |
-| 124  | `#d9d9dd` | light.selected |
+| 122  | `#ebebef` | light.selected |
+| 124  | `#ebebef` | light.selected |
 
 ### `scripts/paseo-bots-native-tokens.test.mjs`
 
@@ -251,14 +251,14 @@ These pin the palette or an expected relation and must follow a value change.
 | 49   | `#959da5` | dark.faint     |
 | 50   | `#444d56` | dark.selected  |
 | 57   | `#ffffff` | light.canvas   |
-| 58   | `#e8e8eb` | light.hover    |
+| 58   | `#f4f4f7` | light.hover    |
 | 59   | `#f8f8fa` | light.raised   |
 | 60   | `#dddde2` | light.border   |
 | 61   | `#202325` | light.text     |
 | 62   | `#5c5e63` | light.subdued  |
 | 63   | `#1571be` | light.blue     |
 | 64   | `#6d6f71` | light.faint    |
-| 65   | `#d9d9dd` | light.selected |
+| 65   | `#ebebef` | light.selected |
 | 119  | `#1d2125` | dark.canvas    |
 | 129  | `#444d56` | dark.selected  |
 | 130  | `#959da5` | dark.faint     |
@@ -289,6 +289,6 @@ Prose and tables only; update with the values, no code reads them.
 | ---- | --------- | ----------- |
 | 116  | `#959da5` | dark.faint  |
 | 159  | `#2f363d` | dark.hover  |
-| 159  | `#e8e8eb` | light.hover |
+| 159  | `#f4f4f7` | light.hover |
 | 162  | `#2f363d` | dark.hover  |
-| 162  | `#e8e8eb` | light.hover |
+| 162  | `#f4f4f7` | light.hover |
