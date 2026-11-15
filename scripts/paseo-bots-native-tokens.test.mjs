@@ -71,7 +71,7 @@ const LIGHT = {
 };
 // Upstream's own themes (standalone Paseo): no `selected`, so the plugin keeps its upstream tokens.
 const UPSTREAM_LIGHT = {
-  surface0: "#f2f2f6",
+  surface0: "#ffffff",
   surface1: "#fafafa",
   surface2: "#f4f4f5",
   border: "#e4e4e7",
@@ -151,7 +151,7 @@ test("with the palette there is one expression per token: no mode branch except 
   assert.equal(light.linkDecoration, "underline");
   assert.equal(light.accentBright, LIGHT.accent);
   // The shimmer sweep is the pole opposite the canvas: white in dark (upstream's band), black in light.
-  assert.equal(nativeTokens(DARK).shimmerHighlight, "#f2f2f6");
+  assert.equal(nativeTokens(DARK).shimmerHighlight, "#ffffff");
   assert.equal(light.shimmerHighlight, "#000000");
 });
 
