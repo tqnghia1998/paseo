@@ -10,7 +10,12 @@ vi.mock("./focus-mode", () => ({
   isEmbeddedChiefView: false,
 }));
 
-const { resolveComposerPillHover, resolveComposerSurface } = await import("./composer-pill-hover");
+const {
+  resolveChatFillRing,
+  resolveChatFillSurface,
+  resolveComposerPillHover,
+  resolveComposerSurface,
+} = await import("./composer-pill-hover");
 
 const light = {
   colorScheme: "light",
@@ -147,6 +152,43 @@ describe("resolveComposerPillHover", () => {
   });
 });
 
+describe("chat fill (user message bubbles)", () => {
+  beforeEach(() => {
+    focus.embedded = true;
+  });
+
+  it("is the composer tone with a 1px inset ring in embedded light", () => {
+    expect(
+      resolveChatFillSurface({
+        colorScheme: "light",
+        colors: { composerSurface: "#dddfe5", surface3: "#cbcdd3" },
+      }),
+    ).toBe("#dddfe5");
+    expect(resolveChatFillRing({ colorScheme: "light", colors: { borderAccent: "#c1c2c7" } })).toBe(
+      "inset 0 0 0 1px #c1c2c7",
+    );
+  });
+
+  it("keeps surface3 and no ring in dark and standalone builds", () => {
+    const colors = { composerSurface: "#dddfe5", surface3: "#cbcdd3" };
+    expect(resolveChatFillSurface({ colorScheme: "dark", colors })).toBe("#cbcdd3");
+    expect(resolveChatFillRing({ colorScheme: "dark", colors: { borderAccent: "#2b3137" } })).toBe(
+      "none",
+    );
+    focus.embedded = false;
+    expect(resolveChatFillSurface({ colorScheme: "light", colors })).toBe("#cbcdd3");
+    expect(resolveChatFillRing({ colorScheme: "light", colors: { borderAccent: "#c1c2c7" } })).toBe(
+      "none",
+    );
+  });
+
+  it("keeps the bubble text readable on it", () => {
+    expect(ratio("#343b59", "#dddfe5")).toBeGreaterThanOrEqual(8);
+    expect(ratio("#4c505e", "#dddfe5")).toBeGreaterThanOrEqual(4.5);
+    expect(ratio("#c1c2c7", "#dddfe5")).toBeGreaterThanOrEqual(1.25);
+  });
+});
+
 describe("composer theme tokens", () => {
   beforeEach(() => {
     focus.embedded = true;
@@ -163,12 +205,17 @@ describe("composer theme tokens", () => {
     );
     expect(lightColors.composerSurface).toBe("#dddfe5");
     expect(lightColors.composerPillHover).toBe("#d5d7de");
+    expect(lightColors.chatFillSurface).toBe("#dddfe5");
+    expect(lightColors.chatFillRing).toBe("inset 0 0 0 1px #c1c2c7");
     // surface1, surface3 and the selected tone derived from them are untouched.
     expect(lightColors.surface1).toBe("#cbcdd3");
     expect(lightColors.surface3).toBe("#cbcdd3");
     expect(darkColors.composerSurface).toBe(darkColors.surface1);
     expect(darkColors.composerSurface).toBe("#2f363d");
     expect(darkColors.composerPillHover).toBe("#24292e");
+    // Dark bubbles keep surface3 and have no ring.
+    expect(darkColors.chatFillSurface).toBe(darkColors.surface3);
+    expect(darkColors.chatFillRing).toBe("none");
   });
 
   it("give Chief's composer and pills the Details box tone too, keeping its raised bubbles", async () => {
@@ -177,7 +224,9 @@ describe("composer theme tokens", () => {
     expect(light.composerSurface).toBe(CHIEF_PALETTES.light.composerSurface);
     expect(light.composerSurface).toBe("#dddfe5");
     expect(light.composerPillHover).toBe("#d5d7de");
-    // The user bubbles (surface3) and raised cards stay the grey #cbcdd3.
+    // The user bubbles follow the composer (tone and 1px ring); surface3 itself and raised cards stay #cbcdd3.
+    expect(light.chatFillSurface).toBe("#dddfe5");
+    expect(light.chatFillRing).toBe("inset 0 0 0 1px #c1c2c7");
     expect(light.surface1).toBe("#cbcdd3");
     expect(light.surface3).toBe("#cbcdd3");
     // The box sits on the #e6e7ed popup: lighter than the grey, darker than the popup, with a visible border.
@@ -191,6 +240,8 @@ describe("composer theme tokens", () => {
     expect(dark.composerSurface).toBe(dark.surface1);
     expect(dark.composerSurface).toBe("#2f363d");
     expect(dark.composerPillHover).toBe(dark.surface2);
+    expect(dark.chatFillSurface).toBe(dark.surface3);
+    expect(dark.chatFillRing).toBe("none");
   });
 
   it("are what the style sheets read, not values computed from the theme object", () => {
@@ -205,6 +256,14 @@ describe("composer theme tokens", () => {
     );
     expect(wrapper).toContain("backgroundColor: theme.colors.composerSurface");
     expect(wrapper).not.toContain("backgroundColor: theme.colors.surface1");
+  });
+
+  it("are what the user bubble style sheet reads, leaving surface3 for every other user", () => {
+    const source = readFileSync(resolve(__dirname, "../../components/message.tsx"), "utf8");
+    const bubble = source.slice(source.indexOf("  bubble: {"), source.indexOf("  text: {"));
+    expect(bubble).toContain("backgroundColor: theme.colors.chatFillSurface");
+    expect(bubble).toContain("boxShadow: theme.colors.chatFillRing");
+    expect(bubble).not.toContain("theme.colors.surface3");
   });
 
   it("reach the Run pill: the plugin composer button hovers with the pill style, not its own surface2 fill", () => {
