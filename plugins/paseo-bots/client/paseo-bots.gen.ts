@@ -5406,11 +5406,12 @@ function BotRow({ colors: colors2, tokens, bot, lead, touch, isOpen, aggregate, 
 }
 var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu, onDelete }) {
   const [hovered, setHovered] = useState6(false);
+  const [pressed, setPressed] = useState6(false);
   const kebabRef = useRef3(null);
   const bucket = chatBucket(chat);
   const title = displayTitle(chat.title);
   const showKebab = hovered || touch;
-  const background = selected ? tokens.surfaceSidebarSelected : hovered ? colors2.surface1 : "transparent";
+  const background = pressed ? colors2.surface2 : selected ? tokens.surfaceSidebarSelected : hovered ? colors2.surface1 : "transparent";
   return /* @__PURE__ */ jsxs5(
     View6,
     {
@@ -5438,14 +5439,16 @@ var ChatRow = memo(function ChatRow2({ colors: colors2, tokens, chat, bot, selec
             accessibilityLabel: `${title}, ${BUCKET_LABELS[bucket]}`,
             accessibilityState: { selected },
             onPress,
+            onPressIn: () => setPressed(true),
+            onPressOut: () => setPressed(false),
             ...contextMenuProps((anchor) => onMenu(anchor, "context")),
-            style: ({ pressed }) => ({ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 8, backgroundColor: pressed ? colors2.surface2 : "transparent" })
+            style: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 8 }
           }
         ),
         /* @__PURE__ */ jsxs5(View6, { pointerEvents: "none", style: { flexDirection: "row", alignItems: "flex-start", gap: 8, width: "100%" }, children: [
           hoisted ? /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxs5(View6, { style: { position: "relative", width: 16, height: 16 }, children: [
             /* @__PURE__ */ jsx6(Avatar, { avatar: bot.avatar, size: 16 }),
-            bucket !== "done" ? /* @__PURE__ */ jsx6(StatusBadge2, { colors: colors2, tokens, bucket, backdrop: selected ? tokens.surfaceSidebarSelected : hovered ? colors2.surface1 : tokens.surfaceSidebar }) : null
+            bucket !== "done" ? /* @__PURE__ */ jsx6(StatusBadge2, { colors: colors2, tokens, bucket, backdrop: background === "transparent" ? tokens.surfaceSidebar : background }) : null
           ] }) }) : /* @__PURE__ */ jsx6(ChatStatusSlot, { colors: colors2, tokens, bucket }),
           /* @__PURE__ */ jsxs5(View6, { style: { flex: 1, minWidth: 0 }, children: [
             /* @__PURE__ */ jsxs5(View6, { style: { flexDirection: "row", alignItems: "flex-start", gap: 8 }, children: [
