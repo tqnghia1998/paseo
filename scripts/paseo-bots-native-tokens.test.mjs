@@ -51,8 +51,8 @@ const DARK = {
 // Two light sets: the current primitives and the target ones (raised `#dddfe5`, hover `#e3e4ea`).
 const LIGHT = {
   surface0: "#d6d8df",
-  surface1: "#cbcdd3",
-  surface2: "#e6e7ed",
+  surface1: "#e3e4ea",
+  surface2: "#dddfe5",
   border: "#c1c2c7",
   foreground: "#343b59",
   foregroundMuted: "#4c505e",
