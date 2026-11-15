@@ -3462,7 +3462,7 @@ function nativeTokens(colors2) {
   const cached = cache.get(colors2);
   if (cached) return cached;
   const dark = isDark(colors2);
-  const selected = mix(colors2.surface1, colors2.foreground, 0.865);
+  const selected = colors2.selected ?? mix(colors2.surface1, colors2.foreground, 0.865);
   const tokens = {
     dark,
     // The list, the tab strip and the splash are the canvas.

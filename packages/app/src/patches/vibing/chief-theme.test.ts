@@ -145,6 +145,7 @@ describe("Chief theme", () => {
       border: "#2b3137",
       raised: "#2f363d",
       raisedStrong: "#2f363d",
+      selected: "#444d56",
       ring: "#959da5",
       foreground: "#f6f8fa",
       mutedForeground: "#d1d5da",

@@ -301,6 +301,7 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     surface2: tint.surface2,
     surface3: tint.surface3,
     surface4: tint.surface4,
+    selected: tint.selected,
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: roles.surfaceSidebarHover,
     surfaceSidebarSelected: roles.surfaceSidebarSelected,
@@ -397,6 +398,8 @@ export interface DarkThemeConfig {
   /** Tooltips and hover cards; `surface2` when omitted. */
   popover?: string;
 
+  /** The selected-row tone (neutral-700); plugins read it as `selected`. */
+  selected?: string;
   foregroundMuted: string;
   foregroundExtraMuted: string;
   border: string;
@@ -439,6 +442,7 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surface3: tint.surface3,
     surface4: tint.surface4,
 
+    selected: tint.selected,
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: tint.surfaceSidebarHover ?? sidebarStates.hover,
     surfaceSidebarSelected: tint.surfaceSidebarSelected ?? sidebarStates.selected,

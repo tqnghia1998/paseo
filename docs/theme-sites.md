@@ -143,11 +143,12 @@ These pin the palette or an expected relation and must follow a value change.
 | 145  | `#2b3137` | dark.border   |
 | 146  | `#2f363d` | dark.hover    |
 | 147  | `#2f363d` | dark.hover    |
-| 148  | `#959da5` | dark.faint    |
-| 149  | `#f6f8fa` | dark.text     |
-| 150  | `#d1d5da` | dark.subdued  |
-| 151  | `#79b8ff` | dark.blue     |
-| 153  | `#1d2125` | dark.canvas   |
+| 148  | `#444d56` | dark.selected |
+| 149  | `#959da5` | dark.faint    |
+| 150  | `#f6f8fa` | dark.text     |
+| 151  | `#d1d5da` | dark.subdued  |
+| 152  | `#79b8ff` | dark.blue     |
+| 154  | `#1d2125` | dark.canvas   |
 
 ### `packages/app/src/patches/vibing/default-dark-tint.test.ts`
 
@@ -165,6 +166,11 @@ These pin the palette or an expected relation and must follow a value change.
 | 29   | `#e3e4ea` | light.hover  |
 | 30   | `#343b59` | light.text   |
 | 31   | `#395d99` | light.blue   |
+| 100  | `#dddfe5` | light.raised |
+| 100  | `#e3e4ea` | light.hover  |
+| 103  | `#e3e4ea` | light.hover  |
+| 103  | `#e3e4ea` | light.hover  |
+| 103  | `#dddfe5` | light.raised |
 
 ### `packages/app/src/patches/vibing/light-readable.test.ts`
 
@@ -234,18 +240,26 @@ These pin the palette or an expected relation and must follow a value change.
 | 47   | `#d1d5da` | dark.subdued   |
 | 48   | `#79b8ff` | dark.blue      |
 | 49   | `#959da5` | dark.faint     |
-| 53   | `#d6d8df` | light.canvas   |
-| 54   | `#e3e4ea` | light.hover    |
-| 55   | `#dddfe5` | light.raised   |
-| 56   | `#c1c2c7` | light.border   |
-| 57   | `#343b59` | light.text     |
-| 58   | `#4c505e` | light.subdued  |
-| 59   | `#395d99` | light.blue     |
-| 60   | `#686a77` | light.faint    |
-| 63   | `#444d56` | dark.selected  |
-| 63   | `#c6c9cf` | light.selected |
-| 88   | `#1d2125` | dark.canvas    |
-| 104  | `#959da5` | dark.faint     |
+| 50   | `#444d56` | dark.selected  |
+| 52   | `#dddfe5` | light.raised   |
+| 52   | `#e3e4ea` | light.hover    |
+| 54   | `#d6d8df` | light.canvas   |
+| 55   | `#e3e4ea` | light.hover    |
+| 56   | `#dddfe5` | light.raised   |
+| 57   | `#c1c2c7` | light.border   |
+| 58   | `#343b59` | light.text     |
+| 59   | `#4c505e` | light.subdued  |
+| 60   | `#395d99` | light.blue     |
+| 61   | `#686a77` | light.faint    |
+| 62   | `#c6c9cf` | light.selected |
+| 64   | `#e3e4ea` | light.hover    |
+| 64   | `#dddfe5` | light.raised   |
+| 65   | `#444d56` | dark.selected  |
+| 65   | `#c6c9cf` | light.selected |
+| 90   | `#1d2125` | dark.canvas    |
+| 91   | `#444d56` | dark.selected  |
+| 103  | `#444d56` | dark.selected  |
+| 108  | `#959da5` | dark.faint     |
 
 ### `scripts/paseo-chat-polish-surfaces.test.mjs`
 
@@ -260,13 +274,13 @@ These hexes are computed from the primitives (a mix or a darkening), so the subs
 recompute and update them after a value change. Dark values must stay byte-identical, so they only change if a dark
 primitive changes.
 
-| File                                                        | Value                                                                                                                                                                                                  | Derivation                                                                                                                                               |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/app/src/patches/vibing/chief-theme.test.ts`       | dark `accentBright` `#8ec3fe`, light `#38578e`                                                                                                                                                         | accent mixed 17% toward the default text (`color-mix(in srgb, <accent> 83%, <text>)`); the host's `ChiefPanel.css` `--chief-accent-bright` must equal it |
-| `packages/app/src/patches/vibing/chief-theme.test.ts`       | dark Chief palette snapshot                                                                                                                                                                            | the 13 dark values above plus the derived `accentBright`                                                                                                 |
-| `packages/app/src/patches/vibing/default-dark-tint.test.ts` | light `destructive` `#b04138` (upstream) and its readable darkening                                                                                                                                    | upstream's destructive darkened to 4.5:1 on canvas, hover and raised (`#973830` for the current light values)                                            |
-| `scripts/paseo-bots-native-tokens.test.mjs`                 | dark `#4a5057`, `#3f4449`, `#565b5f`; the old `#fdfdfe`, `#cde5ff` (new values are within 2/255); the status dots `#5caaf6`, `#35c264`, `#db932e`, `#f7796d`; target light values `#e3e4ea`, `#dddfe5` | `nativeTokens` mixes of the palette (the dots and faint text come from the host theme; the dots are Paseo's own status-dot hues, not palette colours)    |
-| `packages/app/src/patches/vibing/light-readable.test.ts`    | `#3e704a`, `#15803d`                                                                                                                                                                                   | upstream's standalone light status colours (not palette-derived)                                                                                         |
+| File                                                        | Value                                                                                                                                                                                                                                                                | Derivation                                                                                                                                               |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/app/src/patches/vibing/chief-theme.test.ts`       | dark `accentBright` `#8ec3fe`, light `#38578e`                                                                                                                                                                                                                       | accent mixed 17% toward the default text (`color-mix(in srgb, <accent> 83%, <text>)`); the host's `ChiefPanel.css` `--chief-accent-bright` must equal it |
+| `packages/app/src/patches/vibing/chief-theme.test.ts`       | dark Chief palette snapshot                                                                                                                                                                                                                                          | the 13 dark values above plus the derived `accentBright`                                                                                                 |
+| `packages/app/src/patches/vibing/default-dark-tint.test.ts` | light `destructive` `#b04138` (upstream) and its readable darkening                                                                                                                                                                                                  | upstream's destructive darkened to 4.5:1 on canvas, hover and raised (`#973830` for the current light values)                                            |
+| `scripts/paseo-bots-native-tokens.test.mjs`                 | dark `#3f4449`, `#565b5f` (the old derived selected tone `#4a5057` is now the primitive `#444d56`); the old `#fdfdfe`, `#cde5ff` (new values are within 2/255); the status dots `#5caaf6`, `#35c264`, `#db932e`, `#f7796d`; target light values `#e3e4ea`, `#dddfe5` | `nativeTokens` mixes of the palette (the dots and faint text come from the host theme; the dots are Paseo's own status-dot hues, not palette colours)    |
+| `packages/app/src/patches/vibing/light-readable.test.ts`    | `#3e704a`, `#15803d`                                                                                                                                                                                                                                                 | upstream's standalone light status colours (not palette-derived)                                                                                         |
 
 ## E. Documentation mentions (informational)
 
@@ -276,7 +290,7 @@ Prose and tables only; update with the values, no code reads them.
 
 | Line | Hex       | Mode.role   |
 | ---- | --------- | ----------- |
-| 157  | `#2f363d` | dark.hover  |
-| 157  | `#e3e4ea` | light.hover |
-| 160  | `#2f363d` | dark.hover  |
-| 160  | `#e3e4ea` | light.hover |
+| 158  | `#2f363d` | dark.hover  |
+| 158  | `#e3e4ea` | light.hover |
+| 161  | `#2f363d` | dark.hover  |
+| 161  | `#e3e4ea` | light.hover |
