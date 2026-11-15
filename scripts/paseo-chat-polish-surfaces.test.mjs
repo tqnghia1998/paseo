@@ -5,7 +5,7 @@ import { test } from "node:test";
 // Chat Polish paints menus, listboxes, the Command Center and the selection menu with the host's
 // `control` colour in dark. Upstream's light override switched them to `raised` because a white
 // theme's control is darker than the page; in Space App Vibing's light palette `control` is the
-// raised card (#e6e7ed, lighter than the canvas) and `raised` is the neutral grey #cbcdd3 (the theme plugin's `raised`), so that
+// raised card (#dddfe5, lighter than the canvas) and `raised` is the neutral grey #e3e4ea (the theme plugin's `raised`), so that
 // override made every menu darker than the canvas where dark's are the raised card. Light keeps
 // the dark mapping, and a hovered row is that neutral tone (1.29:1 on the menu).
 const source = readFileSync(

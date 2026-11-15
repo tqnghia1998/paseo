@@ -46,8 +46,8 @@ export const VIBING_PALETTES = {
   },
   light: {
     canvas: "#d6d8df",
-    raised: "#e6e7ed",
-    hover: "#cbcdd3",
+    raised: "#dddfe5",
+    hover: "#e3e4ea",
     selected: "#c6c9cf",
     faint: "#686a77",
     subdued: "#4c505e",

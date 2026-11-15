@@ -86,7 +86,7 @@ describe("evaluatePluginClientBundle", () => {
     // Borders have their own value; raisedStrong (surface3) is the hover primitive of each mode.
     expect(plugin.themes.map(({ colors }) => [colors.border, colors.raisedStrong])).toEqual([
       ["#2b3137", "#2f363d"],
-      ["#c1c2c7", "#cbcdd3"],
+      ["#c1c2c7", "#e3e4ea"],
     ]);
     // The sidebar is the canvas and the popover the raised card in both modes.
     expect(plugin.themes.map(({ colors }) => [colors.background, colors.sidebar])).toEqual([
@@ -95,7 +95,7 @@ describe("evaluatePluginClientBundle", () => {
     ]);
     expect(plugin.themes.map(({ colors }) => [colors.control, colors.popover])).toEqual([
       ["#24292e", "#24292e"],
-      ["#e6e7ed", "#e6e7ed"],
+      ["#dddfe5", "#dddfe5"],
     ]);
     await plugin.cleanup();
     expect(plugin.settingsScreens).toEqual([]);
