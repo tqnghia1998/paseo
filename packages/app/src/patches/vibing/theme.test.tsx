@@ -27,7 +27,7 @@ const light: PluginThemeOption = {
   id: "space-app-vibing-theme/theme/light",
   serverId: "server",
   name: "Space App Vibing Light",
-  swatch: "#ffffff",
+  swatch: "#f2f2f6",
   theme: lightTheme,
 };
 const other: PluginThemeOption = {

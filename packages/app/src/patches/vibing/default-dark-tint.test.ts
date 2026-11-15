@@ -35,9 +35,9 @@ describe("Space App Vibing default tints", () => {
     expect(light).toMatchObject({
       border: "#dddde2",
       borderAccent: "#dddde2",
-      surface0: "#f2f2f6",
+      surface0: "#ffffff",
       surface1: "#e8e8eb",
-      surface2: "#ffffff",
+      surface2: "#f2f2f6",
       surface3: "#e8e8eb",
       foreground: "#202325",
       accent: "#1571be",

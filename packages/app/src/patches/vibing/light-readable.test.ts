@@ -24,7 +24,7 @@ function ratio(a: string, b: string): number {
 }
 
 // Space App Vibing light surfaces (docs/theme.md): canvas, neutral raised tone, raised card.
-const SURFACES = ["#f2f2f6", "#e8e8eb", "#ffffff"];
+const SURFACES = ["#ffffff", "#e8e8eb", "#f2f2f6"];
 
 describe("readableOnSurfaces", () => {
   it("leaves a colour that already passes alone", () => {
@@ -53,7 +53,7 @@ describe("readableOnSurfaces", () => {
 describe("resolveLightReadable", () => {
   it("is the identity outside the embedded build", () => {
     focus.embedded = false;
-    const input = { a: "#ffffff", b: "#ca8a04" };
+    const input = { a: "#f2f2f6", b: "#ca8a04" };
     expect(resolveLightReadable(input, SURFACES, 4.5)).toBe(input);
     focus.embedded = true;
   });
@@ -121,10 +121,10 @@ describe("embedded light theme text colours", () => {
 
   it("does not touch the dark theme or the standalone light theme", () => {
     focus.embedded = false;
-    const standalone = buildLightSemanticColors({ ...tint, surface0: "#ffffff" });
+    const standalone = buildLightSemanticColors({ ...tint, surface0: "#f2f2f6" });
     expect(standalone.statusSuccess).toBe("#3e704a");
     expect(standalone.diffAddition).toBe("#15803d");
-    expect(standalone.terminal.white).toBe("#ffffff");
+    expect(standalone.terminal.white).toBe("#f2f2f6");
     focus.embedded = true;
   });
 });
