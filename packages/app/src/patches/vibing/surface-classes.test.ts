@@ -26,8 +26,8 @@ const CLASSES = {
   light: {
     canvas: "#f2f2f6",
     raised: "#ffffff",
-    hover: "#e9e9f4",
-    selected: "#dbdbe4",
+    hover: "#e8e8eb",
+    selected: "#d9d9dd",
     faint: "#6d6f71",
   },
 } as const;
