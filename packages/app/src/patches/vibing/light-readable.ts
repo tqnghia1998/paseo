@@ -1,10 +1,11 @@
 import { isEmbeddedFocusMode } from "./focus-mode";
 
-// Upstream's light colours (status, diff, syntax, terminal ANSI) were picked for a white page. Space App
-// Vibing's light surfaces are the grey canvas #d6d8df, the neutral raised tone #cbcdd3 and raised #e6e7ed, where
-// many of them fall under 4.5:1 (ANSI white is 1.4:1). In the embedded build each of those colours is
-// darkened toward black by the least amount that reaches the floor on every given surface, so hues are
-// kept, nothing is a new palette value, and colours that already pass are untouched. Dark and the
+// Upstream's light colours (status, diff, syntax, terminal ANSI, destructive) were picked for a white page. Space App
+// Vibing's light surfaces are the grey canvas, hover and raised tones of the 13-colour palette (palette.ts), where many
+// of them fall under 4.5:1 (ANSI white is 1.4:1). In the embedded build each of those upstream colours is darkened
+// toward black by the least amount that reaches the floor on every given surface, so hues are kept, nothing is a new
+// palette value, and colours that already pass are untouched. This applies only to upstream's colours: the surfaces
+// and text Space App Vibing owns come straight from the palette, with the same role mapping as dark. Dark and the
 // standalone light theme never go through this.
 
 const HEX = /^#[0-9a-fA-F]{6}$/;

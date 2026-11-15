@@ -9,9 +9,46 @@ import {
   REGISTERED_THEMES,
   type Theme,
 } from "@/styles/theme";
-import { resolveChatFillRing, resolveComposerPillHover } from "./composer-pill-hover";
 import { isEmbeddedChiefView } from "./focus-mode";
 import type { HostThemeMode } from "./host-theme-mode";
+import { pluginThemeColors, VIBING_PALETTES, type VibingPrimitives } from "./palette";
+
+// Mixes a colour toward another one (`amount` of `toward`), channel by channel, as CSS color-mix does.
+function mixHex(base: string, toward: string, amount: number): string {
+  const channels = (hex: string) => [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+  const target = channels(toward);
+  return `#${channels(base)
+    .map((value, index) =>
+      Math.round(value + (target[index]! - value) * amount)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
+// One mapping for both modes, from the same 13-colour palette as the theme plugin (Chief's `background` is the
+// plugin's `control`, the raised card; its `control` and `raised` are the plugin's `raised`, the hover tone).
+function chiefPalette(p: VibingPrimitives) {
+  const plugin = pluginThemeColors(p);
+  return {
+    background: plugin.control,
+    control: plugin.raised,
+    border: plugin.border,
+    // The theme plugin's `raised`: composer, cards and raised surfaces.
+    raised: plugin.raised,
+    // The theme plugin's `raisedStrong` (surface3): secondary fills and the sidebar hover stay on the hover tone while
+    // borders use their own value.
+    raisedStrong: plugin.raisedStrong,
+    ring: plugin.ring,
+    foreground: plugin.foreground,
+    mutedForeground: plugin.mutedForeground,
+    accent: plugin.accent,
+    // Links and highlights: color-mix(in srgb, <accent> 85%, white), the same expression in both modes.
+    accentBright: mixHex(plugin.accent, "#ffffff", 0.15),
+    // Filled buttons use the canvas as their text colour, as the theme plugin's builders do (accentForeground).
+    accentForeground: plugin.background,
+  };
+}
 
 /**
  * Chief's frame palettes, one per host mode: the same Space App Vibing colours as the host.
@@ -25,45 +62,8 @@ import type { HostThemeMode } from "./host-theme-mode";
  * and the two must be the same colours. Change them together.
  */
 export const CHIEF_PALETTES = {
-  dark: {
-    background: "#24292e",
-    control: "#2f363d",
-    border: "#2b3137",
-    // The theme plugin's `raised`: composer, cards and raised surfaces.
-    raised: "#2f363d",
-    // The theme plugin's `raisedStrong` (surface3): secondary fills and the light sidebar hover
-    // stay on the hover tone while borders use their own value.
-    raisedStrong: "#2f363d",
-    // The composer box and its pills: the raised tone, as for every embedded frame in dark.
-    composerSurface: "#2f363d",
-    ring: "#959da5",
-    foreground: "#f6f8fa",
-    mutedForeground: "#d1d5da",
-    // The theme blue, shared with the host; filled buttons use dark text (accentForeground).
-    accent: "#79b8ff",
-    // Links and highlights: color-mix(in srgb, #79b8ff 85%, white).
-    accentBright: "#8dc3ff",
-    accentForeground: "#1d2125",
-  },
-  light: {
-    background: "#e6e7ed",
-    // The neutral grey #cbcdd3 (50/50 mix of #d6d8df and #c1c2c7), not the blue-tinted hover tone.
-    control: "#cbcdd3",
-    border: "#c1c2c7",
-    raised: "#cbcdd3",
-    raisedStrong: "#cbcdd3",
-    // The composer box and its pills: the Details box tone (the canvas #d6d8df mixed 45% toward #e6e7ed), the same as
-    // the Bots composer; the user bubbles and other controls stay on `raised`. On the #e6e7ed popup the box reads through
-    // its 1px border (the border colour is 1.33:1 against it).
-    composerSurface: "#dddfe5",
-    ring: "#686a77",
-    foreground: "#343b59",
-    mutedForeground: "#4c505e",
-    accent: "#395d99",
-    // color-mix(in srgb, #395d99 85%, black): darker, so accent text keeps its contrast.
-    accentBright: "#304f82",
-    accentForeground: "#ffffff",
-  },
+  dark: chiefPalette(VIBING_PALETTES.dark),
+  light: chiefPalette(VIBING_PALETTES.light),
 } as const satisfies Record<HostThemeMode, Record<string, string>>;
 
 /**
@@ -87,6 +87,8 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
     surface3: palette.raisedStrong,
     surface4: palette.ring,
     surfaceDiffEmpty: palette.raised,
+    // The Chief surface in both modes, never the control tone.
+    surfaceSidebar: palette.background,
     foreground: palette.foreground,
     foregroundMuted: palette.mutedForeground,
     foregroundExtraMuted: palette.ring,
@@ -103,9 +105,7 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
       ? buildLightTheme(
           buildLightSemanticColors({
             ...shared,
-            // The Chief surface in both modes (dark: palette.background), never the control tone.
-            surfaceSidebar: palette.background,
-            // Tooltips and hover cards sit one step off the Chief surface, as in dark (control).
+            // Tooltips and hover cards sit one step off the Chief surface (dark: surface2, the control tone).
             popover: palette.control,
             primary: palette.foreground,
             primaryForeground: palette.background,
@@ -116,35 +116,12 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
       : buildDarkTheme(
           buildDarkSemanticColors({
             ...shared,
-            surfaceSidebar: palette.background,
             destructive: darkTheme.colors.destructive,
             terminalBlack: palette.control,
           }),
         );
-  // The composer shell and pills rest on the palette's own composerSurface (light: the Details box tone #dddfe5 like the
-  // Bots composer, whose builder token mixes the canvas, which the Chief palette does not carry), and the pills hover a
-  // step darker (5% toward the foreground). Dark keeps the raised tone and surface2.
-  const composerSurface = palette.composerSurface;
-  // The user bubbles follow the composer: the same tone and 1px ring in light, surface3 and no ring in dark.
-  const chatFillSurface = mode === "light" ? composerSurface : colors.surface3;
-  const chatFillRing =
-    mode === "light" ? resolveChatFillRing({ colorScheme: "light", colors: colors }) : "none";
-  const composerPillHover =
-    mode === "light"
-      ? resolveComposerPillHover({
-          colorScheme: "light",
-          colors: { composerSurface, surface2: colors.surface2, foreground: colors.foreground },
-        })
-      : colors.composerPillHover;
   // The builders reuse the accent for success; keep success states the shared green.
-  return {
-    ...colors,
-    composerSurface,
-    composerPillHover,
-    chatFillSurface,
-    chatFillRing,
-    success: colors.statusSuccess,
-  } as Theme["colors"];
+  return { ...colors, success: colors.statusSuccess } as Theme["colors"];
 }
 
 const CHIEF_COLORS_BY_MODE: Record<HostThemeMode, Theme["colors"]> = {

@@ -558,41 +558,29 @@ Do not label these patches as installed plugins merely to make them discoverable
   in memory, so a host switch repaints the frame live through Unistyles without a remount
   and is never written to the shared settings store or `localStorage`; standalone Paseo
   keeps its own saved appearance. Until the plugin catalog loads, embedded frames use
-  built-in dark and light themes tinted to the same palettes (`default-dark-tint.ts`). Borders use
-  the palette's own border value while `surface3` (secondary fills, light sidebar hover) stays on
-  the raised tone (dark hover `#2f363d`; light the neutral grey `#cbcdd3`, derived from the canvas and border so it
-  is not blue), through the fork's optional `raisedStrong` theme color (plugin contract,
-  `plugins/themes/index.ts`; omitted, it falls back to `border`), Chief's `CHIEF_PALETTES.raisedStrong`
-  and the tints' `surface3`. In light, `light-readable.ts` darkens upstream's status, diff, syntax
-  and terminal ANSI colours (written for a white page) to 4.5:1 on the canvas, the neutral raised tone and raised
-  surfaces through `buildLightSemanticColors` and `buildLightTheme`, in the embedded build only.
-  A container that is the canvas in dark is the canvas in light (`surfaceSidebar`), and the classes
-  that are raised in dark stay raised in light (`popover`): the fork's optional `sidebar` and `popover`
-  theme colors, `default-dark-tint.ts` and Chief's light builder set them, and
-  `patches/vibing/surface-classes.test.ts` checks every background slot against the palette classes in
-  both modes.
-  The composer shell (`inputWrapper`) and the composer pills (Import session, Run, a plugin composer button that
-  reuses `composerPillStyles` in `plugins/buttons/view.tsx`; the diff-stat chip, the subagents chip) rest on the theme
-  token `composerSurface`: in the embedded light build the Details box tone (the canvas mixed 45% toward the control
-  colour, `#d6d8df` + `#e6e7ed` = `#dddfe5`, `patches/vibing/composer-pill-hover.ts`), `surface1` in dark and standalone
-  builds. The pills hover to `composerPillHover`, the rest tone mixed 5% toward the foreground (`#dddfe5` + `#343b59` =
-  `#d5d7de`) instead of the near-white `surface2`; dark and standalone keep `surface2`. The Chief frame carries the
-  same light tone in `CHIEF_PALETTES.light.composerSurface` (`#dddfe5`, kept by hand because its palette has no canvas
-  to mix; the composer box reads on the `#e6e7ed` popup through its 1px border), dark its raised tone; Chief's other
-  raised fills stay `#cbcdd3`. Both are computed in `buildLightSemanticColors` from real hex colours: on web,
-  Unistyles gives `StyleSheet.create` functions the CSS-variable theme (every string, `colorScheme` too, is a
-  `var(--...)` reference), so nothing can be computed or branched on there. `surface1`, `surface3` and the Bots
-  selected tone derived from them are unchanged (`#cbcdd3`, `#c6c9cf`).
-  The user message bubbles (the Bots, Live Design Agent and Chief frames, one build) follow the composer in the embedded
-  light build: the theme tokens `chatFillSurface` (the composer tone `#dddfe5`) and `chatFillRing` (a 1px inset ring in
-  `borderAccent`, `#c1c2c7`, as a CSS box-shadow so it adds no layout space and does not double up with any border; Chat
-  Polish restyles the bubble's padding and radius only). Dark and standalone keep `surface3` and `none`. `surface3`
-  itself (toggle tracks, skeletons, secondary buttons, sidebar hover, the Bots selected row) is unchanged. The Bots
-  plugin's muted `StatusBadge` (the routine card's Running, Skipped, Paused) fills with the same tone in light
-  (`mutedBadgeFill` in `scripts/paseo-bots-vibing.patch`, `client/panel/controls.tsx`); the app's own `StatusBadge`
-  (settings pages) is not a chat surface and stays on `surface3`.
-  The Bots patch's `nativeTokens` branches on `dark` for its text and icon colours
-  (`foregroundSelected`, `accentBright`, `foregroundExtraMuted`, the placeholder, status dots).
+  built-in dark and light themes tinted to the same palettes (`default-dark-tint.ts`).
+  The palette is exactly 13 colours per mode (canvas, raised, hover, selected, faint, subdued and default text,
+  border, blue, green, yellow, red, purple; `patches/vibing/palette.ts`, restated by the theme plugin because a plugin
+  cannot import app source, and listed literal by literal in `docs/theme-sites.md`). Every embedded surface derives from
+  it by one role mapping that is identical in light and dark, so a mode only changes values, never roles:
+  `background`/`sidebar` = canvas, `control`/`popover` = raised, `raised`/`raisedStrong` (`surface1`/`surface3`:
+  composer, bubbles, badges, secondary fills, sidebar hover) = hover, `border` = border, `accent` = blue,
+  `mutedForeground` = subdued, `ring` = faint, `foreground` = default text (`pluginThemeColors` in `palette.ts`, the
+  plugin's `colorsFor`, `default-dark-tint.ts` and Chief's `chiefPalette` all use the same assignments, and
+  `palette.test.ts` asserts it). Light-only tokens do not exist: the composer shell, the composer pills and their hover,
+  the user bubbles and the muted Bots badge use the same Paseo tokens as dark (`surface1`, `surface2`, `surface3`). The
+  fork-only `composerSurface`, `composerPillHover`, `chatFillSurface` and `chatFillRing` tokens were removed.
+  The optional `raisedStrong`, `sidebar` and `popover` theme colors (plugin contract, `plugins/themes/index.ts`;
+  omitted, `raisedStrong` falls back to `border`) and Chief's `CHIEF_PALETTES` carry the same roles. Upstream's light
+  builder maps four roles differently from its dark builder (sidebar hover and selected fills, the workspace screen,
+  the text on success and destructive fills); `resolveLightRoles` in `default-dark-tint.ts` gives embedded frames the
+  dark mapping. `light-readable.ts` darkens only upstream's own colours written for a white page (status, diff, syntax,
+  terminal ANSI and destructive) to 4.5:1 or 3:1 on the light surfaces, in the embedded build only; it never touches a
+  surface or text colour taken from the palette. `patches/vibing/surface-classes.test.ts` checks every background slot
+  against the palette classes in both modes.
+  The Bots patch's `nativeTokens` derives its extra tokens with one expression for both modes (the selected tone is
+  `surface1` mixed toward the text, 0.865); only `interactionHighlight` (white over dark, black over light, a
+  translucent overlay) and the plugin's own icon/glyph colours that branch on `tokens.dark` differ by mode.
   The theme needs an explicit Paseo version range
   and a server entry to load independently of the user-plugin switch.
 - Worktree APIs stay loopback-only and host-token-gated. Startup pruning,
