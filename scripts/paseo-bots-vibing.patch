@@ -1595,7 +1595,7 @@ index 2b79473..1c571f7 100644
        onToggleBot={(bot, on) => toggleApp(app.slug, bot, on)}
        onDisconnected={() => setTarget(compact ? null : { kind: "apps" })}
 diff --git a/client/native.ts b/client/native.ts
-index 5d97e59..b97df36 100644
+index 5d97e59..b6b5a7b 100644
 --- a/client/native.ts
 +++ b/client/native.ts
 @@ -70,6 +70,15 @@ function mix(a: string, b: string, weight: number): string {
@@ -1619,7 +1619,7 @@ index 5d97e59..b97df36 100644
    dark: boolean;
    surfaceSidebar: string;
 -  /** Selected sidebar row: surface2 in dark themes, surface3 in light. */
-+  /** Selected sidebar row: the raised (hover) tone mixed toward the text, in both modes. */
++  /** Selected sidebar row and tab: the host's selected colour in both modes. */
    surfaceSidebarSelected: string;
    surface3: string;
    surface4: string;
@@ -1630,14 +1630,15 @@ index 5d97e59..b97df36 100644
    accentBright: string;
    interactionHighlight: string;
    statusDotRunning: string;
-@@ -109,21 +120,30 @@ export function nativeTokens(colors: Colors): NativeTokens {
+@@ -109,21 +120,31 @@ export function nativeTokens(colors: Colors): NativeTokens {
    const cached = cache.get(colors);
    if (cached) return cached;
    const dark = isDark(colors);
 -  const surface3 = mix(colors.surface2, colors.foreground, dark ? 0.87 : 0.93);
 +  // One set of expressions for both modes: every value derives from the theme colours by the same role mapping, so light
-+  // differs from dark only in the palette's values. The selected tone is the raised (hover) tone mixed toward the text.
-+  const selected = mix(colors.surface1, colors.foreground, 0.865);
++  // differs from dark only in the palette's values. The selected tone is the host's own selected colour (older hosts: the
++  // raised (hover) tone mixed toward the text).
++  const selected = colors.selected ?? mix(colors.surface1, colors.foreground, 0.865);
    const tokens: NativeTokens = {
      dark,
 -    surfaceSidebar: dark ? mix(colors.surface0, "#000000", 0.83) : colors.surface2,

@@ -39,6 +39,8 @@ function chiefPalette(p: VibingPrimitives) {
     // The theme plugin's `raisedStrong` (surface3): secondary fills and the sidebar hover stay on the hover tone while
     // borders use their own value.
     raisedStrong: plugin.raisedStrong,
+    // The selected-row tone, handed to plugins as `selected` (the Bots selected pill).
+    selected: plugin.selected,
     ring: plugin.ring,
     foreground: plugin.foreground,
     mutedForeground: plugin.mutedForeground,
@@ -89,6 +91,7 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
     surface3: palette.raisedStrong,
     surface4: palette.ring,
     surfaceDiffEmpty: palette.raised,
+    selected: palette.selected,
     // The Chief surface in both modes, never the control tone.
     surfaceSidebar: palette.background,
     foreground: palette.foreground,
