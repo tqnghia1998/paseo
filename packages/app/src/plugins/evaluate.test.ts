@@ -95,7 +95,7 @@ describe("evaluatePluginClientBundle", () => {
     ]);
     expect(plugin.themes.map(({ colors }) => [colors.control, colors.popover])).toEqual([
       ["#24292e", "#24292e"],
-      ["#f2f2f6", "#f2f2f6"],
+      ["#f8f8fa", "#f8f8fa"],
     ]);
     await plugin.cleanup();
     expect(plugin.settingsScreens).toEqual([]);

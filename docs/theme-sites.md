@@ -6,7 +6,7 @@ frame derives from them by ONE role mapping that is identical in light and dark;
 | Role       | Dark      | Light     |
 | ---------- | --------- | --------- |
 | `canvas`   | `#1d2125` | `#ffffff` |
-| `raised`   | `#24292e` | `#f2f2f6` |
+| `raised`   | `#24292e` | `#f8f8fa` |
 | `hover`    | `#2f363d` | `#e8e8eb` |
 | `selected` | `#444d56` | `#d9d9dd` |
 | `faint`    | `#959da5` | `#6d6f71` |
@@ -30,7 +30,7 @@ bundles and `package-lock.json`. `packages/app/src/patches/vibing/palette.test.t
 list complete:
 
 - `palette.ts` and `plugins/space-app-vibing-theme/index.client.ts` each contain all 26 primitives as literals;
-- no other hex literal except `#f2f2f6` (the pole mixes go toward, in both modes) appears in code (comments excluded) in
+- no other hex literal except `#f8f8fa` (the pole mixes go toward, in both modes) appears in code (comments excluded) in
   `palette.ts`, `chief-theme.ts`, `default-dark-tint.ts` or the theme plugin;
 - the plugin's per-mode colours equal `pluginThemeColors(VIBING_PALETTES[mode])`, so the two literal tables cannot drift.
 
@@ -76,7 +76,7 @@ excluded from the scan and from any substitution).
 | 44   | `#f97583` | dark.red       |
 | 45   | `#b392f0` | dark.purple    |
 | 48   | `#ffffff` | light.canvas   |
-| 49   | `#f2f2f6` | light.raised   |
+| 49   | `#f8f8fa` | light.raised   |
 | 50   | `#e8e8eb` | light.hover    |
 | 51   | `#d9d9dd` | light.selected |
 | 52   | `#6d6f71` | light.faint    |
@@ -107,7 +107,7 @@ excluded from the scan and from any substitution).
 | 43   | `#f97583` | dark.red       |
 | 44   | `#b392f0` | dark.purple    |
 | 47   | `#ffffff` | light.canvas   |
-| 48   | `#f2f2f6` | light.raised   |
+| 48   | `#f8f8fa` | light.raised   |
 | 49   | `#e8e8eb` | light.hover    |
 | 50   | `#d9d9dd` | light.selected |
 | 51   | `#6d6f71` | light.faint    |
@@ -133,7 +133,7 @@ These pin the palette or an expected relation and must follow a value change.
 | 21   | `#2b3137` | dark.border   |
 | 22   | `#d1d5da` | dark.subdued  |
 | 23   | `#79b8ff` | dark.blue     |
-| 27   | `#f2f2f6` | light.raised  |
+| 27   | `#f8f8fa` | light.raised  |
 | 28   | `#e8e8eb` | light.hover   |
 | 29   | `#dddde2` | light.border  |
 | 30   | `#5c5e63` | light.subdued |
@@ -162,7 +162,7 @@ These pin the palette or an expected relation and must follow a value change.
 | 37   | `#dddde2` | light.border |
 | 38   | `#ffffff` | light.canvas |
 | 39   | `#e8e8eb` | light.hover  |
-| 40   | `#f2f2f6` | light.raised |
+| 40   | `#f8f8fa` | light.raised |
 | 41   | `#e8e8eb` | light.hover  |
 | 42   | `#202325` | light.text   |
 | 43   | `#1571be` | light.blue   |
@@ -173,7 +173,7 @@ These pin the palette or an expected relation and must follow a value change.
 | ---- | --------- | ------------ |
 | 27   | `#ffffff` | light.canvas |
 | 27   | `#e8e8eb` | light.hover  |
-| 27   | `#f2f2f6` | light.raised |
+| 27   | `#f8f8fa` | light.raised |
 | 31   | `#202325` | light.text   |
 | 31   | `#202325` | light.text   |
 | 116  | `#6d6f71` | light.faint  |
@@ -195,7 +195,7 @@ These pin the palette or an expected relation and must follow a value change.
 | 23   | `#444d56` | dark.selected  |
 | 24   | `#959da5` | dark.faint     |
 | 27   | `#ffffff` | light.canvas   |
-| 28   | `#f2f2f6` | light.raised   |
+| 28   | `#f8f8fa` | light.raised   |
 | 29   | `#e8e8eb` | light.hover    |
 | 30   | `#d9d9dd` | light.selected |
 | 31   | `#6d6f71` | light.faint    |
@@ -227,8 +227,8 @@ These pin the palette or an expected relation and must follow a value change.
 | 94   | `#ffffff` | light.canvas |
 | 97   | `#24292e` | dark.raised  |
 | 97   | `#24292e` | dark.raised  |
-| 98   | `#f2f2f6` | light.raised |
-| 98   | `#f2f2f6` | light.raised |
+| 98   | `#f8f8fa` | light.raised |
+| 98   | `#f8f8fa` | light.raised |
 
 ### `packages/app/src/plugins/theme.test.ts`
 
@@ -252,7 +252,7 @@ These pin the palette or an expected relation and must follow a value change.
 | 50   | `#444d56` | dark.selected  |
 | 57   | `#ffffff` | light.canvas   |
 | 58   | `#e8e8eb` | light.hover    |
-| 59   | `#f2f2f6` | light.raised   |
+| 59   | `#f8f8fa` | light.raised   |
 | 60   | `#dddde2` | light.border   |
 | 61   | `#202325` | light.text     |
 | 62   | `#5c5e63` | light.subdued  |
