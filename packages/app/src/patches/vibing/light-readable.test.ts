@@ -113,7 +113,7 @@ describe("embedded light theme text colours", () => {
     expect(background).toBe(tint.surface0);
     expect(ansi).toHaveLength(16);
     for (const [name, color] of ansi) {
-      // Bright black is the palette's faint tone (#7b7d7f, 3.77:1 on the canvas), the 3:1 hint floor.
+      // Bright black is the palette's faint tone (#6d6f71, 3.77:1 on the canvas), the 3:1 hint floor.
       const floor = name === "brightBlack" ? 3 : 4.5;
       expect(ratio(color, background), `terminal ${name}`).toBeGreaterThanOrEqual(floor);
     }
