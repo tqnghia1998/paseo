@@ -4594,3 +4594,36 @@ index 0000000..016c943
 +    expect(fallbackDefaultBotId([])).toBeUndefined();
 +  });
 +});
+diff --git a/client/panel/controls.tsx b/client/panel/controls.tsx
+index e5670fd..c8d3081 100644
+--- a/client/panel/controls.tsx
++++ b/client/panel/controls.tsx
+@@ -299,7 +299,18 @@ export function Alert({ colors, variant = "default", title, description }: { col
+ 
+ export type BadgeVariant = "success" | "warning" | "error" | "muted";
+ 
+-/** Paseo's StatusBadge: surface3 pill, or the status tint (12% light / 16% dark) with the status text. */
++/** The muted badge fill: surface3 in dark, and in light the composer tone (the canvas mixed 45% toward the raised card, #dddfe5). */
++function mutedBadgeFill(colors: Colors, surface3: string, dark: boolean): string {
++  const hex = /^#[0-9a-f]{6}$/i;
++  if (dark || !hex.test(colors.surface0) || !hex.test(colors.surface2)) return surface3;
++  const channel = (i: number) =>
++    Math.round(parseInt(colors.surface0.slice(1 + i * 2, 3 + i * 2), 16) * 0.55 + parseInt(colors.surface2.slice(1 + i * 2, 3 + i * 2), 16) * 0.45)
++      .toString(16)
++      .padStart(2, "0");
++  return `#${channel(0)}${channel(1)}${channel(2)}`;
++}
++
++/** Paseo's StatusBadge: surface3 pill (the composer tone in light), or the status tint (12% light / 16% dark) with the status text. */
+ export function StatusBadge({ colors, label, variant = "muted" }: { colors: Colors; label: string; variant?: BadgeVariant }) {
+   const tokens = nativeTokens(colors);
+   const status = variant === "success" ? colors.statusSuccess : variant === "warning" ? colors.statusWarning : variant === "error" ? colors.statusDanger : null;
+@@ -312,7 +323,7 @@ export function StatusBadge({ colors, label, variant = "muted" }: { colors: Colo
+         borderRadius: 999,
+         borderWidth: 1,
+         borderColor: status ? "transparent" : colors.border,
+-        backgroundColor: status ? withAlpha(status, tokens.dark ? 0.16 : 0.12) : tokens.surface3,
++        backgroundColor: status ? withAlpha(status, tokens.dark ? 0.16 : 0.12) : mutedBadgeFill(colors, tokens.surface3, tokens.dark),
+         paddingHorizontal: 8,
+         paddingVertical: 3,
+       }}

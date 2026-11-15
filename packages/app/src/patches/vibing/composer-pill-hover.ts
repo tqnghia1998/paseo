@@ -56,3 +56,27 @@ export function resolveComposerPillHover(theme: {
   }
   return mixHex(composerSurface, foreground, COMPOSER_PILL_HOVER_MIX);
 }
+
+/**
+ * The fill of a chat bubble in the transcript (the user message): the composer tone in embedded light, surface3
+ * elsewhere (it is the tone every other surface3 user keeps: toggle tracks, secondary buttons, skeletons).
+ */
+export function resolveChatFillSurface(theme: {
+  colorScheme: "light" | "dark";
+  colors: { composerSurface: string; surface3: string };
+}): string {
+  if (!isEmbeddedFocusMode || theme.colorScheme !== "light") return theme.colors.surface3;
+  return theme.colors.composerSurface;
+}
+
+/**
+ * The thin 1px outline of that fill in embedded light, as an inset ring (a CSS box-shadow, so it adds no layout
+ * space and dark and standalone builds, where the value is `none`, stay byte-identical).
+ */
+export function resolveChatFillRing(theme: {
+  colorScheme: "light" | "dark";
+  colors: { borderAccent: string };
+}): string {
+  if (!isEmbeddedFocusMode || theme.colorScheme !== "light") return "none";
+  return `inset 0 0 0 1px ${theme.colors.borderAccent}`;
+}

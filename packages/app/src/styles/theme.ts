@@ -5,6 +5,8 @@ import {
   resolveDefaultLightTint,
 } from "@/patches/vibing/default-dark-tint";
 import {
+  resolveChatFillRing,
+  resolveChatFillSurface,
   resolveComposerPillHover,
   resolveComposerSurface,
 } from "@/patches/vibing/composer-pill-hover";
@@ -298,6 +300,15 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     // Rest tone of the composer shell and pills, and the pills' hover fill; tokens so web style sheets read
     // the per-theme CSS variable (they only see var() references, so nothing can be computed there).
     composerSurface,
+    // Fill and 1px ring of the user message bubble: the composer tone and outline in embedded light, surface3 and no ring elsewhere.
+    chatFillSurface: resolveChatFillSurface({
+      colorScheme: "light",
+      colors: { composerSurface, surface3: tint.surface3 },
+    }),
+    chatFillRing: resolveChatFillRing({
+      colorScheme: "light",
+      colors: { borderAccent: tint.borderAccent },
+    }),
 
     composerPillHover: resolveComposerPillHover({
       colorScheme: "light",
@@ -439,6 +450,8 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surface3: tint.surface3,
     surface4: tint.surface4,
     composerSurface: tint.surface1,
+    chatFillSurface: tint.surface3,
+    chatFillRing: "none",
 
     composerPillHover: tint.surface2,
 
