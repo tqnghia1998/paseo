@@ -1,4 +1,5 @@
 import { useOverlayRegistration, type KeyboardInputEvent } from "@/keyboard";
+import { scrimColor } from "@/styles/scrim";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -93,7 +94,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: scrimColor(theme.scrimStrength, 0.55),
     justifyContent: "center",
     alignItems: "center",
     padding: theme.spacing[6],

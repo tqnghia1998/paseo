@@ -1,4 +1,5 @@
 import { Modal } from "@/components/ui/modal";
+import { scrimColor } from "@/styles/scrim";
 import {
   View,
   Text,
@@ -685,7 +686,7 @@ const styles = StyleSheet.create((theme) => ({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: scrimColor(theme.scrimStrength, 0.35),
   },
   sheetContainer: {
     backgroundColor: theme.colors.surface2,
