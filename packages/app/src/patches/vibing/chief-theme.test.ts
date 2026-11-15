@@ -12,8 +12,10 @@ import {
 } from "./chief-theme";
 import { paletteRole, VIBING_PALETTES } from "./palette";
 
-// Space App Vibing's src/components/Chief/ChiefPanel.css, per mode (accent-bright is the
-// resolved hex of its color-mix, the accent mixed 17% toward the default text in both modes). Change both repositories together.
+// Space App Vibing's src/components/Chief/ChiefPanel.css, per mode. The hexes are palette primitives (the host's
+// `pnpm theme:apply` rewrites them); accent-bright is derived (the accent mixed 17% toward the default text in both
+// modes, one `color-mix` in the CSS) and is computed below, so a palette change needs no edit here.
+
 const HOST_CHIEF_CSS = {
   dark: {
     surface: "#24292e",
@@ -21,7 +23,6 @@ const HOST_CHIEF_CSS = {
     border: "#2b3137",
     textMuted: "#d1d5da",
     accent: "#79b8ff",
-    accentBright: "#8ec3fe",
   },
   light: {
     surface: "#ffffff",
@@ -29,13 +30,24 @@ const HOST_CHIEF_CSS = {
     border: "#dddde2",
     textMuted: "#5e5e77",
     accent: "#1571be",
-    accentBright: "#38578e",
   },
 } as const;
 const CHIEF_PALETTE = CHIEF_PALETTES.dark;
 
 const { updateTheme } = vi.hoisted(() => ({ updateTheme: vi.fn() }));
 vi.mock("react-native-unistyles", () => ({ UnistylesRuntime: { updateTheme } }));
+
+function mixToward(base: string, toward: string, amount: number): string {
+  const channels = (hex: string) => [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+  const target = channels(toward);
+  return `#${channels(base)
+    .map((value, index) =>
+      Math.round(value + (target[index]! - value) * amount)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
 
 function luminance(hex: string): number {
   const [r, g, b] = [1, 3, 5].map((i) => {
@@ -113,7 +125,7 @@ describe("Chief theme", () => {
       border: host.border,
       mutedForeground: host.textMuted,
       accent: host.accent,
-      accentBright: host.accentBright,
+      accentBright: mixToward(host.accent, VIBING_PALETTES[mode].text, 0.17),
     });
     expect(palette.accentForeground).toBe(VIBING_PALETTES[mode].canvas);
     const colors = buildChiefColors(mode);
