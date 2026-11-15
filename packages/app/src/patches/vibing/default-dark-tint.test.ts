@@ -33,14 +33,14 @@ describe("Space App Vibing default tints", () => {
       UPSTREAM as Parameters<typeof resolveDefaultLightTint>[0],
     );
     expect(light).toMatchObject({
-      border: "#c1c2c7",
-      borderAccent: "#c1c2c7",
-      surface0: "#d6d8df",
-      surface1: "#e3e4ea",
-      surface2: "#dddfe5",
-      surface3: "#e3e4ea",
-      foreground: "#343b59",
-      accent: "#395d99",
+      border: "#dddde2",
+      borderAccent: "#dddde2",
+      surface0: "#f2f2f6",
+      surface1: "#e9e9f4",
+      surface2: "#ffffff",
+      surface3: "#e9e9f4",
+      foreground: "#202325",
+      accent: "#1571be",
       destructive: "#b04138",
     });
   });

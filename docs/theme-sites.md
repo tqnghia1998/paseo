@@ -5,19 +5,19 @@ frame derives from them by ONE role mapping that is identical in light and dark;
 
 | Role       | Dark      | Light     |
 | ---------- | --------- | --------- |
-| `canvas`   | `#1d2125` | `#d6d8df` |
-| `raised`   | `#24292e` | `#dddfe5` |
-| `hover`    | `#2f363d` | `#e3e4ea` |
-| `selected` | `#444d56` | `#c6c9cf` |
-| `faint`    | `#959da5` | `#686a77` |
-| `subdued`  | `#d1d5da` | `#4c505e` |
-| `text`     | `#f6f8fa` | `#343b59` |
-| `border`   | `#2b3137` | `#c1c2c7` |
-| `blue`     | `#79b8ff` | `#395d99` |
-| `green`    | `#28a745` | `#33635c` |
-| `yellow`   | `#f9c513` | `#7e5211` |
-| `red`      | `#f97583` | `#8c4351` |
-| `purple`   | `#b392f0` | `#7540b1` |
+| `canvas`   | `#1d2125` | `#f2f2f6` |
+| `raised`   | `#24292e` | `#ffffff` |
+| `hover`    | `#2f363d` | `#e9e9f4` |
+| `selected` | `#444d56` | `#dbdbe4` |
+| `faint`    | `#959da5` | `#7b7d7f` |
+| `subdued`  | `#d1d5da` | `#5e5e77` |
+| `text`     | `#f6f8fa` | `#202325` |
+| `border`   | `#2b3137` | `#dddde2` |
+| `blue`     | `#79b8ff` | `#1571be` |
+| `green`    | `#28a745` | `#0f811c` |
+| `yellow`   | `#f9c513` | `#926610` |
+| `red`      | `#f97583` | `#d91e28` |
+| `purple`   | `#b392f0` | `#5c4dff` |
 
 Roles: `canvas` = neutral-850, `raised` = neutral-800, `hover` = neutral-750, `selected` = neutral-700, `faint` /
 `subdued` / `text` = neutral-400 / 300 / 200, `border`, and the `blue`, `green`, `yellow`, `red`, `purple` hues. They equal
@@ -75,19 +75,19 @@ excluded from the scan and from any substitution).
 | 43   | `#f9c513` | dark.yellow    |
 | 44   | `#f97583` | dark.red       |
 | 45   | `#b392f0` | dark.purple    |
-| 48   | `#d6d8df` | light.canvas   |
-| 49   | `#dddfe5` | light.raised   |
-| 50   | `#e3e4ea` | light.hover    |
-| 51   | `#c6c9cf` | light.selected |
-| 52   | `#686a77` | light.faint    |
-| 53   | `#4c505e` | light.subdued  |
-| 54   | `#343b59` | light.text     |
-| 55   | `#c1c2c7` | light.border   |
-| 56   | `#395d99` | light.blue     |
-| 57   | `#33635c` | light.green    |
-| 58   | `#7e5211` | light.yellow   |
-| 59   | `#8c4351` | light.red      |
-| 60   | `#7540b1` | light.purple   |
+| 48   | `#f2f2f6` | light.canvas   |
+| 49   | `#ffffff` | light.raised   |
+| 50   | `#e9e9f4` | light.hover    |
+| 51   | `#dbdbe4` | light.selected |
+| 52   | `#7b7d7f` | light.faint    |
+| 53   | `#5e5e77` | light.subdued  |
+| 54   | `#202325` | light.text     |
+| 55   | `#dddde2` | light.border   |
+| 56   | `#1571be` | light.blue     |
+| 57   | `#0f811c` | light.green    |
+| 58   | `#926610` | light.yellow   |
+| 59   | `#d91e28` | light.red      |
+| 60   | `#5c4dff` | light.purple   |
 
 ### `plugins/space-app-vibing-theme/index.client.ts`
 
@@ -106,19 +106,19 @@ excluded from the scan and from any substitution).
 | 42   | `#f9c513` | dark.yellow    |
 | 43   | `#f97583` | dark.red       |
 | 44   | `#b392f0` | dark.purple    |
-| 47   | `#d6d8df` | light.canvas   |
-| 48   | `#dddfe5` | light.raised   |
-| 49   | `#e3e4ea` | light.hover    |
-| 50   | `#c6c9cf` | light.selected |
-| 51   | `#686a77` | light.faint    |
-| 52   | `#4c505e` | light.subdued  |
-| 53   | `#343b59` | light.text     |
-| 54   | `#c1c2c7` | light.border   |
-| 55   | `#395d99` | light.blue     |
-| 56   | `#33635c` | light.green    |
-| 57   | `#7e5211` | light.yellow   |
-| 58   | `#8c4351` | light.red      |
-| 59   | `#7540b1` | light.purple   |
+| 47   | `#f2f2f6` | light.canvas   |
+| 48   | `#ffffff` | light.raised   |
+| 49   | `#e9e9f4` | light.hover    |
+| 50   | `#dbdbe4` | light.selected |
+| 51   | `#7b7d7f` | light.faint    |
+| 52   | `#5e5e77` | light.subdued  |
+| 53   | `#202325` | light.text     |
+| 54   | `#dddde2` | light.border   |
+| 55   | `#1571be` | light.blue     |
+| 56   | `#0f811c` | light.green    |
+| 57   | `#926610` | light.yellow   |
+| 58   | `#d91e28` | light.red      |
+| 59   | `#5c4dff` | light.purple   |
 
 ## C. Tests that mirror primitives
 
@@ -133,11 +133,11 @@ These pin the palette or an expected relation and must follow a value change.
 | 21   | `#2b3137` | dark.border   |
 | 22   | `#d1d5da` | dark.subdued  |
 | 23   | `#79b8ff` | dark.blue     |
-| 27   | `#dddfe5` | light.raised  |
-| 28   | `#e3e4ea` | light.hover   |
-| 29   | `#c1c2c7` | light.border  |
-| 30   | `#4c505e` | light.subdued |
-| 31   | `#395d99` | light.blue    |
+| 27   | `#ffffff` | light.raised  |
+| 28   | `#e9e9f4` | light.hover   |
+| 29   | `#dddde2` | light.border  |
+| 30   | `#5e5e77` | light.subdued |
+| 31   | `#1571be` | light.blue    |
 | 143  | `#24292e` | dark.raised   |
 | 144  | `#2f363d` | dark.hover    |
 | 145  | `#2b3137` | dark.border   |
@@ -158,25 +158,25 @@ These pin the palette or an expected relation and must follow a value change.
 | 28   | `#2b3137` | dark.border  |
 | 29   | `#2f363d` | dark.hover   |
 | 30   | `#2f363d` | dark.hover   |
-| 36   | `#c1c2c7` | light.border |
-| 37   | `#c1c2c7` | light.border |
-| 38   | `#d6d8df` | light.canvas |
-| 39   | `#e3e4ea` | light.hover  |
-| 40   | `#dddfe5` | light.raised |
-| 41   | `#e3e4ea` | light.hover  |
-| 42   | `#343b59` | light.text   |
-| 43   | `#395d99` | light.blue   |
+| 36   | `#dddde2` | light.border |
+| 37   | `#dddde2` | light.border |
+| 38   | `#f2f2f6` | light.canvas |
+| 39   | `#e9e9f4` | light.hover  |
+| 40   | `#ffffff` | light.raised |
+| 41   | `#e9e9f4` | light.hover  |
+| 42   | `#202325` | light.text   |
+| 43   | `#1571be` | light.blue   |
 
 ### `packages/app/src/patches/vibing/light-readable.test.ts`
 
 | Line | Hex       | Mode.role    |
 | ---- | --------- | ------------ |
-| 27   | `#d6d8df` | light.canvas |
-| 27   | `#e3e4ea` | light.hover  |
-| 27   | `#dddfe5` | light.raised |
-| 31   | `#343b59` | light.text   |
-| 31   | `#343b59` | light.text   |
-| 116  | `#686a77` | light.faint  |
+| 27   | `#f2f2f6` | light.canvas |
+| 27   | `#e9e9f4` | light.hover  |
+| 27   | `#ffffff` | light.raised |
+| 31   | `#202325` | light.text   |
+| 31   | `#202325` | light.text   |
+| 116  | `#7b7d7f` | light.faint  |
 
 ### `packages/app/src/patches/vibing/standalone-light.test.ts`
 
@@ -194,11 +194,11 @@ These pin the palette or an expected relation and must follow a value change.
 | 22   | `#2f363d` | dark.hover     |
 | 23   | `#444d56` | dark.selected  |
 | 24   | `#959da5` | dark.faint     |
-| 27   | `#d6d8df` | light.canvas   |
-| 28   | `#dddfe5` | light.raised   |
-| 29   | `#e3e4ea` | light.hover    |
-| 30   | `#c6c9cf` | light.selected |
-| 31   | `#686a77` | light.faint    |
+| 27   | `#f2f2f6` | light.canvas   |
+| 28   | `#ffffff` | light.raised   |
+| 29   | `#e9e9f4` | light.hover    |
+| 30   | `#dbdbe4` | light.selected |
+| 31   | `#7b7d7f` | light.faint    |
 | 101  | `#1d2125` | dark.canvas    |
 | 102  | `#24292e` | dark.raised    |
 | 103  | `#1d2125` | dark.canvas    |
@@ -219,23 +219,23 @@ These pin the palette or an expected relation and must follow a value change.
 | ---- | --------- | ------------ |
 | 88   | `#2b3137` | dark.border  |
 | 88   | `#2f363d` | dark.hover   |
-| 89   | `#c1c2c7` | light.border |
-| 89   | `#e3e4ea` | light.hover  |
+| 89   | `#dddde2` | light.border |
+| 89   | `#e9e9f4` | light.hover  |
 | 93   | `#1d2125` | dark.canvas  |
 | 93   | `#1d2125` | dark.canvas  |
-| 94   | `#d6d8df` | light.canvas |
-| 94   | `#d6d8df` | light.canvas |
+| 94   | `#f2f2f6` | light.canvas |
+| 94   | `#f2f2f6` | light.canvas |
 | 97   | `#24292e` | dark.raised  |
 | 97   | `#24292e` | dark.raised  |
-| 98   | `#dddfe5` | light.raised |
-| 98   | `#dddfe5` | light.raised |
+| 98   | `#ffffff` | light.raised |
+| 98   | `#ffffff` | light.raised |
 
 ### `packages/app/src/plugins/theme.test.ts`
 
 | Line | Hex       | Mode.role      |
 | ---- | --------- | -------------- |
-| 122  | `#c6c9cf` | light.selected |
-| 124  | `#c6c9cf` | light.selected |
+| 122  | `#dbdbe4` | light.selected |
+| 124  | `#dbdbe4` | light.selected |
 
 ### `scripts/paseo-bots-native-tokens.test.mjs`
 
@@ -250,15 +250,15 @@ These pin the palette or an expected relation and must follow a value change.
 | 48   | `#79b8ff` | dark.blue      |
 | 49   | `#959da5` | dark.faint     |
 | 50   | `#444d56` | dark.selected  |
-| 57   | `#d6d8df` | light.canvas   |
-| 58   | `#e3e4ea` | light.hover    |
-| 59   | `#dddfe5` | light.raised   |
-| 60   | `#c1c2c7` | light.border   |
-| 61   | `#343b59` | light.text     |
-| 62   | `#4c505e` | light.subdued  |
-| 63   | `#395d99` | light.blue     |
-| 64   | `#686a77` | light.faint    |
-| 65   | `#c6c9cf` | light.selected |
+| 57   | `#f2f2f6` | light.canvas   |
+| 58   | `#e9e9f4` | light.hover    |
+| 59   | `#ffffff` | light.raised   |
+| 60   | `#dddde2` | light.border   |
+| 61   | `#202325` | light.text     |
+| 62   | `#5e5e77` | light.subdued  |
+| 63   | `#1571be` | light.blue     |
+| 64   | `#7b7d7f` | light.faint    |
+| 65   | `#dbdbe4` | light.selected |
 | 119  | `#1d2125` | dark.canvas    |
 | 129  | `#444d56` | dark.selected  |
 | 130  | `#959da5` | dark.faint     |
@@ -289,6 +289,6 @@ Prose and tables only; update with the values, no code reads them.
 | ---- | --------- | ----------- |
 | 116  | `#959da5` | dark.faint  |
 | 159  | `#2f363d` | dark.hover  |
-| 159  | `#e3e4ea` | light.hover |
+| 159  | `#e9e9f4` | light.hover |
 | 162  | `#2f363d` | dark.hover  |
-| 162  | `#e3e4ea` | light.hover |
+| 162  | `#e9e9f4` | light.hover |
