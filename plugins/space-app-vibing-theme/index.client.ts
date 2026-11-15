@@ -48,7 +48,7 @@ const PALETTES = {
     raised: "#ffffff",
     hover: "#e9e9f4",
     selected: "#dbdbe4",
-    faint: "#7b7d7f",
+    faint: "#6d6f71",
     subdued: "#5e5e77",
     text: "#202325",
     border: "#dddde2",

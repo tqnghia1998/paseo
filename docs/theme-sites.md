@@ -9,7 +9,7 @@ frame derives from them by ONE role mapping that is identical in light and dark;
 | `raised`   | `#24292e` | `#ffffff` |
 | `hover`    | `#2f363d` | `#e9e9f4` |
 | `selected` | `#444d56` | `#dbdbe4` |
-| `faint`    | `#959da5` | `#7b7d7f` |
+| `faint`    | `#959da5` | `#6d6f71` |
 | `subdued`  | `#d1d5da` | `#5e5e77` |
 | `text`     | `#f6f8fa` | `#202325` |
 | `border`   | `#2b3137` | `#dddde2` |
@@ -79,7 +79,7 @@ excluded from the scan and from any substitution).
 | 49   | `#ffffff` | light.raised   |
 | 50   | `#e9e9f4` | light.hover    |
 | 51   | `#dbdbe4` | light.selected |
-| 52   | `#7b7d7f` | light.faint    |
+| 52   | `#6d6f71` | light.faint    |
 | 53   | `#5e5e77` | light.subdued  |
 | 54   | `#202325` | light.text     |
 | 55   | `#dddde2` | light.border   |
@@ -110,7 +110,7 @@ excluded from the scan and from any substitution).
 | 48   | `#ffffff` | light.raised   |
 | 49   | `#e9e9f4` | light.hover    |
 | 50   | `#dbdbe4` | light.selected |
-| 51   | `#7b7d7f` | light.faint    |
+| 51   | `#6d6f71` | light.faint    |
 | 52   | `#5e5e77` | light.subdued  |
 | 53   | `#202325` | light.text     |
 | 54   | `#dddde2` | light.border   |
@@ -176,7 +176,7 @@ These pin the palette or an expected relation and must follow a value change.
 | 27   | `#ffffff` | light.raised |
 | 31   | `#202325` | light.text   |
 | 31   | `#202325` | light.text   |
-| 116  | `#7b7d7f` | light.faint  |
+| 116  | `#6d6f71` | light.faint  |
 
 ### `packages/app/src/patches/vibing/standalone-light.test.ts`
 
@@ -198,7 +198,7 @@ These pin the palette or an expected relation and must follow a value change.
 | 28   | `#ffffff` | light.raised   |
 | 29   | `#e9e9f4` | light.hover    |
 | 30   | `#dbdbe4` | light.selected |
-| 31   | `#7b7d7f` | light.faint    |
+| 31   | `#6d6f71` | light.faint    |
 | 101  | `#1d2125` | dark.canvas    |
 | 102  | `#24292e` | dark.raised    |
 | 103  | `#1d2125` | dark.canvas    |
@@ -257,7 +257,7 @@ These pin the palette or an expected relation and must follow a value change.
 | 61   | `#202325` | light.text     |
 | 62   | `#5e5e77` | light.subdued  |
 | 63   | `#1571be` | light.blue     |
-| 64   | `#7b7d7f` | light.faint    |
+| 64   | `#6d6f71` | light.faint    |
 | 65   | `#dbdbe4` | light.selected |
 | 119  | `#1d2125` | dark.canvas    |
 | 129  | `#444d56` | dark.selected  |
