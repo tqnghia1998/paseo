@@ -2982,7 +2982,7 @@ ${SURFACE}:is([hidden], [aria-hidden="true"], [data-state="closed"], [style*="op
 /* Every floating surface shares one shape: all pickers, menus/listboxes, and Command Center. */
 ${SURFACE} { border-radius: 12px !important; border-color: var(--colors-border) !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
 [data-cp-setting-menu] { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22) !important; }
-/* Dark raised sits too close to the page (1.15:1), so surfaces use control in both modes (a host whose light control is the raised card, lighter than the page, keeps the dark mapping); a hovered row is the raised tone in light. */
+/* Dark raised sits too close to the page (1.15:1), so surfaces use control in both modes (a host whose light control is the raised card, lighter than the page, keeps the dark mapping); a hovered or lit row is the control tone mixed 12% toward the text in both modes. */
 ${SURFACE} { background-color: var(--cp-control) !important; }
 ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]) { border-radius: 16px !important; }
 /* Reset inherited cursor styles throughout the popup; restore pointer only across active rows. */
@@ -2991,16 +2991,13 @@ ${IN_SURFACE} :is(input, textarea, [contenteditable="true"]) { cursor: text !imp
 ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]):not(:disabled):not([aria-disabled="true"]),
 ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]):not(:disabled):not([aria-disabled="true"]) * { cursor: pointer !important; }
 ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible, [aria-selected="true"]) { background-color: color-mix(in srgb, var(--cp-control), var(--cp-fg) 12%) !important; }
-:root:is(.light, .pluginLight) ${IN_SURFACE} :is(button, [role="button"], [role="menuitem"], [role="option"], a[href]):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible, [aria-selected="true"]) { background-color: var(--cp-raised) !important; }
 /* The composer's track panels (subagents, tasks) light a row on a child inset 4px; the fill goes there, not on the full-width row, or both show. */
 :root ${TRACK_PANEL} [role="menuitem"]:not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible, [aria-selected="true"]) { background-color: transparent !important; }
 ${TRACK_PANEL} [role="menuitem"] > div { border-radius: 11px !important; }
 @supports (corner-shape: squircle) { ${TRACK_PANEL} [role="menuitem"] > div { corner-shape: squircle; } }
 ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-color: color-mix(in srgb, var(--cp-control), var(--cp-fg) 12%) !important; }
-:root:is(.light, .pluginLight) ${TRACK_PANEL} [role="menuitem"]:is(:hover, :focus-visible) > div { background-color: var(--cp-raised) !important; }
 /* Paseo lights a row with the raised color, which would vanish on a raised surface; markLitRows tags it to draw it a step up. */
 [data-cp-lit] { background-color: color-mix(in srgb, var(--cp-control), var(--cp-fg) 12%) !important; }
-:root:is(.light, .pluginLight) [data-cp-lit] { background-color: var(--cp-raised) !important; }
 /* The sidebar's workspace hover card is a menu too (role=menu), but its rows ran edge to edge, so their 16px hover fill missed the
    card's corners. Inset them 4px like menu rows: 28px tall, 13px text, 14px icons, title 13/600, divider inset too. */
 [data-cp-part="ws-card"] { padding: 4px !important; }
@@ -3087,9 +3084,8 @@ button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !impo
 /* Scroll to bottom: a 36px floating control like the plugin's surfaces (rule border, lifted fill), not Paseo's 48px disc. Its margin keeps
    it centered in the 48px box Paseo positions. */
 [data-testid="scroll-to-bottom-button"] { width: 36px !important; height: 36px !important; margin: 6px !important; border: 1px solid var(--cp-rule) !important; background-color: var(--cp-control) !important; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3) !important; transition: background-color 120ms ease-out; }
-:root:is(.light, .pluginLight) [data-testid="scroll-to-bottom-button"] { background-color: var(--cp-control) !important; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12) !important; }
+:root:is(.light, .pluginLight) [data-testid="scroll-to-bottom-button"] { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12) !important; }
 [data-testid="scroll-to-bottom-button"]:hover { background-color: color-mix(in srgb, var(--cp-control), var(--cp-fg) 12%) !important; }
-:root:is(.light, .pluginLight) [data-testid="scroll-to-bottom-button"]:hover { background-color: var(--cp-raised) !important; }
 [data-testid="scroll-to-bottom-button"] svg { width: 16px !important; height: 16px !important; }
 /* Tooltips read as captions: 12px text in a tighter box than menus. */
 [role="tooltip"] { padding: 4px 8px !important; border-radius: 8px !important; border-color: var(--cp-rule, var(--colors-border)) !important; }

@@ -578,14 +578,39 @@ Do not label these patches as installed plugins merely to make them discoverable
   terminal ANSI and destructive) to 4.5:1 or 3:1 on the light surfaces, in the embedded build only; it never touches a
   surface or text colour taken from the palette. `patches/vibing/surface-classes.test.ts` checks every background slot
   against the palette classes in both modes.
-  The Bots patch's `nativeTokens` derives its extra tokens with one expression for both modes (the selected tone is
-  the host's `selected` colour, the palette's selected primitive; selected text and links push or pull relative to the canvas and the text, so
-  they lighten in dark and darken in light; faint text and the status dots are the host's own, carried by the optional
-  `PluginTheme.colors` fields); only `interactionHighlight` (white over dark, black over light, a translucent overlay)
-  and the plugin's own icon/glyph colours that branch on `tokens.dark` differ by mode. Chief's `accentBright` is the
-  accent mixed 17% toward the default text in both modes.
-  The theme needs an explicit Paseo version range
-  and a server entry to load independently of the user-plugin switch.
+  The Bots patch's `nativeTokens` is palette-aware when the host passes the palette's `selected` colour
+  (`PluginTheme.colors.selected`, present only on Space App Vibing themes; standalone Paseo and third-party themes
+  keep upstream's tokens, `foregroundSelected` = the text, links `none`, tested in
+  `scripts/paseo-bots-native-tokens.test.mjs`). With the palette every token is one expression for both modes: the
+  selected tone is `selected`; the placeholder and faint text are the host's faint colour (`foregroundExtraMuted`);
+  selected text is the text pushed 3% further from the canvas; links are the accent, underlined; the shimmer sweep is
+  the text lifted a full difference from the canvas (white in dark, black in light); the status dots are the host's.
+  Chief's `accentBright` is the accent mixed 17% toward the default text in both modes.
+  **Accepted exceptions to "one expression in both modes"** (each is a colour whose dark value is an upstream constant
+  that no single expression reproduces while dark stays unchanged; the list is mirrored in `docs/theme.md` and a test
+  fails when a new one appears):
+  1. ANSI black (`default-dark-tint.ts`, `chief-theme.ts`, upstream's plugin builders): raised in dark, the default text
+     in light (a raised card is unreadable as the terminal's darkest colour; tested).
+  2. `interactionHighlight` and the terminal selection colour: white over dark, black over light (translucent overlays).
+  3. Shadows: upstream's per-mode shadow colours and radii in Bots menus, command menu and stream, Paseo's own `lightShadow`/
+     `darkShadow`, and the light scroll-to-bottom shadow in Chat Polish.
+  4. Bots error text, the context meter's amber and the notification icon tint: upstream's red/amber constants in dark,
+     the host theme's `statusDanger`/`statusDotWarning`/status dots in light (standalone Paseo keeps upstream's constants in
+     both modes).
+  5. Bots status badge tint strength `dark ? 0.16 : 0.12` (upstream): either value alone drops the status text on its tint
+     under 4.5:1 in light (3.7 at 16%, 3.9 to 4.4 at 12%).
+  6. Bots avatar and team-logo artwork variants (`dark`): asset choice, not a colour.
+  7. `light-readable.ts`: upstream's status, diff, syntax, terminal ANSI and destructive colours are per-mode constants
+     written for a white page; in the embedded light build they are darkened toward black to 4.5:1 (3:1 for dots) on the light
+     surfaces, and dark keeps its upstream values. This is the only place a mode-specific transform of upstream colours exists.
+  8. Chat Polish rules that are upstream's own: the model-picker rail wash (`rgba(0,0,0,.14)` vs 5% of the text), its
+     tooltip shadow, the sunken settings-field fill in light and the document link colour (accent mixed 30% toward the
+     text in light). Menu, track, lit and scroll-to-bottom rows are one expression (the control colour mixed 12% toward the
+     text) in both modes.
+  9. Composer pills: `surface1` at rest and `surface2` on hover in both modes (one expression); the light distance is only
+     1.05:1 because the palette's hover and raised values are that close (dark 1.2:1), so it is a primitive-value matter.
+     The theme needs an explicit Paseo version range
+     and a server entry to load independently of the user-plugin switch.
 - Worktree APIs stay loopback-only and host-token-gated. Startup pruning,
   archive/close/flush/delete ordering, directory-boundary matching and capability
   removal before child processes are part of the cleanup contract. `/stop` releases

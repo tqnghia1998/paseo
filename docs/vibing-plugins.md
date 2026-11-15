@@ -106,22 +106,23 @@ to one worktree per frame and to the host's native chat.
   source-defined `managedChiefBot`; its internal memory remains available through the
   host broker. Ordinary Bots remain user-configurable. This lives in the maintained
   Bots vendor patch and requires a permitted plugin refresh to activate.
-- **One role mapping in both modes.** `nativeTokens` (`client/native.ts`) derives every extra token from the theme
+- **One role mapping in both modes.** `nativeTokens` (`client/native.ts`) is palette-aware when the host passes the
+  palette's `selected` colour (`PluginTheme.colors.selected`; only Space App Vibing themes have it, so standalone Paseo
+  and third-party themes keep upstream's tokens exactly). With the palette every extra token derives from the theme
   colours with one expression for light and dark, so light differs from dark only in the palette's values
-  (docs/theme-sites.md). `surfaceSidebar` is `surface0`; the selected tone (`surfaceSidebarSelected`, the Bots pill, rows and the badge
-  backdrop) is the host's `selected` colour (`PluginTheme.colors.selected`, the palette's neutral-700; older hosts: `surface1`
-  mixed toward the text, 0.865); `surface3` mixes `surface2` toward the text (0.87); the placeholder (`surface4`) 0.76;
-  `borderAccent` 0.95. Selected text (`foregroundSelected`) is the default text pushed 3% further from the canvas
-  (`lift`, within 1/255 of the old white mix in dark, darker than the text in light). Links (`accentBright`) pull the
-  accent toward the default text (64% text) and push it 2% from the canvas: lighter in dark (within 1/255), darker in
-  light. Faint text (`foregroundExtraMuted`) and the four status dots are the host's own values, which the plugin theme
-  now carries (`PluginTheme.colors.foregroundExtraMuted` and `statusDot*`, optional; older hosts fall back to one
-  expression and the dark dot hues). Only `interactionHighlight` (white over dark, black over light) branches on `dark`.
-  The tooltip bubble is `surface2` and the muted `StatusBadge` is `surface3` in both modes. The placeholder keeps its
-  dark expression and fails 3:1 in light: no mode-neutral formula reaches it while dark stays unchanged (see the
-  palette-align report). Dark values are pinned within 2/255 by `scripts/paseo-bots-native-tokens.test.mjs`. The plugin's
-  own chevron, error text, amber progress, notice icons, compaction icons and shimmer highlight still branch on
-  `tokens.dark` (upstream's dark constants versus theme tokens in light).
+  (docs/theme-sites.md): `surfaceSidebar` is `surface0`; the selected tone (`surfaceSidebarSelected`, the Bots pill, rows and
+  the badge backdrop) is `selected`; `surface3` mixes `surface2` toward the text (0.87); `borderAccent` 0.95; the
+  placeholder (`surface4`) and faint text (`foregroundExtraMuted`) are the host's faint colour (3:1 or better on the canvas,
+  raised and hover in both modes; the dark placeholder moved from `#565b5f`, 2.36:1, to `#959da5`); selected text is the default
+  text pushed 3% further from the canvas (`lift`, within 1/255 of the old value in dark, darker than the text in light);
+  links are the accent (4.61:1 on the light canvas, 7.80:1 on the dark one) underlined in both modes, because the accent
+  alone is not enough to tell a link from the text around it; the shimmer sweep is the text lifted a full difference from
+  the canvas (white in dark, black in light); the status dots and faint text are the host's own values (optional
+  `PluginTheme.colors.foregroundExtraMuted` and `statusDot*`; absent keys are not created, older palette-aware hosts fall back
+  to one expression and upstream's dot hues). Only `interactionHighlight` branches on `dark`. The tooltip bubble is
+  `surface2` and the muted `StatusBadge` is `surface3` in both modes. The remaining mode branches are the accepted
+  exceptions listed in `docs/vibing-patches.md`, and a test fails when one is added. Dark values are pinned by
+  `scripts/paseo-bots-native-tokens.test.mjs`.
 - **Managed Chief.** `vibing-chief` is a reserved, host-managed persona: ordinary launches,
   routines and relay tools reject it (`assertOrdinaryBot`). The daemon-only broker
   (`server/chief.ts`, `bots.chief.prepare|call|handoff`, bridge-token gated) serves Chief's
