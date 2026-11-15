@@ -246,7 +246,7 @@ index 9d97c7f..855ce7f 100644
      </Modal>
    );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 5174b04..2baa986 100644
+index 5174b04..ff76b1b 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
 @@ -1,3 +1,5 @@
@@ -506,7 +506,7 @@ index 5174b04..2baa986 100644
          <View style={{ opacity: actionsVisible ? 1 : 0 }} pointerEvents={actionsVisible ? "auto" : "none"}>
            <KebabButton
              colors={colors}
-@@ -454,10 +467,11 @@ interface ChatRowProps {
+@@ -454,16 +467,18 @@ interface ChatRowProps {
    hoisted?: boolean;
    onPress(): void;
    onMenu(anchor: LayoutRectangle, source: MenuSource): void;
@@ -517,9 +517,37 @@ index 5174b04..2baa986 100644
 -const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu }: ChatRowProps) {
 +const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, touch, hoisted, onPress, onMenu, onDelete }: ChatRowProps) {
    const [hovered, setHovered] = useState(false);
++  const [pressed, setPressed] = useState(false);
    const kebabRef = useRef<View>(null);
    const bucket = chatBucket(chat);
-@@ -506,11 +520,11 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+   const title = displayTitle(chat.title);
+   const showKebab = hovered || touch;
+-  const background = selected ? tokens.surfaceSidebarSelected : hovered ? colors.surface1 : "transparent";
++  const background = pressed ? colors.surface2 : selected ? tokens.surfaceSidebarSelected : hovered ? colors.surface1 : "transparent";
+   // As in BotRow: the press target sits behind the content and the ⋮ is its sibling, so a
+   // kebab press can't also select the chat.
+   return (
+@@ -490,15 +505,17 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+         accessibilityLabel={`${title}, ${BUCKET_LABELS[bucket]}`}
+         accessibilityState={{ selected }}
+         onPress={onPress}
++        onPressIn={() => setPressed(true)}
++        onPressOut={() => setPressed(false)}
+         {...contextMenuProps((anchor) => onMenu(anchor, "context"))}
+-        style={({ pressed }) => ({ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 8, backgroundColor: pressed ? colors.surface2 : "transparent" })}
++        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 8 }}
+       />
+       <View pointerEvents="none" style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, width: "100%" }}>
+         {hoisted ? (
+           <View style={{ width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }}>
+             <View style={{ position: "relative", width: 16, height: 16 }}>
+               <Avatar avatar={bot.avatar} size={16} />
+-              {bucket !== "done" ? <StatusBadge colors={colors} tokens={tokens} bucket={bucket} backdrop={selected ? tokens.surfaceSidebarSelected : hovered ? colors.surface1 : tokens.surfaceSidebar} /> : null}
++              {bucket !== "done" ? <StatusBadge colors={colors} tokens={tokens} bucket={bucket} backdrop={background === "transparent" ? tokens.surfaceSidebar : background} /> : null}
+             </View>
+           </View>
+         ) : (
+@@ -506,11 +523,11 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
          )}
          <View style={{ flex: 1, minWidth: 0 }}>
            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
@@ -533,7 +561,7 @@ index 5174b04..2baa986 100644
            </View>
            {hoisted ? (
              <Text numberOfLines={1} style={{ fontSize: ui(12), lineHeight: 16, color: colors.foregroundMuted }}>
-@@ -522,8 +536,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
+@@ -522,8 +539,9 @@ const ChatRow = memo(function ChatRow({ colors, tokens, chat, bot, selected, tou
        {showKebab ? (
          <View style={{ position: "absolute", top: 8, right: 12, flexDirection: "row" }}>
            {/* A short scrim in the row's colour hides the title's tail under the kebab, as native does. */}
@@ -545,7 +573,7 @@ index 5174b04..2baa986 100644
              <KebabButton colors={colors} buttonRef={kebabRef} label="Chat actions" onPress={() => void measureAnchor(kebabRef).then((anchor) => anchor && onMenu(anchor, "kebab"))} />
            </View>
          </View>
-@@ -563,7 +578,7 @@ function NewChatGhostRow({ colors, tokens, selected, onPress }: { colors: Colors
+@@ -563,7 +581,7 @@ function NewChatGhostRow({ colors, tokens, selected, onPress }: { colors: Colors
            <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
              <Icon name="Plus" size={14} color={hovered || pressed || selected ? colors.foreground : colors.foregroundMuted} />
            </View>
@@ -554,7 +582,7 @@ index 5174b04..2baa986 100644
              New chat
            </Text>
          </>
-@@ -604,7 +619,7 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -604,7 +622,7 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
            <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
              <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={hovered || pressed ? colors.foreground : colors.foregroundMuted} />
            </View>
@@ -563,7 +591,7 @@ index 5174b04..2baa986 100644
              {label}
            </Text>
          </>
-@@ -613,6 +628,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
+@@ -613,6 +631,24 @@ function ShowMoreRow({ colors, expanded, onPress }: { colors: Colors; expanded:
    );
  }
  
@@ -588,7 +616,7 @@ index 5174b04..2baa986 100644
  /**
   * Kebab triggers. Chat rows use Paseo's workspace trigger (padding 2, radius 4, pulled
   * onto the rail with marginRight -7); bot rows use the 24pt project kebab (`box`).
-@@ -690,7 +723,7 @@ const BADGE_SIZE = 12;
+@@ -690,7 +726,7 @@ const BADGE_SIZE = 12;
  const BADGE_OFFSET = -4;
  const RING_FRAME = 14;
  
@@ -3688,6 +3716,149 @@ index 0000000..e5e18f6
 +    expect(entries).toEqual([]);
 +  });
 +});
+diff --git a/tests/chat-row.test.tsx b/tests/chat-row.test.tsx
+new file mode 100644
+index 0000000..8d1930d
+--- /dev/null
++++ b/tests/chat-row.test.tsx
+@@ -0,0 +1,137 @@
++// @vitest-environment jsdom
++import { cleanup, fireEvent, render, screen } from "@testing-library/react";
++import { afterEach, expect, it, vi } from "vitest";
++
++vi.mock("@getpaseo/plugin/client/react-native", () => ({
++  Icon: () => null,
++  ScrollView: ({ children }: any) => <div>{children}</div>,
++}));
++vi.mock("react-native", async () => {
++  const React = await import("react");
++  const flatten = (style: any): any =>
++    Array.isArray(style) ? Object.assign({}, ...style.map(flatten)) : (style ?? {});
++  const background = (style: any) => ({ backgroundColor: flatten(style).backgroundColor });
++  const View = React.forwardRef(
++    ({ children, style, onPointerEnter, onPointerLeave }: any, ref: any) => (
++      <div
++        ref={ref}
++        style={background(style)}
++        onPointerEnter={onPointerEnter}
++        onPointerLeave={onPointerLeave}
++      >
++        {children}
++      </div>
++    ),
++  );
++  const Pressable = React.forwardRef(
++    ({ children, style, onPress, onPressIn, onPressOut, accessibilityLabel }: any, ref: any) => {
++      const [pressed, setPressed] = React.useState(false);
++      return (
++        <button
++          ref={ref}
++          aria-label={accessibilityLabel}
++          style={background(typeof style === "function" ? style({ pressed }) : style)}
++          onClick={onPress}
++          onMouseDown={() => {
++            setPressed(true);
++            onPressIn?.();
++          }}
++          onMouseUp={() => {
++            setPressed(false);
++            onPressOut?.();
++          }}
++          onBlur={() => {
++            setPressed(false);
++            onPressOut?.();
++          }}
++        >
++          {typeof children === "function" ? children({ pressed }) : children}
++        </button>
++      );
++    },
++  );
++  return {
++    Animated: {
++      Value: class {
++        interpolate() {
++          return 0;
++        }
++      },
++    },
++    Easing: {},
++    View,
++    Pressable,
++    Text: ({ children }: any) => <span>{children}</span>,
++    Platform: { OS: "web" },
++  };
++});
++vi.mock("../client/Avatar", () => ({ Avatar: () => null }));
++vi.mock("../client/Splash", () => ({ Splash: () => null }));
++vi.mock("../client/typography", () => ({ ui: (size: number) => size }));
++vi.mock("../client/navigation", () => ({ openLibrary: vi.fn() }));
++vi.mock("../client/data", () => ({
++  useBotHost: () => ({}),
++  useBotChats: () => ({
++    data: [{ id: "chat", title: "Hi", status: "idle", createdAt: "2026-11-14" }],
++  }),
++}));
++vi.mock("../client/native", () => ({
++  nativeTokens: () => ({ surfaceSidebarSelected: "rgb(50, 50, 60)" }),
++  useHover: () => ({ hovered: false, hoverProps: {} }),
++}));
++vi.mock("../client/ui/Tooltip", () => ({ tooltip: () => ({}) }));
++vi.mock("../client/ui/Menu", () => ({
++  contextMenuProps: () => ({}),
++  measureAnchor: async () => ({ x: 0, y: 0, width: 20, height: 20 }),
++  useMenu: () => ({ open: vi.fn() }),
++}));
++import { BotSidebar } from "../client/BotSidebar";
++import { DEFAULT_BOT_LIST_UI } from "../shared/bot";
++import { makeBot } from "./helpers";
++
++afterEach(cleanup);
++
++it.each([false, true])(
++  "keeps the chat actions on the row's visible surface while held and released (selected=%s)",
++  (selected) => {
++    const onSelect = vi.fn(),
++      onDeleteChat = vi.fn();
++    render(
++      <BotSidebar
++        {...({
++          colors: { surface1: "rgb(30, 30, 40)", surface2: "rgb(60, 60, 70)" },
++          bots: [makeBot()],
++          openTab: null,
++          hiddenArchivedCount: 0,
++          selection: selected ? { botId: "bot-1", chatId: "chat" } : null,
++          ui: DEFAULT_BOT_LIST_UI,
++          localHost: {},
++          touch: false,
++          bottomInset: 0,
++          onSelect,
++          onDeleteChat,
++        } as any)}
++      />,
++    );
++    const target = screen.getByRole("button", { name: "Hi, Done" });
++    const row = target.parentElement!;
++    fireEvent.pointerEnter(row);
++    const actions = screen.getByRole("button", { name: "Chat actions" }).parentElement!;
++    const surface = () =>
++      target.style.backgroundColor && target.style.backgroundColor !== "transparent"
++        ? target.style.backgroundColor
++        : row.style.backgroundColor;
++    expect(actions.style.backgroundColor).toBe(surface());
++    fireEvent.mouseDown(target);
++    expect(surface()).toBe("rgb(60, 60, 70)");
++    expect(actions.style.backgroundColor).toBe(surface());
++    expect(actions.previousElementSibling?.getAttribute("style")).toContain(surface());
++    expect(onSelect).not.toHaveBeenCalled();
++    expect(onDeleteChat).not.toHaveBeenCalled();
++    fireEvent.mouseUp(target);
++    expect(actions.style.backgroundColor).toBe(surface());
++    expect(surface()).toBe(selected ? "rgb(50, 50, 60)" : "rgb(30, 30, 40)");
++    fireEvent.click(target);
++    expect(onSelect).toHaveBeenCalledWith({ botId: "bot-1", chatId: "chat" });
++  },
++);
 diff --git a/tests/chief.test.ts b/tests/chief.test.ts
 new file mode 100644
 index 0000000..3bb1803
