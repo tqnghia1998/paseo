@@ -28,7 +28,7 @@ const CLASSES = {
     raised: "#ffffff",
     hover: "#e9e9f4",
     selected: "#dbdbe4",
-    faint: "#7b7d7f",
+    faint: "#6d6f71",
   },
 } as const;
 

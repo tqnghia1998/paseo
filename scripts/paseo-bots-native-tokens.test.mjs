@@ -61,7 +61,7 @@ const LIGHT = {
   foreground: "#202325",
   foregroundMuted: "#5e5e77",
   accent: "#1571be",
-  foregroundExtraMuted: "#7b7d7f",
+  foregroundExtraMuted: "#6d6f71",
   selected: "#dbdbe4",
   // The host's light dots after its readability pass (3:1 on the canvas, hover, raised and selected tones).
   statusDotRunning: "#1f71b8",
