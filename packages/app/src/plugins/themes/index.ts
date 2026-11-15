@@ -93,6 +93,7 @@ function buildDarkPluginTheme(contribution: PluginThemeContribution): Theme {
       surface4: colors.surface4 ?? fills.surface4,
       surfaceSidebar: sidebar,
       popover: colors.popover,
+      selected: colors.selected,
       surfaceSidebarHover: hover,
       surfaceSidebarSelected: selected,
       foregroundSidebarHover:

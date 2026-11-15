@@ -108,8 +108,9 @@ to one worktree per frame and to the host's native chat.
   Bots vendor patch and requires a permitted plugin refresh to activate.
 - **One role mapping in both modes.** `nativeTokens` (`client/native.ts`) derives every extra token from the theme
   colours with one expression for light and dark, so light differs from dark only in the palette's values
-  (docs/theme-sites.md). `surfaceSidebar` is `surface0`; the selected tone (`surfaceSidebarSelected`) is `surface1`
-  mixed toward the text (0.865); `surface3` mixes `surface2` toward the text (0.87); the placeholder (`surface4`) 0.76;
+  (docs/theme-sites.md). `surfaceSidebar` is `surface0`; the selected tone (`surfaceSidebarSelected`, the Bots pill, rows and the badge
+  backdrop) is the host's `selected` colour (`PluginTheme.colors.selected`, the palette's neutral-700; older hosts: `surface1`
+  mixed toward the text, 0.865); `surface3` mixes `surface2` toward the text (0.87); the placeholder (`surface4`) 0.76;
   `borderAccent` 0.95. Selected text (`foregroundSelected`) is the default text pushed 3% further from the canvas
   (`lift`, within 1/255 of the old white mix in dark, darker than the text in light). Links (`accentBright`) pull the
   accent toward the default text (64% text) and push it 2% from the canvas: lighter in dark (within 1/255), darker in

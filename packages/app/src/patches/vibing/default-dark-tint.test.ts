@@ -49,9 +49,10 @@ describe("Space App Vibing default tints", () => {
       resolveDefaultLightTint(UPSTREAM as Parameters<typeof resolveDefaultLightTint>[0]),
       "light",
     );
+    expect(dark.selected).toBe("selected");
+    expect(light.selected).toBe("selected");
     // Light adds primary and its foreground (the roles dark's builder derives itself) and a text-coloured ANSI black.
-    const { primary, primaryForeground, selected, ...lightShared } = light;
-    expect(selected).toBe("selected");
+    const { primary, primaryForeground, ...lightShared } = light;
     expect(primary).toBe("text");
     expect(primaryForeground).toBe("canvas");
     expect({ ...lightShared, terminalBlack: undefined }).toEqual({
