@@ -107,18 +107,20 @@ to one worktree per frame and to the host's native chat.
   host broker. Ordinary Bots remain user-configurable. This lives in the maintained
   Bots vendor patch and requires a permitted plugin refresh to activate.
 - **One role mapping in both modes.** `nativeTokens` (`client/native.ts`) derives every extra token from the theme
-  colours with one expression for light and dark, so light differs from dark only in the palette's values (docs/theme-sites.md):
-  `surfaceSidebar` is `surface0`; the selected tone (`surfaceSidebarSelected`) is `surface1` mixed toward the text
-  (0.865); `surface3` mixes `surface2` toward the text (0.87); the placeholder (`surface4`) 0.76; `borderAccent` 0.95;
-  `foregroundExtraMuted` mixes the muted foreground toward the canvas (0.65); `foregroundSelected` mixes the text 75%
-  toward white; `accentBright` mixes the accent 63% toward white; the four status dots are the same four hues in both
-  modes. Only `interactionHighlight` (white over dark, black over light) branches on `dark`. The tooltip bubble is
-  `surface2` and the muted `StatusBadge` is `surface3` in both modes. The earlier light-only branches and the
-  `mutedBadgeFill` helper were removed, so the light values of these mixes can fail contrast floors until the palette
-  values are chosen for them (see the palette-align report); dark values are unchanged and pinned by
-  `scripts/paseo-bots-native-tokens.test.mjs`. The plugin's own chevron, error text, amber progress, notice icons,
-  compaction icons and shimmer highlight still branch on `tokens.dark` (upstream's dark constants versus theme
-  tokens in light).
+  colours with one expression for light and dark, so light differs from dark only in the palette's values
+  (docs/theme-sites.md). `surfaceSidebar` is `surface0`; the selected tone (`surfaceSidebarSelected`) is `surface1`
+  mixed toward the text (0.865); `surface3` mixes `surface2` toward the text (0.87); the placeholder (`surface4`) 0.76;
+  `borderAccent` 0.95. Selected text (`foregroundSelected`) is the default text pushed 3% further from the canvas
+  (`lift`, within 1/255 of the old white mix in dark, darker than the text in light). Links (`accentBright`) pull the
+  accent toward the default text (64% text) and push it 2% from the canvas: lighter in dark (within 1/255), darker in
+  light. Faint text (`foregroundExtraMuted`) and the four status dots are the host's own values, which the plugin theme
+  now carries (`PluginTheme.colors.foregroundExtraMuted` and `statusDot*`, optional; older hosts fall back to one
+  expression and the dark dot hues). Only `interactionHighlight` (white over dark, black over light) branches on `dark`.
+  The tooltip bubble is `surface2` and the muted `StatusBadge` is `surface3` in both modes. The placeholder keeps its
+  dark expression and fails 3:1 in light: no mode-neutral formula reaches it while dark stays unchanged (see the
+  palette-align report). Dark values are pinned within 2/255 by `scripts/paseo-bots-native-tokens.test.mjs`. The plugin's
+  own chevron, error text, amber progress, notice icons, compaction icons and shimmer highlight still branch on
+  `tokens.dark` (upstream's dark constants versus theme tokens in light).
 - **Managed Chief.** `vibing-chief` is a reserved, host-managed persona: ordinary launches,
   routines and relay tools reject it (`assertOrdinaryBot`). The daemon-only broker
   (`server/chief.ts`, `bots.chief.prepare|call|handoff`, bridge-token gated) serves Chief's
@@ -152,7 +154,8 @@ cards are lighter than the canvas); keep them equal to `--palette-*` in
 Vibing's `src/index.css`. Each theme is exactly the 13 palette colours of its mode, mapped to Paseo's roles by one
 function (`colorsFor`) shared by both modes: `border` is the palette's own border value, `raised` and `raisedStrong`
 (the composer, user bubbles, badges, secondary fills and the sidebar hover) are the hover colour in both modes
-(`#2f363d` dark, `#cbcdd3` light), `control` and `popover` are the raised card. `default-dark-tint.ts` and Chief's
+(`#2f363d` dark, `#cbcdd3` light), `control` and `popover` are the raised card, `selected` is the selected tone (a light
+theme darkens its status dots until they hold 3:1 on it). `default-dark-tint.ts` and Chief's
 `CHIEF_PALETTES` use the same assignments (`patches/vibing/palette.ts`, `palette.test.ts`).
 It also sets the optional `raisedStrong` (`surface3`) to the same tone as `raised` (`#2f363d` dark; `#cbcdd3` light):
 without it the theme builder would derive `surface3`, and with it secondary buttons, selected

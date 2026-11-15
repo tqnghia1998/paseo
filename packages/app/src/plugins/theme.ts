@@ -15,6 +15,11 @@ export function toPluginTheme(theme: Theme): PluginTheme {
       statusSuccess: theme.colors.statusSuccess,
       statusWarning: theme.colors.statusWarning,
       statusDanger: theme.colors.statusDanger,
+      foregroundExtraMuted: theme.colors.foregroundExtraMuted,
+      statusDotRunning: theme.colors.statusDotRunning,
+      statusDotSuccess: theme.colors.statusDotSuccess,
+      statusDotWarning: theme.colors.statusDotWarning,
+      statusDotDanger: theme.colors.statusDotDanger,
     },
   };
 }

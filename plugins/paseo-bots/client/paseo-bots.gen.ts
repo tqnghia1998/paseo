@@ -3441,6 +3441,13 @@ function mix(a, b, weight) {
   const channel = (i) => Math.round(x[i] * weight + y[i] * (1 - weight)).toString(16).padStart(2, "0");
   return `#${channel(0)}${channel(1)}${channel(2)}`;
 }
+function lift(color, surface, amount) {
+  const x = parseColor(color);
+  const y = parseColor(surface);
+  if (!x || !y) return color;
+  const channel = (i) => Math.round(Math.min(255, Math.max(0, x[i] + (x[i] - y[i]) * amount))).toString(16).padStart(2, "0");
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
+}
 function withAlpha(color, alpha) {
   const c = parseColor(color);
   return c ? `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})` : color;
@@ -3464,16 +3471,19 @@ function nativeTokens(colors2) {
     surface3: mix(colors2.surface2, colors2.foreground, 0.87),
     surface4: mix(colors2.surface2, colors2.foreground, 0.76),
     borderAccent: mix(colors2.border, colors2.foreground, 0.95),
-    foregroundExtraMuted: mix(colors2.foregroundMuted, colors2.surface0, 0.65),
-    foregroundSelected: mix(colors2.foreground, "#ffffff", 0.25),
-    accentBright: mix(colors2.accent, "#ffffff", 0.37),
+    // Faint text: the host's own faint colour (older hosts: the muted foreground mixed toward the canvas).
+    foregroundExtraMuted: colors2.foregroundExtraMuted ?? mix(colors2.foregroundMuted, colors2.surface0, 0.65),
+    // Selected text is the default text pushed 3% further from the canvas, in both modes.
+    foregroundSelected: lift(colors2.foreground, colors2.surface0, 0.03),
+    // Links: the accent pulled toward the default text, then pushed 2% from the canvas; it lightens in dark and darkens in light.
+    accentBright: lift(mix(colors2.foreground, colors2.accent, 0.64), colors2.surface0, 0.02),
     // An overlay of the opposite pole of the canvas: white over dark, black over light (a translucent value, not a palette colour).
     interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-    // The status dot hues (Paseo's darkStatusDotColors), the same in both modes.
-    statusDotRunning: "#5caaf6",
-    statusDotSuccess: "#35c264",
-    statusDotWarning: "#db932e",
-    statusDotDanger: "#f7796d"
+    // The host's status dot hues, which already keep their contrast on each mode's surfaces (older hosts: the dark hues).
+    statusDotRunning: colors2.statusDotRunning ?? "#5caaf6",
+    statusDotSuccess: colors2.statusDotSuccess ?? "#35c264",
+    statusDotWarning: colors2.statusDotWarning ?? "#db932e",
+    statusDotDanger: colors2.statusDotDanger ?? "#f7796d"
   };
   cache.set(colors2, tokens);
   return tokens;

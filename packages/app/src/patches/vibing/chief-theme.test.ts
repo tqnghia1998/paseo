@@ -13,7 +13,7 @@ import {
 import { paletteRole, VIBING_PALETTES } from "./palette";
 
 // Space App Vibing's src/components/Chief/ChiefPanel.css, per mode (accent-bright is the
-// resolved hex of its color-mix, the accent 85% toward white in both modes). Change both repositories together.
+// resolved hex of its color-mix, the accent mixed 17% toward the default text in both modes). Change both repositories together.
 const HOST_CHIEF_CSS = {
   dark: {
     surface: "#24292e",
@@ -21,7 +21,7 @@ const HOST_CHIEF_CSS = {
     border: "#2b3137",
     textMuted: "#d1d5da",
     accent: "#79b8ff",
-    accentBright: "#8dc3ff",
+    accentBright: "#8ec3fe",
   },
   light: {
     surface: "#e6e7ed",
@@ -29,7 +29,7 @@ const HOST_CHIEF_CSS = {
     border: "#c1c2c7",
     textMuted: "#4c505e",
     accent: "#395d99",
-    accentBright: "#5775a8",
+    accentBright: "#38578e",
   },
 } as const;
 const CHIEF_PALETTE = CHIEF_PALETTES.dark;
@@ -138,7 +138,7 @@ describe("Chief theme", () => {
     expect(contrast(accent, accentForeground)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("keeps dark's Chief colours byte for byte", () => {
+  it("keeps dark's Chief colours (accentBright within 1/255 of the previous mix)", () => {
     expect(CHIEF_PALETTES.dark).toEqual({
       background: "#24292e",
       control: "#2f363d",
@@ -149,14 +149,19 @@ describe("Chief theme", () => {
       foreground: "#f6f8fa",
       mutedForeground: "#d1d5da",
       accent: "#79b8ff",
-      accentBright: "#8dc3ff",
+      accentBright: "#8ec3fe",
       accentForeground: "#1d2125",
     });
   });
 
-  // The link accent is the accent mixed 15% toward white in both modes (the same role mapping as dark), which the light
-  // palette does not keep at 4.5:1 on its surfaces; the palette-align report lists the numbers for the controller.
-  it.todo("light: accentBright keeps 4.5:1 on the Chief surface and control tone");
+  it.each(["dark", "light"] as const)(
+    "keeps the Chief link at 4.5:1 on its surfaces in %s mode",
+    (mode) => {
+      const { background, control, accentBright } = CHIEF_PALETTES[mode];
+      expect(contrast(accentBright, background)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(accentBright, control)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
 
   it.each(["dark", "light"] as const)("gives borders their own colour in %s mode", (mode) => {
     const { background, control, border } = CHIEF_PALETTES[mode];
