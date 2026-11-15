@@ -6,8 +6,8 @@ frame derives from them by ONE role mapping that is identical in light and dark;
 | Role       | Dark      | Light     |
 | ---------- | --------- | --------- |
 | `canvas`   | `#1d2125` | `#d6d8df` |
-| `raised`   | `#24292e` | `#e6e7ed` |
-| `hover`    | `#2f363d` | `#cbcdd3` |
+| `raised`   | `#24292e` | `#dddfe5` |
+| `hover`    | `#2f363d` | `#e3e4ea` |
 | `selected` | `#444d56` | `#c6c9cf` |
 | `faint`    | `#959da5` | `#686a77` |
 | `subdued`  | `#d1d5da` | `#4c505e` |
@@ -76,8 +76,8 @@ excluded from the scan and from any substitution).
 | 44   | `#f97583` | dark.red       |
 | 45   | `#b392f0` | dark.purple    |
 | 48   | `#d6d8df` | light.canvas   |
-| 49   | `#e6e7ed` | light.raised   |
-| 50   | `#cbcdd3` | light.hover    |
+| 49   | `#dddfe5` | light.raised   |
+| 50   | `#e3e4ea` | light.hover    |
 | 51   | `#c6c9cf` | light.selected |
 | 52   | `#686a77` | light.faint    |
 | 53   | `#4c505e` | light.subdued  |
@@ -107,8 +107,8 @@ excluded from the scan and from any substitution).
 | 43   | `#f97583` | dark.red       |
 | 44   | `#b392f0` | dark.purple    |
 | 47   | `#d6d8df` | light.canvas   |
-| 48   | `#e6e7ed` | light.raised   |
-| 49   | `#cbcdd3` | light.hover    |
+| 48   | `#dddfe5` | light.raised   |
+| 49   | `#e3e4ea` | light.hover    |
 | 50   | `#c6c9cf` | light.selected |
 | 51   | `#686a77` | light.faint    |
 | 52   | `#4c505e` | light.subdued  |
@@ -133,8 +133,8 @@ These pin the palette or an expected relation and must follow a value change.
 | 21   | `#2b3137` | dark.border   |
 | 22   | `#d1d5da` | dark.subdued  |
 | 23   | `#79b8ff` | dark.blue     |
-| 27   | `#e6e7ed` | light.raised  |
-| 28   | `#cbcdd3` | light.hover   |
+| 27   | `#dddfe5` | light.raised  |
+| 28   | `#e3e4ea` | light.hover   |
 | 29   | `#c1c2c7` | light.border  |
 | 30   | `#4c505e` | light.subdued |
 | 31   | `#395d99` | light.blue    |
@@ -160,9 +160,9 @@ These pin the palette or an expected relation and must follow a value change.
 | 24   | `#c1c2c7` | light.border |
 | 25   | `#c1c2c7` | light.border |
 | 26   | `#d6d8df` | light.canvas |
-| 27   | `#cbcdd3` | light.hover  |
-| 28   | `#e6e7ed` | light.raised |
-| 29   | `#cbcdd3` | light.hover  |
+| 27   | `#e3e4ea` | light.hover  |
+| 28   | `#dddfe5` | light.raised |
+| 29   | `#e3e4ea` | light.hover  |
 | 30   | `#343b59` | light.text   |
 | 31   | `#395d99` | light.blue   |
 
@@ -171,8 +171,8 @@ These pin the palette or an expected relation and must follow a value change.
 | Line | Hex       | Mode.role    |
 | ---- | --------- | ------------ |
 | 27   | `#d6d8df` | light.canvas |
-| 27   | `#cbcdd3` | light.hover  |
-| 27   | `#e6e7ed` | light.raised |
+| 27   | `#e3e4ea` | light.hover  |
+| 27   | `#dddfe5` | light.raised |
 | 31   | `#343b59` | light.text   |
 | 31   | `#343b59` | light.text   |
 | 116  | `#686a77` | light.faint  |
@@ -187,8 +187,8 @@ These pin the palette or an expected relation and must follow a value change.
 | 23   | `#444d56` | dark.selected  |
 | 24   | `#959da5` | dark.faint     |
 | 27   | `#d6d8df` | light.canvas   |
-| 28   | `#e6e7ed` | light.raised   |
-| 29   | `#cbcdd3` | light.hover    |
+| 28   | `#dddfe5` | light.raised   |
+| 29   | `#e3e4ea` | light.hover    |
 | 30   | `#c6c9cf` | light.selected |
 | 31   | `#686a77` | light.faint    |
 | 101  | `#1d2125` | dark.canvas    |
@@ -212,15 +212,15 @@ These pin the palette or an expected relation and must follow a value change.
 | 88   | `#2b3137` | dark.border  |
 | 88   | `#2f363d` | dark.hover   |
 | 89   | `#c1c2c7` | light.border |
-| 89   | `#cbcdd3` | light.hover  |
+| 89   | `#e3e4ea` | light.hover  |
 | 93   | `#1d2125` | dark.canvas  |
 | 93   | `#1d2125` | dark.canvas  |
 | 94   | `#d6d8df` | light.canvas |
 | 94   | `#d6d8df` | light.canvas |
 | 97   | `#24292e` | dark.raised  |
 | 97   | `#24292e` | dark.raised  |
-| 98   | `#e6e7ed` | light.raised |
-| 98   | `#e6e7ed` | light.raised |
+| 98   | `#dddfe5` | light.raised |
+| 98   | `#dddfe5` | light.raised |
 
 ### `scripts/paseo-bots-native-tokens.test.mjs`
 
@@ -235,8 +235,8 @@ These pin the palette or an expected relation and must follow a value change.
 | 48   | `#79b8ff` | dark.blue      |
 | 49   | `#959da5` | dark.faint     |
 | 53   | `#d6d8df` | light.canvas   |
-| 54   | `#cbcdd3` | light.hover    |
-| 55   | `#e6e7ed` | light.raised   |
+| 54   | `#e3e4ea` | light.hover    |
+| 55   | `#dddfe5` | light.raised   |
 | 56   | `#c1c2c7` | light.border   |
 | 57   | `#343b59` | light.text     |
 | 58   | `#4c505e` | light.subdued  |
@@ -251,8 +251,8 @@ These pin the palette or an expected relation and must follow a value change.
 
 | Line | Hex       | Mode.role    |
 | ---- | --------- | ------------ |
-| 8    | `#e6e7ed` | light.raised |
-| 8    | `#cbcdd3` | light.hover  |
+| 8    | `#dddfe5` | light.raised |
+| 8    | `#e3e4ea` | light.hover  |
 
 ## D. Derived values pinned in tests (not literals of a primitive, but they change with one)
 
@@ -277,6 +277,6 @@ Prose and tables only; update with the values, no code reads them.
 | Line | Hex       | Mode.role   |
 | ---- | --------- | ----------- |
 | 157  | `#2f363d` | dark.hover  |
-| 157  | `#cbcdd3` | light.hover |
+| 157  | `#e3e4ea` | light.hover |
 | 160  | `#2f363d` | dark.hover  |
-| 160  | `#cbcdd3` | light.hover |
+| 160  | `#e3e4ea` | light.hover |
