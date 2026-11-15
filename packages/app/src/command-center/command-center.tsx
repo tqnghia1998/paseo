@@ -1,4 +1,5 @@
 import { useOverlayRegistration, type KeyboardInputEvent } from "@/keyboard";
+import { scrimColor } from "@/styles/scrim";
 import { Modal } from "@/components/ui/modal";
 import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import equal from "fast-deep-equal";
@@ -1162,7 +1163,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     paddingTop: theme.spacing[12],
   },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0, 0, 0, 0.5)" },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: scrimColor(theme.scrimStrength, 0.5) },
   panel: {
     width: 640,
     height: 560,

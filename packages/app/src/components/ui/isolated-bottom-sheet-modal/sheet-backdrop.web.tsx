@@ -7,6 +7,8 @@ import {
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet as ThemedStyleSheet } from "react-native-unistyles";
+import { scrimOpacity } from "@/styles/scrim";
 import type { SheetBackdropPress } from "./sheet-backdrop";
 
 export type { SheetBackdropPress };
@@ -28,15 +30,18 @@ export function SheetBackdrop({
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        pressBehavior="none"
-        accessible={false}
-        accessibilityRole={null}
-        accessibilityLabel={null}
-      />
+      {/* The backdrop is black and animates its own opacity; the wrapper scales it with the canvas. */}
+      <View style={themedStyles.scrimStrength}>
+        <BottomSheetBackdrop
+          {...props}
+          appearsOnIndex={0}
+          disappearsOnIndex={-1}
+          pressBehavior="none"
+          accessible={false}
+          accessibilityRole={null}
+          accessibilityLabel={null}
+        />
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t("common.bottomSheetBackdrop")}
@@ -48,3 +53,10 @@ export function SheetBackdrop({
     </View>
   );
 }
+
+const themedStyles = ThemedStyleSheet.create((theme) => ({
+  scrimStrength: {
+    ...ThemedStyleSheet.absoluteFill,
+    opacity: scrimOpacity(theme.scrimStrength),
+  },
+}));
