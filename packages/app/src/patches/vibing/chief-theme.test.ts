@@ -25,7 +25,7 @@ const HOST_CHIEF_CSS = {
     accent: "#79b8ff",
   },
   light: {
-    surface: "#ffffff",
+    surface: "#f2f2f6",
     control: "#e8e8eb",
     border: "#dddde2",
     textMuted: "#5c5e63",
