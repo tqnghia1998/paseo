@@ -319,9 +319,7 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[4],
   },
   bubble: {
-    // Embedded light: the composer tone with its 1px outline (an inset ring, no layout space); elsewhere surface3.
-    backgroundColor: theme.colors.chatFillSurface,
-    ...(isWeb ? { boxShadow: theme.colors.chatFillRing } : {}),
+    backgroundColor: theme.colors.surface3,
     borderRadius: theme.borderRadius["2xl"],
     borderTopRightRadius: theme.borderRadius.sm,
     paddingHorizontal: theme.spacing[4],

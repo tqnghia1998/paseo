@@ -375,9 +375,7 @@ function ButtonControl({ view }: { view: ButtonView }) {
         ? [
             input ? styles.inputButton : composerPillStyles.body,
             styles.button,
-            // Composer pills (Run) hover like the other pills: a step darker than rest, not the near-white surface2.
-            (hovered || pressed || entry.open) &&
-              (input ? styles.inputActive : composerPillStyles.bodyActive),
+            (hovered || pressed || entry.open) && (input ? styles.inputActive : styles.active),
             disabled && styles.disabled,
           ]
         : headerButtonStyle(props.layout.compact, { hovered, pressed, open: entry.open }, disabled),

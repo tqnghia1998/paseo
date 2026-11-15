@@ -83,7 +83,7 @@ describe("evaluatePluginClientBundle", () => {
       { id: "light", name: "Space App Vibing Light" },
     ]);
     expect(plugin.themes.map(({ appearance }) => appearance)).toEqual(["dark", "light"]);
-    // Borders have their own value; raisedStrong (surface3) is the dark hover tone and, in light, a neutral grey (not the blue hover primitive).
+    // Borders have their own value; raisedStrong (surface3) is the hover primitive of each mode.
     expect(plugin.themes.map(({ colors }) => [colors.border, colors.raisedStrong])).toEqual([
       ["#2b3137", "#2f363d"],
       ["#c1c2c7", "#cbcdd3"],

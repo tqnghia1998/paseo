@@ -36,13 +36,10 @@ export const composerPillStyles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius["2xl"],
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
-    // The Details box tone in embedded light (the composer shell's tone), surface1 elsewhere.
-    backgroundColor: theme.colors.composerSurface,
+    backgroundColor: theme.colors.surface1,
   },
   bodyActive: {
-    // Embedded light hovers a step darker than the resting grey instead of the near-white surface2 (a theme token:
-    // the web style sheet only sees `var(--colors-...)` references, so nothing can be computed from them here).
-    backgroundColor: theme.colors.composerPillHover,
+    backgroundColor: theme.colors.surface2,
   },
   label: {
     fontSize: theme.fontSize.sm,
