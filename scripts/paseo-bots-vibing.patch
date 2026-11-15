@@ -1595,59 +1595,61 @@ index 2b79473..1c571f7 100644
        onToggleBot={(bot, on) => toggleApp(app.slug, bot, on)}
        onDisconnected={() => setTarget(compact ? null : { kind: "apps" })}
 diff --git a/client/native.ts b/client/native.ts
-index 5d97e59..0b34818 100644
+index 5d97e59..a5f212c 100644
 --- a/client/native.ts
 +++ b/client/native.ts
-@@ -95,6 +95,8 @@ export interface NativeTokens {
+@@ -89,12 +89,14 @@ function isDark(colors: Colors): boolean {
+ export interface NativeTokens {
+   dark: boolean;
+   surfaceSidebar: string;
+-  /** Selected sidebar row: surface2 in dark themes, surface3 in light. */
++  /** Selected sidebar row: the raised (hover) tone mixed toward the text, in both modes. */
+   surfaceSidebarSelected: string;
+   surface3: string;
    surface4: string;
    borderAccent: string;
    foregroundExtraMuted: string;
-+  /** Text on a selected tab or row: lighter than the default foreground in dark, the foreground itself in light. */
++  /** Text on a selected tab or row: the default text mixed toward white, in both modes. */
 +  foregroundSelected: string;
    accentBright: string;
    interactionHighlight: string;
    statusDotRunning: string;
-@@ -109,21 +111,33 @@ export function nativeTokens(colors: Colors): NativeTokens {
+@@ -109,21 +111,27 @@ export function nativeTokens(colors: Colors): NativeTokens {
    const cached = cache.get(colors);
    if (cached) return cached;
    const dark = isDark(colors);
 -  const surface3 = mix(colors.surface2, colors.foreground, dark ? 0.87 : 0.93);
-+  // The selected tone: the raised tone mixed toward the text, a step past it and never lighter than the canvas (dark and light
-+  // are the same class). Light 0.97 on the neutral raised tone #cbcdd3 keeps muted text and status dots at 4.5:1 and 3:1.
-+  const selected = mix(colors.surface1, colors.foreground, dark ? 0.865 : 0.97);
-+  const surface3 = dark ? mix(colors.surface2, colors.foreground, 0.87) : selected;
++  // One set of expressions for both modes: every value derives from the theme colours by the same role mapping, so light
++  // differs from dark only in the palette's values. The selected tone is the raised (hover) tone mixed toward the text.
++  const selected = mix(colors.surface1, colors.foreground, 0.865);
    const tokens: NativeTokens = {
      dark,
 -    surfaceSidebar: dark ? mix(colors.surface0, "#000000", 0.83) : colors.surface2,
 -    surfaceSidebarSelected: dark ? colors.surface2 : surface3,
-+    // The list, the tab strip and the splash are the canvas in both modes (never the raised control tone).
+-    surface3,
+-    surface4: mix(colors.surface2, colors.foreground, dark ? 0.76 : 0.85),
+-    borderAccent: dark ? mix(colors.border, colors.foreground, 0.95) : mix(colors.border, colors.surface0, 0.7),
++    // The list, the tab strip and the splash are the canvas.
 +    surfaceSidebar: colors.surface0,
 +    surfaceSidebarSelected: selected,
-     surface3,
--    surface4: mix(colors.surface2, colors.foreground, dark ? 0.76 : 0.85),
-+    // Placeholder text: in light, a tone of the muted foreground (4.5:1 on the canvas and on raised).
-+    surface4: dark ? mix(colors.surface2, colors.foreground, 0.76) : mix(colors.foregroundMuted, colors.surface0, 0.9),
-     borderAccent: dark ? mix(colors.border, colors.foreground, 0.95) : mix(colors.border, colors.surface0, 0.7),
--    foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, 0.65),
++    surface3: mix(colors.surface2, colors.foreground, 0.87),
++    surface4: mix(colors.surface2, colors.foreground, 0.76),
++    borderAccent: mix(colors.border, colors.foreground, 0.95),
+     foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, 0.65),
 -    accentBright: mix(colors.accent, "#ffffff", dark ? 0.37 : 0.75),
-+    // Light mixes toward the canvas by less: 0.65 leaves 2.6 to 3.2:1, 0.97 keeps 4.5:1 on every light surface
-+    // (the canvas, raised, hover, the selected tone and the host's selected tone).
-+    foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, dark ? 0.65 : 0.97),
-+    // Dark lightens the text; mixing 75% white into a light-mode foreground made it 1.1:1 on its own pill.
-+    foregroundSelected: dark ? mix(colors.foreground, "#ffffff", 0.25) : colors.foreground,
-+    // Link text: light mixes toward black (white over the accent was 2.6:1 on the canvas).
-+    accentBright: dark ? mix(colors.accent, "#ffffff", 0.37) : mix(colors.accent, "#000000", 0.85),
++    foregroundSelected: mix(colors.foreground, "#ffffff", 0.25),
++    accentBright: mix(colors.accent, "#ffffff", 0.37),
++    // An overlay of the opposite pole of the canvas: white over dark, black over light (a translucent value, not a palette colour).
      interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
 -    statusDotRunning: dark ? "#5caaf6" : "#268ae0",
 -    statusDotSuccess: dark ? "#35c264" : "#299f51",
 -    statusDotWarning: dark ? "#db932e" : "#b37824",
 -    statusDotDanger: dark ? "#f7796d" : "#f12e2f",
-+    // Light dots are the original hues darkened just enough for 3:1 on every light surface (the canvas, raised,
-+    // hover and both selected tones); the previous values were 2.2 to 2.9:1 there.
-+    statusDotRunning: dark ? "#5caaf6" : "#1f72b9",
-+    statusDotSuccess: dark ? "#35c264" : "#207f41",
-+    statusDotWarning: dark ? "#db932e" : "#97651f",
-+    statusDotDanger: dark ? "#f7796d" : "#d6292a",
++    // The status dot hues (Paseo's darkStatusDotColors), the same in both modes.
++    statusDotRunning: "#5caaf6",
++    statusDotSuccess: "#35c264",
++    statusDotWarning: "#db932e",
++    statusDotDanger: "#f7796d",
    };
    cache.set(colors, tokens);
    return tokens;
@@ -4594,36 +4596,3 @@ index 0000000..016c943
 +    expect(fallbackDefaultBotId([])).toBeUndefined();
 +  });
 +});
-diff --git a/client/panel/controls.tsx b/client/panel/controls.tsx
-index e5670fd..c8d3081 100644
---- a/client/panel/controls.tsx
-+++ b/client/panel/controls.tsx
-@@ -299,7 +299,18 @@ export function Alert({ colors, variant = "default", title, description }: { col
- 
- export type BadgeVariant = "success" | "warning" | "error" | "muted";
- 
--/** Paseo's StatusBadge: surface3 pill, or the status tint (12% light / 16% dark) with the status text. */
-+/** The muted badge fill: surface3 in dark, and in light the composer tone (the canvas mixed 45% toward the raised card, #dddfe5). */
-+function mutedBadgeFill(colors: Colors, surface3: string, dark: boolean): string {
-+  const hex = /^#[0-9a-f]{6}$/i;
-+  if (dark || !hex.test(colors.surface0) || !hex.test(colors.surface2)) return surface3;
-+  const channel = (i: number) =>
-+    Math.round(parseInt(colors.surface0.slice(1 + i * 2, 3 + i * 2), 16) * 0.55 + parseInt(colors.surface2.slice(1 + i * 2, 3 + i * 2), 16) * 0.45)
-+      .toString(16)
-+      .padStart(2, "0");
-+  return `#${channel(0)}${channel(1)}${channel(2)}`;
-+}
-+
-+/** Paseo's StatusBadge: surface3 pill (the composer tone in light), or the status tint (12% light / 16% dark) with the status text. */
- export function StatusBadge({ colors, label, variant = "muted" }: { colors: Colors; label: string; variant?: BadgeVariant }) {
-   const tokens = nativeTokens(colors);
-   const status = variant === "success" ? colors.statusSuccess : variant === "warning" ? colors.statusWarning : variant === "error" ? colors.statusDanger : null;
-@@ -312,7 +323,7 @@ export function StatusBadge({ colors, label, variant = "muted" }: { colors: Colo
-         borderRadius: 999,
-         borderWidth: 1,
-         borderColor: status ? "transparent" : colors.border,
--        backgroundColor: status ? withAlpha(status, tokens.dark ? 0.16 : 0.12) : tokens.surface3,
-+        backgroundColor: status ? withAlpha(status, tokens.dark ? 0.16 : 0.12) : mutedBadgeFill(colors, tokens.surface3, tokens.dark),
-         paddingHorizontal: 8,
-         paddingVertical: 3,
-       }}
