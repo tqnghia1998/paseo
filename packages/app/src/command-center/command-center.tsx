@@ -1,5 +1,6 @@
 import { useOverlayRegistration, type KeyboardInputEvent } from "@/keyboard";
 import { Modal } from "@/components/ui/modal";
+import { isEmbeddedFocusMode } from "@/patches/vibing/focus-mode";
 import equal from "fast-deep-equal";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
 
@@ -74,6 +75,10 @@ import {
 } from "@/utils/command-center-focus-restore";
 import { focusWithRetries } from "@/utils/web-focus";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import {
+  scopeEmbeddedCommandCenterRows,
+  useEmbeddedWorkspaceSelection,
+} from "@/patches/vibing/embedded-command-center";
 
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import { getProjectSummaryForHostProject } from "@/utils/projects";
@@ -242,8 +247,6 @@ function useWorkspaceRows(
           if (workspace.archivingAt) continue;
           const key = `${host.serverId}:${workspace.id}`;
           rows.push(
-
-
             preserve({
               kind: "workspace",
               id: `workspace:${key}`,
@@ -317,16 +320,16 @@ function useWorkspaceRows(
     });
   }, [active, archivedWorkspaces, hosts, iconDataByProjectViewKey, projects, showHost]);
 
-  return {
-    active,
-    archived,
-    // Opening a workspace route loads that workspace before the rest of the directory, so rows
-    // are no sign that the list is complete.
-    loading: agentsLoading || projectsLoading || workspacesArriving,
-  };
-
-
-
+  return scopeEmbeddedCommandCenterRows(
+    {
+      active,
+      archived,
+      // Opening a workspace route loads that workspace before the rest of the directory, so rows
+      // are no sign that the list is complete.
+      loading: agentsLoading || projectsLoading || workspacesArriving,
+    },
+    agents,
+  );
 }
 
 /**
@@ -376,14 +379,14 @@ function useCommandCenterState(
   const inputRef = useRef<EditingTextInputHandle>(null);
   const previousOpenRef = useRef(open);
   const { query, activeId } = useSyncExternalStore(interaction.subscribe, interaction.getSnapshot);
-  const activeWorkspace = useActiveWorkspaceSelection();
+  const activeWorkspace = useEmbeddedWorkspaceSelection(useActiveWorkspaceSelection());
   const hasWorkspace = activeWorkspace !== null;
   const tabs = useMemo(() => availableCommandCenterTabs({ hasWorkspace }), [hasWorkspace]);
   const tab = resolveCommandCenterTab(requestedTab, tabs);
   const showBackground = useSidebarViewStore((state) => state.showBackground);
   const listsWorkspaces = tab === "all" || tab === "workspaces";
   const archivedSearch = useArchivedWorkspaceSearch(query, {
-    enabled: open && listsWorkspaces,
+    enabled: open && listsWorkspaces && !isEmbeddedFocusMode,
   });
   const workspaceRows = useWorkspaceRows(open, archivedSearch.workspaces);
   const [rankWorkspaces] = useState(createWorkspaceRanker);

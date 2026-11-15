@@ -138,7 +138,8 @@ function isEmbeddedSettingsRouteAllowed(pathname: string, bound: Workspace): boo
   }
   return (
     (segments.length === 4 && HOST_SECTIONS.has(segments[3])) ||
-    (segments.length === 6 && segments[3] === "plugins")
+    ((segments.length === 5 || segments.length === 6) && segments[3] === "plugins") ||
+    (segments.length === 6 && segments[3] === "plugin-directory")
   );
 }
 

@@ -47,7 +47,6 @@ const contributionSchema: z.ZodType<PluginThemeContribution> = z.strictObject({
     accent: hexColorSchema.optional(),
     mutedForeground: hexColorSchema,
     ring: hexColorSchema,
-    sidebar: hexColorSchema.optional(),
     sidebarHover: hexColorSchema.optional(),
     sidebarSelected: hexColorSchema.optional(),
     surface3: hexColorSchema.optional(),
@@ -102,7 +101,6 @@ function buildDarkPluginTheme(contribution: PluginThemeContribution): Theme {
         colors.foregroundExtraMuted ??
         deriveSidebarStateText(tertiary, selected, colors.foreground),
 
-
       foreground: colors.foreground,
       foregroundMuted: colors.mutedForeground,
       foregroundExtraMuted: tertiary,
@@ -145,7 +143,6 @@ function buildLightPluginTheme(contribution: PluginThemeContribution): Theme {
       foregroundSidebarSelected:
         colors.foregroundExtraMuted ??
         deriveSidebarStateText(tertiary, selected, colors.foreground),
-
 
       selected: colors.selected,
 

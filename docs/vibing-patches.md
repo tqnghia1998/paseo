@@ -729,3 +729,13 @@ another workspace or file. `chief-host.ts` subscribes it once with the handshake
 document can open while the first document surface is on screen. The host waits for the
 correlated acknowledgement and times out visibly on older runtimes. Generated artifacts and
 running runtimes are unchanged until a permitted normal refresh.
+
+### Refresh 2026-11-16
+
+Rebased onto `685e11335`. Embedded command-center search uses upstream workspace
+rows scoped to the bound worktree and current chat context, with matches opening
+chats, and retains Files on the Bots route. Embedded settings admits the new plugin
+gallery detail routes only for the bound host. Removed the obsolete plugins-page
+test alongside upstream's component replacement; gallery UI lifecycle coverage
+has not yet been migrated. The built-in loader lifecycle test uses its own fixture
+instead of the retired Annotations plugin.

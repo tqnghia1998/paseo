@@ -26,32 +26,65 @@ beforeEach(() => {
   bound.workspace = { serverId: "host", workspaceId: "ws" };
 });
 
-const agent = (id: string, serverId: string, workspaceId: string | null, cwd: string) => ({
+const makeAgent = (
+  id: string,
+  serverId: string,
+  workspaceId: string | null,
+  cwd: string,
+  labels?: Record<string, string>,
+) => ({
   id,
-  agent: { serverId, workspaceId, cwd },
+  serverId,
+  workspaceId,
+  cwd,
+  labels,
+});
+const agents = [
+  makeAgent("bound", "host", "ws", "/repo"),
+  makeAgent("same-folder", "host", "legacy-duplicate", "/repo"),
+  makeAgent("other-worktree", "host", "other", "/repo-feature"),
+  makeAgent("other-host", "remote", "ws", "/repo"),
+  makeAgent("design", "host", "ws", "/repo", { "paseo-bots.context": "live-design" }),
+];
+const workspace = (serverId: string, workspaceId: string) => ({
+  serverId,
+  workspaceId,
+  run: vi.fn(),
+  openAgent: vi.fn(),
+  agents: agents.filter(
+    (agent) => agent.serverId === serverId && agent.workspaceId === workspaceId,
+  ),
+});
+const rows = () => ({
+  active: [
+    workspace("host", "ws"),
+    workspace("host", "legacy-duplicate"),
+    workspace("host", "other"),
+    workspace("remote", "ws"),
+  ],
+  archived: [workspace("host", "archived")],
+  loading: false,
 });
 
-it("keeps only the agents of the bound worktree and drops workspace navigation", () => {
-  const rows = scopeEmbeddedCommandCenterRows({
-    workspaces: [{ id: "workspace:host:other" }],
-    agents: [
-      agent("bound", "host", "ws", "/repo"),
-      agent("same-folder", "host", "legacy-duplicate", "/repo"),
-      agent("other-worktree", "host", "other", "/repo-feature"),
-      agent("other-host", "remote", "ws", "/repo"),
-    ],
-  });
-  expect(rows.workspaces).toEqual([]);
-  expect(rows.agents.map((row) => row.id)).toEqual(["bound", "same-folder"]);
+it("keeps current-surface chats under the bound worktree and opens a chat instead of workspace navigation", () => {
+  const input = rows();
+  const result = scopeEmbeddedCommandCenterRows(input, agents);
+  expect(result.active).toHaveLength(1);
+  expect(result.archived).toEqual([]);
+  expect(result.active[0].agents.map((agent) => agent.id)).toEqual(["bound", "same-folder"]);
+  result.active[0].run();
+  expect(input.active[0].openAgent).toHaveBeenCalledWith("bound");
+  expect(input.active[0].run).not.toHaveBeenCalled();
 });
 
-it("offers nothing to navigate before the worktree is bound", () => {
+it("offers no navigation before binding or without matching chats", () => {
   bound.workspace = null;
-  const rows = scopeEmbeddedCommandCenterRows({
-    workspaces: [{ id: "w" }],
-    agents: [agent("a", "host", "ws", "/repo")],
+  expect(scopeEmbeddedCommandCenterRows(rows(), agents)).toMatchObject({
+    active: [],
+    archived: [],
   });
-  expect(rows).toEqual({ workspaces: [], agents: [] });
+  bound.workspace = { serverId: "host", workspaceId: "ws" };
+  expect(scopeEmbeddedCommandCenterRows(rows(), [])).toMatchObject({ active: [], archived: [] });
 });
 
 it("keeps settings and shortcut help among the root commands", () => {
@@ -73,14 +106,8 @@ it("keeps settings and shortcut help among the root commands", () => {
   ]);
 });
 
-it("keeps command-center conversation results in the current surface", () => {
-  const normal = agent("normal", "host", "ws", "/repo");
-  const design = {
-    ...agent("design", "host", "ws", "/repo"),
-    agent: { ...normal.agent, labels: { "paseo-bots.context": "live-design" } },
-  };
-  const rows = { workspaces: [], agents: [normal, design] };
-  expect(scopeEmbeddedCommandCenterRows(rows).agents.map((row) => row.id)).toEqual(["normal"]);
+it("keeps Live Design search within its chat context", () => {
   bound.liveDesign = true;
-  expect(scopeEmbeddedCommandCenterRows(rows).agents.map((row) => row.id)).toEqual(["design"]);
+  const result = scopeEmbeddedCommandCenterRows(rows(), agents);
+  expect(result.active[0].agents.map((agent) => agent.id)).toEqual(["design"]);
 });
