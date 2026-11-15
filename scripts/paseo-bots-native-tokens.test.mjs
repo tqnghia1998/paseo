@@ -55,14 +55,14 @@ const DARK = {
 };
 const LIGHT = {
   surface0: "#f2f2f6",
-  surface1: "#e9e9f4",
+  surface1: "#e8e8eb",
   surface2: "#ffffff",
   border: "#dddde2",
   foreground: "#202325",
-  foregroundMuted: "#5e5e77",
+  foregroundMuted: "#5c5e63",
   accent: "#1571be",
   foregroundExtraMuted: "#6d6f71",
-  selected: "#dbdbe4",
+  selected: "#d9d9dd",
   // The host's light dots after its readability pass (3:1 on the canvas, hover, raised and selected tones).
   statusDotRunning: "#1f71b8",
   statusDotSuccess: "#217f41",

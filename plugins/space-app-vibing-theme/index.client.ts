@@ -46,10 +46,10 @@ const PALETTES = {
   light: {
     canvas: "#f2f2f6",
     raised: "#ffffff",
-    hover: "#e9e9f4",
-    selected: "#dbdbe4",
+    hover: "#e8e8eb",
+    selected: "#d9d9dd",
     faint: "#6d6f71",
-    subdued: "#5e5e77",
+    subdued: "#5c5e63",
     text: "#202325",
     border: "#dddde2",
     blue: "#1571be",
