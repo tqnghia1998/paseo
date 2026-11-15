@@ -56,7 +56,7 @@ const DARK = {
 const LIGHT = {
   surface0: "#ffffff",
   surface1: "#e8e8eb",
-  surface2: "#f2f2f6",
+  surface2: "#f8f8fa",
   border: "#dddde2",
   foreground: "#202325",
   foregroundMuted: "#5c5e63",

@@ -37,7 +37,7 @@ describe("Space App Vibing default tints", () => {
       borderAccent: "#dddde2",
       surface0: "#ffffff",
       surface1: "#e8e8eb",
-      surface2: "#f2f2f6",
+      surface2: "#f8f8fa",
       surface3: "#e8e8eb",
       foreground: "#202325",
       accent: "#1571be",
