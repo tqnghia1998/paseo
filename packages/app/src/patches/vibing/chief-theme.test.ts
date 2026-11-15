@@ -24,8 +24,8 @@ const HOST_CHIEF_CSS = {
     accentBright: "#8ec3fe",
   },
   light: {
-    surface: "#e6e7ed",
-    control: "#cbcdd3",
+    surface: "#dddfe5",
+    control: "#e3e4ea",
     border: "#c1c2c7",
     textMuted: "#4c505e",
     accent: "#395d99",

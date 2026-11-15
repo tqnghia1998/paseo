@@ -24,7 +24,7 @@ function ratio(a: string, b: string): number {
 }
 
 // Space App Vibing light surfaces (docs/theme.md): canvas, neutral raised tone, raised card.
-const SURFACES = ["#d6d8df", "#cbcdd3", "#e6e7ed"];
+const SURFACES = ["#d6d8df", "#e3e4ea", "#dddfe5"];
 
 describe("readableOnSurfaces", () => {
   it("leaves a colour that already passes alone", () => {
