@@ -9,7 +9,7 @@ import {
   REGISTERED_THEMES,
   type Theme,
 } from "@/styles/theme";
-import { resolveComposerPillHover } from "./composer-pill-hover";
+import { resolveChatFillRing, resolveComposerPillHover } from "./composer-pill-hover";
 import { isEmbeddedChiefView } from "./focus-mode";
 import type { HostThemeMode } from "./host-theme-mode";
 
@@ -125,6 +125,10 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
   // Bots composer, whose builder token mixes the canvas, which the Chief palette does not carry), and the pills hover a
   // step darker (5% toward the foreground). Dark keeps the raised tone and surface2.
   const composerSurface = palette.composerSurface;
+  // The user bubbles follow the composer: the same tone and 1px ring in light, surface3 and no ring in dark.
+  const chatFillSurface = mode === "light" ? composerSurface : colors.surface3;
+  const chatFillRing =
+    mode === "light" ? resolveChatFillRing({ colorScheme: "light", colors: colors }) : "none";
   const composerPillHover =
     mode === "light"
       ? resolveComposerPillHover({
@@ -137,6 +141,8 @@ export function buildChiefColors(mode: HostThemeMode): Theme["colors"] {
     ...colors,
     composerSurface,
     composerPillHover,
+    chatFillSurface,
+    chatFillRing,
     success: colors.statusSuccess,
   } as Theme["colors"];
 }
