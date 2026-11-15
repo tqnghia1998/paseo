@@ -6,7 +6,7 @@ import type { Theme } from "@/styles/theme";
 type IconComponent = ComponentType<{ size: number; color: string; strokeWidth?: number }>;
 
 type IconColor = {
-  [K in keyof Theme["colors"]]: Theme["colors"][K] extends string ? K : never;
+  [K in keyof Theme["colors"]]-?: Theme["colors"][K] extends string ? K : never;
 }[keyof Theme["colors"]];
 
 function IconGlyph({

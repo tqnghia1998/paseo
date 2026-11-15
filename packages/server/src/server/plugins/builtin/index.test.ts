@@ -82,12 +82,17 @@ test("Bots stays built-in while ordinary community plugins use native lifecycle 
     });
     expect(await client.listPlugins()).toEqual([]);
     await client.patchDaemonConfig({ pluginsEnabled: true });
-    for (const id of ["paseo-chat-polish", "annotations"]) {
-      expect(builtinPlugins).not.toContain(id);
-      await client.installDirectoryPlugin(path.join(resolveBuiltinPluginsRoot(), id));
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-lifecycle-fixture-"));
+    roots.push(fixtureRoot);
+    const fixtureDirectory = await fixture(fixtureRoot, "lifecycle-fixture");
+    for (const directory of [
+      path.join(resolveBuiltinPluginsRoot(), "paseo-chat-polish"),
+      fixtureDirectory,
+    ]) {
+      await client.installDirectoryPlugin(directory);
     }
     expect((await client.listPlugins()).map(({ id }) => id).sort()).toEqual([
-      "annotations",
+      "lifecycle-fixture",
       "paseo-chat-polish",
     ]);
     await client.disablePlugin("paseo-chat-polish");
@@ -98,27 +103,10 @@ test("Bots stays built-in while ordinary community plugins use native lifecycle 
     );
     await client.enablePlugin("paseo-chat-polish");
     const installedCatalog = await client.getPluginCatalog();
-    const annotation = {
-      id: "bundle-test",
-      agentId: "agent-test",
-      quote: "Selected passage",
-      anchorText: "Selected passage",
-      code: null,
-      anchor: null,
-      comment: "Explain this",
-      status: "pending",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    };
-    await client.invokePluginRpc("annotations", "annotations.save", { annotations: [annotation] });
-    expect(await client.invokePluginRpc("annotations", "annotations.list", {})).toEqual({
-      annotations: [annotation],
-    });
-    expect(
-      (
-        await stat(path.join(daemon.paseoHome, "plugin-data/annotations/annotations.json"))
-      ).isFile(),
-    ).toBe(true);
+    const dataDirectory = path.join(daemon.paseoHome, "plugin-data/lifecycle-fixture");
+    await mkdir(dataDirectory, { recursive: true });
+    const dataFile = path.join(dataDirectory, "preserved.json");
+    await writeFile(dataFile, JSON.stringify({ keep: true }));
     expect(catalog.find(({ id }) => id === "space-app-vibing-theme")?.clientBundle).toContain(
       "Space App Vibing",
     );
@@ -131,12 +119,8 @@ test("Bots stays built-in while ordinary community plugins use native lifecycle 
         source: "flowchart LR\n  A --> B",
       }),
     ).toMatchObject({ svg: expect.stringContaining("<svg"), width: expect.any(Number) });
-    await client.removePlugin("annotations");
-    expect(
-      (
-        await stat(path.join(daemon.paseoHome, "plugin-data/annotations/annotations.json"))
-      ).isFile(),
-    ).toBe(true);
+    await client.removePlugin("lifecycle-fixture");
+    expect((await stat(dataFile)).isFile()).toBe(true);
   } finally {
     await client.close();
     await daemon.close();

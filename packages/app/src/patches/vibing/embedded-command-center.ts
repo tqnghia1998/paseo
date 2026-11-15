@@ -21,32 +21,51 @@ export function keepEmbeddedRootActions<Action extends { id: string }>(
     : actions;
 }
 
-interface AgentRow {
-  agent: {
-    serverId: string;
-    workspaceId?: string | null;
-    cwd: string;
-    labels?: Record<string, string>;
-  };
+interface SearchAgent {
+  id: string;
+  serverId: string;
+  workspaceId?: string | null;
+  cwd: string;
+  labels?: Record<string, string>;
 }
 
-/** Agents are limited to the bound worktree, like Bots chat lists; workspaces are not offered. */
-export function scopeEmbeddedCommandCenterRows<Workspace, Agent extends AgentRow>(rows: {
-  workspaces: Workspace[];
-  agents: Agent[];
-}): { workspaces: Workspace[]; agents: Agent[] } {
+interface SearchWorkspace {
+  serverId: string;
+  workspaceId: string;
+  agents: readonly { id: string }[];
+  run(): void;
+  openAgent(agentId: string): void;
+}
+
+/** Upstream groups chat matches under workspaces; embedded search opens only this worktree's chats. */
+export function scopeEmbeddedCommandCenterRows<Workspace extends SearchWorkspace>(
+  rows: { active: Workspace[]; archived: Workspace[]; loading: boolean },
+  agents: readonly SearchAgent[],
+): { active: Workspace[]; archived: Workspace[]; loading: boolean } {
   if (!isEmbeddedFocusMode) return rows;
   const bound = getEmbeddedWorkspace();
-  if (!bound) return { workspaces: [], agents: [] };
+  const workspace = rows.active.find(
+    (row) => row.serverId === bound?.serverId && row.workspaceId === bound.workspaceId,
+  );
+  if (!bound || !workspace) return { ...rows, active: [], archived: [] };
   const directory = getEmbeddedWorkspaceDirectory();
+  const allowed = new Set(
+    agents
+      .filter(
+        (agent) =>
+          agent.serverId === bound.serverId &&
+          isBotChatContext(agent) &&
+          (agent.workspaceId === bound.workspaceId || (!!directory && agent.cwd === directory)),
+      )
+      .map((agent) => agent.id),
+  );
+  const chats = rows.active.flatMap((row) => row.agents).filter((agent) => allowed.has(agent.id));
   return {
-    workspaces: [],
-    agents: rows.agents.filter(
-      ({ agent }) =>
-        agent.serverId === bound.serverId &&
-        isBotChatContext(agent) &&
-        (agent.workspaceId === bound.workspaceId || (!!directory && agent.cwd === directory)),
-    ),
+    ...rows,
+    active: chats.length
+      ? [{ ...workspace, agents: chats, run: () => workspace.openAgent(chats[0].id) }]
+      : [],
+    archived: [],
   };
 }
 

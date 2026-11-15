@@ -381,17 +381,12 @@ export function useModelBrowser({
       ),
       back: singleProviderView ? undefined : { onPress: showAll },
       actions: (
-        <View style={styles.headerActionRow}>
-          <ProviderSettingsAction
-            serverId={serverId}
-            provider={view.providerId}
-            label={t("modelSelector.openProviderSettings", {
-              provider: view.providerLabel,
-            })}
-          />
-        </View>
+        <ProviderSettingsAction
+          serverId={serverId}
+          provider={view.providerId}
+          label={t("modelSelector.openProviderSettings", { provider: view.providerLabel })}
+        />
       ),
-
       search: {
         onChange: handleSearchQueryChange,
         onFocus: () => setIsSearchFocused(true),

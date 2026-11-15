@@ -9,8 +9,6 @@ import { resolveLightReadable } from "@/patches/vibing/light-readable";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
 import { deriveSurfaceStates } from "./derive-colors";
 
-
-
 export const baseColors = {
   // Base colors
   white: "#ffffff",
@@ -328,7 +326,6 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     success: tint.accent,
     successForeground: roles.successForeground,
 
-
     background: tint.surface0,
     popover: tint.popover ?? tint.surface0,
     popoverForeground: tint.foreground,
@@ -379,7 +376,6 @@ const lightSemanticColors = buildLightSemanticColors(
     terminalBrightBlack: "#3f3f46",
   }),
 );
-
 
 // ---------------------------------------------------------------------------
 // Dark theme variant builder
@@ -519,7 +515,6 @@ const paseoDarkColors = buildDarkSemanticColors(
     terminalBrightBlack: "#434645",
   }),
 );
-
 
 // Zinc — neutral gray, no tint
 const zincDarkColors = buildDarkSemanticColors({

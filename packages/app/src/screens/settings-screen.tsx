@@ -1158,7 +1158,6 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
       view.kind === "pluginListing" ||
       view.kind === "provider"
     )
-
       return view.serverId;
     return resolveActiveHostServerId({
       selectedServerId: selectedSettingsHostServerId,

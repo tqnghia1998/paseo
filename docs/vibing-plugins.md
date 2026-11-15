@@ -13,7 +13,7 @@ is the per-plugin reference and the upgrade procedure.
 | Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
 | AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
 | Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
-| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `6b52cc2`                  | 0.14.0        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
+| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `5220b9c`                  | 0.14.1        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
 | Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`             |
 | Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `7f08467` | 1.4.1         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`    |
 
@@ -219,3 +219,15 @@ numbers, instead of an anchor that opens a Paseo file tab. Regressions:
    checks every built-in plugin loads.
 7. Update the table above. Existing homes pick up the new bundle on their next start, unless
    their copy was edited (see Updates above).
+
+## Upstream refresh 2026-11-16
+
+Paseo rebased onto `685e11335`. Chat Polish now pins `5220b9c` (0.14.1); its
+patch retains Vibing colors and actions while incorporating attachment text clamping
+and natural file-menu height. Bots `069f8eb`, Generative UI `cd50b2a` and Shell Yeah
+`7f08467` are unchanged: the first two are current and Shell Yeah has no directory
+changes through repository HEAD `5929e52`.
+
+Upstream theme overrides supply sidebar and fill colors. The built-in Vibing theme
+sets explicit palette values for those roles; other plugin themes keep the new
+upstream derivations. It requires Paseo `>=0.16.0-0`.

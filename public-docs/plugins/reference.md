@@ -1446,9 +1446,9 @@ colors, and the terminal without listing them.
 | `sidebar`              | Sidebar background. Optional; `background` in dark themes, `control` in light. |
 | `sidebarHover`         | Optional hovered sidebar row background.                                       |
 | `sidebarSelected`      | Optional selected sidebar row background.                                      |
-| `selected` | Optional selected-row tone for status-dot contrast. |
-| `popover` | Tooltips and hover cards; defaults to the native theme role. |
-| `raisedStrong` | Vibing fallback for `surface3` when omitted. |
+| `selected`             | Optional selected-row tone for status-dot contrast.                            |
+| `popover`              | Tooltips and hover cards; defaults to the native theme role.                   |
+| `raisedStrong`         | Vibing fallback for `surface3` when omitted.                                   |
 | `surface3`             | Optional neutral fill for message bubbles, secondary buttons, and chips.       |
 | `surface4`             | Optional stronger neutral fill for tracks and other states.                    |
 | `foregroundExtraMuted` | Optional tertiary text, including sidebar timestamps.                          |
@@ -1459,9 +1459,6 @@ surfaces or text it accompanies.
 
 `sidebar` and the five overrides require Paseo 0.16.0 or later. Older apps reject a theme with an unknown color, and the
 plugin's other contributions fail to load with it, so raise `requirements.paseo` when you use any of them.
-
-
-
 
 `appearance` is `"light"` or `"dark"`. Paseo uses it to select the matching surface, status,
 diff, syntax, terminal, and shadow derivation.
