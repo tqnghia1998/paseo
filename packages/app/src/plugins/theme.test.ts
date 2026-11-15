@@ -99,6 +99,11 @@ describe("toPluginTheme", () => {
         statusSuccess: lightTheme.colors.statusSuccess,
         statusWarning: lightTheme.colors.statusWarning,
         statusDanger: lightTheme.colors.statusDanger,
+        foregroundExtraMuted: lightTheme.colors.foregroundExtraMuted,
+        statusDotRunning: lightTheme.colors.statusDotRunning,
+        statusDotSuccess: lightTheme.colors.statusDotSuccess,
+        statusDotWarning: lightTheme.colors.statusDotWarning,
+        statusDotDanger: lightTheme.colors.statusDotDanger,
       },
     });
   });

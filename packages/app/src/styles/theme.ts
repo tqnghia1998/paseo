@@ -240,6 +240,9 @@ export interface LightThemeConfig {
   /** Tooltips and hover cards; the page surface (`surface0`) when omitted. */
   popover?: string;
 
+  /** The selected-row tone; the status dots are darkened until they stay readable on it too. */
+  selected?: string;
+
   foreground: string;
   foregroundMuted: string;
   foregroundExtraMuted: string;
@@ -279,7 +282,8 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
   const surfaces = [tint.surface0, tint.surface1, tint.surface2];
   const diffColors = resolveLightReadable(lightDiffColors, surfaces, 4.5);
   const statusColors = resolveLightReadable(lightStatusColors, surfaces, 4.5);
-  const statusDotColors = resolveLightReadable(lightStatusDotColors, surfaces, 3);
+  const dotSurfaces = tint.selected ? [...surfaces, tint.selected] : surfaces;
+  const statusDotColors = resolveLightReadable(lightStatusDotColors, dotSurfaces, 3);
   const terminalAnsi = resolveLightReadable(lightTerminalAnsi, [tint.surface0], 4.5);
   const roles = resolveLightRoles(tint, {
     surfaceSidebarHover: tint.surfaceSidebarHover ?? sidebarStates.hover,

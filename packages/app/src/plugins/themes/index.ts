@@ -43,6 +43,7 @@ const contributionSchema: z.ZodType<PluginThemeContribution> = z.strictObject({
     raisedStrong: hexColorSchema.optional(),
     sidebar: hexColorSchema.optional(),
     popover: hexColorSchema.optional(),
+    selected: hexColorSchema.optional(),
     accent: hexColorSchema.optional(),
     mutedForeground: hexColorSchema,
     ring: hexColorSchema,
@@ -144,6 +145,8 @@ function buildLightPluginTheme(contribution: PluginThemeContribution): Theme {
         colors.foregroundExtraMuted ??
         deriveSidebarStateText(tertiary, selected, colors.foreground),
 
+
+      selected: colors.selected,
 
       foreground: colors.foreground,
       foregroundMuted: colors.mutedForeground,
