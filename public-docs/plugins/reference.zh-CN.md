@@ -1190,8 +1190,9 @@ export default function contribute(client: PluginClientContext) {
 | `sidebar`              | 侧边栏背景。可选；深色主题默认为 `background`，浅色为 `control` |
 | `sidebarHover`         | 可选的侧边栏行悬停背景                                          |
 | `sidebarSelected`      | 可选的侧边栏行选中背景                                          |
-| `popover` | Tooltips and hover cards; defaults to the native theme role. |
-| `raisedStrong` | Vibing fallback for `surface3` when omitted. |
+| `selected` | 可选的选中行色调，用于状态点对比度。 |
+| `popover` | 工具提示和悬停卡片；省略时使用原生主题角色。 |
+| `raisedStrong` | Vibing 的 `surface3` 可选后备值。 |
 | `surface3`             | 可选的消息气泡、次要按钮和芯片中性填充                          |
 | `surface4`             | 可选的轨道和其他状态的较强中性填充                              |
 | `foregroundExtraMuted` | 可选的三级文字颜色，包括侧边栏时间戳                            |

@@ -3462,29 +3462,50 @@ function nativeTokens(colors2) {
   const cached = cache.get(colors2);
   if (cached) return cached;
   const dark = isDark(colors2);
-  const selected = colors2.selected ?? mix(colors2.surface1, colors2.foreground, 0.865);
-  const tokens = {
+  const aware = colors2.selected !== void 0;
+  const dot = (value, darkHue, lightHue) => value ?? (dark ? darkHue : lightHue);
+  const common = {
     dark,
+    aware,
+    interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+    statusDotRunning: dot(colors2.statusDotRunning, "#5caaf6", "#268ae0"),
+    statusDotSuccess: dot(colors2.statusDotSuccess, "#35c264", "#299f51"),
+    statusDotWarning: dot(colors2.statusDotWarning, "#db932e", "#b37824"),
+    statusDotDanger: dot(colors2.statusDotDanger, "#f7796d", "#f12e2f")
+  };
+  const faint = colors2.foregroundExtraMuted ?? mix(colors2.foregroundMuted, colors2.surface0, 0.65);
+  const tokens = aware ? {
+    ...common,
     // The list, the tab strip and the splash are the canvas.
     surfaceSidebar: colors2.surface0,
-    surfaceSidebarSelected: selected,
+    surfaceSidebarSelected: colors2.selected ?? colors2.surface1,
     surface3: mix(colors2.surface2, colors2.foreground, 0.87),
-    surface4: mix(colors2.surface2, colors2.foreground, 0.76),
+    // Placeholder text is the host's faint colour (3:1 or better on the canvas and raised surfaces in both modes).
+    surface4: faint,
     borderAccent: mix(colors2.border, colors2.foreground, 0.95),
-    // Faint text: the host's own faint colour (older hosts: the muted foreground mixed toward the canvas).
-    foregroundExtraMuted: colors2.foregroundExtraMuted ?? mix(colors2.foregroundMuted, colors2.surface0, 0.65),
-    // Selected text is the default text pushed 3% further from the canvas, in both modes.
+    foregroundExtraMuted: faint,
     foregroundSelected: lift(colors2.foreground, colors2.surface0, 0.03),
-    // Links: the accent pulled toward the default text, then pushed 2% from the canvas; it lightens in dark and darkens in light.
-    accentBright: lift(mix(colors2.foreground, colors2.accent, 0.64), colors2.surface0, 0.02),
-    // An overlay of the opposite pole of the canvas: white over dark, black over light (a translucent value, not a palette colour).
-    interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-    // The host's status dot hues, which already keep their contrast on each mode's surfaces (older hosts: the dark hues).
-    statusDotRunning: colors2.statusDotRunning ?? "#5caaf6",
-    statusDotSuccess: colors2.statusDotSuccess ?? "#35c264",
-    statusDotWarning: colors2.statusDotWarning ?? "#db932e",
-    statusDotDanger: colors2.statusDotDanger ?? "#f7796d"
-  };
+    // Links are the accent itself (4.5:1 on the canvas, raised and hover in both modes), underlined.
+    accentBright: colors2.accent,
+    linkDecoration: "underline",
+    // Lifting the text a full difference from the canvas lands on the opposite pole: white over dark, black over light.
+    shimmerHighlight: lift(colors2.foreground, colors2.surface0, 1)
+  } : (() => {
+    const surface3 = mix(colors2.surface2, colors2.foreground, dark ? 0.87 : 0.93);
+    return {
+      ...common,
+      surfaceSidebar: dark ? mix(colors2.surface0, "#000000", 0.83) : colors2.surface2,
+      surfaceSidebarSelected: dark ? colors2.surface2 : surface3,
+      surface3,
+      surface4: mix(colors2.surface2, colors2.foreground, dark ? 0.76 : 0.85),
+      borderAccent: dark ? mix(colors2.border, colors2.foreground, 0.95) : mix(colors2.border, colors2.surface0, 0.7),
+      foregroundExtraMuted: mix(colors2.foregroundMuted, colors2.surface0, 0.65),
+      foregroundSelected: colors2.foreground,
+      accentBright: mix(colors2.accent, "#ffffff", dark ? 0.37 : 0.75),
+      linkDecoration: "none",
+      shimmerHighlight: void 0
+    };
+  })();
   cache.set(colors2, tokens);
   return tokens;
 }
@@ -5337,7 +5358,7 @@ function BotRow({ colors: colors2, tokens, bot, lead, touch, isOpen, aggregate, 
           }
         ),
         /* @__PURE__ */ jsxs5(View6, { pointerEvents: "none", style: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }, children: [
-          /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: hovered ? /* @__PURE__ */ jsx6(Icon4, { name: isOpen ? "ChevronDown" : "ChevronRight", size: 14, color: tokens.dark ? CHEVRON_COLOR : tokens.foregroundExtraMuted }) : /* @__PURE__ */ jsxs5(View6, { style: { position: "relative", width: 16, height: 16 }, children: [
+          /* @__PURE__ */ jsx6(View6, { style: { width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }, children: hovered ? /* @__PURE__ */ jsx6(Icon4, { name: isOpen ? "ChevronDown" : "ChevronRight", size: 14, color: tokens.dark && !tokens.aware ? CHEVRON_COLOR : tokens.foregroundExtraMuted }) : /* @__PURE__ */ jsxs5(View6, { style: { position: "relative", width: 16, height: 16 }, children: [
             /* @__PURE__ */ jsx6(Avatar, { avatar: bot.avatar, size: 16 }),
             aggregate ? /* @__PURE__ */ jsx6(StatusBadge2, { colors: colors2, tokens, bucket: aggregate, backdrop }) : null
           ] }) }),
@@ -6197,7 +6218,7 @@ function ContextMeter({ colors: colors2, usage, pending: pending2, glyphSize }) 
   }
   const rounded = Math.round(usage.percent);
   const tone = meterTone(usage.percent);
-  const progress = tone === "danger" ? colors2.statusDanger : tone === "warning" ? tokens.dark ? AMBER_500 : tokens.statusDotWarning : colors2.foregroundMuted;
+  const progress = tone === "danger" ? colors2.statusDanger : tone === "warning" ? tokens.aware && !tokens.dark ? tokens.statusDotWarning : AMBER_500 : colors2.foregroundMuted;
   const cost = usage.costUsd !== null ? formatSessionCost(usage.costUsd) : null;
   const tokensLine = `${formatTokenCount(usage.used)} / ${formatTokenCount(usage.max)} tokens`;
   const costLine = cost ? `Session cost ${cost}` : null;
@@ -6757,7 +6778,7 @@ function ChatComposer({ colors: colors2, bot, host: host2, agentId, running, lay
   return /* @__PURE__ */ jsxs9(View10, { ref: outerRef, collapsable: false, style: { width: "100%", minHeight: 75, alignItems: "center", paddingHorizontal: 16, paddingBottom: 16 + bottomInset, flexShrink: 1 }, children: [
     /* @__PURE__ */ jsxs9(View10, { style: { width: "100%", maxWidth: CONTENT_MAX_WIDTH, gap: 12, flexShrink: 1 }, children: [
       queue.length > 0 ? /* @__PURE__ */ jsx10(View10, { style: { gap: 8 }, children: queue.map((item) => /* @__PURE__ */ jsx10(QueuedRow, { colors: colors2, item, onEdit: () => editQueued(item), onSendNow: () => void sendQueuedNow(item) }, item.id)) }) : null,
-      sendError ? /* @__PURE__ */ jsx10(Text8, { accessibilityRole: "alert", style: { color: nativeTokens(colors2).dark ? RED_500 : colors2.statusDanger, fontSize: ui(14) }, children: sendError }) : null,
+      sendError ? /* @__PURE__ */ jsx10(Text8, { accessibilityRole: "alert", style: { color: nativeTokens(colors2).aware && !nativeTokens(colors2).dark ? colors2.statusDanger : RED_500, fontSize: ui(14) }, children: sendError }) : null,
       /* @__PURE__ */ jsxs9(View10, { style: { position: "relative", width: "100%", flexShrink: 1 }, children: [
         commandsVisible ? /* @__PURE__ */ jsx10(
           CommandMenu,
@@ -7578,7 +7599,7 @@ var ExpandableBadge = memo2(function ExpandableBadge2({ colors: colors2, label, 
   const interactive = Boolean(onToggle);
   const active = hovered || isExpanded;
   const duration = shimmerDuration(label, secondaryLabel);
-  const shimmer = useShimmer(isLoading, duration, nativeTokens(colors2).dark ? void 0 : "#000000");
+  const shimmer = useShimmer(isLoading, duration, nativeTokens(colors2).shimmerHighlight);
   const details = isExpanded && renderDetails ? renderDetails() : null;
   const labelStyle = {
     color: isLoading || active ? colors2.foreground : colors2.foregroundMuted,
@@ -8763,7 +8784,7 @@ function Link({ colors: colors2, url, inlines }) {
     const target = url.replace(/^file:\/\//i, "");
     void copyText3(target).then(() => toast.show("Path copied", { variant: "success" })).catch(() => toast.error("Couldn't copy the path."));
   };
-  return /* @__PURE__ */ jsx13(Text11, { accessibilityRole: "link", style: { color: nativeTokens(colors2).accentBright, textDecorationLine: "none" }, onPress, children: /* @__PURE__ */ jsx13(Inlines, { colors: colors2, inlines }) });
+  return /* @__PURE__ */ jsx13(Text11, { accessibilityRole: "link", style: { color: nativeTokens(colors2).accentBright, textDecorationLine: nativeTokens(colors2).linkDecoration }, onPress, children: /* @__PURE__ */ jsx13(Inlines, { colors: colors2, inlines }) });
 }
 function CodeBlock({ colors: colors2, text }) {
   const [copied, setCopied] = useState13(false);
@@ -10516,7 +10537,7 @@ var NOTIFICATION_STYLES = {
 var Notification = memo5(function Notification2({ colors: colors2, level, message: message2 }) {
   const style = NOTIFICATION_STYLES[level];
   const tokens = nativeTokens(colors2);
-  const tint = tokens.dark ? style.tint : level === "info" ? tokens.statusDotRunning : level === "warning" ? tokens.statusDotWarning : style.tint;
+  const tint = !tokens.aware || tokens.dark ? style.tint : level === "info" ? tokens.statusDotRunning : level === "warning" ? tokens.statusDotWarning : style.tint;
   return /* @__PURE__ */ jsx24(View24, { style: { borderRadius: 6, overflow: "hidden", backgroundColor: style.background }, children: /* @__PURE__ */ jsx24(View24, { style: { paddingHorizontal: 12, paddingVertical: 10 }, children: /* @__PURE__ */ jsxs23(View24, { style: { flexDirection: "row", alignItems: "flex-start", gap: 8 }, children: [
     /* @__PURE__ */ jsx24(View24, { style: { flexShrink: 0, height: 20, justifyContent: "center" }, children: /* @__PURE__ */ jsx24(Icon14, { name: style.icon, size: 16, color: tint || colors2.statusDanger }) }),
     /* @__PURE__ */ jsx24(View24, { style: { flex: 1 }, children: /* @__PURE__ */ jsx24(Text22, { selectable: true, style: { color: colors2.foreground, fontSize: ui(14), lineHeight: 20 }, children: message2 }) })
@@ -10530,7 +10551,8 @@ function compactionLabel(status, trigger, preTokens) {
   return "Context compacted";
 }
 var CompactionMarker = memo5(function CompactionMarker2({ colors: colors2, status, trigger, preTokens }) {
-  const glyph = nativeTokens(colors2).dark ? "#a1a1aa" : colors2.foregroundMuted;
+  const glyphTokens = nativeTokens(colors2);
+  const glyph = glyphTokens.aware ? glyphTokens.foregroundExtraMuted : glyphTokens.dark ? "#a1a1aa" : colors2.foregroundMuted;
   return /* @__PURE__ */ jsxs23(View24, { style: { flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16, gap: 8 }, children: [
     /* @__PURE__ */ jsx24(View24, { style: { flex: 1, height: 1, backgroundColor: colors2.border } }),
     /* @__PURE__ */ jsxs23(View24, { style: { flexDirection: "row", alignItems: "center", gap: 8 }, children: [
