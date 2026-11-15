@@ -36,10 +36,11 @@ const VIBING_DARK_TINT: Omit<DarkThemeConfig, "destructive"> = {
   terminalBlack: VIBING_PALETTES.dark.raised,
 };
 
-// Light adds the two fields only its builder asks for (primary and its foreground, the same roles dark's builder
+// Light adds the fields only its builder asks for (the selected tone, primary and its foreground, the same roles dark's builder
 // derives from `foreground` and `surface0`). ANSI black stays the default text: it is a terminal colour, not a surface.
 const VIBING_LIGHT_TINT: Omit<LightThemeConfig, "destructive"> = {
   ...vibingTint(VIBING_PALETTES.light),
+  selected: VIBING_PALETTES.light.selected,
   primary: VIBING_PALETTES.light.text,
   primaryForeground: VIBING_PALETTES.light.canvas,
   terminalBlack: VIBING_PALETTES.light.text,

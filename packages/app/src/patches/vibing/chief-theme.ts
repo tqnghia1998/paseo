@@ -43,8 +43,10 @@ function chiefPalette(p: VibingPrimitives) {
     foreground: plugin.foreground,
     mutedForeground: plugin.mutedForeground,
     accent: plugin.accent,
-    // Links and highlights: color-mix(in srgb, <accent> 85%, white), the same expression in both modes.
-    accentBright: mixHex(plugin.accent, "#ffffff", 0.15),
+    // Links and highlights: the accent mixed 17% toward the default text, the same expression in both modes (CSS:
+    // color-mix(in srgb, <accent> 83%, <text>)). Toward the text rather than toward white, so it lightens in dark
+    // and darkens in light and keeps its contrast on the Chief surfaces in both.
+    accentBright: mixHex(plugin.accent, plugin.foreground, 0.17),
     // Filled buttons use the canvas as their text colour, as the theme plugin's builders do (accentForeground).
     accentForeground: plugin.background,
   };

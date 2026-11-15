@@ -75,6 +75,7 @@ export function pluginThemeColors(p: VibingPrimitives) {
     raisedStrong: p.hover,
     sidebar: p.canvas,
     popover: p.raised,
+    selected: p.selected,
     accent: p.blue,
     mutedForeground: p.subdued,
     ring: p.faint,
