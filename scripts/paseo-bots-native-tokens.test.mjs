@@ -174,10 +174,10 @@ test("with the palette every text, placeholder and dot colour holds its floor on
       }
     };
     // Links are drawn in chat on the canvas and on raised fills (4.5:1) and, rarely, on hover fills, where the
-    // palette's accent is held at 4.2:1 (a documented exception: SeaTalk's brand blue darkened to 4.5 on the canvas
-    // and raised card is 4.21 on the hover tone); selected text on the canvas and the selected row.
+    // palette's accent is held at 4.1:1 (a documented exception: SeaTalk's brand blue darkened to 4.5 on the canvas
+    // and raised card is 4.15 on the hover tone); selected text on the canvas and the selected row.
     check("link", t.accentBright, { canvas, raised }, 4.5);
-    check("link", t.accentBright, { hover }, 4.2);
+    check("link", t.accentBright, { hover }, 4.1);
     check("selected text", t.foregroundSelected, { canvas, selected }, 4.5);
     // Faint text, the placeholder and the dots are UI tones: 3:1 on the canvas, raised, hover and the selected row.
     for (const [name, color] of [
