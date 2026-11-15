@@ -12,6 +12,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { useBotChatFork } from "@/patches/vibing/bot-chat-fork";
+import { isEmbeddedChiefView } from "@/patches/vibing/focus-mode";
 
 export type AssistantForkTarget = "tab" | "workspace";
 
@@ -76,6 +77,9 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
     () => <ThemedSplit size={ICON_SIZE.sm} uniProps={foregroundColorMapping} />,
     [],
   );
+
+  // Chief owns one fixed conversation and has no fork destination.
+  if (isEmbeddedChiefView) return null;
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
