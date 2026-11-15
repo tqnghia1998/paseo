@@ -246,7 +246,7 @@ index 9d97c7f..855ce7f 100644
      </Modal>
    );
 diff --git a/client/BotSidebar.tsx b/client/BotSidebar.tsx
-index 5174b04..39396db 100644
+index 5174b04..2baa986 100644
 --- a/client/BotSidebar.tsx
 +++ b/client/BotSidebar.tsx
 @@ -1,3 +1,5 @@
@@ -476,7 +476,7 @@ index 5174b04..39396db 100644
          <View style={{ width: 16, height: 20, flexShrink: 0, alignItems: "center", justifyContent: "center" }}>
            {hovered ? (
 -            <Icon name={isOpen ? "ChevronDown" : "ChevronRight"} size={14} color={CHEVRON_COLOR} />
-+            <Icon name={isOpen ? "ChevronDown" : "ChevronRight"} size={14} color={tokens.dark ? CHEVRON_COLOR : tokens.foregroundExtraMuted} />
++            <Icon name={isOpen ? "ChevronDown" : "ChevronRight"} size={14} color={tokens.dark && !tokens.aware ? CHEVRON_COLOR : tokens.foregroundExtraMuted} />
            ) : (
              <View style={{ position: "relative", width: 16, height: 16 }}>
                <Avatar avatar={bot.avatar} size={16} />
@@ -1352,7 +1352,7 @@ index 0000000..1f1bc75
 +  workspaceBridge?: ComponentType<BotWorkspaceBridgeProps>;
 +}
 diff --git a/client/chat/Composer.tsx b/client/chat/Composer.tsx
-index aff5897..7d0f3fd 100644
+index aff5897..d729307 100644
 --- a/client/chat/Composer.tsx
 +++ b/client/chat/Composer.tsx
 @@ -469,7 +469,7 @@ function ChatComposer({ colors, bot, host, agentId, running, layout, keyboardOpe
@@ -1360,12 +1360,12 @@ index aff5897..7d0f3fd 100644
          ) : null}
          {sendError ? (
 -          <Text accessibilityRole="alert" style={{ color: RED_500, fontSize: ui(14) }}>
-+          <Text accessibilityRole="alert" style={{ color: nativeTokens(colors).dark ? RED_500 : colors.statusDanger, fontSize: ui(14) }}>
++          <Text accessibilityRole="alert" style={{ color: nativeTokens(colors).aware && !nativeTokens(colors).dark ? colors.statusDanger : RED_500, fontSize: ui(14) }}>
              {sendError}
            </Text>
          ) : null}
 diff --git a/client/chat/composer/ContextMeter.tsx b/client/chat/composer/ContextMeter.tsx
-index 5a8d768..4c0c430 100644
+index 5a8d768..6b3ca9d 100644
 --- a/client/chat/composer/ContextMeter.tsx
 +++ b/client/chat/composer/ContextMeter.tsx
 @@ -32,7 +32,7 @@ export function ContextMeter({ colors, usage, pending, glyphSize }: { colors: Co
@@ -1373,12 +1373,12 @@ index 5a8d768..4c0c430 100644
    const rounded = Math.round(usage.percent);
    const tone = meterTone(usage.percent);
 -  const progress = tone === "danger" ? colors.statusDanger : tone === "warning" ? AMBER_500 : colors.foregroundMuted;
-+  const progress = tone === "danger" ? colors.statusDanger : tone === "warning" ? (tokens.dark ? AMBER_500 : tokens.statusDotWarning) : colors.foregroundMuted;
++  const progress = tone === "danger" ? colors.statusDanger : tone === "warning" ? (tokens.aware && !tokens.dark ? tokens.statusDotWarning : AMBER_500) : colors.foregroundMuted;
    const cost = usage.costUsd !== null ? formatSessionCost(usage.costUsd) : null;
    const tokensLine = `${formatTokenCount(usage.used)} / ${formatTokenCount(usage.max)} tokens`;
    const costLine = cost ? `Session cost ${cost}` : null;
 diff --git a/client/chat/stream/rows.tsx b/client/chat/stream/rows.tsx
-index d87a3bd..ff0118c 100644
+index d87a3bd..d972ca6 100644
 --- a/client/chat/stream/rows.tsx
 +++ b/client/chat/stream/rows.tsx
 @@ -327,12 +327,15 @@ const NOTIFICATION_STYLES = {
@@ -1387,7 +1387,7 @@ index d87a3bd..ff0118c 100644
    const style = NOTIFICATION_STYLES[level];
 +  const tokens = nativeTokens(colors);
 +  // The dark tints are pastel; in light the status dot hues keep the icon at 3:1.
-+  const tint = tokens.dark ? style.tint : level === "info" ? tokens.statusDotRunning : level === "warning" ? tokens.statusDotWarning : style.tint;
++  const tint = !tokens.aware || tokens.dark ? style.tint : level === "info" ? tokens.statusDotRunning : level === "warning" ? tokens.statusDotWarning : style.tint;
    return (
      <View style={{ borderRadius: 6, overflow: "hidden", backgroundColor: style.background }}>
        <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
@@ -1398,11 +1398,12 @@ index d87a3bd..ff0118c 100644
            </View>
            <View style={{ flex: 1 }}>
              <Text selectable style={{ color: colors.foreground, fontSize: ui(14), lineHeight: 20 }}>
-@@ -354,11 +357,12 @@ function compactionLabel(status: "loading" | "completed", trigger?: "auto" | "ma
+@@ -354,11 +357,13 @@ function compactionLabel(status: "loading" | "completed", trigger?: "auto" | "ma
  }
  
  const CompactionMarker = memo(function CompactionMarker({ colors, status, trigger, preTokens }: { colors: Colors; status: "loading" | "completed"; trigger?: "auto" | "manual"; preTokens?: number }) {
-+  const glyph = nativeTokens(colors).dark ? "#a1a1aa" : colors.foregroundMuted;
++  const glyphTokens = nativeTokens(colors);
++  const glyph = glyphTokens.aware ? glyphTokens.foregroundExtraMuted : glyphTokens.dark ? "#a1a1aa" : colors.foregroundMuted;
    return (
      <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16, gap: 8 }}>
        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
@@ -1413,7 +1414,7 @@ index d87a3bd..ff0118c 100644
        </View>
        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
 diff --git a/client/chat/stream/ui.tsx b/client/chat/stream/ui.tsx
-index bd71e8d..33f04ec 100644
+index bd71e8d..8fac804 100644
 --- a/client/chat/stream/ui.tsx
 +++ b/client/chat/stream/ui.tsx
 @@ -55,7 +55,7 @@ const SHIMMER_CSS = `
@@ -1443,13 +1444,14 @@ index bd71e8d..33f04ec 100644
    }
    return { textProps: {}, style: { opacity } as unknown as TextStyle };
  }
-@@ -239,7 +239,8 @@ export const ExpandableBadge = memo(function ExpandableBadge({ colors, label, se
+@@ -239,7 +239,9 @@ export const ExpandableBadge = memo(function ExpandableBadge({ colors, label, se
    const interactive = Boolean(onToggle);
    const active = hovered || isExpanded;
    const duration = shimmerDuration(label, secondaryLabel);
 -  const shimmer = useShimmer(isLoading, duration);
-+  // The sweep brightens the text in dark; in light it darkens it (a white band would erase the label).
-+  const shimmer = useShimmer(isLoading, duration, nativeTokens(colors).dark ? undefined : "#000000");
++  // With the palette the sweep is the pole opposite the canvas (it brightens the text in dark and darkens it in light, where a
++  // white band would erase the label); other themes keep upstream's white band.
++  const shimmer = useShimmer(isLoading, duration, nativeTokens(colors).shimmerHighlight);
    const details = isExpanded && renderDetails ? renderDetails() : null;
    const labelStyle: TextStyle = {
      color: isLoading || active ? colors.foreground : colors.foregroundMuted,
@@ -1595,7 +1597,7 @@ index 2b79473..1c571f7 100644
        onToggleBot={(bot, on) => toggleApp(app.slug, bot, on)}
        onDisconnected={() => setTarget(compact ? null : { kind: "apps" })}
 diff --git a/client/native.ts b/client/native.ts
-index 5d97e59..b6b5a7b 100644
+index 5d97e59..bea9a17 100644
 --- a/client/native.ts
 +++ b/client/native.ts
 @@ -70,6 +70,15 @@ function mix(a: string, b: string, weight: number): string {
@@ -1614,32 +1616,42 @@ index 5d97e59..b6b5a7b 100644
  export function withAlpha(color: string, alpha: number): string {
    const c = parseColor(color);
    return c ? `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})` : color;
-@@ -89,12 +98,14 @@ function isDark(colors: Colors): boolean {
+@@ -88,14 +97,22 @@ function isDark(colors: Colors): boolean {
+  */
  export interface NativeTokens {
    dark: boolean;
++  /** True when the host carries the Space App Vibing palette (it passes `selected`); every other theme keeps upstream's tokens. */
++  aware: boolean;
    surfaceSidebar: string;
 -  /** Selected sidebar row: surface2 in dark themes, surface3 in light. */
-+  /** Selected sidebar row and tab: the host's selected colour in both modes. */
++  /** Selected sidebar row and tab: the host's selected colour with the palette, upstream's mix otherwise. */
    surfaceSidebarSelected: string;
    surface3: string;
    surface4: string;
    borderAccent: string;
    foregroundExtraMuted: string;
-+  /** Text on a selected tab or row: the default text pushed 3% further from the canvas, in both modes. */
++  /** Text on a selected tab or row: the default text pushed 3% further from the canvas with the palette, the default text otherwise. */
 +  foregroundSelected: string;
    accentBright: string;
++  /** Links are underlined with the palette (they are the accent, which the surrounding text colours do not separate on their own). */
++  linkDecoration: "underline" | "none";
++  /** The shimmer sweep: the pole opposite the canvas with the palette; undefined keeps upstream's white band. */
++  shimmerHighlight: string | undefined;
    interactionHighlight: string;
    statusDotRunning: string;
-@@ -109,21 +120,31 @@ export function nativeTokens(colors: Colors): NativeTokens {
+   statusDotSuccess: string;
+@@ -109,22 +126,55 @@ export function nativeTokens(colors: Colors): NativeTokens {
    const cached = cache.get(colors);
    if (cached) return cached;
    const dark = isDark(colors);
 -  const surface3 = mix(colors.surface2, colors.foreground, dark ? 0.87 : 0.93);
-+  // One set of expressions for both modes: every value derives from the theme colours by the same role mapping, so light
-+  // differs from dark only in the palette's values. The selected tone is the host's own selected colour (older hosts: the
-+  // raised (hover) tone mixed toward the text).
-+  const selected = colors.selected ?? mix(colors.surface1, colors.foreground, 0.865);
-   const tokens: NativeTokens = {
+-  const tokens: NativeTokens = {
++  // The Space App Vibing host passes the palette's `selected` colour (and its faint and status-dot colours). With it, every
++  // token derives from the theme colours by one expression for both modes, so light differs from dark only in the palette's
++  // values. Without it (standalone Paseo, third-party themes) the tokens are upstream's, unchanged.
++  const aware = colors.selected !== undefined;
++  const dot = (value: string | undefined, darkHue: string, lightHue: string) => value ?? (dark ? darkHue : lightHue);
++  const common = {
      dark,
 -    surfaceSidebar: dark ? mix(colors.surface0, "#000000", 0.83) : colors.surface2,
 -    surfaceSidebarSelected: dark ? colors.surface2 : surface3,
@@ -1648,32 +1660,55 @@ index 5d97e59..b6b5a7b 100644
 -    borderAccent: dark ? mix(colors.border, colors.foreground, 0.95) : mix(colors.border, colors.surface0, 0.7),
 -    foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, 0.65),
 -    accentBright: mix(colors.accent, "#ffffff", dark ? 0.37 : 0.75),
-+    // The list, the tab strip and the splash are the canvas.
-+    surfaceSidebar: colors.surface0,
-+    surfaceSidebarSelected: selected,
-+    surface3: mix(colors.surface2, colors.foreground, 0.87),
-+    surface4: mix(colors.surface2, colors.foreground, 0.76),
-+    borderAccent: mix(colors.border, colors.foreground, 0.95),
-+    // Faint text: the host's own faint colour (older hosts: the muted foreground mixed toward the canvas).
-+    foregroundExtraMuted: colors.foregroundExtraMuted ?? mix(colors.foregroundMuted, colors.surface0, 0.65),
-+    // Selected text is the default text pushed 3% further from the canvas, in both modes.
-+    foregroundSelected: lift(colors.foreground, colors.surface0, 0.03),
-+    // Links: the accent pulled toward the default text, then pushed 2% from the canvas; it lightens in dark and darkens in light.
-+    accentBright: lift(mix(colors.foreground, colors.accent, 0.64), colors.surface0, 0.02),
-+    // An overlay of the opposite pole of the canvas: white over dark, black over light (a translucent value, not a palette colour).
++    aware,
      interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
 -    statusDotRunning: dark ? "#5caaf6" : "#268ae0",
 -    statusDotSuccess: dark ? "#35c264" : "#299f51",
 -    statusDotWarning: dark ? "#db932e" : "#b37824",
 -    statusDotDanger: dark ? "#f7796d" : "#f12e2f",
-+    // The host's status dot hues, which already keep their contrast on each mode's surfaces (older hosts: the dark hues).
-+    statusDotRunning: colors.statusDotRunning ?? "#5caaf6",
-+    statusDotSuccess: colors.statusDotSuccess ?? "#35c264",
-+    statusDotWarning: colors.statusDotWarning ?? "#db932e",
-+    statusDotDanger: colors.statusDotDanger ?? "#f7796d",
++    statusDotRunning: dot(colors.statusDotRunning, "#5caaf6", "#268ae0"),
++    statusDotSuccess: dot(colors.statusDotSuccess, "#35c264", "#299f51"),
++    statusDotWarning: dot(colors.statusDotWarning, "#db932e", "#b37824"),
++    statusDotDanger: dot(colors.statusDotDanger, "#f7796d", "#f12e2f"),
    };
++  const faint = colors.foregroundExtraMuted ?? mix(colors.foregroundMuted, colors.surface0, 0.65);
++  const tokens: NativeTokens = aware
++    ? {
++        ...common,
++        // The list, the tab strip and the splash are the canvas.
++        surfaceSidebar: colors.surface0,
++        surfaceSidebarSelected: colors.selected ?? colors.surface1,
++        surface3: mix(colors.surface2, colors.foreground, 0.87),
++        // Placeholder text is the host's faint colour (3:1 or better on the canvas and raised surfaces in both modes).
++        surface4: faint,
++        borderAccent: mix(colors.border, colors.foreground, 0.95),
++        foregroundExtraMuted: faint,
++        foregroundSelected: lift(colors.foreground, colors.surface0, 0.03),
++        // Links are the accent itself (4.5:1 on the canvas, raised and hover in both modes), underlined.
++        accentBright: colors.accent,
++        linkDecoration: "underline",
++        // Lifting the text a full difference from the canvas lands on the opposite pole: white over dark, black over light.
++        shimmerHighlight: lift(colors.foreground, colors.surface0, 1),
++      }
++    : (() => {
++        const surface3 = mix(colors.surface2, colors.foreground, dark ? 0.87 : 0.93);
++        return {
++          ...common,
++          surfaceSidebar: dark ? mix(colors.surface0, "#000000", 0.83) : colors.surface2,
++          surfaceSidebarSelected: dark ? colors.surface2 : surface3,
++          surface3,
++          surface4: mix(colors.surface2, colors.foreground, dark ? 0.76 : 0.85),
++          borderAccent: dark ? mix(colors.border, colors.foreground, 0.95) : mix(colors.border, colors.surface0, 0.7),
++          foregroundExtraMuted: mix(colors.foregroundMuted, colors.surface0, 0.65),
++          foregroundSelected: colors.foreground,
++          accentBright: mix(colors.accent, "#ffffff", dark ? 0.37 : 0.75),
++          linkDecoration: "none",
++          shimmerHighlight: undefined,
++        } satisfies Omit<NativeTokens, keyof typeof common>;
++      })();
    cache.set(colors, tokens);
    return tokens;
+ }
 diff --git a/client/panel/AgentSections.tsx b/client/panel/AgentSections.tsx
 index ee24cd8..c0cf7b4 100644
 --- a/client/panel/AgentSections.tsx
@@ -4617,3 +4652,16 @@ index 0000000..016c943
 +    expect(fallbackDefaultBotId([])).toBeUndefined();
 +  });
 +});
+diff --git a/client/Markdown.tsx b/client/Markdown.tsx
+index fdedf64..87cd1c7 100644
+--- a/client/Markdown.tsx
++++ b/client/Markdown.tsx
+@@ -262,7 +262,7 @@ function Link({ colors, url, inlines }: { colors: Colors; url: string; inlines:
+       .catch(() => toast.error("Couldn't copy the path."));
+   };
+   return (
+-    <Text accessibilityRole="link" style={{ color: nativeTokens(colors).accentBright, textDecorationLine: "none" }} onPress={onPress}>
++    <Text accessibilityRole="link" style={{ color: nativeTokens(colors).accentBright, textDecorationLine: nativeTokens(colors).linkDecoration }} onPress={onPress}>
+       <Inlines colors={colors} inlines={inlines} />
+     </Text>
+   );

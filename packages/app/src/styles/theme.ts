@@ -300,7 +300,8 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     surface2: tint.surface2,
     surface3: tint.surface3,
     surface4: tint.surface4,
-    selected: tint.selected,
+    // Only themes that carry the palette have a selected tone; the key is absent elsewhere (plugins read its presence).
+    ...(tint.selected === undefined ? {} : { selected: tint.selected }),
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: roles.surfaceSidebarHover,
     surfaceSidebarSelected: roles.surfaceSidebarSelected,
@@ -440,8 +441,8 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surface2: tint.surface2,
     surface3: tint.surface3,
     surface4: tint.surface4,
-
-    selected: tint.selected,
+    // Only themes that carry the palette have a selected tone; the key is absent elsewhere (plugins read its presence).
+    ...(tint.selected === undefined ? {} : { selected: tint.selected }),
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: tint.surfaceSidebarHover ?? sidebarStates.hover,
     surfaceSidebarSelected: tint.surfaceSidebarSelected ?? sidebarStates.selected,

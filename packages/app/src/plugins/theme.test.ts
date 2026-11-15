@@ -110,6 +110,27 @@ describe("toPluginTheme", () => {
   });
 });
 
+describe("toPluginTheme optional colours", () => {
+  it("omits the optional keys a theme does not have instead of setting them to undefined", () => {
+    const theme = {
+      ...lightTheme,
+      colors: { ...lightTheme.colors, selected: undefined, foregroundExtraMuted: undefined },
+    } as unknown as typeof lightTheme;
+    const colors = toPluginTheme(theme).colors;
+    expect("selected" in colors).toBe(false);
+    expect("foregroundExtraMuted" in colors).toBe(false);
+    expect(colors.statusDotRunning).toBe(lightTheme.colors.statusDotRunning);
+  });
+
+  it("carries the selected tone when the theme has one", () => {
+    const theme = {
+      ...lightTheme,
+      colors: { ...lightTheme.colors, selected: "#c6c9cf" },
+    } as unknown as typeof lightTheme;
+    expect(toPluginTheme(theme).colors.selected).toBe("#c6c9cf");
+  });
+});
+
 describe("plugin theme palettes", () => {
   it("expands a contributed palette onto the semantic and terminal tokens", () => {
     const option = collectPluginThemes([installed("host-a", [MOCHA])], new Set(["host-a"]))[0];
