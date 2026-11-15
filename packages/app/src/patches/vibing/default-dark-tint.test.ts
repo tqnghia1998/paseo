@@ -3,17 +3,23 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("./focus-mode", () => ({ isEmbeddedFocusMode: true }));
 
 const { resolveDefaultDarkTint, resolveDefaultLightTint } = await import("./default-dark-tint");
+const { paletteRole } = await import("./palette");
+
+// Upstream's own destructive colour is kept (the light builder darkens it for readability).
+const UPSTREAM = { destructive: "#b04138" };
 
 describe("Space App Vibing default tints", () => {
   it("gives borders their own value and keeps surface3 on the hover tone", () => {
-    const dark = resolveDefaultDarkTint({} as Parameters<typeof resolveDefaultDarkTint>[0]);
+    const dark = resolveDefaultDarkTint(UPSTREAM as Parameters<typeof resolveDefaultDarkTint>[0]);
     expect(dark).toMatchObject({
       border: "#2b3137",
       borderAccent: "#2b3137",
       surface1: "#2f363d",
       surface3: "#2f363d",
     });
-    const light = resolveDefaultLightTint({} as Parameters<typeof resolveDefaultLightTint>[0]);
+    const light = resolveDefaultLightTint(
+      UPSTREAM as Parameters<typeof resolveDefaultLightTint>[0],
+    );
     expect(light).toMatchObject({
       border: "#c1c2c7",
       borderAccent: "#c1c2c7",
@@ -23,12 +29,42 @@ describe("Space App Vibing default tints", () => {
       surface3: "#cbcdd3",
       foreground: "#343b59",
       accent: "#395d99",
-      destructive: "#973830",
+      destructive: "#b04138",
     });
   });
 
-  it("keeps the light destructive colour readable on the canvas, raised and neutral raised tones", () => {
-    const light = resolveDefaultLightTint({} as Parameters<typeof resolveDefaultLightTint>[0]);
+  it("derives both tints from the palette with the same role mapping", () => {
+    const roles = (tint: object, mode: "dark" | "light") =>
+      Object.fromEntries(
+        Object.entries(tint as Record<string, string>).map(([key, value]) => [
+          key,
+          paletteRole(mode, value) ?? `literal:${value}`,
+        ]),
+      );
+    const dark = roles(
+      resolveDefaultDarkTint(UPSTREAM as Parameters<typeof resolveDefaultDarkTint>[0]),
+      "dark",
+    );
+    const light = roles(
+      resolveDefaultLightTint(UPSTREAM as Parameters<typeof resolveDefaultLightTint>[0]),
+      "light",
+    );
+    // Light adds primary and its foreground (the roles dark's builder derives itself) and a text-coloured ANSI black.
+    const { primary, primaryForeground, ...lightShared } = light;
+    expect(primary).toBe("text");
+    expect(primaryForeground).toBe("canvas");
+    expect({ ...lightShared, terminalBlack: undefined }).toEqual({
+      ...dark,
+      terminalBlack: undefined,
+    });
+    expect(dark.terminalBlack).toBe("raised");
+    expect(light.terminalBlack).toBe("text");
+  });
+
+  it("darkens the upstream light destructive colour to stay readable on the canvas, raised and hover tones", async () => {
+    const { buildLightSemanticColors } = await import("@/styles/theme");
+    const tint = resolveDefaultLightTint(UPSTREAM as Parameters<typeof resolveDefaultLightTint>[0]);
+    const light = { ...tint, destructive: buildLightSemanticColors(tint).destructive };
     const lum = (hex: string) => {
       const [r, g, b] = [1, 3, 5].map((i) => {
         const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255;

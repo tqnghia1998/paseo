@@ -3,13 +3,8 @@ import { isWeb } from "@/constants/platform";
 import {
   resolveDefaultDarkTint,
   resolveDefaultLightTint,
+  resolveLightRoles,
 } from "@/patches/vibing/default-dark-tint";
-import {
-  resolveChatFillRing,
-  resolveChatFillSurface,
-  resolveComposerPillHover,
-  resolveComposerSurface,
-} from "@/patches/vibing/composer-pill-hover";
 import { resolveLightReadable } from "@/patches/vibing/light-readable";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
 import { deriveSurfaceStates } from "./derive-colors";
@@ -286,10 +281,15 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
   const statusColors = resolveLightReadable(lightStatusColors, surfaces, 4.5);
   const statusDotColors = resolveLightReadable(lightStatusDotColors, surfaces, 3);
   const terminalAnsi = resolveLightReadable(lightTerminalAnsi, [tint.surface0], 4.5);
-  const composerSurface = resolveComposerSurface({
-    colorScheme: "light",
-    colors: { surface0: tint.surface0, surface1: tint.surface1, surface2: tint.surface2 },
+  const roles = resolveLightRoles(tint, {
+    surfaceSidebarHover: tint.surfaceSidebarHover ?? sidebarStates.hover,
+    surfaceSidebarSelected: tint.surfaceSidebarSelected ?? sidebarStates.selected,
+    surfaceWorkspace: tint.surface0,
+    destructiveForeground: tint.surface0,
+    successForeground: tint.surface0,
   });
+  // Upstream's light destructive assumes a white page; darken it just enough for the surfaces (embedded build only).
+  const { destructive } = resolveLightReadable({ destructive: tint.destructive }, surfaces, 4.5);
 
   return {
     surface0: tint.surface0,
@@ -297,30 +297,13 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     surface2: tint.surface2,
     surface3: tint.surface3,
     surface4: tint.surface4,
-    // Rest tone of the composer shell and pills, and the pills' hover fill; tokens so web style sheets read
-    // the per-theme CSS variable (they only see var() references, so nothing can be computed there).
-    composerSurface,
-    // Fill and 1px ring of the user message bubble: the composer tone and outline in embedded light, surface3 and no ring elsewhere.
-    chatFillSurface: resolveChatFillSurface({
-      colorScheme: "light",
-      colors: { composerSurface, surface3: tint.surface3 },
-    }),
-    chatFillRing: resolveChatFillRing({
-      colorScheme: "light",
-      colors: { borderAccent: tint.borderAccent },
-    }),
-
-    composerPillHover: resolveComposerPillHover({
-      colorScheme: "light",
-      colors: { composerSurface, surface2: tint.surface2, foreground: tint.foreground },
-    }),
-
     surfaceSidebar: tint.surfaceSidebar,
-    surfaceSidebarHover: tint.surfaceSidebarHover ?? sidebarStates.hover,
-    surfaceSidebarSelected: tint.surfaceSidebarSelected ?? sidebarStates.selected,
+    surfaceSidebarHover: roles.surfaceSidebarHover,
+    surfaceSidebarSelected: roles.surfaceSidebarSelected,
     foregroundSidebarHover: tint.foregroundSidebarHover ?? tint.foregroundExtraMuted,
     foregroundSidebarSelected: tint.foregroundSidebarSelected ?? tint.foregroundExtraMuted,
-    surfaceWorkspace: tint.surface0,
+    surfaceWorkspace: roles.surfaceWorkspace,
+
     interactionHighlight: "rgba(0, 0, 0, 0.06)",
 
     foreground: tint.foreground,
@@ -334,9 +317,11 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     accentBright: tint.accentBright,
     accentForeground: tint.accentForeground ?? tint.surface0,
 
-    destructive: tint.destructive,
-    destructiveForeground: tint.surface0,
+    destructive,
+    destructiveForeground: roles.destructiveForeground,
     success: tint.accent,
+    successForeground: roles.successForeground,
+
 
     background: tint.surface0,
     popover: tint.popover ?? tint.surface0,
@@ -449,11 +434,6 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surface2: tint.surface2,
     surface3: tint.surface3,
     surface4: tint.surface4,
-    composerSurface: tint.surface1,
-    chatFillSurface: tint.surface3,
-    chatFillRing: "none",
-
-    composerPillHover: tint.surface2,
 
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: tint.surfaceSidebarHover ?? sidebarStates.hover,

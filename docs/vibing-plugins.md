@@ -106,36 +106,19 @@ to one worktree per frame and to the host's native chat.
   source-defined `managedChiefBot`; its internal memory remains available through the
   host broker. Ordinary Bots remain user-configurable. This lives in the maintained
   Bots vendor patch and requires a permitted plugin refresh to activate.
-- **Light-mode text colours.** `nativeTokens` (`client/native.ts`) branches on `dark` for every
-  colour that is text or an icon, because the dark values assume a dark canvas: the selected tab
-  and row text (`foregroundSelected`) is the foreground itself in light (dark mixes 25% white
-  into it; in light that left `#ccced6`, 1.14:1 on the selected pill), the link colour
-  (`accentBright`) mixes the accent toward black (`#304f82`; white over the accent was 2.6:1),
-  `foregroundExtraMuted` mixes 5% toward the canvas instead of 35% (4.7:1 or better on every
-  light surface instead of 2.6 to 3.2), the placeholder (`surface4`) is a tone of the muted
-  foreground, and the four status dots are the original hues darkened to 3:1 on the canvas,
-  raised, hover and both selected tones. The hard-coded chevron, error text, amber progress,
-  notice icons, compaction icons and shimmer highlight of the plugin's own chat UI use the same
-  tokens in light. Dark values are unchanged; `scripts/paseo-bots-native-tokens.test.mjs` checks
-  both.
-- **One canvas, the same classes in both modes.** A container that is the canvas in dark is the
-  canvas in light; only the classes that are raised in dark (cards, menus, popovers, the composer)
-  are the raised card (`#e6e7ed`) in light, and hover and selected map by class too. Upstream's
-  light themes paint the sidebar with `surface2` and the selected tone with a mix toward it, which
-  is right when control is darker than the page and wrong for this palette, where control is the
-  raised card. `nativeTokens` therefore sets `surfaceSidebar` (the Bots list, tab strip and
-  splash) to `surface0` in both modes, derives the selected tone (`surfaceSidebarSelected`, and
-  `surface3` in light) as the raised tone (surface1) mixed toward the text (dark 0.865, light 0.97:
-  `#4a5057` and `#c6c9cf`, near the palette's selected tones `#444d56` and `#bfc9df`; light had
-  mixed toward the canvas and ended up lighter than it; light was 0.955 on the blue hover tone
-  `#cbd1df` and became 0.97 on the neutral tone `#cbcdd3` below), and the tooltip bubble is `surface2`
-  in both modes (it was the canvas in light). Moving the pill onto the darker selected tone cost
-  contrast, so the light `foregroundExtraMuted` mixes 3% toward the canvas (was 5%) and the light
-  status dots are `#1f72b9`, `#207f41`, `#97651f` and `#d6292a`; both hold 4.5:1 and 3:1 on the
-  canvas, raised, the neutral raised tone and both selected tones. Chat Polish's light overrides of its popup surface
-  (menus, listboxes, the Command Center, the selection menu and the scroll-to-bottom button) are
-  removed so they use `control` as dark does, and a hovered or lit row is the neutral raised tone
-  (`--cp-raised`, `#cbcdd3`, 1.29:1 on the menu) instead of a mix on it (`scripts/paseo-chat-polish-surfaces.test.mjs`).
+- **One role mapping in both modes.** `nativeTokens` (`client/native.ts`) derives every extra token from the theme
+  colours with one expression for light and dark, so light differs from dark only in the palette's values (docs/theme-sites.md):
+  `surfaceSidebar` is `surface0`; the selected tone (`surfaceSidebarSelected`) is `surface1` mixed toward the text
+  (0.865); `surface3` mixes `surface2` toward the text (0.87); the placeholder (`surface4`) 0.76; `borderAccent` 0.95;
+  `foregroundExtraMuted` mixes the muted foreground toward the canvas (0.65); `foregroundSelected` mixes the text 75%
+  toward white; `accentBright` mixes the accent 63% toward white; the four status dots are the same four hues in both
+  modes. Only `interactionHighlight` (white over dark, black over light) branches on `dark`. The tooltip bubble is
+  `surface2` and the muted `StatusBadge` is `surface3` in both modes. The earlier light-only branches and the
+  `mutedBadgeFill` helper were removed, so the light values of these mixes can fail contrast floors until the palette
+  values are chosen for them (see the palette-align report); dark values are unchanged and pinned by
+  `scripts/paseo-bots-native-tokens.test.mjs`. The plugin's own chevron, error text, amber progress, notice icons,
+  compaction icons and shimmer highlight still branch on `tokens.dark` (upstream's dark constants versus theme
+  tokens in light).
 - **Managed Chief.** `vibing-chief` is a reserved, host-managed persona: ordinary launches,
   routines and relay tools reject it (`assertOrdinaryBot`). The daemon-only broker
   (`server/chief.ts`, `bots.chief.prepare|call|handoff`, bridge-token gated) serves Chief's
@@ -166,29 +149,30 @@ reading the installed macOS AIS Switch app's login, read-only (see its README).
 `space-app-vibing-theme` registers two themes, `dark` and `light`, with the Space App Vibing
 palette of each mode (dark is Desktop Plus; light follows the SeaTalk light theme arrangement of Tokyo Night Light tones, where the
 cards are lighter than the canvas); keep them equal to `--palette-*` in
-Vibing's `src/index.css`. Its `border` is the palette's own border value (`--palette-border`: `#2b3137` dark,
-`#c1c2c7` light), not the hover tone that `raised` uses; `default-dark-tint.ts` and Chief's `CHIEF_PALETTES` match it.
-In light, `raised` and `raisedStrong` (the composer, user bubbles, badges, secondary fills and the light sidebar
-hover) are the neutral grey `#cbcdd3`, the 50/50 mix of the canvas `#d6d8df` and the border `#c1c2c7`
-(derived, not a palette primitive; the red midpoint 203.5 is truncated). The host's hover primitive `#cbd1df` read blue there
-and stays host-only; dark is unchanged (`#2f363d`).
+Vibing's `src/index.css`. Each theme is exactly the 13 palette colours of its mode, mapped to Paseo's roles by one
+function (`colorsFor`) shared by both modes: `border` is the palette's own border value, `raised` and `raisedStrong`
+(the composer, user bubbles, badges, secondary fills and the sidebar hover) are the hover colour in both modes
+(`#2f363d` dark, `#cbcdd3` light), `control` and `popover` are the raised card. `default-dark-tint.ts` and Chief's
+`CHIEF_PALETTES` use the same assignments (`patches/vibing/palette.ts`, `palette.test.ts`).
 It also sets the optional `raisedStrong` (`surface3`) to the same tone as `raised` (`#2f363d` dark; `#cbcdd3` light):
 without it the theme builder would derive `surface3`, and with it secondary buttons, selected
 segments, switch tracks and the light sidebar hover, from the border. `raisedStrong` is a fork
 addition to the theme contract (`PluginThemeColors`, the theme schema and builders in
 `plugins/themes/index.ts`); themes that omit it keep `surface3 = border`.
 It also sets the optional `sidebar` (`surfaceSidebar`) to the canvas and `popover` (tooltips and
-hover cards) to the raised card in both modes (`#1d2125` / `#24292e` and `#d6d8df` / `#e6e7ed`):
+hover cards) to the raised card in both modes (canvas and raised of each palette):
 the theme contract paints a light sidebar with `control` and a light popover with `background`,
 which for this palette (control is the lighter raised card) made them the wrong class compared
 with dark. `sidebar` and `popover` are fork additions too; omitted, they keep the old defaults
 (dark sidebar `background`, light sidebar `control`, dark popover `control`, light popover
-`background`). `surfaceSidebarSelected` and `surfaceWorkspace` only paint the native workspace
-sidebar and screen, which an embedded frame never mounts, so they stay as upstream builds them.
-Upstream's light status, diff, syntax and terminal ANSI colours assume a white page, so in the
+`background`). Upstream's light builder also maps the sidebar hover and selected fills, the workspace
+screen and the text on success and destructive fills differently from its dark builder; embedded frames
+use the dark mapping (`resolveLightRoles` in `patches/vibing/default-dark-tint.ts`).
+Upstream's light status, diff, syntax, terminal ANSI and destructive colours assume a white page, so in the
 embedded build `patches/vibing/light-readable.ts` darkens each toward black by the least amount
 that reaches 4.5:1 (3:1 for status dots, and for terminal ANSI colours against the canvas only) on
 the light canvas, hover and raised surfaces; passing colours, dark and standalone Paseo are untouched.
+It never applies to a colour taken from the palette.
 Embedded frames show the theme of the host's light/dark mode, chosen in memory from the
 `themeMode` query and `space:theme-mode` messages (`patches/vibing/host-theme-mode.ts` and
 `theme.ts`); the choice is never saved to the shared settings.

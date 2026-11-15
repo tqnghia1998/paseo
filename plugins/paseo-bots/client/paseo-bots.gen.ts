@@ -3455,31 +3455,25 @@ function nativeTokens(colors2) {
   const cached = cache.get(colors2);
   if (cached) return cached;
   const dark = isDark(colors2);
-  const selected = mix(colors2.surface1, colors2.foreground, dark ? 0.865 : 0.97);
-  const surface3 = dark ? mix(colors2.surface2, colors2.foreground, 0.87) : selected;
+  const selected = mix(colors2.surface1, colors2.foreground, 0.865);
   const tokens = {
     dark,
-    // The list, the tab strip and the splash are the canvas in both modes (never the raised control tone).
+    // The list, the tab strip and the splash are the canvas.
     surfaceSidebar: colors2.surface0,
     surfaceSidebarSelected: selected,
-    surface3,
-    // Placeholder text: in light, a tone of the muted foreground (4.5:1 on the canvas and on raised).
-    surface4: dark ? mix(colors2.surface2, colors2.foreground, 0.76) : mix(colors2.foregroundMuted, colors2.surface0, 0.9),
-    borderAccent: dark ? mix(colors2.border, colors2.foreground, 0.95) : mix(colors2.border, colors2.surface0, 0.7),
-    // Light mixes toward the canvas by less: 0.65 leaves 2.6 to 3.2:1, 0.97 keeps 4.5:1 on every light surface
-    // (the canvas, raised, hover, the selected tone and the host's selected tone).
-    foregroundExtraMuted: mix(colors2.foregroundMuted, colors2.surface0, dark ? 0.65 : 0.97),
-    // Dark lightens the text; mixing 75% white into a light-mode foreground made it 1.1:1 on its own pill.
-    foregroundSelected: dark ? mix(colors2.foreground, "#ffffff", 0.25) : colors2.foreground,
-    // Link text: light mixes toward black (white over the accent was 2.6:1 on the canvas).
-    accentBright: dark ? mix(colors2.accent, "#ffffff", 0.37) : mix(colors2.accent, "#000000", 0.85),
+    surface3: mix(colors2.surface2, colors2.foreground, 0.87),
+    surface4: mix(colors2.surface2, colors2.foreground, 0.76),
+    borderAccent: mix(colors2.border, colors2.foreground, 0.95),
+    foregroundExtraMuted: mix(colors2.foregroundMuted, colors2.surface0, 0.65),
+    foregroundSelected: mix(colors2.foreground, "#ffffff", 0.25),
+    accentBright: mix(colors2.accent, "#ffffff", 0.37),
+    // An overlay of the opposite pole of the canvas: white over dark, black over light (a translucent value, not a palette colour).
     interactionHighlight: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-    // Light dots are the original hues darkened just enough for 3:1 on every light surface (the canvas, raised,
-    // hover and both selected tones); the previous values were 2.2 to 2.9:1 there.
-    statusDotRunning: dark ? "#5caaf6" : "#1f72b9",
-    statusDotSuccess: dark ? "#35c264" : "#207f41",
-    statusDotWarning: dark ? "#db932e" : "#97651f",
-    statusDotDanger: dark ? "#f7796d" : "#d6292a"
+    // The status dot hues (Paseo's darkStatusDotColors), the same in both modes.
+    statusDotRunning: "#5caaf6",
+    statusDotSuccess: "#35c264",
+    statusDotWarning: "#db932e",
+    statusDotDanger: "#f7796d"
   };
   cache.set(colors2, tokens);
   return tokens;
@@ -4111,12 +4105,6 @@ function Alert2({ colors: colors2, variant = "default", title, description }) {
     (title ? body : body.slice(1)).length ? /* @__PURE__ */ jsx3(View3, { style: { marginLeft: icon ? 26 : 0 }, children: title ? body : body.slice(1) }) : null
   ] });
 }
-function mutedBadgeFill(colors2, surface3, dark) {
-  const hex = /^#[0-9a-f]{6}$/i;
-  if (dark || !hex.test(colors2.surface0) || !hex.test(colors2.surface2)) return surface3;
-  const channel = (i) => Math.round(parseInt(colors2.surface0.slice(1 + i * 2, 3 + i * 2), 16) * 0.55 + parseInt(colors2.surface2.slice(1 + i * 2, 3 + i * 2), 16) * 0.45).toString(16).padStart(2, "0");
-  return `#${channel(0)}${channel(1)}${channel(2)}`;
-}
 function StatusBadge({ colors: colors2, label, variant = "muted" }) {
   const tokens = nativeTokens(colors2);
   const status = variant === "success" ? colors2.statusSuccess : variant === "warning" ? colors2.statusWarning : variant === "error" ? colors2.statusDanger : null;
@@ -4130,7 +4118,7 @@ function StatusBadge({ colors: colors2, label, variant = "muted" }) {
         borderRadius: 999,
         borderWidth: 1,
         borderColor: status ? "transparent" : colors2.border,
-        backgroundColor: status ? withAlpha(status, tokens.dark ? 0.16 : 0.12) : mutedBadgeFill(colors2, tokens.surface3, tokens.dark),
+        backgroundColor: status ? withAlpha(status, tokens.dark ? 0.16 : 0.12) : tokens.surface3,
         paddingHorizontal: 8,
         paddingVertical: 3
       },
