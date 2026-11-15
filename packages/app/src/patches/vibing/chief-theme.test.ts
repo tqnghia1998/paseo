@@ -24,11 +24,11 @@ const HOST_CHIEF_CSS = {
     accentBright: "#8ec3fe",
   },
   light: {
-    surface: "#dddfe5",
-    control: "#e3e4ea",
-    border: "#c1c2c7",
-    textMuted: "#4c505e",
-    accent: "#395d99",
+    surface: "#ffffff",
+    control: "#e9e9f4",
+    border: "#dddde2",
+    textMuted: "#5e5e77",
+    accent: "#1571be",
     accentBright: "#38578e",
   },
 } as const;

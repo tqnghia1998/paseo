@@ -24,11 +24,11 @@ function ratio(a: string, b: string): number {
 }
 
 // Space App Vibing light surfaces (docs/theme.md): canvas, neutral raised tone, raised card.
-const SURFACES = ["#d6d8df", "#e3e4ea", "#dddfe5"];
+const SURFACES = ["#f2f2f6", "#e9e9f4", "#ffffff"];
 
 describe("readableOnSurfaces", () => {
   it("leaves a colour that already passes alone", () => {
-    expect(readableOnSurfaces("#343b59", SURFACES, 4.5)).toBe("#343b59");
+    expect(readableOnSurfaces("#202325", SURFACES, 4.5)).toBe("#202325");
   });
 
   it("darkens toward black by the least amount that reaches the floor on every surface", () => {
@@ -113,7 +113,7 @@ describe("embedded light theme text colours", () => {
     expect(background).toBe(tint.surface0);
     expect(ansi).toHaveLength(16);
     for (const [name, color] of ansi) {
-      // Bright black is the palette's faint tone (#686a77, 3.77:1 on the canvas), the 3:1 hint floor.
+      // Bright black is the palette's faint tone (#7b7d7f, 3.77:1 on the canvas), the 3:1 hint floor.
       const floor = name === "brightBlack" ? 3 : 4.5;
       expect(ratio(color, background), `terminal ${name}`).toBeGreaterThanOrEqual(floor);
     }

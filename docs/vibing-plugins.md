@@ -156,10 +156,10 @@ cards are lighter than the canvas); keep them equal to `--palette-*` in
 Vibing's `src/index.css`. Each theme is exactly the 13 palette colours of its mode, mapped to Paseo's roles by one
 function (`colorsFor`) shared by both modes: `border` is the palette's own border value, `raised` and `raisedStrong`
 (the composer, user bubbles, badges, secondary fills and the sidebar hover) are the hover colour in both modes
-(`#2f363d` dark, `#e3e4ea` light), `control` and `popover` are the raised card, `selected` is the selected tone (a light
+(`#2f363d` dark, `#e9e9f4` light), `control` and `popover` are the raised card, `selected` is the selected tone (a light
 theme darkens its status dots until they hold 3:1 on it). `default-dark-tint.ts` and Chief's
 `CHIEF_PALETTES` use the same assignments (`patches/vibing/palette.ts`, `palette.test.ts`).
-It also sets the optional `raisedStrong` (`surface3`) to the same tone as `raised` (`#2f363d` dark; `#e3e4ea` light):
+It also sets the optional `raisedStrong` (`surface3`) to the same tone as `raised` (`#2f363d` dark; `#e9e9f4` light):
 without it the theme builder would derive `surface3`, and with it secondary buttons, selected
 segments, switch tracks and the light sidebar hover, from the border. `raisedStrong` is a fork
 addition to the theme contract (`PluginThemeColors`, the theme schema and builders in
