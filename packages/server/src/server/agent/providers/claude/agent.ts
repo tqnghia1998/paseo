@@ -5346,7 +5346,6 @@ class ClaudeAgentSession implements AgentSession {
       return { behavior: "allow", updatedInput: input, toolUseID: options.toolUseID };
     }
 
-
     const requestId = `permission-${randomUUID()}`;
     const kind = resolvePermissionKind(toolName, input);
     const requestInput = normalizeClaudeAskUserQuestionRequestInput(toolName, input);

@@ -12,7 +12,7 @@ index 08b8e39..d59f6d9 100644
    const apply = useRpc(applyUpdate);
    const [status, setStatus] = useState<UpdateStatus>();
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index 05edb75..0de79e6 100644
+index 158f2bd..5ed53cb 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
 @@ -23,7 +23,6 @@ ${[4, 5, 3, 0, 2, 1].map((step, i) => `${DOT}:nth-child(${i + 1}) { animation-de
@@ -184,11 +184,11 @@ index 27fb94a..07c5af6 100644
    server.before("agent.create", async ({ request }, { paseo }) => {
      // Off by default, so unreadable prefs mean off; internal agents (commit and PR messages) never draw.
 diff --git a/package-lock.json b/package-lock.json
-index 13c5aa9..dee0dad 100644
+index 8e7da0d..852173c 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -9,18 +9,18 @@
-       "version": "0.14.0",
+       "version": "0.14.1",
        "license": "MIT",
        "dependencies": {
 -        "@getpaseo/protocol": "0.13.0",
@@ -305,7 +305,7 @@ index 13c5aa9..dee0dad 100644
        "funding": {
          "url": "https://github.com/sponsors/colinhacks"
 diff --git a/package.json b/package.json
-index 4323f86..0aa4c1e 100644
+index 7b6b112..ba95105 100644
 --- a/package.json
 +++ b/package.json
 @@ -32,16 +32,16 @@
@@ -445,7 +445,7 @@ index 0000000..a4a535c
 +  await assert.rejects(access(marker));
 +});
 diff --git a/test/web.test.mjs b/test/web.test.mjs
-index ef6a88a..5b8dd3e 100644
+index 41259ec..9b2ecc7 100644
 --- a/test/web.test.mjs
 +++ b/test/web.test.mjs
 @@ -23,7 +23,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
@@ -505,12 +505,12 @@ index ef6a88a..5b8dd3e 100644
            checks.mermaidDocFromBundle = (await web.loadMermaidDoc()) === new TextDecoder().decode(Uint8Array.from(atob("${Buffer.from(mermaidDoc).toString("base64")}"), (ch) => ch.charCodeAt(0)));
            await wait(); checks.observerSettles = !capped;
            // Paseo 0.14 wraps a prompt's rows and text in a message preview that clamps long prompts itself.
-@@ -286,7 +327,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
+@@ -305,7 +346,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
      assert.equal(report.error, undefined, report.error);
      assert.deepEqual(report.errors, []);
      for (const [check, passed] of Object.entries(report.checks)) assert.equal(passed, true, check);
--    assert.equal(Object.keys(report.checks).length, 32);
-+    assert.equal(Object.keys(report.checks).length, 41);
+-    assert.equal(Object.keys(report.checks).length, 37);
++    assert.equal(Object.keys(report.checks).length, 46);
    } finally {
      server?.closeAllConnections(); server?.close();
      rmSync(temp, { recursive: true, force: true });
