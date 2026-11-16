@@ -162,3 +162,229 @@ describe("Chief chats: send", () => {
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+describe("Chief chats: pending input", () => {
+  const permission = () => ({
+    id: "permission-1",
+    provider: "codex" as const,
+    name: "Bash",
+    kind: "tool" as const,
+    input: { command: "git status" },
+    actions: [
+      { id: "once", label: "Allow once", behavior: "allow" as const },
+      { id: "no", label: "Deny", behavior: "deny" as const },
+    ],
+  });
+  function inputFixture(verified = new Set(["a"])) {
+    const request = permission();
+    const pendingPermissions = new Map([[request.id, request]]);
+    const respond = vi.fn(async (_id: string, _requestId: string, _response: unknown) => {});
+    const notifyChief = vi.fn(async (_text: string) => true);
+    const records = [
+      record({ id: "a", labels: { "paseo-bots.bot": "bot-review", "paseo-chief.handoff": "yes" } }),
+      record({ id: "chief" }),
+      record({ id: "hidden", internal: true }),
+    ];
+    const chats = createChiefChats({
+      agentStorage: {
+        get: async (id) => records.find((r) => r.id === id) ?? null,
+        listActive: async () => records,
+      } as never,
+      agentManager: {
+        getAgent: (id: string) =>
+          id === "a" ? { lifecycle: "running", pendingPermissions } : null,
+      } as never,
+      chiefOwns: (id) => id === "chief",
+      readRows: async () => [],
+      deleteAgent: async () => {},
+      send: async () => {},
+      respondToPermission: respond,
+      notifyChief,
+      delegatedChatIds: async () => verified,
+    });
+    return { chats, request, pendingPermissions, respond, notifyChief };
+  }
+  test("reads the exact pending request and protects hidden or Chief chats", async () => {
+    const { chats, request } = inputFixture();
+    const pending = await chats.pendingInput("a");
+    expect(pending?.requests[0]).toMatchObject({
+      request,
+      requestDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(await chats.pendingInput("chief")).toBeNull();
+    expect(await chats.pendingInput("hidden")).toBeNull();
+    expect(await chats.pendingInput("unknown")).toBeNull();
+  });
+  test("restores native pending input before reading an unloaded chat", async () => {
+    const request = permission();
+    let loaded = false;
+    const loadAgent = vi.fn(async () => {
+      loaded = true;
+    });
+    const chats = createChiefChats({
+      agentStorage: { get: async () => record({ id: "a" }), listActive: async () => [] } as never,
+      agentManager: {
+        getAgent: () =>
+          loaded
+            ? { lifecycle: "idle", pendingPermissions: new Map([[request.id, request]]) }
+            : null,
+      } as never,
+      chiefOwns: () => false,
+      readRows: async () => [],
+      deleteAgent: async () => {},
+      send: async () => {},
+      loadAgent,
+    });
+    expect((await chats.pendingInput("a"))!.requests[0]).toMatchObject({ request });
+    expect(loadAgent).toHaveBeenCalledExactlyOnceWith("a");
+  });
+  test("answers exactly the current request once and refuses changed requests and invalid actions", async () => {
+    const { chats, request, pendingPermissions, respond } = inputFixture();
+    const [{ requestDigest }] = (await chats.pendingInput("a"))!.requests;
+    expect(
+      await chats.respond("a", request.id, requestDigest, {
+        behavior: "allow",
+        selectedActionId: "always",
+      }),
+    ).toMatchObject({ ok: false });
+    expect(
+      await chats.respond("a", request.id, requestDigest, {
+        behavior: "deny",
+        selectedActionId: "once",
+      }),
+    ).toMatchObject({ ok: false });
+    pendingPermissions.set(request.id, { ...request, input: { command: "git push" } });
+    expect(
+      await chats.respond("a", request.id, requestDigest, {
+        behavior: "allow",
+        selectedActionId: "once",
+      }),
+    ).toMatchObject({ ok: false });
+    const [current] = (await chats.pendingInput("a"))!.requests;
+    expect(
+      await chats.respond("a", request.id, current.requestDigest, {
+        behavior: "allow",
+        selectedActionId: "once",
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      await chats.respond("a", request.id, current.requestDigest, {
+        behavior: "allow",
+        selectedActionId: "once",
+      }),
+    ).toMatchObject({ ok: false });
+    expect(respond).toHaveBeenCalledExactlyOnceWith("a", request.id, {
+      behavior: "allow",
+      selectedActionId: "once",
+    });
+  });
+  test("rejects concurrent answers while the native permission handler is still running", async () => {
+    const { chats, request, respond } = inputFixture();
+    const [{ requestDigest }] = (await chats.pendingInput("a"))!.requests;
+    let release!: () => void;
+    respond.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const first = chats.respond("a", request.id, requestDigest, {
+      behavior: "allow",
+      selectedActionId: "once",
+    });
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    expect(
+      await chats.respond("a", request.id, requestDigest, {
+        behavior: "allow",
+        selectedActionId: "once",
+      }),
+    ).toMatchObject({ ok: false });
+    release();
+    expect(await first).toEqual({ ok: true });
+    expect(respond).toHaveBeenCalledTimes(1);
+  });
+  test("does not replay an uncertain native response after a provider error", async () => {
+    const { chats, request, respond } = inputFixture();
+    const [{ requestDigest }] = (await chats.pendingInput("a"))!.requests;
+    respond.mockRejectedValueOnce(new Error("Provider disconnected after accepting input"));
+    const response = { behavior: "allow", selectedActionId: "once" };
+    expect(await chats.respond("a", request.id, requestDigest, response)).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("unknown"),
+    });
+    expect(await chats.respond("a", request.id, requestDigest, response)).toMatchObject({
+      ok: false,
+    });
+    expect(respond).toHaveBeenCalledTimes(1);
+  });
+  test("redacts credential fields and strings before exposing pending input", async () => {
+    const { chats, request, pendingPermissions } = inputFixture();
+    pendingPermissions.set(request.id, {
+      ...request,
+      input: { command: "read glpat-" + "x".repeat(24), apiKey: "hidden-value" },
+    } as never);
+    const pending = await chats.pendingInput("a");
+    expect(JSON.stringify(pending)).not.toContain("hidden-value");
+    expect(JSON.stringify(pending)).not.toContain("x".repeat(24));
+    expect(pending!.requests[0]!.requestDigest).toMatch(/^[a-f0-9]{64}$/);
+  });
+  test("validates structured question answers without changing tool inputs", async () => {
+    const { chats, pendingPermissions, respond } = inputFixture();
+    const question = {
+      id: "question-1",
+      provider: "codex",
+      name: "request_user_input",
+      kind: "question",
+      input: {
+        questions: [
+          {
+            id: "mode",
+            header: "Mode",
+            question: "Which mode?",
+            multiSelect: false,
+            options: [
+              { label: "Fast", description: "Quick" },
+              { label: "Deep", description: "Thorough" },
+            ],
+          },
+        ],
+      },
+    };
+    pendingPermissions.clear();
+    pendingPermissions.set(question.id, question as never);
+    const [{ requestDigest }] = (await chats.pendingInput("a"))!.requests;
+    expect(
+      await chats.respond("a", question.id, requestDigest, {
+        behavior: "allow",
+        updatedInput: { answers: { Wrong: "Fast" } },
+      }),
+    ).toMatchObject({ ok: false });
+    expect(
+      await chats.respond("a", question.id, requestDigest, {
+        behavior: "allow",
+        updatedPermissions: [{ allow: "everything" }],
+      }),
+    ).toMatchObject({ ok: false });
+    const response = { behavior: "allow", updatedInput: { answers: { Mode: "Deep" } } };
+    expect(await chats.respond("a", question.id, requestDigest, response)).toEqual({ ok: true });
+    expect(respond).toHaveBeenCalledWith("a", question.id, {
+      ...response,
+      updatedInput: { ...question.input, answers: { Mode: "Deep" } },
+    });
+  });
+  test("does not notify Chief for an unverified handoff label", async () => {
+    const { chats, notifyChief } = inputFixture(new Set());
+    await chats.notifyPending();
+    expect(notifyChief).not.toHaveBeenCalled();
+  });
+  test("defers notification while Chief is busy and delivers each delegated input once", async () => {
+    const { chats, notifyChief } = inputFixture();
+    notifyChief.mockResolvedValueOnce(false);
+    await chats.notifyPending();
+    await chats.notifyPending();
+    await chats.notifyPending();
+    expect(notifyChief).toHaveBeenCalledTimes(2);
+    expect(notifyChief.mock.calls[1][0]).toContain("/api/ui/bot-chat/pending-input");
+    expect(notifyChief.mock.calls[1][0]).toContain('"chatId":"a"');
+  });
+});

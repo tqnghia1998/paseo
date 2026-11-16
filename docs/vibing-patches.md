@@ -705,6 +705,8 @@ the consumer bundle and run its guard. Verify workspace entry, prompt insertion,
 New Agent and compact Bots/Live Design in an isolated runtime before shipping. Module
 organization does not replace runtime or target-platform native checks.
 
+Chief executes requested window actions directly. Closing a workspace keeps its worktree and tool state; removing an app deletes its repository/worktrees. Necessary user questions belong in Chief chat, before execution, and command failures or partial effects are reported there. These commands never open the host’s close/remove confirmation dialogs. Gateway approvals remain optional. Delegated native questions/permissions use exact request digests and native response validation; verified handoffs and host decision notices reach Chief only while idle. Ordinary Bot messages remain idle-only. The cross-repository authority contract and activation checklist live in Vibing’s `tasks/vibing-chief-spec.md` and `docs/chief-live-check.md`.
+
 Chief contract fixtures are shared by agreement with the Vibing host: `test-fixtures/vibing-chief-contract.json` here matches its `shared/chief-contract.fixtures.json` byte-for-byte. `chief-contract.test.ts` checks frame session parsing and runtime branch validation against those fixtures; update both copies together. Host/backend/browser connection parsing and approval shapes are consolidated in Vibing `shared/chief.ts`.
 
 Chief follow-up audit (2026-11-08): handoffs of every kind check the saved branch and the

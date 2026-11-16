@@ -50,9 +50,40 @@ export function registerChiefRoutes(input: {
   /** Bot chats for the host's own reads, deletes and messages. */
   chats?: ChiefChats;
   ready?(): boolean;
+  /** Native idle-only Chief dispatch; false defers a notice until a later host poll. */
+  notifyChief?(text: string): Promise<boolean>;
 }) {
   const { router, session, tools } = input;
   const vibingApi = createChiefVibingApi({ hostToken: input.hostToken });
+  const notices = new Map<string, string>();
+  const sentNotices = new Map<string, string>();
+  let noticeOwner: string | null | undefined;
+  let flushingNotices = false;
+  const reconcileNotices = () => {
+    const owner = session.agentId?.() ?? null;
+    if (owner !== noticeOwner) {
+      noticeOwner = owner;
+      notices.clear();
+      sentNotices.clear();
+    }
+  };
+  const flushNotices = async () => {
+    if (!input.notifyChief || flushingNotices) return;
+    reconcileNotices();
+    flushingNotices = true;
+    try {
+      for (const [key, text] of notices) {
+        const owner = noticeOwner;
+        if (!(await input.notifyChief(text))) return;
+        if (owner !== noticeOwner) return;
+        notices.delete(key);
+        sentNotices.set(key, text);
+        if (sentNotices.size > 256) sentNotices.delete(sentNotices.keys().next().value!);
+      }
+    } finally {
+      flushingNotices = false;
+    }
+  };
   function host(req: Request, res: Response): boolean {
     if (loopback(req) && matches(req.header("x-paseo-worktree-cleanup-token"), input.hostToken))
       return true;
@@ -106,6 +137,35 @@ export function registerChiefRoutes(input: {
         }
         res.status(503).json({ error: "Chief session unavailable" });
       });
+  });
+  // App-authored decisions are queued into Chief's actual conversation, never a host modal.
+  router.post("/notices", (req, res) => {
+    if (!host(req, res)) return;
+    if (!session.isConnected() || !input.notifyChief) {
+      res.status(503).json({ error: "Chief conversation unavailable" });
+      return;
+    }
+    const parsed = z
+      .object({ key: z.string().min(1).max(200), text: z.string().min(1).max(4000) })
+      .strict()
+      .safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid Chief notice" });
+      return;
+    }
+    reconcileNotices();
+    const { key, text } = parsed.data;
+    const existing = notices.get(key) ?? sentNotices.get(key);
+    if (existing !== undefined && existing !== text) {
+      res.status(409).json({ error: "This notice key already identifies different text" });
+      return;
+    }
+    if (existing === undefined && notices.size >= 32) {
+      res.status(429).json({ error: "Chief has too many queued notices" });
+      return;
+    }
+    if (existing === undefined) notices.set(key, text);
+    res.json({ queued: true });
   });
   // Bot chats. Host-only: the Vibing backend decides what Chief may do (reads are untrusted
   // text, deletes and messages wait for the user) and calls these only after that.
@@ -171,6 +231,27 @@ export function registerChiefRoutes(input: {
           chats.read(body.chatId, body.limit, body.cursor),
       ),
     );
+    router.post("/chats/pending-input", (req, res) =>
+      run(req, res, z.object({ chatId: ChatId }).strict(), (body: { chatId: string }) =>
+        chats.pendingInput(body.chatId),
+      ),
+    );
+    router.post("/chats/respond", (req, res) =>
+      run(
+        req,
+        res,
+        z
+          .object({
+            chatId: ChatId,
+            requestId: ChatId,
+            requestDigest: z.string().regex(/^[a-f0-9]{64}$/),
+            response: z.unknown(),
+          })
+          .strict(),
+        (body: { chatId: string; requestId: string; requestDigest: string; response: unknown }) =>
+          chats.respond(body.chatId, body.requestId, body.requestDigest, body.response),
+      ),
+    );
     router.post("/chats/delete", (req, res) =>
       run(
         req,
@@ -201,6 +282,10 @@ export function registerChiefRoutes(input: {
       res.status(400).json({ error: "Invalid Chief inventory" });
       return;
     }
+    void Promise.resolve()
+      .then(() => input.chats?.notifyPending?.())
+      .then(() => flushNotices())
+      .catch(() => undefined);
     void (input.handoffs?.list() ?? Promise.resolve([]))
       .catch(() => [])
       .then((handoffs) => res.json({ requests, handoffs }));
