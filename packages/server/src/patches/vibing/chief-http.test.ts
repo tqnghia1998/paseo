@@ -31,6 +31,8 @@ async function fixture(handoffs?: Parameters<typeof registerChiefRoutes>[0]["han
     provider: "claude",
   }));
   const isConnected = vi.fn(() => true);
+  const agentId = vi.fn(() => "agent");
+  const notifyChief = vi.fn(async (_text: string) => true);
   const ready = vi.fn(() => true);
   const restart = vi.fn(async () => ({
     protocol: 1,
@@ -46,6 +48,7 @@ async function fixture(handoffs?: Parameters<typeof registerChiefRoutes>[0]["han
     connect,
     restart,
     isConnected,
+    agentId,
     agentToken: () => "fixture-agent-token",
   } as unknown as ReturnType<typeof createChiefSession>;
   const chats = {
@@ -53,6 +56,11 @@ async function fixture(handoffs?: Parameters<typeof registerChiefRoutes>[0]["han
     read: vi.fn(async (): Promise<unknown> => ({ chat: { id: "c" }, messages: [] })),
     remove: vi.fn(async () => ({ deleted: ["c"], skipped: [] })),
     send: vi.fn(async () => ({ ok: true })),
+    pendingInput: vi.fn(async (_id: string) => ({ requests: [] })),
+    respond: vi.fn(async (_id: string, _request: string, _digest: string, _response: unknown) => ({
+      ok: true,
+    })),
+    notifyPending: vi.fn(async () => {}),
   };
   registerChiefRoutes({
     router,
@@ -60,6 +68,7 @@ async function fixture(handoffs?: Parameters<typeof registerChiefRoutes>[0]["han
     session,
     tools,
     ready,
+    notifyChief,
     handoffs,
     chats: chats as never,
   });
@@ -83,7 +92,7 @@ async function fixture(handoffs?: Parameters<typeof registerChiefRoutes>[0]["han
       },
       body: JSON.stringify(body),
     });
-  return { url, host, connect, restart, isConnected, ready, tools, chats };
+  return { url, host, connect, restart, isConnected, ready, tools, chats, notifyChief, agentId };
 }
 
 test("cold plugin startup returns starting without attempting Chief launch", async () => {
@@ -382,4 +391,58 @@ test("merge request resolution round-trips through the host and the poll lists h
     ),
   ).toContain("idle");
   expect((await fetch(url + "/review/mcp", { method: "POST" })).status).toBe(404);
+});
+
+test("Bot native pending-input and response routes remain host-only and preserve the exact request digest", async () => {
+  const { host, url, chats } = await fixture();
+  for (const route of ["/chats/pending-input", "/chats/respond"])
+    expect(
+      (
+        await fetch(url + route, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        })
+      ).status,
+    ).toBe(403);
+  expect((await host("/chats/pending-input", { chatId: "c" })).status).toBe(200);
+  expect(chats.pendingInput).toHaveBeenCalledWith("c");
+  const digest = "a".repeat(64);
+  const response = { behavior: "deny", message: "Keep the current state" };
+  expect(
+    (await host("/chats/respond", { chatId: "c", requestId: "p", requestDigest: digest, response }))
+      .status,
+  ).toBe(200);
+  expect(chats.respond).toHaveBeenCalledWith("c", "p", digest, response);
+  expect(
+    (
+      await host("/chats/respond", {
+        chatId: "c",
+        requestId: "p",
+        requestDigest: "wrong",
+        response,
+      })
+    ).status,
+  ).toBe(400);
+  expect(chats.respond).toHaveBeenCalledTimes(1);
+});
+
+test("app notices queue once per Chief conversation and wait for idle delivery", async () => {
+  const { host, url, notifyChief, agentId } = await fixture();
+  expect((await fetch(url + "/notices", { method: "POST" })).status).toBe(403);
+  const notice = { key: "branch-choice", text: "App state needs a decision in this conversation." };
+  notifyChief.mockResolvedValueOnce(false);
+  expect(await (await host("/notices", notice)).json()).toEqual({ queued: true });
+  await host("/navigation/poll", { apps });
+  await vi.waitFor(() => expect(notifyChief).toHaveBeenCalledTimes(1));
+  await host("/navigation/poll", { apps });
+  await vi.waitFor(() => expect(notifyChief).toHaveBeenCalledTimes(2));
+  await host("/notices", notice);
+  await host("/navigation/poll", { apps });
+  expect(notifyChief).toHaveBeenCalledTimes(2);
+  expect((await host("/notices", { ...notice, text: "Different text" })).status).toBe(409);
+  agentId.mockReturnValue("fresh-agent");
+  await host("/notices", notice);
+  await host("/navigation/poll", { apps });
+  await vi.waitFor(() => expect(notifyChief).toHaveBeenCalledTimes(3));
 });
