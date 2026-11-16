@@ -9,6 +9,7 @@ import { verifyChiefReviewWorkspace } from "../patches/vibing/chief-review-works
 import { createChiefHandoffs } from "../patches/vibing/chief-handoffs.js";
 import { ensureAgentLoaded } from "./agent/agent-loading.js";
 import { sendPromptToAgent, unarchiveAgentState } from "./agent/agent-prompt.js";
+import { respondToAgentPermission } from "./agent/permission-response.js";
 import { createIdleRuntimeCleanup } from "./agent/idle-runtime-cleanup/index.js";
 import {
   createFinishSubscriptions,
@@ -1442,6 +1443,34 @@ export async function createPaseoDaemon(
     isEnabled: () => daemonConfigStore.get().usage?.enabled !== false,
     listUsageReports: () => pluginRuntime.listUsageReports(),
   });
+  const notifyChief = async (text: string) => {
+    const id = chiefSession.isConnected() ? chiefSession.agentId() : null;
+    const live = id ? agentManager.getAgent(id) : null;
+    if (
+      !id ||
+      !live ||
+      live.pendingPermissions.size ||
+      live.activeTurnId ||
+      agentManager.hasInFlightRun(id) ||
+      (live.lifecycle !== "idle" && live.lifecycle !== "error")
+    )
+      return false;
+    try {
+      await sendPromptToAgent({
+        agentId: id,
+        prompt: text,
+        agentManager,
+        agentStorage,
+        logger,
+        unarchive: false,
+        idleOnly: true,
+        clearPendingPermissions: false,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
   registerChiefRoutes({
     router: chiefRouter,
     hostToken: config.worktreeCleanupToken,
@@ -1449,10 +1478,20 @@ export async function createPaseoDaemon(
     tools: chiefTools,
     bot: chiefBot,
     handoffs: chiefHandoffs,
+    notifyChief,
     chats: createChiefChats({
       agentStorage,
       agentManager,
       chiefOwns: (id) => chiefSession.owns(id),
+      notifyChief,
+      notificationOwner: () => chiefSession.agentId(),
+      loadAgent: async (id) => {
+        await ensureAgentLoaded(id, { agentManager, agentStorage, logger });
+      },
+      delegatedChatIds: async () =>
+        new Set((await chiefHandoffs.list()).map((handoff) => handoff.chatId)),
+      respondToPermission: (agentId, requestId, response) =>
+        respondToAgentPermission({ agentManager, agentId, requestId, response, logger }),
       isCanceled: chiefHandoffs.isCanceled,
       readRows: async (id) => {
         await ensureAgentLoaded(id, { agentManager, agentStorage, logger });

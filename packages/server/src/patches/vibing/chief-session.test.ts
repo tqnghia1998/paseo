@@ -649,6 +649,26 @@ test("the ceiling and persona include the three Vibing API tools", () => {
   expect(CHIEF_PERSONA).toContain("approval_required");
 });
 
+test("the persona owns confirmations in Chief chat and executes window actions directly", () => {
+  expect(CHIEF_PERSONA).toContain("full authority");
+  expect(CHIEF_PERSONA).toContain(
+    "Ask any necessary user questions in Chief chat before executing",
+  );
+  expect(CHIEF_PERSONA).toContain("Closing a workspace keeps its worktree and tool state");
+  expect(CHIEF_PERSONA).not.toContain("tell the user to confirm it there");
+});
+
+test("the persona routes delegated decisions and host state changes through Chief", () => {
+  expect(CHIEF_PERSONA).toContain(
+    "Pending Bot questions and approvals belong in this Chief conversation",
+  );
+  expect(CHIEF_PERSONA).toContain("/api/ui/bot-chat/pending-input");
+  expect(CHIEF_PERSONA).toContain("requestDigest");
+  expect(CHIEF_PERSONA).toContain("/api/ui/bot-chat/respond");
+  expect(CHIEF_PERSONA).toContain("expectedRevision");
+  expect(CHIEF_PERSONA).toContain("/api/ui/context-link");
+});
+
 test("the persona maps where each kind of fact lives, so Chief looks it up instead of asking", () => {
   expect(CHIEF_PERSONA).toMatch(/Look things up instead of guessing/);
   expect(CHIEF_PERSONA).toContain("POST /api/ui/workspace");
@@ -705,7 +725,7 @@ test("the persona lets Chief read Bot chats as evidence and gates deletes and me
 test("the persona knows the app-window commands and that changed commands need approval", () => {
   expect(CHIEF_PERSONA).toContain("GET /api/ui/state");
   expect(CHIEF_PERSONA).toContain("POST /api/ui/command");
-  expect(CHIEF_PERSONA).toMatch(/never claim it is closed/);
+  expect(CHIEF_PERSONA).toContain("Await the command result before claiming success");
   // Saving a changed start command is no longer a routine change.
   expect(CHIEF_PERSONA).toContain("replaces all of it");
   expect(CHIEF_PERSONA).toContain("send every field back");
