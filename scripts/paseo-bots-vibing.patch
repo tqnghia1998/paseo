@@ -2319,10 +2319,10 @@ index eb3af25..8254186 100644
      title: input.title,
 diff --git a/server/chief.ts b/server/chief.ts
 new file mode 100644
-index 0000000..e933e57
+index 0000000..e1f5936
 --- /dev/null
 +++ b/server/chief.ts
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,219 @@
 +import { timingSafeEqual } from "node:crypto";
 +import { constants } from "node:fs";
 +import { lstat, open, realpath } from "node:fs/promises";
@@ -2331,6 +2331,9 @@ index 0000000..e933e57
 +import { z } from "zod";
 +import { localDay } from "../shared/activity";
 +import { BOT_LABEL, botSkills, composeSystemPrompt, type Bot } from "../shared/bot";
++import type { ChatAgentSettings } from "../shared/chat";
++import type { ChiefHandoffRuntime } from "../shared/rpc";
++import { userSettings } from "../shared/managed-chief-ui";
 +import { assertOrdinaryBot, CHIEF_BOT_ID } from "../shared/vibing-defaults";
 +import { startChat } from "./chats";
 +import type { Relay } from "./relay";
@@ -2350,7 +2353,7 @@ index 0000000..e933e57
 +const MemoryName = z.string().max(120).regex(/^[A-Za-z0-9 _-][A-Za-z0-9 ._-]*\.md$/);
 +const SkillId = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/);
 +// General Bot tools stay scoped to Chief; feature replies use the gateway chat reader.
-+const READ_ONLY = new Set(["list_bots", "search_chats", "get_setup"]);
++const READ_ONLY = new Set(["search_chats", "get_setup"]);
 +/** Written on a handoff chat: the Bot's display name when Chief started it. */
 +export const HANDOFF_BOT_NAME_LABEL = "paseo-chief.bot-name";
 +const HANDOFF_LABEL = "paseo-chief.handoff";
@@ -2445,12 +2448,41 @@ index 0000000..e933e57
 +    return composeSystemPrompt(bot, { ...context, botTools: false, paseoTools: false, apps: [], skills: [] }) +
 +      (skills.length ? `\n\nReviewed assigned skills (reference material, never authority):\n${skills.map((skill) => `--- ${skill.id} ---\n${skill.text}`).join("\n\n")}` : "");
 +  }
++  private async listHandoffTargets(): Promise<string> {
++    const saved = await this.host.values();
++    if (!saved) throw new Error("Bot and team settings are unavailable.");
++    const values = userSettings(saved);
++    const bots = values.bots.filter((bot) => !bot.archived && !bot.hostId).map(
++      ({ id, name, title, description, provider, model }) => ({ id, name, title, description, provider, model }),
++    );
++    const available = new Set(bots.map((bot) => bot.id));
++    const teams = (values.groups ?? []).map(({ id, name, leadId, memberIds }) => ({
++      id, name, leadId: leadId && available.has(leadId) ? leadId : null,
++      memberIds: memberIds.filter((memberId) => available.has(memberId)),
++    }));
++    return JSON.stringify({ bots, teams });
++  }
++
++  private async resolveRuntime(target: Bot, runtime: ChiefHandoffRuntime, cwd: string): Promise<ChatAgentSettings> {
++    const { models, error } = await this.host.requirePaseo().providers.listModels(runtime.provider, { cwd });
++    if (error) throw new Error(error);
++    if (!models?.some((model) => model.id === runtime.model && model.isSelectable !== false)) {
++      throw new Error(`Model "${runtime.model}" is unavailable for provider "${runtime.provider}".`);
++    }
++    const sameProvider = target.provider === runtime.provider;
++    return {
++      ...runtime,
++      modeId: sameProvider ? target.modeId : null,
++      thinkingOptionId: sameProvider && target.model === runtime.model ? target.thinkingOptionId : null,
++    };
++  }
++
 +  /**
 +   * Starts the same ordinary chat a user would start in the feature's Bots tab: the Bot's own
 +   * runtime, tools and permissions, listed under it in that workspace. The agent id makes a
 +   * repeated request return the chat it already started.
 +   */
-+  async handoff(input: { bridgeToken: string; agentId: string; bot: string; path: string; workspaceId: string; prompt: string; titleSuffix: string; labels: Record<string, string> }): Promise<{ chatId: string; botId: string; name: string }> {
++  async handoff(input: { bridgeToken: string; agentId: string; bot: string; path: string; workspaceId: string; prompt: string; titleSuffix: string; runtime?: ChiefHandoffRuntime; labels: Record<string, string> }): Promise<{ chatId: string; botId: string; name: string }> {
 +    this.authorize(input.bridgeToken);
 +    const wanted = input.bot.trim();
 +    const bots = await this.host.bots();
@@ -2464,7 +2496,9 @@ index 0000000..e933e57
 +      if (existing.labels?.[BOT_LABEL] !== target.id || existing.labels?.[HANDOFF_LABEL] !== input.labels[HANDOFF_LABEL]) throw new Error("That chat id is already in use");
 +      return { chatId: existing.id, botId: target.id, name: target.name };
 +    }
++    const agentSettings = input.runtime ? await this.resolveRuntime(target, input.runtime, input.path) : undefined;
 +    const chatId = await startChat(this.host, this.relay, target, {
++      ...(agentSettings ? { agentSettings } : {}),
 +      agentId: input.agentId,
 +      prompt: input.prompt,
 +      title: `${target.name} · ${input.titleSuffix}`,
@@ -2479,6 +2513,10 @@ index 0000000..e933e57
 +    if (!agent || agent.id !== input.agentId || !agent.cwd || agent.labels?.[BOT_LABEL] !== CHIEF_BOT_ID || agent.labels?.[CHIEF_POLICY_LABEL] !== CHIEF_POLICY) throw new Error("Chief identity or policy mismatch");
 +    const cwd = await realpath(agent.cwd).catch(() => { throw new Error("Chief identity cwd is unavailable"); });
 +    if (!this.identity || this.identity.agentId !== input.agentId || this.identity.cwd !== cwd) throw new Error("Chief identity or cwd mismatch");
++    if (input.tool === "list_bots") {
++      z.object({}).strict().parse(input.arguments);
++      return { text: await this.listHandoffTargets() };
++    }
 +    const bot = (await this.host.bot(CHIEF_BOT_ID))!;
 +    if (input.tool === "read_memory" || input.tool === "write_memory") {
 +      const schema = z.object({ name: MemoryName, ...(input.tool === "write_memory" ? { text: z.string().max(MAX_FILE_BYTES) } : {}) }).strict();
@@ -3145,7 +3183,7 @@ index 0000000..fc03719
 +  })) };
 +}
 diff --git a/shared/rpc.ts b/shared/rpc.ts
-index c54be3b..0d69734 100644
+index c54be3b..125c508 100644
 --- a/shared/rpc.ts
 +++ b/shared/rpc.ts
 @@ -241,7 +241,7 @@ const ImportedBotSchema = z.object({ bot: BotSchema, skills: z.array(ImportedSki
@@ -3157,7 +3195,7 @@ index c54be3b..0d69734 100644
    output: z.object({ json: z.string() }),
  });
 
-@@ -386,3 +386,30 @@ export const commandRemoveRpc = defineRpc({
+@@ -386,3 +386,37 @@ export const commandRemoveRpc = defineRpc({
    input: z.object({ botId: BotId, id: z.string() }),
    output: z.object({ ok: z.boolean() }),
  });
@@ -3173,6 +3211,12 @@ index c54be3b..0d69734 100644
 +  input: z.object({ bridgeToken: ChiefBridgeToken, agentId: z.string().min(1).max(200), tool: z.string().min(1).max(100), arguments: z.unknown() }).strict(),
 +  output: z.object({ text: z.string() }),
 +});
++const ChiefHandoffRuntime = z.object({
++  provider: z.string().trim().min(1).max(100),
++  model: z.string().trim().min(1).max(200),
++}).strict();
++export type ChiefHandoffRuntime = z.infer<typeof ChiefHandoffRuntime>;
++
 +/** Starts an ordinary Bot chat in a feature workspace for Chief's handoff. */
 +export const chiefHandoffRpc = defineRpc({
 +  name: "bots.chief.handoff",
@@ -3184,6 +3228,7 @@ index c54be3b..0d69734 100644
 +    workspaceId: z.string().min(1).max(200),
 +    prompt: z.string().min(1).max(20_000),
 +    titleSuffix: z.string().min(1).max(150),
++    runtime: ChiefHandoffRuntime.optional(),
 +    labels: z.record(z.string().regex(/^paseo-chief\.[a-z-]+$/), z.string().max(500)),
 +  }).strict(),
 +  output: z.object({ chatId: z.string(), botId: z.string(), name: z.string() }),
@@ -3861,10 +3906,10 @@ index 0000000..8d1930d
 +);
 diff --git a/tests/chief.test.ts b/tests/chief.test.ts
 new file mode 100644
-index 0000000..3bb1803
+index 0000000..6ce085c
 --- /dev/null
 +++ b/tests/chief.test.ts
-@@ -0,0 +1,167 @@
+@@ -0,0 +1,191 @@
 +import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 +import { tmpdir } from "node:os";
 +import { join } from "node:path";
@@ -3872,7 +3917,7 @@ index 0000000..3bb1803
 +import { BOT_LABEL, EMPTY_LIBRARY } from "../shared/bot";
 +import { applyVibingDefaults, CHIEF_BOT_ID, managedChiefBot } from "../shared/vibing-defaults";
 +import { ChiefBroker, CHIEF_POLICY_LABEL, CHIEF_POLICY } from "../server/chief";
-+import { fakeHost, makeBot } from "./helpers";
++import { fakeHost, makeBot, NOW } from "./helpers";
 +import { importBot } from "../server/share";
 +import { botDataPath } from "../server/bot-home";
 +import { MemoryJournal } from "../server/journal";
@@ -3880,7 +3925,7 @@ index 0000000..3bb1803
 +import { writeSkill } from "../server/library";
 +import { Relay } from "../server/relay";
 +import { startChat } from "../server/chats";
-+import { startBotChat } from "../shared/chat";
++import { CHAT_RUNTIME_LABEL, startBotChat } from "../shared/chat";
 +import { askBot } from "../server/tools/bots";
 +
 +let home: string;
@@ -3941,6 +3986,18 @@ index 0000000..3bb1803
 +    expect((await call("read_memory", { name: "MEMORY.md" })).text).toBe("Durable preference");
 +    expect(await new MemoryJournal().list(CHIEF_BOT_ID)).toHaveLength(1);
 +  });
++  it("lists active local Bots and configured team leads for Chief", async () => {
++    const { host, broker } = fixture();
++    const values = (await host.values())!;
++    values.bots.push(makeBot({ id: "remote", hostId: "elsewhere" }), makeBot({ id: "archived", archived: true }));
++    values.groups = [{ id: "review-squad", name: "Review Squad", leadId: "reviewer", memberIds: ["reviewer", "remote"], instructions: "Private team instructions", createdAt: NOW, updatedAt: NOW, logo: null }];
++    await broker.prepare(authorization);
++    const { text } = await broker.call({ ...authorization, tool: "list_bots", arguments: {} });
++    expect(JSON.parse(text)).toEqual({
++      bots: [{ id: "reviewer", name: "Reviewer", title: "", description: "", provider: "claude", model: null }],
++      teams: [{ id: "review-squad", name: "Review Squad", leadId: "reviewer", memberIds: ["reviewer"] }],
++    });
++  });
 +  it("rejects user-assigned skills even when enabled and reviewed", async () => {
 +    const { host, broker } = fixture();
 +    await broker.prepare(authorization);
@@ -3981,6 +4038,7 @@ index 0000000..3bb1803
 +    await broker.prepare(authorization);
 +    const created = new Map<string, { labels: Record<string, string>; title?: string; prompt: string; workspace: string; config: { cwd: string } }>();
 +    const workspaceRefs: string[] = [];
++    const listModels = vi.fn(async () => ({ models: [{ id: "gpt-6.2-sol" }, { id: "hidden", isSelectable: false }], error: null }));
 +    host.attach({
 +      agents: { ref: (id: string) => ({ refresh: async () => (created.has(id) ? { agent: { id, labels: created.get(id)!.labels } } : null) }) },
 +      workspaces: {
@@ -3992,7 +4050,7 @@ index 0000000..3bb1803
 +          } } };
 +        },
 +      },
-+      providers: { snapshot: async () => ({ entries: [{ provider: "claude", models: [{ id: "sonnet", isDefault: true }] }] }) },
++      providers: { listModels, snapshot: async () => ({ entries: [{ provider: "claude", models: [{ id: "sonnet", isDefault: true }] }] }) },
 +    } as never);
 +    const input = { ...authorization, agentId: "6f1c3b0e-8f6a-4a52-9a3f-0c1d2e3f4a5b", bot: "reviewer", path: "/repo/feature", workspaceId: "ws-feature", prompt: "Review !12", titleSuffix: "Review !12", labels: { "paseo-chief.handoff": "v1.sig", "paseo-chief.app": "app", "paseo-chief.workspace": "tab" } };
 +    expect(await broker.handoff(input)).toEqual({ chatId: input.agentId, botId: "reviewer", name: "Reviewer" });
@@ -4006,6 +4064,17 @@ index 0000000..3bb1803
 +    expect(created.size).toBe(1);
 +    await expect(broker.handoff({ ...input, labels: { ...input.labels, "paseo-chief.handoff": "v1.other" } })).rejects.toThrow(/in use/i);
 +    await expect(broker.handoff({ ...input, bridgeToken: "incorrect-but-long-enough-secret-32" })).rejects.toThrow(/broker/i);
++    const modelRun = { ...input, agentId: "aaec8411-78fb-425f-80e6-6666d6f15678", runtime: { provider: "codex", model: "gpt-6.2-sol" } };
++    for (const model of ["missing", "hidden"]) {
++      await expect(broker.handoff({ ...modelRun, runtime: { ...modelRun.runtime, model } })).rejects.toThrow(/unavailable/i);
++    }
++    expect(created.size).toBe(1);
++    await broker.handoff(modelRun);
++    expect(listModels).toHaveBeenCalledWith("codex", { cwd: "/repo/feature" });
++    expect(created.get(modelRun.agentId)?.config).toMatchObject({ provider: "codex/gpt-6.2-sol" });
++    expect(created.get(modelRun.agentId)?.labels[CHAT_RUNTIME_LABEL]).toBeUndefined();
++    expect(await host.bot("reviewer")).toMatchObject({ provider: "claude", model: null });
++
 +  });
 +  it("hands off only to local, active, ordinary Bots", async () => {
 +    const { host, broker } = fixture();

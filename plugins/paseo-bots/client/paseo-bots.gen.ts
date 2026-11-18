@@ -3031,6 +3031,10 @@ var chiefCallRpc = defineRpc({
   input: z6.object({ bridgeToken: ChiefBridgeToken, agentId: z6.string().min(1).max(200), tool: z6.string().min(1).max(100), arguments: z6.unknown() }).strict(),
   output: z6.object({ text: z6.string() })
 });
+var ChiefHandoffRuntime = z6.object({
+  provider: z6.string().trim().min(1).max(100),
+  model: z6.string().trim().min(1).max(200)
+}).strict();
 var chiefHandoffRpc = defineRpc({
   name: "bots.chief.handoff",
   input: z6.object({
@@ -3041,6 +3045,7 @@ var chiefHandoffRpc = defineRpc({
     workspaceId: z6.string().min(1).max(200),
     prompt: z6.string().min(1).max(2e4),
     titleSuffix: z6.string().min(1).max(150),
+    runtime: ChiefHandoffRuntime.optional(),
     labels: z6.record(z6.string().regex(/^paseo-chief\.[a-z-]+$/), z6.string().max(500))
   }).strict(),
   output: z6.object({ chatId: z6.string(), botId: z6.string(), name: z6.string() })

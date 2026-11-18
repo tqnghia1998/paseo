@@ -733,3 +733,9 @@ test("the persona knows the app-window commands and that changed commands need a
   expect(CHIEF_PERSONA).toContain("add-app");
   expect(CHIEF_PERSONA).not.toContain("saving a start command, starting");
 });
+
+test("Chief uses endpoints exclusively for Vibing and reports coverage gaps", () => {
+  expect(CHIEF_PERSONA).toContain("Never use computer use");
+  expect(CHIEF_PERSONA).toContain("report the missing endpoint or capability");
+  expect(CHIEF_PERSONA).toContain("per-run");
+});
