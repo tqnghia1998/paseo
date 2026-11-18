@@ -8,12 +8,12 @@ is the per-plugin reference and the upgrade procedure.
 
 | Plugin                                            | Source and pin                                                                                         | Version       | Ships as                   | Modified                                      |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------- | -------------------------- | --------------------------------------------- |
-| Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `069f8eb`                                    | 0.2.0         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch`    |
+| Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `ae40671`                                    | 0.3.1         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch`    |
 | Claude usage (`claude-usage-source`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                            |
 | Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
 | AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
 | Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
-| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `5220b9c`                  | 0.14.1        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
+| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `5fb31cb`                  | 0.15.2        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
 | Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`             |
 | Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `7f08467` | 1.4.1         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`    |
 
@@ -231,3 +231,13 @@ changes through repository HEAD `5929e52`.
 Upstream theme overrides supply sidebar and fill colors. The built-in Vibing theme
 sets explicit palette values for those roles; other plugin themes keep the new
 upstream derivations. It requires Paseo `>=0.16.0-0`.
+
+## Upstream refresh on November 18, 2026
+
+Paseo rebased onto `4f2fbe18a` (0.16.1). Bots `ae40671` (0.3.1) adds
+continued handoffs and MCP OAuth. Vibing keeps workspace-scoped handoff,
+native chat, and Chief’s per-run model selection. The vendored server includes
+the locked Paseo client and MCP SDK dependencies and their license notices.
+
+Chat Polish `5fb31cb` (0.15.2) uses the updated 0.16 SDK and slash menu.
+Shell Yeah and Generative UI have no new source changes.
