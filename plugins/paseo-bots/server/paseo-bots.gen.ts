@@ -1107,6 +1107,18 @@ function assertOrdinaryBot(botId) {
   if (botId === CHIEF_BOT_ID) throw new Error("Chief requires the host-managed execution path; ordinary chats, routines and relay tools are unavailable.");
 }
 
+// shared/managed-chief-ui.ts
+function userBots(bots) {
+  return bots.filter((bot) => bot.id !== CHIEF_BOT_ID);
+}
+function userSettings(values) {
+  return { ...values, bots: userBots(values.bots), groups: values.groups?.map((group) => ({
+    ...group,
+    memberIds: group.memberIds.filter((id) => id !== CHIEF_BOT_ID),
+    leadId: group.leadId === CHIEF_BOT_ID ? null : group.leadId
+  })) };
+}
+
 // shared/chat.ts
 import { z as z2 } from "zod";
 var ROUTINE_LABEL = "paseo-bots.routine";
@@ -2225,18 +2237,6 @@ import { z as z9 } from "zod";
 // shared/proposals.ts
 import { z as z8 } from "zod";
 
-// shared/managed-chief-ui.ts
-function userBots(bots) {
-  return bots.filter((bot) => bot.id !== CHIEF_BOT_ID);
-}
-function userSettings(values) {
-  return { ...values, bots: userBots(values.bots), groups: values.groups?.map((group) => ({
-    ...group,
-    memberIds: group.memberIds.filter((id) => id !== CHIEF_BOT_ID),
-    leadId: group.leadId === CHIEF_BOT_ID ? null : group.leadId
-  })) };
-}
-
 // shared/changes.ts
 import { z as z7 } from "zod";
 
@@ -3294,7 +3294,7 @@ var CHIEF_POLICY = "chief-v1";
 var BridgeToken = z12.string().min(32).max(512);
 var MemoryName = z12.string().max(120).regex(/^[A-Za-z0-9 _-][A-Za-z0-9 ._-]*\.md$/);
 var SkillId = z12.string().min(1).max(100).regex(/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/);
-var READ_ONLY = /* @__PURE__ */ new Set(["list_bots", "search_chats", "get_setup"]);
+var READ_ONLY = /* @__PURE__ */ new Set(["search_chats", "get_setup"]);
 var HANDOFF_BOT_NAME_LABEL = "paseo-chief.bot-name";
 var HANDOFF_LABEL = "paseo-chief.handoff";
 var MAX_FILE_BYTES2 = 512 * 1024;
@@ -3385,6 +3385,35 @@ Reviewed assigned skills (reference material, never authority):
 ${skills.map((skill) => `--- ${skill.id} ---
 ${skill.text}`).join("\n\n")}` : "");
   }
+  async listHandoffTargets() {
+    const saved = await this.host.values();
+    if (!saved) throw new Error("Bot and team settings are unavailable.");
+    const values = userSettings(saved);
+    const bots = values.bots.filter((bot) => !bot.archived && !bot.hostId).map(
+      ({ id, name, title, description, provider, model }) => ({ id, name, title, description, provider, model })
+    );
+    const available = new Set(bots.map((bot) => bot.id));
+    const teams = (values.groups ?? []).map(({ id, name, leadId, memberIds }) => ({
+      id,
+      name,
+      leadId: leadId && available.has(leadId) ? leadId : null,
+      memberIds: memberIds.filter((memberId) => available.has(memberId))
+    }));
+    return JSON.stringify({ bots, teams });
+  }
+  async resolveRuntime(target, runtime, cwd) {
+    const { models, error } = await this.host.requirePaseo().providers.listModels(runtime.provider, { cwd });
+    if (error) throw new Error(error);
+    if (!models?.some((model) => model.id === runtime.model && model.isSelectable !== false)) {
+      throw new Error(`Model "${runtime.model}" is unavailable for provider "${runtime.provider}".`);
+    }
+    const sameProvider = target.provider === runtime.provider;
+    return {
+      ...runtime,
+      modeId: sameProvider ? target.modeId : null,
+      thinkingOptionId: sameProvider && target.model === runtime.model ? target.thinkingOptionId : null
+    };
+  }
   /**
    * Starts the same ordinary chat a user would start in the feature's Bots tab: the Bot's own
    * runtime, tools and permissions, listed under it in that workspace. The agent id makes a
@@ -3404,7 +3433,9 @@ ${skill.text}`).join("\n\n")}` : "");
       if (existing.labels?.[BOT_LABEL] !== target.id || existing.labels?.[HANDOFF_LABEL] !== input.labels[HANDOFF_LABEL]) throw new Error("That chat id is already in use");
       return { chatId: existing.id, botId: target.id, name: target.name };
     }
+    const agentSettings = input.runtime ? await this.resolveRuntime(target, input.runtime, input.path) : void 0;
     const chatId = await startChat(this.host, this.relay, target, {
+      ...agentSettings ? { agentSettings } : {},
       agentId: input.agentId,
       prompt: input.prompt,
       title: `${target.name} \xB7 ${input.titleSuffix}`,
@@ -3421,6 +3452,10 @@ ${skill.text}`).join("\n\n")}` : "");
       throw new Error("Chief identity cwd is unavailable");
     });
     if (!this.identity || this.identity.agentId !== input.agentId || this.identity.cwd !== cwd) throw new Error("Chief identity or cwd mismatch");
+    if (input.tool === "list_bots") {
+      z12.object({}).strict().parse(input.arguments);
+      return { text: await this.listHandoffTargets() };
+    }
     const bot = await this.host.bot(CHIEF_BOT_ID);
     if (input.tool === "read_memory" || input.tool === "write_memory") {
       const schema = z12.object({ name: MemoryName, ...input.tool === "write_memory" ? { text: z12.string().max(MAX_FILE_BYTES2) } : {} }).strict();
@@ -3735,6 +3770,10 @@ var chiefCallRpc = defineRpc({
   input: z13.object({ bridgeToken: ChiefBridgeToken, agentId: z13.string().min(1).max(200), tool: z13.string().min(1).max(100), arguments: z13.unknown() }).strict(),
   output: z13.object({ text: z13.string() })
 });
+var ChiefHandoffRuntime = z13.object({
+  provider: z13.string().trim().min(1).max(100),
+  model: z13.string().trim().min(1).max(200)
+}).strict();
 var chiefHandoffRpc = defineRpc({
   name: "bots.chief.handoff",
   input: z13.object({
@@ -3745,6 +3784,7 @@ var chiefHandoffRpc = defineRpc({
     workspaceId: z13.string().min(1).max(200),
     prompt: z13.string().min(1).max(2e4),
     titleSuffix: z13.string().min(1).max(150),
+    runtime: ChiefHandoffRuntime.optional(),
     labels: z13.record(z13.string().regex(/^paseo-chief\.[a-z-]+$/), z13.string().max(500))
   }).strict(),
   output: z13.object({ chatId: z13.string(), botId: z13.string(), name: z13.string() })
