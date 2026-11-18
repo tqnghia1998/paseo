@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import type { HandoffRuntime } from "./chief-handoffs.js";
+
 export const CHIEF_BOT_ID = "vibing-chief";
 // Chief's own Bot tools: who can take a task, its memory and its history. It has no skills (its
 // configuration is owned by source and cannot be edited) and never reads the Bot setup.
@@ -24,7 +26,8 @@ export function registerChiefBotTools(
   }> = [
     {
       name: "list_bots",
-      description: "List the Bots that can take a feature task (name, id and what each does).",
+      description:
+        "List Bots that can take a feature task, their saved provider and model, and teams with their lead and member Bot IDs.",
       inputSchema: {},
     },
     {
@@ -122,6 +125,7 @@ export function createChiefBotBridge(
       workspaceId: string;
       prompt: string;
       titleSuffix: string;
+      runtime?: HandoffRuntime;
       labels: Record<string, string>;
     }) {
       return z

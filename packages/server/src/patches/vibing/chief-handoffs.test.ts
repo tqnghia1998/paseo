@@ -565,3 +565,28 @@ test.each(["implement", "commit"] as const)(
     expect(startChat).not.toHaveBeenCalled();
   },
 );
+
+test("hands off a one-run model choice and rejects reusing its request id for a different model", async () => {
+  const { handoffs, startChat, createService } = await fixture();
+  const request = {
+    requestId: randomUUID(),
+    appId: "app",
+    workspaceId: "tab",
+    bot: "Reviewer",
+    kind: "implement",
+    instruction: "Run the Review Squad workflow",
+    runtime: { provider: "codex", model: "gpt-6.2-sol" },
+  };
+  await expect(handoffs.startFeatureTask(request)).resolves.toMatchObject({
+    chatId: request.requestId,
+  });
+  expect(startChat).toHaveBeenCalledWith(expect.objectContaining({ runtime: request.runtime }));
+  const restarted = createService();
+  await expect(restarted.startFeatureTask(request)).resolves.toMatchObject({
+    chatId: request.requestId,
+  });
+  await expect(
+    restarted.startFeatureTask({ ...request, runtime: { ...request.runtime, model: "other" } }),
+  ).rejects.toThrow(/requestId does not identify this exact task/);
+  expect(startChat).toHaveBeenCalledTimes(1);
+});
