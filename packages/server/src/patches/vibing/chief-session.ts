@@ -31,9 +31,9 @@ const StateSchema = z
   .strict();
 type State = z.infer<typeof StateSchema>;
 
-/** Chief's source-owned runtime defaults: Codex GPT-6.1 Sol, high reasoning, Full Access. */
+/** Chief's source-owned runtime defaults: Codex GPT-6.2 Sol, high reasoning, Full Access. */
 const CHIEF_PROVIDER = "codex";
-const CHIEF_MODEL = "gpt-6.1-sol";
+const CHIEF_MODEL = "gpt-6.2-sol";
 const CHIEF_THINKING = "high";
 const CHIEF_MODE = "full-access";
 

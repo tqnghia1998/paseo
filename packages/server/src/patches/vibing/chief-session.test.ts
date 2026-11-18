@@ -125,7 +125,7 @@ test("the first connection creates one durable background plain agent in the wor
   const [config, id, options] = manager.createAgent.mock.calls[0]!;
   expect(config).toMatchObject({
     provider: "codex",
-    model: "gpt-6.1-sol",
+    model: "gpt-6.2-sol",
     thinkingOptionId: "high",
     cwd: workdir,
   });
