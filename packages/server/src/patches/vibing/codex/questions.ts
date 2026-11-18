@@ -2,7 +2,10 @@ import { z } from "zod";
 import type { Logger } from "pino";
 import type { AgentSessionConfig } from "../../../server/agent/agent-sdk-types.js";
 import type { CodexAppServerClient } from "../../../server/agent/providers/codex/app-server-transport.js";
-import { composeSystemPromptParts } from "../../../server/agent/system-prompt.js";
+import {
+  composeAgentSystemPrompt,
+  composeSystemPromptParts,
+} from "../../../server/agent/system-prompt.js";
 
 const CODEX_QUESTION_INSTRUCTIONS =
   "Use request_user_input for user questions and wait for the user's answer before continuing. " +
@@ -12,7 +15,12 @@ const CODEX_QUESTION_INSTRUCTIONS =
 
 type QuestionSession = Pick<
   AgentSessionConfig,
-  "systemPrompt" | "daemonAppendSystemPrompt" | "internal" | "cwd" | "providerOptions"
+  | "systemPrompt"
+  | "daemonAppendSystemPrompt"
+  | "pluginAppendSystemPrompt"
+  | "internal"
+  | "cwd"
+  | "providerOptions"
 >;
 interface DeveloperInstructionsInput {
   session: QuestionSession;
@@ -24,10 +32,7 @@ export function buildCodexDeveloperInstructions(
   input: DeveloperInstructionsInput,
 ): string | undefined {
   const { session, nativeInstructions, modeInstructions } = input;
-  const paseoInstructions = composeSystemPromptParts(
-    session.systemPrompt,
-    session.daemonAppendSystemPrompt,
-  );
+  const paseoInstructions = composeAgentSystemPrompt(session);
   return composeSystemPromptParts(
     modeInstructions,
     paseoInstructions ?? (session.internal ? undefined : nativeInstructions),
@@ -55,10 +60,7 @@ export async function readNativeCodexConfig(input: ReadNativeConfigInput) {
     const response = await client.request("config/read", { cwd: session.cwd ?? null });
     return NativeConfigSchema.parse(response).config;
   } catch (error) {
-    const paseoInstructions = composeSystemPromptParts(
-      session.systemPrompt,
-      session.daemonAppendSystemPrompt,
-    );
+    const paseoInstructions = composeAgentSystemPrompt(session);
     if (
       session.providerOptions?.restrictToConfiguredMcp === true ||
       (!session.internal && !paseoInstructions)

@@ -1205,7 +1205,8 @@ describe("Codex app-server provider", () => {
         firstServer.startsTurn({ threadId: "thread-1" });
         await saved;
         handle = first.describePersistence()!;
-        for (const params of [threadStart, turnStart]) {
+        expect(turnStart).not.toHaveProperty("developerInstructions");
+        for (const params of [threadStart]) {
           expect(params.developerInstructions).toContain(systemPrompt ?? nativeInstructions);
           expect(params.developerInstructions).toContain(
             "Use request_user_input for user questions",
@@ -1225,16 +1226,14 @@ describe("Codex app-server provider", () => {
       );
       try {
         await resumed.startTurn("another question");
-        for (const params of [
-          await secondServer.waitForRequest("thread/resume"),
-          await secondServer.waitForTurnStart(),
-        ]) {
+        for (const params of [await secondServer.waitForRequest("thread/resume")]) {
           expect(params.developerInstructions).toContain(systemPrompt ?? nativeInstructions);
           expect(params.developerInstructions).toContain(
             "Use request_user_input for user questions",
           );
           if (systemPrompt) expect(params.developerInstructions).not.toContain(nativeInstructions);
         }
+        expect(await secondServer.waitForTurnStart()).not.toHaveProperty("developerInstructions");
         secondServer.assertNoErrors();
       } finally {
         await resumed.close();
@@ -1360,7 +1359,6 @@ describe("Codex app-server provider", () => {
         });
         await expect(firstServer.waitForTurnStart()).resolves.toMatchObject({
           config: expectedConfig,
-          developerInstructions: expect.stringContaining("Do not use request_user_input_async"),
         });
         const saved = waitForNextEvent(first, "thread_started");
         firstServer.startsTurn({ threadId: "thread-1" });
@@ -1386,9 +1384,6 @@ describe("Codex app-server provider", () => {
         await resumed.startTurn("another question");
         await expect(secondServer.waitForTurnStart()).resolves.toMatchObject({
           config: expectedConfig,
-          developerInstructions: expect.stringContaining(
-            "Keep the user's project conventions.\n\nPreserve unrelated changes.",
-          ),
         });
         secondServer.assertNoErrors();
       } finally {
@@ -1730,7 +1725,11 @@ describe("Codex app-server provider", () => {
     const firstTurn = await firstServer.waitForTurnStart();
     expect(
       firstServer.requests().find((request) => request.method === "thread/start")?.params,
-    ).toMatchObject({ developerInstructions: "Plugin instructions" });
+    ).toMatchObject({
+      developerInstructions: expect.stringContaining(
+        "Plugin instructions\n\nUse request_user_input",
+      ),
+    });
     expect(firstTurn).toMatchObject({
       collaborationMode: {
         settings: { developer_instructions: null },
@@ -1749,7 +1748,11 @@ describe("Codex app-server provider", () => {
     });
     try {
       const resume = secondServer.requests().find((request) => request.method === "thread/resume");
-      expect(resume?.params).not.toHaveProperty("developerInstructions");
+      expect(resume?.params).toHaveProperty(
+        "developerInstructions",
+        expect.stringContaining("Use request_user_input"),
+      );
+      expect(JSON.stringify(resume?.params)).not.toContain("Plugin instructions");
       await resumed.startTurn("after disable");
       const secondTurn = await secondServer.waitForTurnStart();
       expect(secondTurn).not.toHaveProperty("developerInstructions");
@@ -1763,7 +1766,7 @@ describe("Codex app-server provider", () => {
     }
   });
 
-  test("reopen injects current instructions once, including an explicit empty snapshot", async () => {
+  test("reopen injects current instructions once, including removal of disabled plugin instructions", async () => {
     const handlers = {
       initialize: () => ({ userAgent: "codex/0.165.0" }),
       "thread/inject_items": () => ({}),
@@ -1815,7 +1818,8 @@ describe("Codex app-server provider", () => {
       .requests()
       .filter((request) => request.method === "thread/inject_items");
     expect(removal).toHaveLength(1);
-    expect(JSON.stringify(removal[0]?.params)).toContain('\\"instructions\\":\\"\\"');
+    expect(JSON.stringify(removal[0]?.params)).toContain("Use request_user_input");
+    expect(JSON.stringify(removal[0]?.params)).not.toContain("New plugin");
     await empty.close();
   });
 
@@ -1865,7 +1869,11 @@ describe("Codex app-server provider", () => {
     try {
       await session.startTurn("make a plan");
       const start = appServer.requests().find((request) => request.method === "thread/start");
-      expect(start?.params).toMatchObject({ developerInstructions: "Plugin instructions" });
+      expect(start?.params).toMatchObject({
+        developerInstructions: expect.stringContaining(
+          "Plugin instructions\n\nUse request_user_input",
+        ),
+      });
       expect(await appServer.waitForTurnStart()).toMatchObject({
         collaborationMode: { mode: "plan", settings: { developer_instructions: null } },
       });
@@ -1904,8 +1912,11 @@ describe("Codex app-server provider", () => {
       );
       try {
         const resume = appServer.requests().find((request) => request.method === "thread/resume");
-        if (expected) expect(resume?.params).toMatchObject({ developerInstructions: expected });
-        else expect(resume?.params).not.toHaveProperty("developerInstructions");
+        expect(resume?.params).toMatchObject({
+          developerInstructions: expect.stringContaining("Use request_user_input"),
+        });
+        if (expected) expect(JSON.stringify(resume?.params)).toContain(expected);
+        else expect(JSON.stringify(resume?.params)).not.toContain("Old plugin");
         await session.startTurn("after reopen");
         const turn = await appServer.waitForTurnStart();
         expect(turn).toMatchObject({
@@ -3460,6 +3471,7 @@ describe("Codex app-server provider", () => {
       {
         threadId: "thread-1",
         beforeTurnId: "turn-second",
+        developerInstructions: expect.stringContaining("Use request_user_input"),
         config: {
           features: { default_mode_request_user_input: true },
           suppress_unstable_features_warning: true,
@@ -3599,6 +3611,7 @@ describe("Codex app-server provider", () => {
       {
         threadId: "thread-1",
         beforeTurnId: "turn-first",
+        developerInstructions: expect.stringContaining("Use request_user_input"),
         config: {
           features: { default_mode_request_user_input: true },
           suppress_unstable_features_warning: true,
@@ -3680,7 +3693,9 @@ describe("Codex app-server provider", () => {
 
       const forkRequest = appServer.requests().find((request) => request.method === "thread/fork");
       expect(forkRequest?.params).toMatchObject({
-        developerInstructions: "Agent instructions\n\nDaemon instructions\n\nPlugin instructions",
+        developerInstructions: expect.stringContaining(
+          "Agent instructions\n\nDaemon instructions\n\nPlugin instructions\n\nUse request_user_input",
+        ),
       });
       const rewindRequests = appServer
         .requests()

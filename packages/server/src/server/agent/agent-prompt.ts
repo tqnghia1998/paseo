@@ -28,7 +28,6 @@ export type AgentRunController = Pick<
 export class AgentTurnBusyError extends Error {}
 
 export interface StartAgentRunOptions {
-  idleOnly?: boolean;
   /** Called after selecting the run, before consuming its events. */
   onDispatch?: (disposition: PromptDispatchDisposition) => void;
   replaceRunning?: boolean;
@@ -95,7 +94,12 @@ async function startOrReplaceRun(
   if (options?.idleOnly) {
     if (!agentManager.streamIdleAgent) throw new Error("Idle-only dispatch is unavailable");
     return {
-      iterator: await agentManager.streamIdleAgent(agentId, prompt, options.runOptions, promptStart),
+      iterator: await agentManager.streamIdleAgent(
+        agentId,
+        prompt,
+        options.runOptions,
+        promptStart,
+      ),
       replaced: false,
     };
   }
@@ -256,7 +260,6 @@ export async function unarchiveAgentState(
 }
 
 export interface SendPromptToAgentParams {
-  idleOnly?: boolean;
   /** Awaited after the agent is loaded and its mode is set, before the prompt is handed to a run. */
   beforeDispatch?: () => Promise<void>;
   onDispatch?: StartAgentRunOptions["onDispatch"];
