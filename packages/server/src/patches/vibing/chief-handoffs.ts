@@ -19,6 +19,11 @@ export const HANDOFF_TASK_DIGEST_LABEL = "paseo-chief.task-digest";
 const MAX_LISTED = 20;
 const WORKSPACE_WAIT_MS = 15_000;
 
+const HandoffRuntimeSchema = z
+  .object({ provider: z.string().trim().min(1).max(100), model: z.string().trim().min(1).max(200) })
+  .strict();
+export type HandoffRuntime = z.infer<typeof HandoffRuntimeSchema>;
+
 export const StartFeatureTaskInput = z
   .object({
     requestId: z.string().uuid(),
@@ -28,6 +33,7 @@ export const StartFeatureTaskInput = z
     kind: z.enum(["review-merge-request", "implement", "commit"]),
     resolutionId: z.string().uuid().optional(),
     instruction: z.string().min(1).max(4000),
+    runtime: HandoffRuntimeSchema.optional(),
   })
   .strict();
 export type HandoffStatus = ChiefChatStatus;
@@ -64,6 +70,7 @@ export interface ChiefHandoffDependencies {
     workspaceId: string;
     prompt: string;
     titleSuffix: string;
+    runtime?: HandoffRuntime;
     labels: Record<string, string>;
   }): Promise<{ chatId: string }>;
 }
@@ -141,6 +148,7 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
           request.kind,
           request.resolutionId ?? null,
           request.instruction,
+          ...(request.runtime ? [[request.runtime.provider, request.runtime.model]] : []),
         ]),
       )
       .digest("hex");
@@ -256,6 +264,7 @@ export function createChiefHandoffs(deps: ChiefHandoffDependencies) {
       workspaceId: workspace.workspaceId,
       prompt: message.prompt,
       titleSuffix: message.titleSuffix,
+      ...(request.runtime ? { runtime: request.runtime } : {}),
       labels: {
         [HANDOFF_LABEL]: sign(key, request.requestId, request.appId, request.workspaceId, digest),
         [HANDOFF_TASK_DIGEST_LABEL]: digest,

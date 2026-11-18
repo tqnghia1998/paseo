@@ -76,6 +76,16 @@ test.each([false, true])(
             updatedAt: "2026-11-07",
           },
         ],
+        groups: [
+          {
+            id: "review-squad",
+            name: "Review Squad",
+            leadId: "fixture-reviewer",
+            memberIds: ["fixture-reviewer"],
+            createdAt: "2026-11-07",
+            updatedAt: "2026-11-07",
+          },
+        ],
       },
     });
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "chief-real-manager-"));
@@ -130,6 +140,11 @@ test.each([false, true])(
     expect(JSON.stringify(await call("read_memory", { name: "MEMORY.md" }))).toContain(
       "Fixture preference",
     );
+    const inventory = await call("list_bots", {});
+    expect(JSON.parse(inventory.content[0].text)).toMatchObject({
+      bots: [{ id: "fixture-reviewer", provider: "claude", model: "sonnet" }],
+      teams: [{ name: "Review Squad", leadId: "fixture-reviewer" }],
+    });
     await fixture.daemon.agentManager.runAgent(
       descriptor.agentId,
       "Ask Reviewer to add a logout   button to the header",
@@ -142,9 +157,17 @@ test.each([false, true])(
       bot: "Reviewer",
       kind: "implement",
       instruction: "add a logout button to the header",
+      ...(failDelete ? { runtime: { provider: "claude", model: "haiku" } } : {}),
     };
     const starting = call("start_feature_task", request);
-    await startupEntered.promise;
+    await Promise.race([
+      startupEntered.promise,
+      starting.then((result) => {
+        throw new Error(
+          `Handoff returned before the Bot started: ${JSON.stringify(result.content)}`,
+        );
+      }),
+    ]);
     try {
       const pending = fixture.daemon.agentManager.getAgent(request.requestId)!;
       expect(pending.lifecycle).toBe("idle");
@@ -184,6 +207,7 @@ test.each([false, true])(
     );
     const chat = fixture.daemon.agentManager.getAgent(receipt.chatId)!;
     expect(chat.cwd).toBe(cwd);
+    expect(chat.config.model).toBe(failDelete ? "haiku" : "sonnet");
     expect(chat.background).toBe(false);
     expect(chat.config.providerOptions?.restrictToConfiguredMcp).not.toBe(true);
     expect(chat.labels).toMatchObject({

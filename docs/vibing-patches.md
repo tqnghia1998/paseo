@@ -219,6 +219,11 @@ conversation was waiting on as `unknown` (`tools.reset()`); the Vibing backend c
 pending approvals. Handoffs survive a restart: they belong to feature chats and are signed
 with the capability, which does not change.
 
+Chief operates Vibing through its typed tools and API gateway. Its persona instructs it to report
+an unavailable capability instead of using computer use, browser automation or app storage.
+`list_bots` returns active local Bot IDs, saved providers/models, and the leads and membership of
+configured teams. Chief uses that inventory to hand a named team's task to its lead.
+
 Handoffs (`chief-handoffs.ts`): `start_feature_task` builds the Bot's message from a fixed
 template per `kind` (`review-merge-request`, `implement`, `commit`; the merge request title is
 untrusted and JSON-escaped). Chief writes the task: `instruction` is free text of up to 4000
@@ -228,8 +233,10 @@ whose name is the merge request's source branch, and refuse cross-repository mer
 Every kind first checks the actual local checkout (`chief-review-workspace.ts`: current branch and
 `origin`, local Git only). The `bots.chief.handoff` RPC starts the
 chat through the plugin's `startChat`, placed in the feature's Paseo workspace, with the
-Bot's own runtime, tools and permissions; `requestId` is the agent id, so a retry returns
-the same chat. Labels: `paseo-bots.asked-by: vibing-chief`, `paseo-chief.bot-name`, and
+Bot's tools and permissions. The saved runtime is the default. An explicit `runtime: { provider,
+model }` is validated against the provider catalog and applies to the new chat alone. The runtime
+choice is part of the signed request identity when supplied. `requestId` is the agent id, so an
+exact retry returns the same chat. Labels: `paseo-bots.asked-by: vibing-chief`, `paseo-chief.bot-name`, and
 `paseo-chief.app`/`paseo-chief.workspace` signed by `paseo-chief.handoff` (an HMAC keyed
 from Chief's private capability, so labels alone cannot forge a handoff). The poll's
 `handoffs` (newest 20) and `check_feature_task` derive from persisted, unarchived records:
