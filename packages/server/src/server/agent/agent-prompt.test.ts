@@ -392,7 +392,7 @@ test("idle-only dispatch starts a new run in an unarchived idle chat", async () 
         clearPendingPermissions: false,
         logger: createTestLogger(),
       }),
-    ).resolves.toEqual({ disposition: "turn_started" });
+    ).resolves.toMatchObject({ disposition: "turn_started", started: expect.any(Promise) });
     expect(replace).not.toHaveBeenCalled();
     expect(scenario.agentManager.hasInFlightRun(scenario.agentId)).toBe(true);
   } finally {

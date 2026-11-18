@@ -12,8 +12,10 @@ const plugins = [
   {
     id: "paseo-bots",
     repository: "oliexe/paseo-bots",
-    revision: "069f8ebc5de28568461e224747dac9d54941ce2b",
+    revision: "ae406719e8ca22f7d49f377150b8de04e7f1d2f0",
     patch: "paseo-bots-vibing.patch",
+    bundleDependencies: true,
+    shrinkwrap: true,
   },
   {
     id: "shell-yeah",
@@ -25,7 +27,7 @@ const plugins = [
   {
     id: "paseo-chat-polish",
     repository: "lthieu96/paseo-chat-polish",
-    revision: "5220b9cb22cd19cc01ae1cdf268355c41b70a96e",
+    revision: "5fb31cbdb3cbaeb1c49568d64feaa468d0c1813d",
     patch: "paseo-chat-polish-vibing.patch",
     // pele is inlined; sharp is native and loaded on demand, so thumbnails fall back to the original image.
     bundleDependencies: true,
@@ -71,7 +73,10 @@ for (const plugin of plugins) {
     const hasDependencies = Object.keys(metadata.dependencies ?? {}).length > 0;
     if (hasDependencies && !plugin.bundleDependencies)
       throw new Error(`${plugin.id} has new dependencies that must be reviewed and bundled`);
-    if (hasDependencies)
+    if (hasDependencies) {
+      // npm ci in this checkout expects the npm-published shrinkwrap at the lockfile path.
+      if (plugin.shrinkwrap)
+        await cp(path.join(source, "npm-shrinkwrap.json"), path.join(source, "package-lock.json"));
       execFileSync(
         process.platform === "win32" ? "npm.cmd" : "npm",
         [
@@ -84,6 +89,7 @@ for (const plugin of plugins) {
         ],
         { cwd: source, stdio: "inherit" },
       );
+    }
     await rm(destination, { recursive: true, force: true });
     await mkdir(destination, { recursive: true });
     const bundledPackages = new Set();
@@ -100,6 +106,8 @@ for (const plugin of plugins) {
         target: "es2022",
         jsx: "automatic",
         platform: target === "client" ? "browser" : "node",
+        // The packaged plugin loader exposes the host’s Zod v4 under its root name.
+        alias: { "zod/v4": "zod" },
         external: [
           "@getpaseo/plugin",
           "@getpaseo/plugin/*",
@@ -179,7 +187,7 @@ async function licenseNotices(source, names) {
     // A few packages declare their SPDX license without shipping its text.
     if (!licenseName && !info.license) throw new Error(`Missing license for ${name}`);
     const license = licenseName
-      ? await readFile(path.join(directory, licenseName), "utf8")
+      ? (await readFile(path.join(directory, licenseName), "utf8")).replace(/[ \t]+$/gm, "")
       : `No license file is distributed; package.json declares ${info.license}.`;
     notices.push(`${info.name}@${info.version} (${info.license})\n${license}`);
   }
