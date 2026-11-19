@@ -5046,6 +5046,67 @@ describe("Codex app-server provider", () => {
     }
   });
 
+  test("settles only the child named by a native completion on the parent thread", async () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    const childStatuses = () =>
+      Object.fromEntries(
+        events.flatMap((event) =>
+          event.type === "provider_subagent" && event.event.type === "upsert"
+            ? [[event.event.id, event.event.status]]
+            : [],
+        ),
+      );
+
+    for (const id of ["finished", "interrupted", "closed", "active"]) {
+      await asInternals(session).handleNotification("item/completed", {
+        threadId: "test-thread",
+        item: {
+          type: "subAgentActivity",
+          id: `spawn-${id}`,
+          kind: "started",
+          agentThreadId: id,
+          agentPath: `/root/${id}`,
+        },
+      });
+    }
+    expect(childStatuses()).toEqual({
+      finished: "running",
+      interrupted: "running",
+      closed: "running",
+      active: "running",
+    });
+
+    for (const [id, kind] of [
+      ["finished", "completed"],
+      ["interrupted", "interrupted"],
+      ["interrupted", "completed"],
+    ]) {
+      await asInternals(session).handleNotification("item/completed", {
+        threadId: "test-thread",
+        item: {
+          type: "subAgentActivity",
+          id: `end-${id}-${kind}`,
+          kind,
+          agentThreadId: id,
+          agentPath: `/root/${id}`,
+        },
+      });
+    }
+
+    for (const threadId of ["closed", "finished", "test-thread"]) {
+      await asInternals(session).handleNotification("thread/closed", { threadId });
+    }
+
+    expect(childStatuses()).toEqual({
+      finished: "completed",
+      interrupted: "canceled",
+      closed: "canceled",
+      active: "running",
+    });
+  });
+
   test("updates a registered child with its later native activity name", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
@@ -6504,6 +6565,20 @@ describe("Codex app-server provider", () => {
                     agentThreadId: "v2-child-thread",
                     agentPath: "/root/v2-child",
                   },
+                  {
+                    type: "subAgentActivity",
+                    id: "v2-interrupted-history",
+                    kind: "interrupted",
+                    agentThreadId: "v2-child-thread",
+                    agentPath: "/root/v2-child",
+                  },
+                  {
+                    type: "subAgentActivity",
+                    id: "v2-completed-history",
+                    kind: "completed",
+                    agentThreadId: "v2-child-thread",
+                    agentPath: "/root/v2-child",
+                  },
                 ],
               },
             ],
@@ -6527,7 +6602,7 @@ describe("Codex app-server provider", () => {
         status: "completed",
         title: "Sentinel child",
       },
-      { type: "upsert", id: "v2-child-thread", status: "completed" },
+      { type: "upsert", id: "v2-child-thread", status: "canceled" },
     ]);
     expect(
       history.flatMap((event) =>
@@ -6569,7 +6644,7 @@ describe("Codex app-server provider", () => {
       },
       {
         callId: "v2-spawn-history",
-        status: "completed",
+        status: "canceled",
         detail: { type: "sub_agent", description: "v2-child" },
       },
     ]);

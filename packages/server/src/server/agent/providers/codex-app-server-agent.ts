@@ -1970,7 +1970,7 @@ function readCodexHistoryRowTimestamp(
 interface CodexSubAgentActivity {
   id: string | null;
   agentThreadId: string;
-  kind: "started" | "interacted" | "interrupted";
+  kind: "started" | "interacted" | "interrupted" | "completed";
 }
 
 function isTerminalSubAgentStatus(
@@ -1990,7 +1990,10 @@ function readCodexSubAgentActivity(item: unknown): CodexSubAgentActivity | null 
   if (
     normalizedType !== "subAgentActivity" ||
     typeof record.agentThreadId !== "string" ||
-    (record.kind !== "started" && record.kind !== "interacted" && record.kind !== "interrupted")
+    (record.kind !== "started" &&
+      record.kind !== "interacted" &&
+      record.kind !== "interrupted" &&
+      record.kind !== "completed")
   ) {
     return null;
   }
@@ -2098,7 +2101,10 @@ function settleHistoricalSubAgentActivity(
   kind: CodexSubAgentActivity["kind"],
 ): ToolCallTimelineItem {
   // thread/read returns completed parent items, not a live child snapshot.
-  // Only an explicit interruption remains non-completed when replayed.
+  // A generic completion record does not erase a more specific terminal outcome.
+  if (kind !== "interrupted" && (item.status === "canceled" || item.status === "failed")) {
+    return item;
+  }
   return {
     ...item,
     status: kind === "interrupted" ? "canceled" : "completed",
@@ -2824,6 +2830,7 @@ const CodexEventThreadRolledBackNotificationSchema = z
 
 type ParsedCodexNotification =
   | { kind: "thread_started"; threadId: string }
+  | { kind: "thread_closed"; threadId: string }
   | { kind: "turn_started"; turnId: string; threadId: string | null }
   | {
       kind: "turn_completed";
@@ -2980,6 +2987,14 @@ function summarizeCodexMcpStartupError(
 }
 
 const CodexNotificationSchema = z.union([
+  z
+    .object({ method: z.literal("thread/closed"), params: z.object({ threadId: z.string() }) })
+    .transform(
+      ({ params }): ParsedCodexNotification => ({
+        kind: "thread_closed",
+        threadId: params.threadId,
+      }),
+    ),
   z
     .object({ method: z.literal("thread/started"), params: ThreadStartedNotificationSchema })
     .transform(
@@ -6362,6 +6377,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     callId: string,
   ): Promise<void> {
     switch (parsed.kind) {
+      case "thread_closed": {
+        const state = this.subAgentCallsByCallId.get(callId);
+        if (state && !isTerminalSubAgentStatus(state.toolCall.status)) {
+          this.emitSubAgentActivityUpdate(callId, "canceled");
+        }
+        return;
+      }
       case "thread_started":
         this.emitSubAgentActivityUpdate(callId, "running", { reopen: true });
         return;
@@ -6663,6 +6685,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     let nextStatus: ToolCallTimelineItem["status"] | undefined = "running";
     if (activity.kind === "interrupted") {
       nextStatus = "canceled";
+    } else if (activity.kind === "completed") {
+      // A child turn may have already reported failure or interruption.
+      nextStatus = isTerminalSubAgentStatus(state.toolCall.status) ? undefined : "completed";
     } else if (isTerminalSubAgentStatus(state.toolCall.status)) {
       nextStatus = undefined;
     }
