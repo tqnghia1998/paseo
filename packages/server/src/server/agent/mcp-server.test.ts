@@ -1061,6 +1061,30 @@ describe("Paseo tool timeline presentation", () => {
   });
 });
 
+describe("Paseo agent launch guidance", () => {
+  it("directs callers to the configured model catalog without advertising a fixed model", async () => {
+    const server = await createAgentMcpServer({
+      agentManager: new BoundaryAgentManagerFake() as AgentManager,
+      agentStorage: new BoundaryAgentStorageFake() as AgentStorage,
+      providerSnapshotManager:
+        new BoundaryProviderSnapshotManagerFake() as unknown as ProviderSnapshotManager,
+      callerAgentId: "agent-1",
+      logger: createTestLogger(),
+    });
+    const client = await connectInMemoryMcpClient(server);
+
+    try {
+      const { tools } = await client.listTools();
+      const tool = tools.find(({ name }) => name === "create_agent");
+      expect(tool?.description).toContain("Call list_models before choosing");
+      expect(JSON.stringify(tool)).not.toContain("gpt-5.4");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+});
+
 describe("browser MCP tools", () => {
   const logger = createTestLogger();
 
