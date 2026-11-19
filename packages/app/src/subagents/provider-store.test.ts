@@ -867,7 +867,13 @@ describe("resyncing after the update feed resubscribes", () => {
       .descriptors.get(providerSubagentKey(SERVER_ID, parentAgentId, subagentId))?.status;
 
   test("catches up on children that finished or started while updates were not delivered", async () => {
-    const daemon = fakeDaemon({ [PARENT_ID]: [child("child-1", PARENT_ID, "running")] });
+    const daemon = fakeDaemon({
+      [PARENT_ID]: [
+        child("child-1", PARENT_ID, "running"),
+        child("missing", PARENT_ID, "running"),
+        child("active", PARENT_ID, "running"),
+      ],
+    });
     await refreshProviderSubagents(daemon.client, SERVER_ID, PARENT_ID);
     expect(status(PARENT_ID, "child-1")).toBe("running");
 
@@ -875,11 +881,14 @@ describe("resyncing after the update feed resubscribes", () => {
     daemon.lists[PARENT_ID] = [
       child("child-1", PARENT_ID, "completed"),
       child("child-2", PARENT_ID, "completed"),
+      child("active", PARENT_ID, "running"),
     ];
     await resyncProviderSubagents(daemon.client, SERVER_ID);
 
     expect(status(PARENT_ID, "child-1")).toBe("completed");
     expect(status(PARENT_ID, "child-2")).toBe("completed");
+    expect(status(PARENT_ID, "missing")).toBeUndefined();
+    expect(status(PARENT_ID, "active")).toBe("running");
   });
 
   test("catches up on a parent whose first list failed while disconnected", async () => {

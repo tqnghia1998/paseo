@@ -198,7 +198,7 @@ const CodexSubAgentActivityItemSchema = z
   .object({
     type: z.literal("subAgentActivity"),
     id: z.string().min(1),
-    kind: z.enum(["started", "interacted", "interrupted"]),
+    kind: z.enum(["started", "interacted", "interrupted", "completed"]),
     agentThreadId: z.string().min(1),
     agentPath: z.string(),
   })
@@ -1116,11 +1116,14 @@ function mapSubAgentActivityItem(
     .map((segment) => segment[0]?.toUpperCase() + segment.slice(1))
     .join(" / ");
   nativeName ||= "Sub-agent";
+  let status: ToolCallTimelineItem["status"] = "running";
+  if (item.kind === "interrupted") status = "canceled";
+  if (item.kind === "completed") status = "completed";
   return {
     type: "tool_call",
     callId: item.id,
     name: "Sub-agent",
-    status: item.kind === "interrupted" ? "canceled" : "running",
+    status,
     error: null,
     detail: {
       type: "sub_agent",
