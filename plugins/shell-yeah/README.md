@@ -1,7 +1,7 @@
 # shell-yeah
 
-Bundled from [stevecastaneda/paseo-plugins/shell-yeah](https://github.com/stevecastaneda/paseo-plugins/tree/7f08467b1adbe54a201978a7af804c1147a312fa/shell-yeah) at
-`7f08467b1adbe54a201978a7af804c1147a312fa` (version 1.4.1, MIT).
+Bundled from [stevecastaneda/paseo-plugins/shell-yeah](https://github.com/stevecastaneda/paseo-plugins/tree/e49b7e88d94d721afdfe27e14e00d120ab10590e/shell-yeah) at
+`e49b7e88d94d721afdfe27e14e00d120ab10590e` (version 1.4.2, MIT).
 
 Regenerate with `node scripts/vendor-community-plugins.mjs shell-yeah` in the Paseo fork.
 Generated code uses the host SDK, React, React Native, React Query and Zod.
