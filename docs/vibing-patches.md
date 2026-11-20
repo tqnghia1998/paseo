@@ -330,6 +330,9 @@ The vendor descriptor also preserves `gallery/` (including its data and media) a
 `assets/fonts/` (the sketch font and its license). Asset copying supports complete
 directory trees. `community-vibing.e2e.test.ts` installs the package at a relocated
 path in an isolated daemon and reads its gallery, example data and font by RPC.
+The same patch raises the local `Load()` text/data cap to 16 MiB so full test
+reports can load. File-access rules and media caps are unchanged. Run
+`node --test scripts/genui-data-limit.test.mjs` for the exact byte boundary.
 
 Bots and the palette remain built-ins because embedded navigation depends on them.
 The Bots sidebar has no usage cards. Space App Vibing draws the Codex and AIS Switch

@@ -1,4 +1,4 @@
-import { cp, readFile } from "node:fs/promises";
+import { cp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
@@ -49,6 +49,12 @@ test("vendored GenUI serves gallery examples, their data and the sketch font fro
     await expect(
       client.invokePluginRpc("genui", "genui.gallery_data", { path: "data/vitest-report.json" }),
     ).resolves.toMatchObject({ ok: true });
+    const report = { output: "x".repeat(10 * 1024 * 1024) };
+    await writeFile(path.join(directory, "gallery/data/large-report.json"), JSON.stringify(report));
+    const loaded = await client.invokePluginRpc("genui", "genui.gallery_data", {
+      path: "data/large-report.json",
+    });
+    expect(loaded).toEqual({ ok: true, value: report });
     const font = await readFile(
       path.join(directory, "assets/fonts/Excalifont-Regular-latin.woff2"),
     );

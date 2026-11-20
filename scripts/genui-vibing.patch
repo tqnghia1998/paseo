@@ -1,3 +1,11 @@
+diff --git a/server/data-source.ts b/server/data-source.ts
+--- a/server/data-source.ts
++++ b/server/data-source.ts
+@@ -12,3 +12,3 @@
+-export const MAX_DATA_BYTES = 2 * 1024 * 1024;
++export const MAX_DATA_BYTES = 16 * 1024 * 1024;
+ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+ export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 diff --git a/client/components/content.tsx b/client/components/content.tsx
 index 4db4af2..18e8fbd 100644
 --- a/client/components/content.tsx
