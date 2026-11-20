@@ -18,9 +18,9 @@ const styles = StyleSheet.create({
 const ignoreSelectChat = () => undefined;
 const rejectStart = () => Promise.reject(new Error("Chief cannot start new conversations."));
 
-// Below the composer (100/200), which takes Escape while it has dictation to cancel or a turn
-// to interrupt. Overlays run before the dispatcher, so Escape closes the popup only when idle.
-export const CHIEF_CLOSE_KEYBOARD_PRIORITY = 0;
+// Take Escape ahead of the composer (100/200) so hiding Chief leaves its turn running.
+// The keyboard source still gives foreground overlays first refusal.
+const CHIEF_CLOSE_KEYBOARD_PRIORITY = 300;
 
 function ChiefNotice({ text }: { text: string }) {
   return (

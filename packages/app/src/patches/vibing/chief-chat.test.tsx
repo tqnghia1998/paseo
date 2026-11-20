@@ -240,26 +240,24 @@ it("does not close while the frame is hidden", async () => {
   expect(closeCalls(parent)).toHaveLength(0);
 });
 
-it("leaves Escape to a higher-priority handler that takes it, such as a running turn", async () => {
-  const { send, parent, escape, registerHandler } = await readyChief();
-  await send({ type: "space:chief-visibility", requestId: "r1", active: true });
-  let running = true;
-  const interrupt = vi.fn(() => running);
-  // The composer's registration: it declines Escape when there is nothing to interrupt.
-  registerHandler({
-    handlerId: "composer",
-    actions: ["agent.interrupt"],
-    enabled: true,
-    priority: 100,
-    handle: interrupt,
-  });
-  expect(escape()).toBe(true);
-  expect(interrupt).toHaveBeenCalledTimes(1);
-  expect(closeCalls(parent)).toHaveLength(0);
-  running = false;
-  expect(escape()).toBe(true);
-  expect(parent.postMessage).toHaveBeenCalledWith(closeMessage, origin);
-});
+it.each([100, 200])(
+  "closes Chief instead of interrupting a running turn (composer priority %i)",
+  async (priority) => {
+    const { send, parent, escape, registerHandler } = await readyChief();
+    await send({ type: "space:chief-visibility", requestId: "r1", active: true });
+    const interrupt = vi.fn(() => true);
+    registerHandler({
+      handlerId: "composer",
+      actions: ["agent.interrupt"],
+      enabled: true,
+      priority,
+      handle: interrupt,
+    });
+    expect(escape()).toBe(true);
+    expect(interrupt).not.toHaveBeenCalled();
+    expect(parent.postMessage).toHaveBeenCalledWith(closeMessage, origin);
+  },
+);
 
 it("reports activity after ready, on every change, deduplicated, even while hidden", async () => {
   const { parent, send } = await mount();
