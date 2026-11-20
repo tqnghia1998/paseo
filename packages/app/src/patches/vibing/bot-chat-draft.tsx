@@ -1,5 +1,5 @@
 import { useId, useRef, useState, useMemo, useCallback, type ReactNode } from "react";
-import { Text, View } from "react-native";
+import { Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Composer } from "@/composer";
 import { ComposerDock } from "@/composer/dock";
@@ -191,7 +191,7 @@ function DraftPillContentView({
   contentMaxWidth,
 }: {
   children: ReactNode;
-  contentMaxWidth: number;
+  contentMaxWidth: ViewStyle["maxWidth"];
 }) {
   return <View style={[styles.importPillContent, { maxWidth: contentMaxWidth }]}>{children}</View>;
 }

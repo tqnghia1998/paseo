@@ -50,13 +50,6 @@ export interface ListUsageReportsOptions {
   onReport?: (report: UsageReportEntry) => void;
 }
 
-interface AgentReports {
-  provider: string;
-  model?: string;
-  sessionKey: string;
-  reports: Map<string, KnownReport>;
-}
-
 /** Groups discovered logins by account and caches their usage. */
 export class UsageSourceRegistry {
   private readonly sources = new Map<string, UsageSource>();

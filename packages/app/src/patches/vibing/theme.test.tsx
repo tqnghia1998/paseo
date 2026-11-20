@@ -95,19 +95,25 @@ it("selects in memory: never saves settings or writes browser storage", () => {
 
 it("keeps native normal-chat widths and the Bots default while preserving saved widths", async () => {
   const { resolveChatContentMaxWidth } = await import("./chat-appearance");
-  expect(resolveChatContentMaxWidth({ contentMaxWidth: null }, "/h/server/workspace/one")).toBe(
+  expect(resolveChatContentMaxWidth({ contentWidth: "default" }, "/h/server/workspace/one")).toBe(
     820,
   );
   expect(
     resolveChatContentMaxWidth(
-      { contentMaxWidth: null },
+      { contentWidth: "default" },
       "/h/server/plugin/paseo-bots/sidebar/bots",
     ),
   ).toBe(1200);
   expect(
+    resolveChatContentMaxWidth({ contentWidth: 1600 }, "/h/server/plugin/paseo-bots/sidebar/bots"),
+  ).toBe(1600);
+  expect(
     resolveChatContentMaxWidth(
-      { contentMaxWidth: 1600 },
+      { contentWidth: "full" },
       "/h/server/plugin/paseo-bots/sidebar/bots",
     ),
-  ).toBe(1600);
+  ).toBeUndefined();
+  expect(resolveChatContentMaxWidth({ contentWidth: "wide" }, "/h/server/workspace/one")).toBe(
+    1200,
+  );
 });

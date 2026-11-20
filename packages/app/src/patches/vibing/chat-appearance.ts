@@ -1,12 +1,16 @@
-import { DEFAULT_CONTENT_MAX_WIDTH } from "@/styles/theme";
+import { resolveContentMaxWidth, type AppSettings } from "@/hooks/use-settings";
 
 export function isBotsChatPath(pathname: string): boolean {
   return pathname.includes("/plugin/paseo-bots/");
 }
 
 export function resolveChatContentMaxWidth(
-  settings: { contentMaxWidth: number | null },
+  settings: Pick<AppSettings, "contentWidth">,
   pathname: string,
-): number {
-  return settings.contentMaxWidth ?? (isBotsChatPath(pathname) ? 1200 : DEFAULT_CONTENT_MAX_WIDTH);
+): number | undefined {
+  return resolveContentMaxWidth(
+    settings.contentWidth === "default" && isBotsChatPath(pathname)
+      ? { contentWidth: "wide" }
+      : settings,
+  );
 }

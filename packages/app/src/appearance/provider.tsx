@@ -78,7 +78,6 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     [settings.theme, selected, options, hostMode],
   );
 
-  const contentMaxWidth = resolveContentMaxWidth(settings);
   useEffect(() => {
     if (isLoading) return;
     applyTheme(themeInput);
