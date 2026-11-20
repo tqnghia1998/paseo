@@ -21,7 +21,7 @@ const plugins = [
     id: "shell-yeah",
     repository: "stevecastaneda/paseo-plugins",
     directory: "shell-yeah",
-    revision: "7f08467b1adbe54a201978a7af804c1147a312fa",
+    revision: "e49b7e88d94d721afdfe27e14e00d120ab10590e",
     patch: "shell-yeah-vibing.patch",
   },
   {
