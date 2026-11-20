@@ -56,7 +56,7 @@ export const TurnFooter = memo(function TurnFooter({
   onForkInFlightTurn,
 }: {
   isRunning: boolean;
-  contentMaxWidth: number;
+  contentMaxWidth: number | undefined;
   inFlightTurnStartedAt: Date | null;
   host: TurnFooterHost | null;
   strategy: TurnContentStrategy;
@@ -99,7 +99,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
-  contentMaxWidth: number;
+  contentMaxWidth: number | undefined;
   strategy: TurnContentStrategy;
   items: StreamItem[];
   timing?: TurnTiming;
@@ -220,7 +220,7 @@ function TurnFooterRow({
   contentMaxWidth,
 }: {
   children: ReactNode;
-  contentMaxWidth: number;
+  contentMaxWidth: number | undefined;
 }) {
   // Use the transcript's resolved width: numeric theme tokens can lag behind
   // route/appearance changes on web while this footer stays mounted.

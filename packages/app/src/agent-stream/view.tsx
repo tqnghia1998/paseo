@@ -176,7 +176,7 @@ function renderStreamItemWithTurnFooter(input: {
   content: ReactNode;
   layoutItem: StreamLayoutItem;
   turnIndent: TurnIndent;
-  contentMaxWidth: number;
+  contentMaxWidth: number | undefined;
   strategy: TurnContentStrategy;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
