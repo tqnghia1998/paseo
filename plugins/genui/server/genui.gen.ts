@@ -13315,7 +13315,7 @@ import { mkdir, open, readdir, readFile, realpath } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-var MAX_DATA_BYTES = 2 * 1024 * 1024;
+var MAX_DATA_BYTES = 16 * 1024 * 1024;
 var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 var MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 var BB_STORAGE_PREFIX = "$BB_THREAD_STORAGE/";
