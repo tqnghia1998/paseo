@@ -8963,7 +8963,7 @@ test("failed replacement cancellation preserves an autonomous running state", as
   }
 });
 
-test("waitForAgentEvent waitForActive resolves for autonomous live-event run", async () => {
+test("waitForAgentEvent waits through idle only when explicitly requested", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-live-wait-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -8995,6 +8995,12 @@ test("waitForAgentEvent waitForActive resolves for autonomous live-event run", a
     undefined,
     { workspaceId: undefined },
   );
+
+  await expect(
+    manager.waitForAgentEvent(snapshot.id, { waitForActive: true }),
+  ).resolves.toMatchObject({
+    status: "idle",
+  });
 
   const autonomousTurnId = "autonomous-wait-1";
   const waitPromise = manager.waitForAgentEvent(snapshot.id, {

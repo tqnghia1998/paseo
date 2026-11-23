@@ -177,8 +177,24 @@ for (const artifact of [
   );
 }
 
+const builtinPluginsDest = path.join(DEST_DIR, "builtin-plugins");
+const builtinPluginsSrc = path.join(ROOT_DIR, "packages/server/dist/server/builtin-plugins");
+// Ship only the daemon's built-in list; other plugins/ entries stay checkout-only.
+const { builtinPlugins } = await import(
+  pathToFileURL(path.join(ROOT_DIR, "packages/server/dist/server/server/plugins/builtin/index.js"))
+    .href
+);
+const shippedBuiltinEntries = new Set(["", "package.json", ...builtinPlugins]);
+fs.rmSync(builtinPluginsDest, { recursive: true, force: true });
+fs.cpSync(builtinPluginsSrc, builtinPluginsDest, {
+  recursive: true,
+  filter: (source) =>
+    path.basename(source) !== "tsconfig.json" &&
+    shippedBuiltinEntries.has(path.relative(builtinPluginsSrc, source).split(path.sep)[0]),
+});
+
 if (serverOnly) {
-  console.log("Updated standalone server and its terminal/plugin workers in", DEST_DIR);
+  console.log("Updated standalone server, workers, and built-in plugins in", DEST_DIR);
   process.exit(0);
 }
 
@@ -215,21 +231,6 @@ fs.cpSync(
   shellIntegrationDest,
   { recursive: true },
 );
-const builtinPluginsDest = path.join(DEST_DIR, "builtin-plugins");
-const builtinPluginsSrc = path.join(ROOT_DIR, "packages/server/dist/server/builtin-plugins");
-// Ship only the daemon's built-in list; other plugins/ entries stay checkout-only.
-const { builtinPlugins } = await import(
-  pathToFileURL(path.join(ROOT_DIR, "packages/server/dist/server/server/plugins/builtin/index.js"))
-    .href
-);
-const shippedBuiltinEntries = new Set(["", "package.json", ...builtinPlugins]);
-fs.rmSync(builtinPluginsDest, { recursive: true, force: true });
-fs.cpSync(builtinPluginsSrc, builtinPluginsDest, {
-  recursive: true,
-  filter: (source) =>
-    path.basename(source) !== "tsconfig.json" &&
-    shippedBuiltinEntries.has(path.relative(builtinPluginsSrc, source).split(path.sep)[0]),
-});
 const communityPluginsDest = path.join(DEST_DIR, "community-plugins");
 fs.rmSync(communityPluginsDest, { recursive: true, force: true });
 for (const id of communityPluginIds) {

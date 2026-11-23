@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Vibing ships only the provider and usage-source plugins listed here.
+// Vibing ships only these built-ins; the standalone bundler uses the same list.
 export const builtinPlugins = [
   "antigravity-provider",
   "claude-usage-source",

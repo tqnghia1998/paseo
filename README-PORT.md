@@ -44,7 +44,7 @@ rebuilding or replacing its backend, native archive, or UI:
 PASEO_WEB_DEST_DIR=/absolute/consumer/worktree/scripts/paseo-web npm run build:web -- --runner-only
 ```
 
-For a server packaging repair with current `packages/server/dist` artifacts and an existing consumer bundle, use `node scripts/bundle-paseo-web.mjs --server-only` with the same destination. This regenerates `server.mjs`, the plugin runtime/compiler workers, the upstream terminal-worker directory, and both OpenCode bridge versions without rebuilding or replacing the UI; it does not compile changed TypeScript sources.
+For a server packaging repair with current `packages/server/dist` artifacts and an existing consumer bundle, use `node scripts/bundle-paseo-web.mjs --server-only` with the same destination. This regenerates `server.mjs`, its workers, both OpenCode bridge versions, and the daemon's built-in plugin directory without replacing the UI; it does not compile changed TypeScript sources.
 
 The runner consumes `PASEO_WORKTREE_CLEANUP_TOKEN` before importing the daemon or
 launching extraction tools. It retains the capability only in daemon configuration,
@@ -65,7 +65,7 @@ not in the environment inherited by providers, external commands, or terminals.
 - `runtime-node-modules.tgz` — PTY and speech dependencies, TypeScript, esbuild, and the build host's esbuild binary
 - `bridge-plugin.bundle.mjs` — OpenCode v1 bridge runtime artifact
 - `v2/bridge-plugin.bundle.mjs` and `v2/state.mjs` — OpenCode v2 bridge and its shared state module; both must remain beside `server.mjs` under `v2/`
-- `builtin-plugins/` — Only the plugins in the daemon's built-in list (Claude, Codex and AIS Switch usage sources, Bots and embedded theme), loaded beside `server.mjs`; checkout-only `tsconfig.json` files are omitted because their parent configuration is not shipped
+- `builtin-plugins/` — Only the plugins in the daemon's built-in list (Antigravity provider, Claude, Codex and AIS Switch usage sources, Bots and embedded theme), loaded beside `server.mjs`; checkout-only `tsconfig.json` files are omitted because their parent configuration is not shipped
 
 Community addons use native plugin management after one-time installation. Later launches preserve removal and disablement, including a global plugin opt-out. See the [plugin boundary](docs/vibing-patches.md#plugin-boundary).
 

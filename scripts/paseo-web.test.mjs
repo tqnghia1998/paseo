@@ -160,12 +160,14 @@ test("runner-only bundling preserves existing backend and UI artifacts", () => {
   }
 });
 
-test("server-only packaging relocates the upstream terminal worker without replacing the UI", () => {
+test("server-only packaging refreshes built-ins and workers without replacing the UI", () => {
   const directory = mkdtempSync(path.join(os.tmpdir(), "paseo-server-package-"));
   try {
     writeFileSync(path.join(directory, "server.mjs"), "old backend");
     writeFileSync(path.join(directory, "terminal-worker-process.js"), "obsolete worker");
     writeFileSync(path.join(directory, "ui-canary"), "existing UI");
+    const builtinPluginsDir = path.join(directory, "builtin-plugins");
+    mkdirSync(path.join(builtinPluginsDir, "obsolete-plugin"), { recursive: true });
     execFileSync(process.execPath, ["scripts/bundle-paseo-web.mjs", "--server-only"], {
       cwd: path.join(import.meta.dirname, ".."),
       env: { ...process.env, PASEO_WEB_DEST_DIR: directory },
@@ -178,6 +180,15 @@ test("server-only packaging relocates the upstream terminal worker without repla
     assert.ok(existsSync(path.join(directory, "terminal-worker", "terminal-worker.mjs")));
     assert.ok(existsSync(path.join(directory, "plugin-process.js")));
     assert.ok(existsSync(path.join(directory, "compiler-worker.js")));
+    assert.deepEqual(readdirSync(builtinPluginsDir).sort(), [
+      "ais-switch-usage-source",
+      "antigravity-provider",
+      "claude-usage-source",
+      "codex-usage-source",
+      "package.json",
+      "paseo-bots",
+      "space-app-vibing-theme",
+    ]);
     for (const artifact of [
       "bridge-plugin.bundle.mjs",
       "v2/bridge-plugin.bundle.mjs",

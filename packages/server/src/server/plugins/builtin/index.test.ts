@@ -35,6 +35,19 @@ async function fixture(root: string, id: string, client = false): Promise<string
   return directory;
 }
 
+test("the default built-in allowlist is exactly the Vibing inventory", () => {
+  expect(new BuiltinPluginLoader().ids).toEqual(
+    new Set([
+      "antigravity-provider",
+      "claude-usage-source",
+      "codex-usage-source",
+      "ais-switch-usage-source",
+      "paseo-bots",
+      "space-app-vibing-theme",
+    ]),
+  );
+});
+
 test("listed built-ins resolve to matching manifests and compile", async () => {
   const root = resolveBuiltinPluginsRoot();
   for (const id of builtinPlugins) {
@@ -81,7 +94,6 @@ test("Vibing registers Antigravity as a built-in provider without user plugins",
 
 test("Bots stays built-in while ordinary community plugins use native lifecycle controls and their daemon home", async () => {
   const embeddedDefaults = ["space-app-vibing-theme", "paseo-bots"];
-  for (const id of embeddedDefaults) expect(builtinPlugins).toContain(id);
   const daemon = await createTestPaseoDaemon({
     pluginsEnabled: false,
     builtinPlugins: new BuiltinPluginLoader(resolveBuiltinPluginsRoot(), embeddedDefaults),

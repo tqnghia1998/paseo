@@ -8,6 +8,7 @@ is the per-plugin reference and the upgrade procedure.
 
 | Plugin                                            | Source and pin                                                                                         | Version       | Ships as                   | Modified                                      |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------- | -------------------------- | --------------------------------------------- |
+| Antigravity (`antigravity-provider`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                            |
 | Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `ae40671`                                    | 0.3.1         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch`    |
 | Claude usage (`claude-usage-source`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                            |
 | Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
@@ -19,6 +20,7 @@ is the per-plugin reference and the upgrade procedure.
 
 - **Built in:** listed in `builtinPlugins` (`packages/server/src/server/plugins/builtin/index.ts`);
   the bundler copies them beside `server.mjs` and the daemon always loads them.
+  The Antigravity CLI is not bundled; users install it separately.
 - **Community install:** listed in `communityPluginIds` (`scripts/paseo-web-plugins.mjs`) and
   copied into `<home>/installed-plugins/<id>` as an ordinary directory plugin the first time a
   home sees the id. After that the native plugin manager owns it: users can disable or remove it,
