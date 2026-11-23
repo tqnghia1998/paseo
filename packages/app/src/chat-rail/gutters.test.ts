@@ -27,27 +27,22 @@ describe("resolveChatColumnGutters", () => {
     ).toEqual({ paddingLeft: 16, paddingRight: 16 });
   });
 
-  it("reserves only the left outline gutter when content width is Full", () => {
+  it("mirrors the outline gutter on both sides regardless of content width", () => {
     expect(
       resolveChatColumnGutters({
         gutter: CHAT_COLUMN_BASE_GUTTER,
         outlineInset: CHAT_OUTLINE_GUTTER_INSET,
         contentMaxWidth: undefined,
       }),
-    ).toEqual({ paddingLeft: 60, paddingRight: 16 });
-  });
+    ).toEqual({ paddingLeft: 60, paddingRight: 60 });
 
-  it("balances capped columns with a clamped right gutter from the remaining width", () => {
     expect(
       resolveChatColumnGutters({
         gutter: CHAT_COLUMN_BASE_GUTTER,
         outlineInset: CHAT_OUTLINE_GUTTER_INSET,
         contentMaxWidth: 820,
       }),
-    ).toEqual({
-      paddingLeft: 60,
-      paddingRight: "clamp(16px, calc(100% - 880px), 60px)",
-    });
+    ).toEqual({ paddingLeft: 60, paddingRight: 60 });
 
     expect(
       resolveChatColumnGutters({
@@ -55,10 +50,7 @@ describe("resolveChatColumnGutters", () => {
         outlineInset: CHAT_OUTLINE_GUTTER_INSET,
         contentMaxWidth: 1200,
       }),
-    ).toEqual({
-      paddingLeft: 60,
-      paddingRight: "clamp(16px, calc(100% - 1260px), 60px)",
-    });
+    ).toEqual({ paddingLeft: 60, paddingRight: 60 });
   });
 });
 

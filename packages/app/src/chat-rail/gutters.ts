@@ -10,21 +10,14 @@ export interface ChatColumnGutters {
 /**
  * Horizontal padding for a chat column on web.
  *
- * When the chat outline reserves `outlineInset` on the left, a capped column matches
- * that inset on the right using only the horizontal slack left over after fitting
- * `contentMaxWidth`. Default and Wide stay centered while the pane has room, shift
- * smoothly away from the outline as the pane narrows, and fall back to the base gutter
- * on the right when uncapped (`Full`) or tight.
+ * When the chat outline reserves `outlineInset` on the left, mirror the same inset on
+ * the right so the chat column and composer stay symmetric at every pane width.
  */
 export function resolveChatColumnGutters(input: {
   gutter: number;
   outlineInset: number;
   contentMaxWidth: number | undefined;
 }): ChatColumnGutters {
-  const paddingLeft = input.gutter + input.outlineInset;
-  const paddingRight =
-    input.outlineInset > 0 && input.contentMaxWidth !== undefined
-      ? `clamp(${input.gutter}px, calc(100% - ${paddingLeft + input.contentMaxWidth}px), ${paddingLeft}px)`
-      : input.gutter;
-  return { paddingLeft, paddingRight };
+  const padding = input.gutter + input.outlineInset;
+  return { paddingLeft: padding, paddingRight: padding };
 }
