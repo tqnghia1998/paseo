@@ -41,6 +41,36 @@ describe("deriveAgentStateBucket", () => {
     ).toBe("running");
   });
 
+  it("shows idle agents with running subagents as running while preserving attention precedence", () => {
+    expect(
+      deriveAgentStateBucket({
+        status: "idle",
+        runningSubagentCount: 1,
+        requiresAttention: true,
+        attentionReason: "finished",
+      }),
+    ).toBe("running");
+    expect(
+      deriveAgentStateBucket({
+        status: "idle",
+        runningSubagentCount: 1,
+        attentionReason: "permission",
+      }),
+    ).toBe("needs_input");
+    expect(
+      deriveAgentStateBucket({
+        status: "error",
+        runningSubagentCount: 1,
+        requiresAttention: true,
+        attentionReason: "error",
+      }),
+    ).toBe("failed");
+    expect(deriveAgentStateBucket({ status: "idle", runningSubagentCount: 0 })).toBe("done");
+    expect(getAgentStatusPriority({ status: "idle", runningSubagentCount: 1 })).toBe(
+      getAgentStatusPriority({ status: "running" }),
+    );
+  });
+
   it("prioritizes pending permissions as needs_input", () => {
     expect(
       deriveAgentStateBucket({

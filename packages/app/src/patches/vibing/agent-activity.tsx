@@ -8,7 +8,12 @@ export const EMBEDDED_AGENT_ACTIVITY_EVENT_TYPE = "paseo:agent-activity";
 export const EMBEDDED_AGENT_ACTIVITY_REQUEST_TYPE = "space:paseo-agent-activity-request";
 
 export function isEmbeddedWorkspaceRunning(
-  agents: Iterable<Pick<Agent, "id" | "workspaceId" | "archivedAt" | "labels" | "backgroundWork">>,
+  agents: Iterable<
+    Pick<
+      Agent,
+      "id" | "workspaceId" | "archivedAt" | "labels" | "backgroundWork" | "runningSubagentCount"
+    >
+  >,
   workspaceId: string,
   isTurnActive: (agentId: string) => boolean,
   isWorkspaceAllowed?: (workspaceId: string | null | undefined) => boolean,
@@ -24,6 +29,7 @@ export function isEmbeddedWorkspaceRunning(
       isBotChatContext(agent) &&
       (isTurnActive(agent.id) ||
         (agent.backgroundWork?.count ?? 0) > 0 ||
+        (agent.runningSubagentCount ?? 0) > 0 ||
         hasRunningSubagent?.(agent.id))
     )
       return true;

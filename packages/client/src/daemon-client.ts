@@ -3678,6 +3678,18 @@ export class DaemonClient {
     }
   }
 
+  async suggestAgentTitle(agentId: string): Promise<string> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.suggest_title.response">({
+        message: { type: "agent.suggest_title.request", agentId },
+        timeout: 60_000,
+      });
+    if (!payload.accepted || !payload.title) {
+      throw new Error(payload.error ?? "Could not generate a chat title.");
+    }
+    return payload.title;
+  }
+
   async updateAgent(
     agentId: string,
     updates: { name?: string; labels?: Record<string, string> },

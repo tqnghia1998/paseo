@@ -13,6 +13,11 @@ import {
   useWorkspaceAttachmentsStore,
 } from "@/attachments/workspace-attachments-store";
 
+vi.mock("react-native-unistyles", () => ({
+  StyleSheet: { create: () => ({}) },
+  withUnistyles: <T,>(component: T) => component,
+}));
+
 const mocks = vi.hoisted(() => ({
   selection: {
     selectedProvider: "codex" as AgentProvider | null,
@@ -21,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     effectiveThinkingOptionId: "high",
     isModelLoading: false,
     modelError: null as string | null,
+    hasUserModifiedAgentSettings: false,
     providerOptions: { plan_mode: true },
     agentControls: {},
     commandDraft: {},
@@ -57,6 +63,14 @@ vi.mock("@/plugins", () => ({
   ),
 }));
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
+vi.mock("@/chat-rail", () => ({
+  CHAT_COLUMN_RAIL_DATASET: { chatRailLane: "true" },
+  ChatColumnRailSurface: ({ serverId, children }: { serverId: string; children: ReactNode }) => (
+    <div data-testid="chat-column-rail-surface" data-server-id={serverId}>
+      {children}
+    </div>
+  ),
+}));
 vi.mock("@/composer/dock", () => ({
   ComposerDock: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -109,6 +123,7 @@ beforeEach(() => {
   mocks.selection.effectiveThinkingOptionId = "high";
   mocks.selection.isModelLoading = false;
   mocks.selection.modelError = null;
+  mocks.selection.hasUserModifiedAgentSettings = false;
 });
 
 afterEach(() => {
@@ -479,5 +494,32 @@ it("locks controls during creation and snapshots the selected runtime before ima
     expect.objectContaining({
       agentSettings: expect.objectContaining({ provider: "codex", model: "model" }),
     }),
+  );
+});
+
+it("aligns the draft composer and pill row with the active chat column rail", () => {
+  mocks.selection.hasUserModifiedAgentSettings = true;
+  const { container } = render(
+    <NativeBotChatDraft
+      serverId="host-42"
+      botId="bot"
+      cwd="/worktree"
+      workspaceId="workspace"
+      provider="codex"
+      active
+      importLabels={BOT_LABELS}
+      onImported={vi.fn()}
+      onStart={mocks.onStart}
+    />,
+  );
+  const surface = screen.getByTestId("chat-column-rail-surface");
+  expect(surface.getAttribute("data-server-id")).toBe("host-42");
+  expect(surface.contains(screen.getByTestId("native-composer"))).toBe(true);
+  const importButton = screen.getByText("Import session");
+  expect(importButton.closest('[data-chat-rail-lane="true"]')).not.toBeNull();
+  const runtimeHint = screen.getByText("Applies to this chat and delegated team members.");
+  expect(runtimeHint.closest('[data-chat-rail-lane="true"]')).not.toBeNull();
+  expect(container.querySelectorAll('[data-chat-rail-lane="true"]').length).toBeGreaterThanOrEqual(
+    2,
   );
 });

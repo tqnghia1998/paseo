@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 import { Pressable } from "react-native";
 import { useTranslation } from "react-i18next";
 import { DiffStat } from "@/components/diff-stat";
-import { composerPillStyles } from "@/composer/pill-styles";
+import { COMPOSER_PILL_DATASET, composerPillStyles } from "@/composer/pill-styles";
 import { useVisibleWorkspaceDiffStat } from "@/composer/workspace-diff-stat";
 
 interface ComposerDiffStatPillProps {
@@ -24,6 +24,7 @@ export function ComposerDiffStatPill({ additions, deletions, onPress }: Composer
   return (
     <Pressable
       testID="composer-diff-stat-pill"
+      dataSet={COMPOSER_PILL_DATASET}
       accessibilityRole="button"
       accessibilityLabel={t("workspace.git.diff.openChangesTab")}
       onPress={onPress}

@@ -61,6 +61,7 @@ const RAW_STORED_AGENT_SCHEMA = z.object({
   lastActivityAt: z.string().optional(),
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
+  botAutoTitle: z.enum(["pending", "claimed"]).optional(),
   labels: z.record(z.string(), z.string()).default({}),
   metadata: z.record(z.string(), z.custom<JsonValue>()).default({}),
   lastStatus: AgentStatusSchema.default("closed"),
@@ -308,18 +309,20 @@ export class AgentStorage {
 
   private queueRecordMutation(
     agentId: string,
-    mutate: (existing: StoredAgentRecord | null) => StoredAgentRecord,
+    mutate: (existing: StoredAgentRecord | null) => StoredAgentRecord | null,
   ): Promise<void> {
     const prev = this.pendingWrites.get(agentId) ?? Promise.resolve();
-    const next = prev.then(async () => {
-      if (this.deleting.has(agentId)) {
-        return undefined;
-      }
+    const next = prev
+      .catch(() => undefined)
+      .then(async () => {
+        if (this.deleting.has(agentId)) {
+          return undefined;
+        }
 
-      const record = mutate(this.cache.get(agentId) ?? null);
-      await this.writeRecord(record);
-      return undefined;
-    });
+        const record = mutate(this.cache.get(agentId) ?? null);
+        if (record) await this.writeRecord(record);
+        return undefined;
+      });
 
     const tracked = next.finally(() => {
       if (this.pendingWrites.get(agentId) === tracked) {
@@ -417,19 +420,30 @@ export class AgentStorage {
 
   async applySnapshot(
     agent: ManagedAgent,
-    options?: { title?: string | null; internal?: boolean },
+    options?: {
+      title?: string | null;
+      internal?: boolean;
+      botAutoTitle?: "pending";
+      preserveBotAutoTitle?: boolean;
+    },
   ): Promise<void> {
     await this.load();
     const hasTitleOverride =
       options !== undefined && Object.prototype.hasOwnProperty.call(options, "title");
     const hasInternalOverride =
       options !== undefined && Object.prototype.hasOwnProperty.call(options, "internal");
+    const resolveBotAutoTitle = (existing: StoredAgentRecord | null | undefined) => {
+      if (!existing) return options?.botAutoTitle;
+      if (hasTitleOverride && !options?.preserveBotAutoTitle) return undefined;
+      return existing.botAutoTitle;
+    };
     await this.queueRecordMutation(agent.id, (existing) => {
       const record = toStoredAgentRecord(agent, {
         title: hasTitleOverride ? (options?.title ?? null) : (existing?.title ?? null),
         createdAt: existing?.createdAt,
         internal: hasInternalOverride ? options?.internal : (agent.internal ?? existing?.internal),
       });
+      record.botAutoTitle = resolveBotAutoTitle(existing);
 
       // Preserve soft-delete/archive status across snapshot flushes. The
       // projection runs inside the per-agent write queue so it cannot commit a
@@ -447,12 +461,32 @@ export class AgentStorage {
 
   async setTitle(agentId: string, title: string): Promise<void> {
     await this.load();
-    await this.waitForPendingWrite(agentId);
-    const record = await this.get(agentId);
-    if (!record) {
-      throw new Error(`Agent ${agentId} not found`);
-    }
-    await this.upsert({ ...record, title });
+    await this.queueRecordMutation(agentId, (record) => {
+      if (!record) throw new Error(`Agent ${agentId} not found`);
+      return { ...record, title, botAutoTitle: undefined };
+    });
+  }
+
+  async claimBotAutoTitle(agentId: string): Promise<boolean> {
+    await this.load();
+    let claimed = false;
+    await this.queueRecordMutation(agentId, (record) => {
+      if (record?.botAutoTitle !== "pending" || record.archivedAt) return null;
+      claimed = true;
+      return { ...record, botAutoTitle: "claimed" };
+    });
+    return claimed;
+  }
+
+  async finishBotAutoTitle(agentId: string, title: string): Promise<StoredAgentRecord | null> {
+    await this.load();
+    let updated: StoredAgentRecord | null = null;
+    await this.queueRecordMutation(agentId, (record) => {
+      if (record?.botAutoTitle !== "claimed" || record.archivedAt) return null;
+      updated = { ...record, title, botAutoTitle: undefined };
+      return updated;
+    });
+    return updated;
   }
 
   async flush(): Promise<void> {
@@ -597,10 +631,6 @@ export class AgentStorage {
       this.daemonAgentIdsByExecution.delete(key);
     }
     this.daemonExecutionKeysByAgentId.delete(agentId);
-  }
-
-  private async waitForPendingWrite(agentId: string): Promise<void> {
-    await (this.pendingWrites.get(agentId) ?? Promise.resolve()).catch(() => undefined);
   }
 }
 

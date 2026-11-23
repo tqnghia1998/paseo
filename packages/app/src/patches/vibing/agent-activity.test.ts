@@ -96,6 +96,13 @@ describe("embedded agent activity", () => {
     expect(isEmbeddedWorkspaceRunning([parent], "feature", () => false)).toBe(false);
   });
 
+  it("keeps the feature running when snapshot reports running subagents", () => {
+    const parent = { id: "chat", workspaceId: "feature", labels: {}, runningSubagentCount: 1 };
+    expect(isEmbeddedWorkspaceRunning([parent], "feature", () => false)).toBe(true);
+    parent.runningSubagentCount = 0;
+    expect(isEmbeddedWorkspaceRunning([parent], "feature", () => false)).toBe(false);
+  });
+
   it("keeps the parent feature running until its last provider subagent finishes", () => {
     const agents = [
       { id: "parent", workspaceId: "feature", labels: {} },

@@ -10,14 +10,20 @@ export interface AgentStateBucketInput {
   requiresAttention?: boolean;
   attentionReason?: AgentAttentionReason;
   backgroundWork?: AgentBackgroundWorkSummary | null;
+  runningSubagentCount?: number;
 }
 
 export function isAgentRunning(input: {
   status: AgentLifecycleStatus | null | undefined;
   backgroundWork?: AgentBackgroundWorkSummary | null;
+  runningSubagentCount?: number;
 }): boolean {
-  const { status, backgroundWork } = input;
-  return status === "running" || (backgroundWork?.runningCount ?? backgroundWork?.count ?? 0) > 0;
+  const { status, backgroundWork, runningSubagentCount } = input;
+  return (
+    status === "running" ||
+    (backgroundWork?.runningCount ?? backgroundWork?.count ?? 0) > 0 ||
+    (runningSubagentCount ?? 0) > 0
+  );
 }
 
 const WORKSPACE_STATE_BUCKET_PRIORITY = {

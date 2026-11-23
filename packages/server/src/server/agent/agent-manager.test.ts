@@ -803,6 +803,50 @@ function instructionPluginSessions(instructions: () => string[]): PluginSessions
   };
 }
 
+test("automatically titles a new Bots chat after its first substantive completed turn", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-auto-title-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new TestAgentClient();
+  const manager = new AgentManager({ clients: { codex: client }, registry: storage, logger });
+  const run = manager.runAgent.bind(manager);
+  const generate = vi.spyOn(manager, "runAgent").mockImplementation(async (id, prompt, options) => {
+    if (!manager.getAgent(id)?.internal) return run(id, prompt, options);
+    return { sessionId: id, finalText: '{"title":"Plan the login flow"}', timeline: [] };
+  });
+  try {
+    const agent = await manager.createAgent(
+      { provider: "codex", model: "gpt-5.4", cwd: workdir },
+      undefined,
+      { workspaceId: undefined, labels: { "paseo-bots.bot": "general" }, initialTitle: "Hi" },
+    );
+    await manager.runAgent(agent.id, "Hi", { clientMessageId: randomUUID() });
+    await manager.flush();
+    expect(await storage.get(agent.id)).toMatchObject({ title: "Hi", botAutoTitle: "pending" });
+    expect(generate).toHaveBeenCalledTimes(1);
+
+    await manager.runAgent(agent.id, "Help me plan the login flow", {
+      clientMessageId: randomUUID(),
+    });
+    await manager.flush();
+    expect(await storage.get(agent.id)).toMatchObject({ title: "Plan the login flow" });
+    expect(generate).toHaveBeenCalledTimes(3);
+    expect(client.createdConfigs.at(-1)).toMatchObject({
+      provider: "codex",
+      model: "gpt-5.2-codex",
+    });
+    await manager.runAgent(agent.id, "Now consider password reset", {
+      clientMessageId: randomUUID(),
+    });
+    await manager.flush();
+    expect(await storage.get(agent.id)).toMatchObject({ title: "Plan the login flow" });
+    expect(generate).toHaveBeenCalledTimes(4);
+    await manager.closeAgent(agent.id);
+  } finally {
+    await manager.flush();
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
 test("OpenCode persistence excludes launch-only instructions from storage and clients", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-plugin-persistence-"));
   const harness = new V2Harness();

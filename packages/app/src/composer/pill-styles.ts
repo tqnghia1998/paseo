@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native-unistyles";
+import { isWeb } from "@/constants/platform";
 import { SPACING } from "@/styles/theme";
 
 export const COMPOSER_PILL_CLEARANCE = {
@@ -6,6 +7,9 @@ export const COMPOSER_PILL_CLEARANCE = {
   wide: 10,
 } as const;
 export const COMPOSER_PILL_MIN_HEIGHT = 32;
+export const COMPOSER_PILL_DATASET: Record<string, string> | undefined = isWeb
+  ? Object.freeze({ composerPill: "true" })
+  : undefined;
 
 export function resolveComposerPillClearance(isCompact: boolean): number {
   return isCompact ? COMPOSER_PILL_CLEARANCE.compact : COMPOSER_PILL_CLEARANCE.wide;

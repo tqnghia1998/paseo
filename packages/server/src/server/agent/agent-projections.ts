@@ -270,11 +270,21 @@ function visibleStoredBackgroundWork(
   return record.internal || record.archivedAt ? undefined : summary;
 }
 
+function visibleStoredRunningSubagentCount(
+  record: StoredAgentRecord,
+  count: number | undefined,
+): Pick<AgentSnapshotPayload, "runningSubagentCount"> {
+  return !record.internal && !record.archivedAt && (count ?? 0) > 0
+    ? { runningSubagentCount: count }
+    : {};
+}
+
 export function buildStoredAgentPayload(
   record: StoredAgentRecord,
   validProviders: Iterable<AgentProvider>,
   effectiveOptionsFor: EffectiveOptionsResolver,
   backgroundWork?: AgentSnapshotPayload["backgroundWork"],
+  runningSubagentCount?: number,
 ): AgentSnapshotPayload {
   const defaultCapabilities = {
     supportsStreaming: false,
@@ -316,6 +326,7 @@ export function buildStoredAgentPayload(
     lastUserMessageAt: lastUserMessageAt ? lastUserMessageAt.toISOString() : null,
     status: record.lastStatus,
     backgroundWork: visibleStoredBackgroundWork(record, backgroundWork),
+    ...visibleStoredRunningSubagentCount(record, runningSubagentCount),
     capabilities: defaultCapabilities,
     currentModeId: record.lastModeId ?? null,
     availableModes: [],
@@ -347,6 +358,7 @@ export function toAgentListItemPayload(agent: AgentSnapshotPayload): AgentListIt
     effectiveThinkingOptionId: agent.effectiveThinkingOptionId,
     status: agent.status,
     ...(agent.backgroundWork ? { backgroundWork: agent.backgroundWork } : {}),
+    ...(agent.runningSubagentCount ? { runningSubagentCount: agent.runningSubagentCount } : {}),
     cwd: agent.cwd,
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,

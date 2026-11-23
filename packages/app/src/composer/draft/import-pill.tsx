@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Import as ImportIcon } from "lucide-react-native";
-import { composerPillStyles } from "@/composer/pill-styles";
+import { COMPOSER_PILL_DATASET, composerPillStyles } from "@/composer/pill-styles";
 import type { Theme } from "@/styles/theme";
 
 const ThemedImportIcon = withUnistyles(ImportIcon);
@@ -31,6 +31,7 @@ export function ComposerImportPill({ onPress, disabled = false }: ComposerImport
     <View style={styles.row}>
       <Pressable
         testID="composer-import-agent-pill"
+        dataSet={COMPOSER_PILL_DATASET}
         accessibilityRole="button"
         accessibilityLabel={t("importSession.title")}
         onPress={onPress}

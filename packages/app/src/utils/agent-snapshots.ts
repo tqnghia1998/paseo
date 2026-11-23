@@ -57,6 +57,12 @@ export function derivePendingPermissionKey(
   return `${agentId}:${fallbackId}`;
 }
 
+function projectRunningSubagentCount(
+  count: number | undefined,
+): Pick<AgentSnapshotPayload, "runningSubagentCount"> {
+  return count ? { runningSubagentCount: count } : {};
+}
+
 export function projectAgentSnapshot(agent: Agent): AgentSnapshotPayload {
   return {
     id: agent.id,
@@ -72,6 +78,7 @@ export function projectAgentSnapshot(agent: Agent): AgentSnapshotPayload {
     lastUserMessageAt: agent.lastUserMessageAt?.toISOString() ?? null,
     status: agent.status,
     backgroundWork: agent.backgroundWork,
+    ...projectRunningSubagentCount(agent.runningSubagentCount),
     ...projectActiveTurn(agent),
     capabilities: agent.capabilities,
     currentModeId: agent.currentModeId,
@@ -117,6 +124,9 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     provider: snapshot.provider,
     status: snapshot.status,
     backgroundWork: snapshot.backgroundWork,
+    ...(snapshot.runningSubagentCount
+      ? { runningSubagentCount: snapshot.runningSubagentCount }
+      : {}),
     turn,
     createdAt,
     updatedAt,

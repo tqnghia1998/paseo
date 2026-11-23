@@ -1,6 +1,7 @@
 import { useId, useRef, useState, useMemo, useCallback, type ReactNode } from "react";
 import { Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { CHAT_COLUMN_RAIL_DATASET, ChatColumnRailSurface } from "@/chat-rail";
 import { Composer } from "@/composer";
 import { ComposerDock } from "@/composer/dock";
 import { useComposerEditingSession, useComposerFullscreen } from "@/composer/editing-session";
@@ -119,70 +120,74 @@ function BotChatDraft(
     [input.composerState, submitting],
   );
   return (
-    <FileDropZone style={styles.container}>
-      <ComposerDock fullscreen={fullscreen}>
-        <View style={styles.container} />
-        <View style={styles.inputArea}>
-          {input.composerState?.hasUserModifiedAgentSettings ? (
-            <Text style={styles.runtimeHint}>Applies to this chat and delegated team members.</Text>
-          ) : null}
-          {!submitting && !fullscreen ? (
-            <View style={styles.importPillRow}>
-              <DraftPillContent>
-                {canImport ? (
-                  <ComposerImportPill onPress={openImport} disabled={!connected} />
-                ) : null}
-                {props.workspaceId ? (
-                  <PluginComposerPills
-                    serverId={serverId}
-                    workspaceId={props.workspaceId}
-                    agentId={draftId}
-                    compact={compact}
-                  />
-                ) : null}
-              </DraftPillContent>
-            </View>
-          ) : null}
-          <Composer
-            agentId={draftId}
-            workspaceId={props.workspaceId}
-            resolveLiveDesignAgentId={resolveAgentId}
+    <ChatColumnRailSurface serverId={serverId}>
+      <FileDropZone style={styles.container}>
+        <ComposerDock fullscreen={fullscreen}>
+          <View style={styles.container} />
+          <View style={styles.inputArea}>
+            {input.composerState?.hasUserModifiedAgentSettings ? (
+              <Text style={styles.runtimeHint} dataSet={CHAT_COLUMN_RAIL_DATASET}>
+                Applies to this chat and delegated team members.
+              </Text>
+            ) : null}
+            {!submitting && !fullscreen ? (
+              <View style={styles.importPillRow} dataSet={CHAT_COLUMN_RAIL_DATASET}>
+                <DraftPillContent>
+                  {canImport ? (
+                    <ComposerImportPill onPress={openImport} disabled={!connected} />
+                  ) : null}
+                  {props.workspaceId ? (
+                    <PluginComposerPills
+                      serverId={serverId}
+                      workspaceId={props.workspaceId}
+                      agentId={draftId}
+                      compact={compact}
+                    />
+                  ) : null}
+                </DraftPillContent>
+              </View>
+            ) : null}
+            <Composer
+              agentId={draftId}
+              workspaceId={props.workspaceId}
+              resolveLiveDesignAgentId={resolveAgentId}
+              serverId={serverId}
+              isPaneFocused={props.active}
+              autoFocus={shouldAutoFocusWorkspaceDraftComposer({
+                isPaneFocused: props.active,
+                isSubmitting: submitting,
+              })}
+              onSubmitMessage={submit}
+              isSubmitLoading={submitting || !cwd}
+              textSource={input.textSource}
+              onChangeText={input.editText}
+              textReplacement={input.textReplacement}
+              attachments={input.attachments}
+              attachmentScopeKeys={attachmentScopeKeys}
+              onChangeAttachments={input.setAttachments}
+              cwd={cwd}
+              clearDraft={input.clear}
+              editingSession={editingSession}
+              commandDraft={input.composerState?.commandDraft}
+              agentControls={agentControls}
+            />
+          </View>
+        </ComposerDock>
+        {canImport ? (
+          <ImportSessionSheet
+            visible={importOpen}
+            client={client}
             serverId={serverId}
-            isPaneFocused={props.active}
-            autoFocus={shouldAutoFocusWorkspaceDraftComposer({
-              isPaneFocused: props.active,
-              isSubmitting: submitting,
-            })}
-            onSubmitMessage={submit}
-            isSubmitLoading={submitting || !cwd}
-            textSource={input.textSource}
-            onChangeText={input.editText}
-            textReplacement={input.textReplacement}
-            attachments={input.attachments}
-            attachmentScopeKeys={attachmentScopeKeys}
-            onChangeAttachments={input.setAttachments}
             cwd={cwd}
-            clearDraft={input.clear}
-            editingSession={editingSession}
-            commandDraft={input.composerState?.commandDraft}
-            agentControls={agentControls}
+            workspaceId={props.workspaceId}
+            labels={importLabels}
+            scopeLocked
+            onClose={closeImport}
+            onImportedAgent={onImported}
           />
-        </View>
-      </ComposerDock>
-      {canImport ? (
-        <ImportSessionSheet
-          visible={importOpen}
-          client={client}
-          serverId={serverId}
-          cwd={cwd}
-          workspaceId={props.workspaceId}
-          labels={importLabels}
-          scopeLocked
-          onClose={closeImport}
-          onImportedAgent={onImported}
-        />
-      ) : null}
-    </FileDropZone>
+        ) : null}
+      </FileDropZone>
+    </ChatColumnRailSurface>
   );
 }
 

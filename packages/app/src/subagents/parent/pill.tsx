@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronLeft } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { PressHighlight } from "@/components/ui/press-highlight";
-import { composerPillStyles } from "@/composer/pill-styles";
+import { COMPOSER_PILL_DATASET, composerPillStyles } from "@/composer/pill-styles";
 import { ComposerTrackMark } from "@/composer/tracks";
 import type { Theme } from "@/styles/theme";
 import { useParentAgent } from "./use-parent-agent";
@@ -43,6 +43,7 @@ export function ParentAgentPill({
   return (
     <PressHighlight
       testID="composer-parent-agent-pill"
+      dataSet={COMPOSER_PILL_DATASET}
       accessibilityRole="button"
       accessibilityLabel={t("subagents.parent.backTo", { label })}
       onPress={parent.open}

@@ -952,6 +952,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   lastUserMessageAt: z.string().nullable(),
   status: AgentStatusSchema,
   backgroundWork: AgentBackgroundWorkSummarySchema.optional(),
+  runningSubagentCount: z.number().int().nonnegative().optional(),
   activeTurn: AgentActiveTurnPayloadSchema.nullable().optional(),
   capabilities: AgentCapabilityFlagsSchema,
   currentModeId: z.string().nullable(),
@@ -991,6 +992,7 @@ export const AgentListItemPayloadSchema = z.object({
   effectiveThinkingOptionId: z.string().nullable().optional(),
   status: AgentStatusSchema,
   backgroundWork: AgentBackgroundWorkSummarySchema.optional(),
+  runningSubagentCount: z.number().int().nonnegative().optional(),
   cwd: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -2301,6 +2303,15 @@ export const AgentDetachRequestMessageSchema = z.object({
 export const AgentDetachResponseMessageSchema = z.object({
   type: z.literal("agent.detach.response"),
   payload: AgentActionResponsePayloadSchema,
+});
+
+export const AgentSuggestTitleRequestMessageSchema = AgentDetachRequestMessageSchema.extend({
+  type: z.literal("agent.suggest_title.request"),
+});
+
+export const AgentSuggestTitleResponseMessageSchema = z.object({
+  type: z.literal("agent.suggest_title.response"),
+  payload: AgentActionResponsePayloadSchema.extend({ title: z.string().max(72).nullable() }),
 });
 
 export const AgentRewindModeSchema = z.enum(["conversation", "files", "both"]);
@@ -3725,6 +3736,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentFeatureRequestMessageSchema,
   AgentConfigApplyRequestMessageSchema,
   AgentDetachRequestMessageSchema,
+  AgentSuggestTitleRequestMessageSchema,
   AgentRewindRequestMessageSchema,
   AgentPermissionResponseMessageSchema,
   DiffSubscribeRequestSchema,
@@ -7915,6 +7927,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentFeatureResponseMessageSchema,
   AgentConfigApplyResponseMessageSchema,
   AgentDetachResponseMessageSchema,
+  AgentSuggestTitleResponseMessageSchema,
   AgentRewindResponseMessageSchema,
   UpdateAgentResponseMessageSchema,
   ProjectRenameResponseSchema,

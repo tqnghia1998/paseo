@@ -13,6 +13,11 @@ import {
   BOT_AUTO_RESUME_PROMPT,
 } from "../../patches/vibing/bot-auto-resume.js";
 import {
+  canAutoTitleBotChat,
+  isAutoTitleBotChat,
+  suggestBotChatTitle,
+} from "../../patches/vibing/bot-chat-title.js";
+import {
   continuesAssistantMessage,
   projectTimelineRows,
   TimelineProjection,
@@ -967,6 +972,7 @@ export class AgentManager {
   private readonly durableTimelineStore?: AgentTimelineStore;
   private readonly previousStatuses = new Map<string, AgentLifecycleStatus>();
   private readonly backgroundTasks = new Set<Promise<void>>();
+  private readonly botAutoTitles = new Set<string>();
   private readonly agentRegistrationTasks = new Set<Promise<void>>();
   private readonly inFlightAgentCloses = new Map<string, Promise<void>>();
   private readonly historySessions = new WeakSet<AgentSession>();
@@ -1676,6 +1682,26 @@ export class AgentManager {
   /** The live session started work that will start another turn by itself. */
   hasPendingWakeup(agentId: string): boolean {
     return this.agents.get(agentId)?.session.hasPendingWakeup?.() ?? false;
+  }
+
+  getRunningSubagentCount(agentId: string, visited = new Set<string>()): number {
+    if (visited.has(agentId)) return 0;
+    visited.add(agentId);
+    let count = 0;
+    for (const subagent of this.providerSubagents.list(agentId)) {
+      if (subagent.status === "running") count += 1;
+    }
+    for (const child of this.agents.values()) {
+      if (child.internal || child.id === agentId) continue;
+      if (getParentAgentIdFromLabels(child.labels) !== agentId) continue;
+      const backgroundWork = this.backgroundWork.summary(child.id);
+      const childRunning =
+        child.lifecycle === "running" ||
+        (backgroundWork?.runningCount ?? backgroundWork?.count ?? 0) > 0 ||
+        this.getRunningSubagentCount(child.id, visited) > 0;
+      if (childRunning) count += 1;
+    }
+    return count;
   }
 
   private publishBackgroundWork(agentId: string, items: AgentBackgroundWorkItem[] | null): void {
@@ -3016,7 +3042,11 @@ export class AgentManager {
     }
   }
 
-  async setTitle(agentId: string, title: string): Promise<void> {
+  async setTitle(
+    agentId: string,
+    title: string,
+    options?: { provisional?: boolean },
+  ): Promise<void> {
     const agent = this.requireAgent(agentId);
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
@@ -3030,7 +3060,10 @@ export class AgentManager {
       return;
     }
     this.touchUpdatedAt(agent);
-    await this.persistSnapshot(agent, { title: normalizedTitle });
+    await this.persistSnapshot(agent, {
+      title: normalizedTitle,
+      preserveBotAutoTitle: options?.provisional,
+    });
     this.emitState(agent, { persist: false });
   }
 
@@ -3091,7 +3124,7 @@ export class AgentManager {
 
     const nextRecord = {
       ...record,
-      ...(patch.title ? { title: patch.title } : {}),
+      ...(patch.title ? { title: patch.title, botAutoTitle: undefined } : {}),
       ...(patch.labels ? { labels: applyRecordPatch(record.labels, patch.labels) } : {}),
       ...(patch.metadata ? { metadata: applyRecordPatch(record.metadata, patch.metadata) } : {}),
       updatedAt: this.nextStoredUpdatedAt(record),
@@ -4954,12 +4987,7 @@ export class AgentManager {
 
       // Read history before publishing the agent: a provider failure must leave the
       // session unregistered so the registration catch closes it.
-      const startupHistory: AgentStreamEvent[] = [];
-      if (session.initialTimeline?.length && !managed.historyPrimed) {
-        for await (const event of session.streamHistory()) {
-          startupHistory.push(limitAgentStreamEventContent(event));
-        }
-      }
+      const startupHistory = await this.readRegistrationHistory(session, managed);
 
       this.assertAcceptingAgentRegistrations();
       this.runtimeCleanupIdentities.set(session, Object.freeze({ openedAt: Date.now() }));
@@ -4984,6 +5012,8 @@ export class AgentManager {
       this.assertAgentRegistrationActive(managed);
       await this.persistSnapshot(managed, {
         title: initialPersistedTitle,
+        preserveBotAutoTitle: true,
+        botAutoTitle: this.initialBotAutoTitle(managed, config, options?.restoring),
       });
       this.assertAgentRegistrationActive(managed);
       if (!options?.publishWhenReady) {
@@ -5012,6 +5042,27 @@ export class AgentManager {
       }
       throw error;
     }
+  }
+
+  private async readRegistrationHistory(
+    session: AgentSession,
+    managed: ManagedAgent,
+  ): Promise<AgentStreamEvent[]> {
+    const history: AgentStreamEvent[] = [];
+    if (session.initialTimeline?.length && !managed.historyPrimed) {
+      for await (const event of session.streamHistory()) {
+        history.push(limitAgentStreamEventContent(event));
+      }
+    }
+    return history;
+  }
+
+  private initialBotAutoTitle(
+    agent: ManagedAgent,
+    config: AgentSessionConfig,
+    restoring?: boolean,
+  ): "pending" | undefined {
+    if (!restoring && !config.title?.trim() && isAutoTitleBotChat(agent)) return "pending";
   }
 
   private assertAcceptingAgentRegistrations(): void {
@@ -5407,7 +5458,7 @@ export class AgentManager {
 
   private async persistSnapshot(
     agent: ManagedAgent,
-    options?: { title?: string | null; internal?: boolean },
+    options?: Parameters<AgentStorage["applySnapshot"]>[1],
   ): Promise<void> {
     if (!this.registry) {
       return;
@@ -5746,16 +5797,13 @@ export class AgentManager {
     }
 
     if (!options?.fromHistory) {
-      if (isTurnTerminalEvent(event)) {
-        this.runs.settleTerminalRun(agent.id, eventTurnId);
-        if (isForegroundEvent) {
-          this.finalizeForegroundTurn(agent, eventTurnId);
-        } else if (terminalDisposition !== "stale" && !agent.activeForegroundTurnId) {
-          // Publish autonomous readiness only after the tracked run has settled.
-          this.emitState(agent);
-        }
-      }
-
+      this.settleLiveTerminalEvent(
+        agent,
+        event,
+        eventTurnId,
+        isForegroundEvent,
+        terminalDisposition,
+      );
       if (flags.shouldDispatchEvent) {
         this.dispatchStream(agent.id, event, { timestamp: new Date().toISOString() });
       }
@@ -5764,6 +5812,71 @@ export class AgentManager {
     this.traceHandleStreamEventEnd(agent, event, eventTurnId, flags);
 
     return flags.shouldNotifyWaiters;
+  }
+
+  private settleLiveTerminalEvent(
+    agent: ActiveManagedAgent,
+    event: AgentStreamEvent,
+    turnId: string | undefined,
+    isForegroundEvent: boolean,
+    disposition: ActiveTurnTerminalDisposition,
+  ): void {
+    if (!isTurnTerminalEvent(event)) return;
+    this.runs.settleTerminalRun(agent.id, turnId);
+    if (isForegroundEvent) {
+      this.finalizeForegroundTurn(agent, turnId);
+      if (event.type === "turn_completed" && disposition === "closed_current") {
+        this.scheduleBotAutoTitle(agent);
+      }
+    } else if (disposition !== "stale" && !agent.activeForegroundTurnId) {
+      // Publish autonomous readiness only after the tracked run has settled.
+      this.emitState(agent);
+    }
+  }
+
+  private scheduleBotAutoTitle(agent: ActiveManagedAgent): void {
+    const registry = this.registry;
+    if (
+      !registry ||
+      !this.acceptingAgentRegistrations ||
+      !isAutoTitleBotChat(agent) ||
+      this.botAutoTitles.has(agent.id) ||
+      this.botAutoTitles.size >= 4
+    )
+      return;
+
+    this.botAutoTitles.add(agent.id);
+    const task = (async () => {
+      const stored = await registry.get(agent.id);
+      if (
+        stored?.botAutoTitle !== "pending" ||
+        stored.archivedAt ||
+        !this.acceptingAgentRegistrations ||
+        this.agents.get(agent.id) !== agent
+      )
+        return;
+      const items = this.getTimeline(agent.id);
+      if (!canAutoTitleBotChat(agent, items) || !(await registry.claimBotAutoTitle(agent.id)))
+        return;
+      if (!this.acceptingAgentRegistrations) return;
+      const title = await suggestBotChatTitle(this, agent.id, async () => agent, items);
+      await this.runLifecycleMutation(agent.id, async () => {
+        if (!this.acceptingAgentRegistrations) return;
+        const saved = await registry.finishBotAutoTitle(agent.id, title);
+        if (!saved) return;
+        const live = this.agents.get(agent.id);
+        if (live) this.emitState(live, { persist: false });
+        else this.dispatchStoredAgentState(saved);
+      });
+    })()
+      .catch(() => {
+        // The fallback title is already saved; never report a model error in the chat.
+        this.logger.debug({ agentId: agent.id }, "Automatic Bots title unavailable");
+      })
+      .finally(() => {
+        this.botAutoTitles.delete(agent.id);
+      });
+    this.trackBackgroundTask(task);
   }
 
   private traceHandleStreamEventStart(
@@ -6799,6 +6912,10 @@ export class AgentManager {
   }
 
   /** The adapter a provider id runs on: a custom provider is named by the one it extends. */
+  getProviderAdapter(provider: AgentProvider): AgentProvider {
+    return this.adapterOf(provider);
+  }
+
   private adapterOf(provider: AgentProvider): AgentProvider {
     return resolveAdapter({
       provider,

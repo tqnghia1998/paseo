@@ -83,6 +83,7 @@ export interface Agent {
   provider: AgentProvider;
   status: AgentLifecycleStatus;
   backgroundWork?: AgentBackgroundWorkSummary;
+  runningSubagentCount?: number;
   turn: TurnLiveness;
   createdAt: Date;
   updatedAt: Date;

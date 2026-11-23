@@ -172,7 +172,8 @@ interface WorktreeRoutesInput {
   agentManager: Pick<
     AgentManager,
     "listAgents" | "getAgentBackgroundWorkSummary" | "listProviderSubagentActivity"
-  >;
+  > &
+    Partial<Pick<AgentManager, "getRunningSubagentCount">>;
   workspaceRegistry: Pick<WorkspaceRegistry, "listAll">;
   cleanupWorktrees: (paths: string[]) => Promise<void>;
   stopWorktrees: (paths: string[]) => Promise<void>;
@@ -243,6 +244,7 @@ export function registerWorktreeRoutes(input: WorktreeRoutesInput): void {
             workspaces,
             (id) =>
               (agentManager.getAgentBackgroundWorkSummary(id)?.count ?? 0) > 0 ||
+              (agentManager.getRunningSubagentCount?.(id) ?? 0) > 0 ||
               runningParents.has(id),
           ),
         });

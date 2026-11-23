@@ -31,7 +31,7 @@ import {
   iconButtonChromeStyle,
   type IconButtonChromeState,
 } from "@/components/ui/icon-button-chrome";
-import { composerPillStyles } from "@/composer/pill-styles";
+import { COMPOSER_PILL_DATASET, composerPillStyles } from "@/composer/pill-styles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
@@ -299,6 +299,7 @@ function ButtonControl({ view }: { view: ButtonView }) {
   );
   const trigger = expanded ? (
     <MenuTrigger
+      dataSet={composer ? COMPOSER_PILL_DATASET : undefined}
       accessibilityRole="button"
       accessibilityLabel={button.title}
       accessibilityState={accessibilityState}
@@ -309,6 +310,7 @@ function ButtonControl({ view }: { view: ButtonView }) {
     </MenuTrigger>
   ) : (
     <Pressable
+      dataSet={composer ? COMPOSER_PILL_DATASET : undefined}
       accessibilityRole="button"
       accessibilityLabel={button.title}
       accessibilityState={accessibilityState}

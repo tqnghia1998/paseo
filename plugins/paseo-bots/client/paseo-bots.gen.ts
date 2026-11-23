@@ -1492,10 +1492,13 @@ import { useCallback as useCallback7, useEffect as useEffect32, useRef as useRef
 import { ActivityIndicator as ActivityIndicator11, BackHandler, Platform as Platform20, Pressable as Pressable22, Text as Text32, View as View44 } from "react-native";
 
 // shared/sidebar.ts
+function isChatRunning(agent) {
+  return agent.status === "running" || (agent.backgroundWork?.runningCount ?? agent.backgroundWork?.count ?? 0) > 0 || (agent.runningSubagentCount ?? 0) > 0;
+}
 function chatBucket(agent) {
   if ((agent.pendingPermissions?.length ?? 0) > 0 || agent.attentionReason === "permission") return "needs_input";
   if (agent.status === "error" || agent.attentionReason === "error") return "failed";
-  if (agent.status === "running") return "running";
+  if (isChatRunning(agent)) return "running";
   if (agent.requiresAttention) return "attention";
   return "done";
 }
@@ -4676,7 +4679,7 @@ function MenuRow({ colors: colors2, entry, compact, onClose }) {
         opacity: entry.disabled ? 0.5 : 1
       }),
       children: [
-        entry.icon || entry.leading || pending3 ? /* @__PURE__ */ jsx3(View2, { style: { width: 16, alignItems: "center", justifyContent: "center" }, children: pending3 ? /* @__PURE__ */ jsx3(ActivityIndicator, { size: "small", color: colors2.foregroundMuted }) : entry.leading ?? /* @__PURE__ */ jsx3(Icon, { name: entry.icon, size: 14, color: entry.destructive ? colors2.statusDanger : colors2.foregroundMuted }) }) : null,
+        entry.icon || entry.leading || pending3 ? /* @__PURE__ */ jsx3(View2, { style: { width: 16, alignItems: "center", justifyContent: "center" }, children: pending3 ? /* @__PURE__ */ jsx3(ActivityIndicator, { size: 14, color: colors2.foregroundMuted }) : entry.leading ?? /* @__PURE__ */ jsx3(Icon, { name: entry.icon, size: 14, color: entry.destructive ? colors2.statusDanger : colors2.foregroundMuted }) }) : null,
         /* @__PURE__ */ jsx3(Text, { numberOfLines: 1, style: { flexShrink: 1, fontSize: ui(14), lineHeight: 18, color: tint }, children: pending3 && entry.pendingLabel ? entry.pendingLabel : entry.label }),
         entry.trailing ? /* @__PURE__ */ jsx3(Text, { style: { marginLeft: "auto", fontSize: ui(12), color: colors2.foregroundMuted }, children: entry.trailing }) : null,
         entry.selected ? /* @__PURE__ */ jsx3(View2, { style: { marginLeft: "auto", width: 16, alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx3(Icon, { name: "Check", size: 16, color: colors2.foregroundMuted }) }) : null
@@ -5201,14 +5204,15 @@ function StartRow({ colors: colors2, label, hint, avatar, onPress }) {
     }
   );
 }
-function RenameDialog({ colors: colors2, title, initialValue, placeholder, submitLabel = "Rename", maxLength, onClose, onSubmit }) {
+function RenameDialog({ colors: colors2, title, initialValue, currentValue = initialValue, placeholder, submitLabel = "Rename", maxLength, onClose, onSubmit }) {
   const [draft, setDraft] = useState6(initialValue);
   const [error, setError] = useState6(null);
   const [pending3, setPending] = useState6(false);
   const invalid = !draft.trim();
-  const submitDisabled = pending3 || draft === initialValue || invalid;
+  const unchanged = draft.trim() === currentValue.trim();
+  const submitDisabled = pending3 || unchanged || invalid;
   const submit = async () => {
-    if (pending3 || draft === initialValue) return;
+    if (pending3 || unchanged) return;
     if (invalid) {
       setError("Name is required");
       return;
@@ -5318,6 +5322,7 @@ function botMenuEntries(actions) {
 function chatMenuEntries(actions) {
   const entries = [
     { label: "Rename", icon: "Pencil", onSelect: actions.onRename },
+    ...actions.onSuggestTitle ? [{ label: "Generate title with AI", icon: "Sparkles", pendingLabel: "Generating title...", onSelect: actions.onSuggestTitle }] : [],
     { label: "Copy path", icon: "Copy", onSelect: actions.onCopyPath },
     { label: "Copy chat ID", icon: "Copy", onSelect: actions.onCopyId },
     { label: "Copy transcript", icon: "FileText", pendingLabel: "Copying...", onSelect: actions.onCopyTranscript },
@@ -14652,7 +14657,7 @@ function UsageSection({ bot, localHost }) {
   const input = sum((usage) => usage.inputTokens);
   const output = sum((usage) => usage.outputTokens);
   const cost = sum((usage) => usage.totalCostUsd);
-  const working = list2.filter((chat) => chat.status === "running").length;
+  const working = list2.filter((chat) => isChatRunning(chat)).length;
   const loading = chats.isLoading;
   return /* @__PURE__ */ jsx53(SettingsSection23, { title: localHost.workspaceDirectory ? "Workspace chats" : "All chats", info: "From each chat's latest turn as reported by the provider. Archived chats aren't counted.", children: /* @__PURE__ */ jsxs48(SettingsCard25, { children: [
     /* @__PURE__ */ jsx53(SettingsRow13, { label: "Chats", hint: loading ? "Loading..." : `${list2.length} open${working ? `, ${working} working now` : ""}` }),
@@ -15988,6 +15993,16 @@ Its chats stay on the host and remain in Paseo's history.`,
           (current2) => context.pinned ? unpin(current2) : { ...current2, pinnedChats: [...current2.pinnedChats, { botId: bot.id, chatId: chat.id }] }
         ),
         onRename: () => setRenamingChat({ bot, chat }),
+        onSuggestTitle: botHost.online && botHost.api?.agents.ref(chat.id)?.suggestTitle ? async () => {
+          try {
+            const ref = botHost.api?.agents.ref(chat.id);
+            if (!ref?.suggestTitle) throw new Error("This Paseo host can't suggest titles");
+            const suggestion = await ref.suggestTitle();
+            setRenamingChat({ bot, chat, suggestion });
+          } catch (error) {
+            toast.error(`Couldn't generate a title: ${errorText(error)}`);
+          }
+        } : void 0,
         move: context.pinned || listUi.chatSort !== "manual" ? null : { up: move(-1), down: move(1) },
         onOpenInPaseo: !nativeChat && openAgent && botHost.online ? () => openAgent({ agentId: chat.id, serverId: botHost.key }) : void 0,
         onArchive: () => removeChat(bot, chat, context, "archive")
@@ -16049,7 +16064,7 @@ Its chats stay on the host and remain in Paseo's history.`,
       toast.show(`${bot.name} has no chats to delete`);
       return;
     }
-    const running = chats.filter((chat) => chat.status === "running" || chat.status === "initializing").length;
+    const running = chats.filter((chat) => isChatRunning(chat) || chat.status === "initializing").length;
     const confirmed = await confirmDialog({
       title: "Delete all chats?",
       message: deleteAllChatsMessage(bot.name, chats.length, running),
@@ -16351,8 +16366,9 @@ Its chats stay on the host and remain in Paseo's history.`,
             RenameDialog,
             {
               colors: colors2,
-              title: "Rename chat",
-              initialValue: displayTitle(renamingChat.chat.title),
+              title: renamingChat.suggestion ? "Review suggested title" : "Rename chat",
+              initialValue: renamingChat.suggestion ?? displayTitle(renamingChat.chat.title),
+              currentValue: displayTitle(renamingChat.chat.title),
               placeholder: "Chat name",
               maxLength: MAX_CHAT_TITLE_CHARS,
               onClose: () => setRenamingChat(null),

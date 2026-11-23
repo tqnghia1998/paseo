@@ -47,9 +47,17 @@ index 1e4e11b..23a26e2 100644
 +  if (row.style.getPropertyValue("display") !== display) row.style.setProperty("display", display);
  }
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index f9fcd8d..666ae8b 100644
+index f9fcd8d..7f53a09 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
+@@ -1,6 +1,6 @@
+ // The Chat Polish design for what Paseo draws itself: chat chrome, composer, cards, popovers, tool rows and markdown.
+ import { icon } from "./icons";
+-import { BUBBLE, CHIP, CODE_BLOCK, CTX, CTX_HEAD, LANG, LIMIT, MD, MSG, DOC_MD, PERMISSION, PLAN, QUESTION, ROW, ROW_HEAD, ROW_ICON, SLASH, SLASH_GLIDE_MS, SURFACE, IN_SURFACE, TAG, TRACK_PANEL, USAGE, WORKING_BOX } from "./selectors";
++import { BUBBLE, CHIP, CODE_BLOCK, COMPOSER_PILL, CTX, CTX_HEAD, LANG, LIMIT, MD, MSG, DOC_MD, PERMISSION, PLAN, QUESTION, ROW, ROW_HEAD, ROW_ICON, SLASH, SLASH_GLIDE_MS, SURFACE, IN_SURFACE, TAG, TRACK_PANEL, USAGE, WORKING_BOX } from "./selectors";
+ 
+ // Values come from CSS variables set by setNativeColors (restyle.ts), so a theme switch restyles without re-tagging.
+ 
 @@ -23,7 +23,6 @@ ${[4, 5, 3, 0, 2, 1].map((step, i) => `${DOT}:nth-child(${i + 1}) { animation-de
  // and each loader draws with the dots it needs (or the overlay's ::before). Sizes scale the whole box.
  // The dashboard's loader tiles carry their own overlay ([data-cp-loader][data-cp-tile="name"]) so each tile animates whatever is chosen globally.
@@ -72,7 +80,7 @@ index f9fcd8d..666ae8b 100644
 +[data-cp-part="queued"] > div:last-child > :is(*):last-child:is(:disabled, [aria-disabled="true"]) :is(svg, svg *) { stroke: var(--cp-muted) !important; }
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]) { opacity: 0.45 !important; }
  [data-cp-part="queued"] > div:last-child > :is(:disabled, [aria-disabled="true"]):hover { background-color: transparent !important; }
-
+ 
 @@ -104,9 +104,8 @@ ${SURFACE}:is([hidden], [aria-hidden="true"], [data-state="closed"], [style*="op
  /* Every floating surface shares one shape: all pickers, menus/listboxes, and Command Center. */
  ${SURFACE} { border-radius: 12px !important; border-color: var(--colors-border) !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
@@ -103,7 +111,29 @@ index f9fcd8d..666ae8b 100644
  /* The sidebar's workspace hover card is a menu too (role=menu), but its rows ran edge to edge, so their 16px hover fill missed the
     card's corners. Inset them 4px like menu rows: 28px tall, 13px text, 14px icons, title 13/600, divider inset too. */
  [data-cp-part="ws-card"] { padding: 4px !important; }
-@@ -238,9 +234,8 @@ button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !impo
+@@ -207,10 +203,10 @@ ${CHIP}:hover { background-color: var(--cp-control) !important; }
+ [data-testid="message-input-root"] [data-testid="context-window-meter"] { border-radius: 999px !important; }
+ button[aria-label="Stop agent"] { background-color: var(--cp-control) !important; border: 1px solid var(--cp-rule) !important; }
+ button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !important; stroke: var(--cp-fg) !important; fill: var(--cp-fg) !important; }
+-/* Paseo 0.14 gives these pills a 32px min-height; its link back to a subagent's parent joins them. */
+-:is([data-testid="subagents-track-header"], [data-testid="background-work"], [data-testid="composer-diff-stat-pill"], [data-testid="composer-parent-agent-pill"]) { height: 24px !important; min-height: 24px !important; padding: 0 10px !important; border-radius: 999px !important; border-color: var(--cp-rule) !important; }
++/* Paseo 0.14 gives composer pills a 32px min-height; align every tracker, diff, parent, import and plugin pill on one 24px bar. */
++${COMPOSER_PILL} { height: 24px !important; min-height: 24px !important; padding: 0 10px !important; gap: 6px !important; border-radius: 999px !important; border-color: var(--cp-rule) !important; }
+ [data-testid="composer-parent-agent-pill"] { padding-left: 6px !important; }
+-[data-testid="background-work"] [dir] { font-size: 12px !important; }
++${COMPOSER_PILL} [dir] { font-size: 12px !important; line-height: 16px !important; }
+ /* Background tasks panel (tagged by tagBackgroundWork): a status dot, then the title with its elapsed time on the right over the command,
+    each cut to one line (the tooltip has the rest), hairlines between tasks. Paseo stacked all three and wrapped long commands. */
+ [data-cp-part="bg-item"] { position: relative; }
+@@ -229,7 +225,6 @@ button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !impo
+ [data-cp-part="bg-row"] > button { flex: none; height: 24px !important; min-height: 24px !important; padding: 0 10px !important; border: 1px solid var(--cp-rule) !important; }
+ [data-cp-part="bg-row"] > button [dir] { font-size: 12px !important; font-weight: 500 !important; color: var(--cp-muted) !important; }
+ [data-cp-part="bg-row"] > button:not(:disabled):is(:hover, :focus-visible) [dir] { color: var(--colors-status-danger) !important; }
+-[data-testid="composer-parent-agent-pill"] [dir] { font-size: 12px !important; }
+ /* A provider subagent's pane shows a link back to its parent where the composer would be: the composer's shape and the plugin's button. */
+ [data-testid="parent-agent-callout"] { border-radius: 12px !important; border-color: var(--cp-rule) !important; padding: 8px 8px 8px 14px !important; }
+ @supports (corner-shape: squircle) { [data-testid="parent-agent-callout"] { border-radius: 28px !important; corner-shape: squircle; } }
+@@ -238,9 +233,8 @@ button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !impo
  /* Scroll to bottom: a 36px floating control like the plugin's surfaces (rule border, lifted fill), not Paseo's 48px disc. Its margin keeps
     it centered in the 48px box Paseo positions. */
  [data-testid="scroll-to-bottom-button"] { width: 36px !important; height: 36px !important; margin: 6px !important; border: 1px solid var(--cp-rule) !important; background-color: var(--cp-control) !important; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3) !important; transition: background-color 120ms ease-out; }
@@ -114,19 +144,19 @@ index f9fcd8d..666ae8b 100644
  [data-testid="scroll-to-bottom-button"] svg { width: 16px !important; height: 16px !important; }
  /* Tooltips read as captions: 12px text in a tighter box than menus. */
  [role="tooltip"] { padding: 4px 8px !important; border-radius: 8px !important; border-color: var(--cp-rule, var(--colors-border)) !important; }
-@@ -282,7 +277,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
+@@ -282,7 +276,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
  ${PLAN} > div:last-child { padding: 10px 16px 12px !important; border-top: 1px solid var(--cp-rule) !important; }
-
+ 
  [data-testid^="chat-outline-tick-"][aria-selected="true"] > div { background-color: var(--cp-accent) !important; }
 -[data-testid="chat-outline-preview"] { background-color: var(--cp-raised) !important; border-radius: 12px !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
 +[data-testid="chat-outline-preview"] { background-color: var(--cp-raised, var(--colors-surface2)) !important; border-radius: 12px !important; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important; }
  [data-cp-part="outline-preview"] * { font-size: 13px !important; }
  /* Between ticks, a copy of the last preview glides to the hovered tick until Paseo's next one takes over (ghostOutlinePreview). */
  [data-testid="chat-outline-preview"][data-cp-ghost] { pointer-events: none; animation: none !important; transition: transform 100ms cubic-bezier(0.33, 1, 0.68, 1), opacity 100ms ease-out !important; }
-@@ -332,10 +327,21 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
+@@ -332,10 +326,21 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
  ${USAGE} > div:nth-child(4) { margin-top: -6px !important; }
  `;
-
+ 
 +// Host defaults also cover embedded clients without the sidebar that calls setNativeColors.
  export const NATIVE_CSS = `
 -/* followThemeColors (restyle.ts) sets these inline from Paseo's --colors-*; unset, menus drew with no fill at all, so Paseo's own
@@ -148,7 +178,7 @@ index f9fcd8d..666ae8b 100644
  /* Settings pages (tagged by tagSettings): surfaces 12, controls 8, and one text field, 32px in a sunken well that lights up on focus.
     Settings has its own sidebar, so a reload there can come before the --cp-* colors are set: Paseo's own colors stand in. */
  [data-cp-set="card"] { border-radius: 12px !important; }
-@@ -343,7 +349,9 @@ export const NATIVE_CSS = `
+@@ -343,7 +348,9 @@ export const NATIVE_CSS = `
  :is([data-cp-set="field"], [data-cp-set="area"]) { border: 1px solid var(--colors-border) !important; border-radius: 8px !important; background-color: var(--cp-sunken, color-mix(in srgb, var(--colors-surface0), #000 15%)) !important; transition: border-color 120ms ease-out, box-shadow 120ms ease-out; }
  /* The stand-in above is a mid grey on a light page. */
  :root:is(.light, .pluginLight) :is([data-cp-set="field"], [data-cp-set="area"]) { background-color: var(--cp-sunken, var(--colors-surface2)) !important; }
@@ -164,7 +194,7 @@ index 251e126..93472ef 100644
 --- a/client/web/selection-copy.ts
 +++ b/client/web/selection-copy.ts
 @@ -9,7 +9,6 @@ declare const innerWidth: number;
-
+ 
  const SELECT_CSS = `
  [data-cp-select] { position: fixed; z-index: 10000; display: flex; align-items: center; gap: 1px; padding: 3px; border: 1px solid var(--colors-border); border-radius: 8px; background-color: var(--cp-control, var(--colors-surface2)); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); animation: cp-pop 40ms ease-out; }
 -:root:is(.light, .pluginLight) [data-cp-select] { background-color: var(--cp-raised, var(--colors-surface1)); }
@@ -172,16 +202,18 @@ index 251e126..93472ef 100644
  [data-cp-select] > button { height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--cp-fg, var(--colors-foreground)); font-family: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; }
  [data-cp-select] > button:hover { background-color: color-mix(in srgb, var(--cp-control, var(--colors-surface2)), var(--cp-fg, var(--colors-foreground)) 12%); }
 diff --git a/client/web/selectors.ts b/client/web/selectors.ts
-index 7a8659f..c7b7e5f 100644
+index 7a8659f..14b927d 100644
 --- a/client/web/selectors.ts
 +++ b/client/web/selectors.ts
-@@ -29,7 +29,8 @@ export const ADMONITION = `${DOC_MD} .enrm-admonition`;
+@@ -29,7 +29,10 @@ export const ADMONITION = `${DOC_MD} .enrm-admonition`;
  export const LANG = '[data-paseo-markdown-language]:not([data-paseo-markdown-language=""])';
  export const SLASH = '[data-testid="composer-autocomplete-popover"]';
  export const SLASH_GLIDE_MS = 140;
 -export const CHIP = ':is([data-testid="combined-model-selector"], [data-testid="agent-thinking-selector"], [data-testid="mode-control"])';
 +// Composer toolbar chips only: the model sheet reuses mode-control as a labelled settings row, whose value must stay visible.
 +export const CHIP = ':is([data-testid="combined-model-selector"], [data-testid="agent-thinking-selector"], [data-testid="mode-control"]):not([data-testid="agent-controls-settings-list"] *)';
++// Every pill above the composer (trackers, diff stat, parent link, import, plugin actions).
++export const COMPOSER_PILL = ':is([data-composer-pill="true"], [data-testid="composer-track-scroll"] :is(button, [role="button"]), [data-testid="subagents-track-header"], [data-testid="background-work"], [data-testid="agent-task-list-header"], [data-testid="composer-diff-stat-pill"], [data-testid="composer-parent-agent-pill"], [data-testid="composer-import-agent-pill"])';
  export const PERMISSION = '[data-cp-part="permission"]';
  export const PLAN = '[data-testid="permission-plan-card"]';
  export const CTX = '[data-cp-part="context"]';
@@ -262,7 +294,7 @@ index 3ec4de5..c80e240 100644
 -import { spawn } from "node:child_process";
 -import { translate, type Language } from "../shared/i18n";
  import type { UpdateStatus } from "../shared/update";
-
+ 
 -// Paseo hands plugin processes its CLI's path; a daemon started from the CLI has it on PATH.
 -const CLI = process.env.PASEO_CLI || "paseo";
 -const NAME = "Chat Polish";
@@ -324,7 +356,7 @@ index 3ec4de5..c80e240 100644
 +export async function checkForUpdate(): Promise<UpdateStatus> {
 +  return { state: "local", links: [] };
  }
-
+ 
 -export async function installUpdate(lang: Language = "en"): Promise<{ error?: string }> {
 -  try {
 -    const [result] = (await plugin(["update", await ownId(), "--yes"])) as Array<{ outcome: string; error?: string }>;
@@ -371,7 +403,7 @@ index 0000000..a4a535c
 +  await assert.rejects(access(marker));
 +});
 diff --git a/test/web.test.mjs b/test/web.test.mjs
-index 6d85119..0a3ce0c 100644
+index 6d85119..bf472b6 100644
 --- a/test/web.test.mjs
 +++ b/test/web.test.mjs
 @@ -23,7 +23,11 @@ test("DOM restyling, accordion transitions, and bottom following stay stable", {
@@ -398,7 +430,7 @@ index 6d85119..0a3ce0c 100644
          };
          let released = 0;
          const remove = EventTarget.prototype.removeEventListener;
-@@ -65,6 +70,43 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
+@@ -65,6 +70,60 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
            const restyle = web.restyleNative(() => true); const clamp = web.clampUserMessages(() => true);
            window.__r = (id) => (id === 4021 ? { AttachmentLightbox: function Lightbox() {} } : {});
            checks.paseoLightboxFromBundle = (await web.loadPaseoLightbox())?.name === 'Lightbox';
@@ -434,6 +466,23 @@ index 6d85119..0a3ce0c 100644
 +          checks.toolbarModeChipHidesCaret = getComputedStyle(document.getElementById('toolbar-caret')).display === 'none';
 +          checks.sheetModeRowShowsValue = getComputedStyle(document.getElementById('sheet-mode-value')).display !== 'none';
 +          modes.remove();
++          // Every pill above the composer (trackers, diff stat, parent link, import and plugin actions) shares one 24px height and 12px text.
++          const pills = document.createElement('div');
++          pills.innerHTML = '<div data-testid="composer-track-scroll"><div style="display:flex;align-items:center;gap:4px">'
++            + '<div role="button" data-testid="background-work" style="display:flex;align-items:center;box-sizing:border-box;min-height:32px;padding:4px 12px;border:1px solid black"><div dir="auto" style="font-size:14px">4 background tasks</div></div>'
++            + '<div role="button" data-testid="subagents-track-header" style="display:flex;align-items:center;box-sizing:border-box;min-height:32px;padding:4px 12px;border:1px solid black"><div dir="auto" style="font-size:14px">17 subagents</div></div>'
++            + '<div role="button" data-testid="agent-task-list-header" style="display:flex;align-items:center;box-sizing:border-box;min-height:32px;padding:4px 12px;border:1px solid black"><div dir="auto" style="font-size:14px">2/5 tasks</div></div>'
++            + '<div role="button" style="display:flex;align-items:center;box-sizing:border-box;min-height:32px;padding:4px 12px;border:1px solid black"><div dir="auto" style="font-size:14px">Run</div></div>'
++            + '<div role="button" data-testid="composer-diff-stat-pill" style="display:flex;align-items:center;box-sizing:border-box;min-height:32px;padding:4px 12px;border:1px solid black"><div style="display:flex;height:20px;align-items:center"><div dir="auto" style="font-size:14px">+128.4k</div><div dir="auto" style="font-size:14px">-733</div></div></div>'
++            + '</div></div>'
++            + '<div role="button" data-composer-pill="true" style="display:flex;align-items:center;box-sizing:border-box;min-height:32px;padding:4px 12px;border:1px solid black"><div dir="auto" style="font-size:14px">Draft Run</div></div>'
++            + '<div role="button" data-testid="composer-import-agent-pill" style="display:flex;align-items:center;box-sizing:border-box;min-height:32px;padding:4px 12px;border:1px solid black"><div dir="auto" style="font-size:14px">Import</div></div>';
++          document.body.appendChild(pills); await wait();
++          const pillNodes = Array.from(pills.querySelectorAll('[role="button"]'));
++          checks.composerPillsAligned = pillNodes.length === 7
++            && pillNodes.every((el) => el.getBoundingClientRect().height === 24 && getComputedStyle(el).borderRadius === '999px')
++            && Array.from(pills.querySelectorAll('[dir]')).every((el) => getComputedStyle(el).fontSize === '12px' && getComputedStyle(el).lineHeight === '16px');
++          pills.remove();
 +          const labelField = document.getElementById('label-field'), labelInput = document.getElementById('label-input');
 +          const promptField = document.getElementById('prompt-field'), promptInput = document.getElementById('prompt-input');
 +          checks.wrappedSettingsFieldsKeepPadding = getComputedStyle(labelField).paddingTop === '6px' && getComputedStyle(labelField).paddingBottom === '6px';
@@ -442,12 +491,12 @@ index 6d85119..0a3ce0c 100644
            checks.mermaidDocFromBundle = (await web.loadMermaidDoc()) === new TextDecoder().decode(Uint8Array.from(atob("${Buffer.from(mermaidDoc).toString("base64")}"), (ch) => ch.charCodeAt(0)));
            await wait(); checks.observerSettles = !capped;
            // Paseo 0.14 wraps a prompt's rows and text in a message preview that clamps long prompts itself.
-@@ -321,7 +363,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
+@@ -321,7 +380,7 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
      assert.equal(report.error, undefined, report.error);
      assert.deepEqual(report.errors, []);
      for (const [check, passed] of Object.entries(report.checks)) assert.equal(passed, true, check);
 -    assert.equal(Object.keys(report.checks).length, 39);
-+    assert.equal(Object.keys(report.checks).length, 48);
++    assert.equal(Object.keys(report.checks).length, 49);
    } finally {
      server?.closeAllConnections(); server?.close();
      rmSync(temp, { recursive: true, force: true });

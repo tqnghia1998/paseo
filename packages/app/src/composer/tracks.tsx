@@ -28,7 +28,7 @@ import { usePanelAwareHorizontalScrollGesture } from "@/mobile-panels/gestures";
 import { getStatusDotColor } from "@/utils/status-dot-color";
 import { STATUS_INDICATOR_FILLED_DOT_SIZE } from "@/utils/status-indicator-geometry";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
-import { COMPOSER_PILL_CLEARANCE, composerPillStyles } from "./pill-styles";
+import { COMPOSER_PILL_CLEARANCE, COMPOSER_PILL_DATASET, composerPillStyles } from "./pill-styles";
 
 /**
  * The strip of pills where a pane's ambient trackers and plugin actions live.
@@ -194,6 +194,7 @@ function ComposerTrackPillTrigger({
   return (
     <MenuTrigger
       testID={testID}
+      dataSet={COMPOSER_PILL_DATASET}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={accessibilityState}

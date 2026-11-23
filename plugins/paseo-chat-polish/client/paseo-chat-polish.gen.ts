@@ -1295,6 +1295,7 @@ var LANG = '[data-paseo-markdown-language]:not([data-paseo-markdown-language=""]
 var SLASH = '[data-testid="composer-autocomplete-popover"]';
 var SLASH_GLIDE_MS = 140;
 var CHIP = ':is([data-testid="combined-model-selector"], [data-testid="agent-thinking-selector"], [data-testid="mode-control"]):not([data-testid="agent-controls-settings-list"] *)';
+var COMPOSER_PILL = ':is([data-composer-pill="true"], [data-testid="composer-track-scroll"] :is(button, [role="button"]), [data-testid="subagents-track-header"], [data-testid="background-work"], [data-testid="agent-task-list-header"], [data-testid="composer-diff-stat-pill"], [data-testid="composer-parent-agent-pill"], [data-testid="composer-import-agent-pill"])';
 var PERMISSION = '[data-cp-part="permission"]';
 var PLAN = '[data-testid="permission-plan-card"]';
 var CTX = '[data-cp-part="context"]';
@@ -3112,10 +3113,10 @@ ${CHIP}:hover { background-color: var(--cp-control) !important; }
 [data-testid="message-input-root"] [data-testid="context-window-meter"] { border-radius: 999px !important; }
 button[aria-label="Stop agent"] { background-color: var(--cp-control) !important; border: 1px solid var(--cp-rule) !important; }
 button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !important; stroke: var(--cp-fg) !important; fill: var(--cp-fg) !important; }
-/* Paseo 0.14 gives these pills a 32px min-height; its link back to a subagent's parent joins them. */
-:is([data-testid="subagents-track-header"], [data-testid="background-work"], [data-testid="composer-diff-stat-pill"], [data-testid="composer-parent-agent-pill"]) { height: 24px !important; min-height: 24px !important; padding: 0 10px !important; border-radius: 999px !important; border-color: var(--cp-rule) !important; }
+/* Paseo 0.14 gives composer pills a 32px min-height; align every tracker, diff, parent, import and plugin pill on one 24px bar. */
+${COMPOSER_PILL} { height: 24px !important; min-height: 24px !important; padding: 0 10px !important; gap: 6px !important; border-radius: 999px !important; border-color: var(--cp-rule) !important; }
 [data-testid="composer-parent-agent-pill"] { padding-left: 6px !important; }
-[data-testid="background-work"] [dir] { font-size: 12px !important; }
+${COMPOSER_PILL} [dir] { font-size: 12px !important; line-height: 16px !important; }
 /* Background tasks panel (tagged by tagBackgroundWork): a status dot, then the title with its elapsed time on the right over the command,
    each cut to one line (the tooltip has the rest), hairlines between tasks. Paseo stacked all three and wrapped long commands. */
 [data-cp-part="bg-item"] { position: relative; }
@@ -3134,7 +3135,6 @@ button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !impo
 [data-cp-part="bg-row"] > button { flex: none; height: 24px !important; min-height: 24px !important; padding: 0 10px !important; border: 1px solid var(--cp-rule) !important; }
 [data-cp-part="bg-row"] > button [dir] { font-size: 12px !important; font-weight: 500 !important; color: var(--cp-muted) !important; }
 [data-cp-part="bg-row"] > button:not(:disabled):is(:hover, :focus-visible) [dir] { color: var(--colors-status-danger) !important; }
-[data-testid="composer-parent-agent-pill"] [dir] { font-size: 12px !important; }
 /* A provider subagent's pane shows a link back to its parent where the composer would be: the composer's shape and the plugin's button. */
 [data-testid="parent-agent-callout"] { border-radius: 12px !important; border-color: var(--cp-rule) !important; padding: 8px 8px 8px 14px !important; }
 @supports (corner-shape: squircle) { [data-testid="parent-agent-callout"] { border-radius: 28px !important; corner-shape: squircle; } }

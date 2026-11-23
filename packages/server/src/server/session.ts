@@ -83,6 +83,7 @@ import {
   toAgentPersistenceHandle,
 } from "./persistence-hooks.js";
 import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
+import { suggestBotChatTitle } from "../patches/vibing/bot-chat-title.js";
 import {
   sendPromptToAgent,
   waitForAgentRunStartWithTimeout,
@@ -922,6 +923,7 @@ export class Session {
   private readonly agentMessages: AgentMessageDelivery;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
   private readonly creationService: Pick<CreationService, "create" | "subscribe">;
+  private readonly lastRunningSubagentCounts = new Map<string, number>();
 
   constructor(options: SessionOptions) {
     const {
@@ -2239,6 +2241,13 @@ export class Session {
         }
 
         if (event.type === "agent_removed") {
+          this.lastRunningSubagentCounts.delete(event.agentId);
+          void this.reconcileTrackedRunningSubagents().catch((error) => {
+            this.sessionLogger.error(
+              { err: error, agentId: event.agentId },
+              "Failed to reconcile parent subagent counts after agent removal",
+            );
+          });
           if (event.internal) return;
           void this.agentUpdates
             .removeAgent(event.agentId)
@@ -2268,6 +2277,15 @@ export class Session {
             "agent.session.forward_update",
           );
           void this.agentUpdates.forwardLiveAgent(event.agent);
+          const parentId = getParentAgentIdFromLabels(event.agent.labels);
+          if (parentId) {
+            void this.syncParentRunningSubagents(parentId).catch((error) => {
+              this.sessionLogger.error(
+                { err: error, agentId: event.agent.id, parentId },
+                "Failed to sync parent subagent count",
+              );
+            });
+          }
           return;
         }
 
@@ -2357,12 +2375,54 @@ export class Session {
     );
   }
 
+  private recordRunningSubagentCount(agentId: string, count: number): void {
+    if (count > 0) this.lastRunningSubagentCounts.set(agentId, count);
+    else this.lastRunningSubagentCounts.delete(agentId);
+  }
+
+  private async syncParentRunningSubagents(startAgentId: string | null): Promise<void> {
+    const visited = new Set<string>();
+    let currentId = startAgentId;
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
+      const live = this.agentManager.getAgent(currentId);
+      const stored = live ? null : await this.agentStorage.get(currentId);
+      if (!live && !stored) break;
+      const nextCount = this.agentManager.getRunningSubagentCount?.(currentId) ?? 0;
+      const previousCount = this.lastRunningSubagentCounts.get(currentId) ?? 0;
+      if (nextCount !== previousCount) {
+        this.recordRunningSubagentCount(currentId, nextCount);
+        if (live && !live.internal) {
+          void this.agentUpdates.forwardLiveAgent(live);
+        } else if (stored && !stored.internal && !stored.archivedAt) {
+          void this.agentUpdates.forwardStoredAgent(stored);
+        }
+      }
+      const labels = live?.labels ?? stored?.labels;
+      currentId = getParentAgentIdFromLabels(labels);
+    }
+  }
+
+  private async reconcileTrackedRunningSubagents(): Promise<void> {
+    for (const parentId of Array.from(this.lastRunningSubagentCounts.keys())) {
+      await this.syncParentRunningSubagents(parentId);
+    }
+  }
+
   private forwardProviderSubagent(event: ProviderSubagentManagerEvent): void {
     const parentAgentId =
       event.type === "upsert" ? event.subagent.parentAgentId : event.parentAgentId;
     if (this.agentManager.getAgent(parentAgentId)?.internal) return;
     this.emitProviderSubagentWorkspaceUpdate(event);
     this.forwardProviderSubagentUpdate(event);
+    if (event.type !== "timeline") {
+      void this.syncParentRunningSubagents(parentAgentId).catch((error) => {
+        this.sessionLogger.error(
+          { err: error, parentAgentId },
+          "Failed to sync parent running subagent count",
+        );
+      });
+    }
   }
 
   private async forwardBackgroundWork(agentId: string): Promise<void> {
@@ -2379,6 +2439,8 @@ export class Session {
     });
     if (agent) await this.agentUpdates.forwardLiveAgent(agent);
     else if (record) await this.agentUpdates.forwardStoredAgent(record);
+    const parentId = getParentAgentIdFromLabels(agent?.labels ?? record?.labels);
+    if (parentId) await this.syncParentRunningSubagents(parentId);
   }
 
   private projectBackgroundWorkItems(items: AgentBackgroundWorkItem[]): AgentBackgroundWorkItem[] {
@@ -2432,6 +2494,9 @@ export class Session {
     payload.archivedAt = storedRecord?.archivedAt ?? null;
     if (!payload.internal && !storedRecord?.internal && !payload.archivedAt) {
       payload.backgroundWork = this.agentManager.getAgentBackgroundWorkSummary(payload.id);
+      const runningSubagentCount = this.agentManager.getRunningSubagentCount?.(payload.id) ?? 0;
+      this.recordRunningSubagentCount(payload.id, runningSubagentCount);
+      payload.runningSubagentCount = runningSubagentCount > 0 ? runningSubagentCount : undefined;
     }
     return payload;
   }
@@ -2444,11 +2509,17 @@ export class Session {
     record: StoredAgentRecord,
     registeredProviderIds = new Set(this.providerSnapshotManager.listRegisteredProviderIds()),
   ): AgentSnapshotPayload {
+    const runningSubagentCount =
+      !record.internal && !record.archivedAt
+        ? (this.agentManager.getRunningSubagentCount?.(record.id) ?? 0)
+        : 0;
+    this.recordRunningSubagentCount(record.id, runningSubagentCount);
     return buildStoredAgentPayload(
       record,
       registeredProviderIds,
       (provider, own) => this.agentManager.effectiveOptionsFor(provider, own),
       this.agentManager.getAgentBackgroundWorkSummary(record.id),
+      runningSubagentCount > 0 ? runningSubagentCount : undefined,
     );
   }
 
@@ -3246,6 +3317,8 @@ export class Session {
     switch (msg.type) {
       case "agent.detach.request":
         return this.handleDetachAgentRequest(msg.agentId, msg.requestId);
+      case "agent.suggest_title.request":
+        return this.handleSuggestAgentTitleRequest(msg.agentId, msg.requestId);
       default:
         return undefined;
     }
@@ -3942,6 +4015,27 @@ export class Session {
     }
 
     return { agentId, archivedAt };
+  }
+
+  private async handleSuggestAgentTitleRequest(agentId: string, requestId: string): Promise<void> {
+    let title: string | null = null;
+    let error: string | null = null;
+    try {
+      title = await suggestBotChatTitle(this.agentManager, agentId, () =>
+        ensureAgentLoaded(agentId, {
+          agentManager: this.agentManager,
+          agentStorage: this.agentStorage,
+          logger: this.sessionLogger,
+          purpose: "history",
+        }),
+      );
+    } catch (cause) {
+      error = getErrorMessageOr(cause, "Could not generate a chat title.");
+    }
+    this.emit({
+      type: "agent.suggest_title.response",
+      payload: { requestId, agentId, accepted: title !== null, title, error },
+    });
   }
 
   private async handleDetachAgentRequest(agentId: string, requestId: string): Promise<void> {
@@ -9238,7 +9332,9 @@ export class Session {
     const stored = await this.agentStorage.get(agentId);
     if (stored && !stored.title && !stored.lastUserMessageAt) {
       const { provisionalTitle } = resolveCreateAgentTitles({ initialPrompt: text });
-      if (provisionalTitle) await this.agentManager.setTitle(agentId, provisionalTitle);
+      if (provisionalTitle) {
+        await this.agentManager.setTitle(agentId, provisionalTitle, { provisional: true });
+      }
     }
   }
 

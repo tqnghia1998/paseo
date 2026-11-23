@@ -518,6 +518,33 @@ describe("AgentStorage", () => {
     expect(record?.title).toBe("Provided Title");
   });
 
+  test("automatic chat titles are claimed once and cannot overwrite a manual rename", async () => {
+    const agent = createManagedAgent({ id: "auto-title" });
+    await storage.applySnapshot(agent, { title: "Hi", botAutoTitle: "pending" });
+    await storage.applySnapshot(agent);
+    expect(await storage.get(agent.id)).toMatchObject({ botAutoTitle: "pending" });
+    const claims = await Promise.all([
+      storage.claimBotAutoTitle(agent.id),
+      storage.claimBotAutoTitle(agent.id),
+    ]);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    await storage.applySnapshot(agent, { title: "Hi" });
+    expect(await storage.finishBotAutoTitle(agent.id, "Generated name")).toBeNull();
+    expect(await storage.get(agent.id)).toMatchObject({ title: "Hi" });
+  });
+
+  test("automatic chat titles survive later snapshots and are not generated again", async () => {
+    const agent = createManagedAgent({ id: "auto-title-success" });
+    await storage.applySnapshot(agent, { title: "Hi", botAutoTitle: "pending" });
+    expect(await storage.claimBotAutoTitle(agent.id)).toBe(true);
+    expect(await storage.finishBotAutoTitle(agent.id, "Generated name")).toMatchObject({
+      title: "Generated name",
+    });
+    await storage.applySnapshot(agent);
+    expect(await storage.claimBotAutoTitle(agent.id)).toBe(false);
+    expect(await storage.get(agent.id)).toMatchObject({ title: "Generated name" });
+  });
+
   test("applySnapshot preserves custom titles while updating metadata", async () => {
     const agentId = "agent-3";
     await storage.applySnapshot(
