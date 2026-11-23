@@ -63,6 +63,22 @@ test("standalone bundles resolve built-ins beside the server entrypoint", async 
   expect(resolveBuiltinPluginsRoot(pathToFileURL(path.join(root, "server.mjs")))).toBe(plugins);
 });
 
+test("Vibing registers Antigravity as a built-in provider without user plugins", async () => {
+  const daemon = await createTestPaseoDaemon({
+    pluginsEnabled: false,
+    builtinPlugins: new BuiltinPluginLoader(),
+  });
+  const client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
+  try {
+    await client.connect();
+    const snapshot = await client.getProvidersSnapshot();
+    expect(snapshot.entries.map(({ provider }) => provider)).toContain("antigravity");
+  } finally {
+    await client.close();
+    await daemon.close();
+  }
+});
+
 test("Bots stays built-in while ordinary community plugins use native lifecycle controls and their daemon home", async () => {
   const embeddedDefaults = ["space-app-vibing-theme", "paseo-bots"];
   for (const id of embeddedDefaults) expect(builtinPlugins).toContain(id);

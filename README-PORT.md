@@ -12,7 +12,7 @@ Paseo Web is packaged as a standalone server that embeds:
 2. **Web UI (`web-ui/`)**: Pre-built Expo/React web client.
 3. **PTY Terminal Worker (`terminal-worker/terminal-worker.mjs`)**: Upstream's self-contained worker and shell integration, copied into the runtime home before launch. The standalone server resolves this directory beside `server.mjs`, not one directory above it.
 4. **Local Speech Worker (`worker-process.js`)**: Isolated worker for embedded dictation and voice mode.
-5. **Built-in plugins (`builtin-plugins/`)**: The Claude, Codex and AIS Switch usage sources, native Space App Vibing theme and Bots, with runtime compilers included in the dependency archive.
+5. **Built-in plugins (`builtin-plugins/`)**: Antigravity, the Claude, Codex and AIS Switch usage sources, the Space App Vibing theme, and Bots. The dependency archive includes the runtime compilers; users install the Antigravity CLI separately.
 6. **Embedded workspace**: The Bots surface bound to the selected worktree, with host-owned global navigation. See the [patch contracts](docs/vibing-patches.md#contracts-to-preserve) for navigation and Live Design.
 
 ### Canonical embedded mode
