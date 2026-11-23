@@ -47,7 +47,7 @@ index 1e4e11b..23a26e2 100644
 +  if (row.style.getPropertyValue("display") !== display) row.style.setProperty("display", display);
  }
 diff --git a/client/web/restyle-css.ts b/client/web/restyle-css.ts
-index 62bebf7..c47b051 100644
+index f9fcd8d..666ae8b 100644
 --- a/client/web/restyle-css.ts
 +++ b/client/web/restyle-css.ts
 @@ -23,7 +23,6 @@ ${[4, 5, 3, 0, 2, 1].map((step, i) => `${DOT}:nth-child(${i + 1}) { animation-de
@@ -103,7 +103,7 @@ index 62bebf7..c47b051 100644
  /* The sidebar's workspace hover card is a menu too (role=menu), but its rows ran edge to edge, so their 16px hover fill missed the
     card's corners. Inset them 4px like menu rows: 28px tall, 13px text, 14px icons, title 13/600, divider inset too. */
  [data-cp-part="ws-card"] { padding: 4px !important; }
-@@ -217,9 +213,8 @@ button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !impo
+@@ -238,9 +234,8 @@ button[aria-label="Stop agent"] svg { width: 11px !important; height: 11px !impo
  /* Scroll to bottom: a 36px floating control like the plugin's surfaces (rule border, lifted fill), not Paseo's 48px disc. Its margin keeps
     it centered in the 48px box Paseo positions. */
  [data-testid="scroll-to-bottom-button"] { width: 36px !important; height: 36px !important; margin: 6px !important; border: 1px solid var(--cp-rule) !important; background-color: var(--cp-control) !important; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3) !important; transition: background-color 120ms ease-out; }
@@ -114,7 +114,7 @@ index 62bebf7..c47b051 100644
  [data-testid="scroll-to-bottom-button"] svg { width: 16px !important; height: 16px !important; }
  /* Tooltips read as captions: 12px text in a tighter box than menus. */
  [role="tooltip"] { padding: 4px 8px !important; border-radius: 8px !important; border-color: var(--cp-rule, var(--colors-border)) !important; }
-@@ -261,7 +256,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
+@@ -282,7 +277,7 @@ ${PLAN} > div:nth-child(2) { padding: 14px 16px !important; }
  ${PLAN} > div:last-child { padding: 10px 16px 12px !important; border-top: 1px solid var(--cp-rule) !important; }
 
  [data-testid^="chat-outline-tick-"][aria-selected="true"] > div { background-color: var(--cp-accent) !important; }
@@ -123,7 +123,7 @@ index 62bebf7..c47b051 100644
  [data-cp-part="outline-preview"] * { font-size: 13px !important; }
  /* Between ticks, a copy of the last preview glides to the hovered tick until Paseo's next one takes over (ghostOutlinePreview). */
  [data-testid="chat-outline-preview"][data-cp-ghost] { pointer-events: none; animation: none !important; transition: transform 100ms cubic-bezier(0.33, 1, 0.68, 1), opacity 100ms ease-out !important; }
-@@ -311,10 +306,21 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
+@@ -332,10 +327,21 @@ ${CTX}::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; h
  ${USAGE} > div:nth-child(4) { margin-top: -6px !important; }
  `;
 
@@ -148,7 +148,7 @@ index 62bebf7..c47b051 100644
  /* Settings pages (tagged by tagSettings): surfaces 12, controls 8, and one text field, 32px in a sunken well that lights up on focus.
     Settings has its own sidebar, so a reload there can come before the --cp-* colors are set: Paseo's own colors stand in. */
  [data-cp-set="card"] { border-radius: 12px !important; }
-@@ -322,7 +328,9 @@ export const NATIVE_CSS = `
+@@ -343,7 +349,9 @@ export const NATIVE_CSS = `
  :is([data-cp-set="field"], [data-cp-set="area"]) { border: 1px solid var(--colors-border) !important; border-radius: 8px !important; background-color: var(--cp-sunken, color-mix(in srgb, var(--colors-surface0), #000 15%)) !important; transition: border-color 120ms ease-out, box-shadow 120ms ease-out; }
  /* The stand-in above is a mid grey on a light page. */
  :root:is(.light, .pluginLight) :is([data-cp-set="field"], [data-cp-set="area"]) { background-color: var(--cp-sunken, var(--colors-surface2)) !important; }
@@ -172,7 +172,7 @@ index 251e126..93472ef 100644
  [data-cp-select] > button { height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--cp-fg, var(--colors-foreground)); font-family: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; }
  [data-cp-select] > button:hover { background-color: color-mix(in srgb, var(--cp-control, var(--colors-surface2)), var(--cp-fg, var(--colors-foreground)) 12%); }
 diff --git a/client/web/selectors.ts b/client/web/selectors.ts
-index 4326a26..5dfde22 100644
+index 7a8659f..c7b7e5f 100644
 --- a/client/web/selectors.ts
 +++ b/client/web/selectors.ts
 @@ -29,7 +29,8 @@ export const ADMONITION = `${DOC_MD} .enrm-admonition`;
@@ -186,11 +186,11 @@ index 4326a26..5dfde22 100644
  export const PLAN = '[data-testid="permission-plan-card"]';
  export const CTX = '[data-cp-part="context"]';
 diff --git a/package-lock.json b/package-lock.json
-index cc195ee..9c77262 100644
+index 31e7991..2be9d80 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -9,18 +9,18 @@
-       "version": "0.15.2",
+       "version": "0.15.5",
        "license": "MIT",
        "dependencies": {
 -        "@getpaseo/protocol": "0.16.0",
@@ -233,7 +233,7 @@ index cc195ee..9c77262 100644
        "funding": {
          "url": "https://github.com/sponsors/colinhacks"
 diff --git a/package.json b/package.json
-index 35096e4..7d5a4d6 100644
+index d8b0232..d226b8f 100644
 --- a/package.json
 +++ b/package.json
 @@ -33,15 +33,15 @@

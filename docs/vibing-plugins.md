@@ -14,9 +14,9 @@ is the per-plugin reference and the upgrade procedure.
 | Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
 | AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
 | Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
-| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `5fb31cb`                  | 0.15.2        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
+| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `ceb74fb`                  | 0.15.5        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
 | Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`             |
-| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `7f08467` | 1.4.1         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`    |
+| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `e49b7e8` | 1.4.2         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`    |
 
 - **Built in:** listed in `builtinPlugins` (`packages/server/src/server/plugins/builtin/index.ts`);
   the bundler copies them beside `server.mjs` and the daemon always loads them.
@@ -243,3 +243,12 @@ the locked Paseo client and MCP SDK dependencies and their license notices.
 
 Chat Polish `5fb31cb` (0.15.2) uses the updated 0.16 SDK and slash menu.
 Shell Yeah and Generative UI have no new source changes.
+
+## Plugin refresh on November 23, 2026
+
+Chat Polish `ceb74fb` (0.15.5) leaves live GenUI replies to their renderer,
+restyles background tasks, and adapts to Paseo 0.17's composer and PR update
+turns. The Vibing patch retains embedded styling and the offline bundle setup.
+Bots `ae40671` and Generative UI `cd50b2a` still match upstream HEAD. Shell
+Yeah stays at `e49b7e8` (1.4.2): the `shell-yeah/` tree is unchanged through
+monorepo HEAD `29befcc`.
