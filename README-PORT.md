@@ -17,7 +17,7 @@ Paseo Web is packaged as a standalone server that embeds:
 
 ### Canonical embedded mode
 
-Both consumer surfaces use one **embedded workspace policy** backed by the same standalone build. The Bots left tab inside Space App Vibing and the Live Design drawer's **Agent** tab both open Bots for the selected worktree; Live Design runs in its own runtime and home.
+Both consumer surfaces use one **embedded workspace policy** backed by the same standalone build. The Bots left tab inside Space App Vibing and the Live Design drawer's **Agent** tab both open Bots for the selected worktree inside one shared runtime and home, separated by `paseo-bots.context=live-design`.
 
 The [Vibing patch catalog](docs/vibing-patches.md) owns the module map, remaining
 upstream hooks, behavior contracts and focused checks. Read it before changing
@@ -54,15 +54,15 @@ not in the environment inherited by providers, external commands, or terminals.
 
 - `paseo-web.js` — Executable CLI runner
 - `paseo-web-plugins.mjs` — One-time ordinary directory installation of each community addon in `communityPluginIds`
-- `community-plugins/` — Prebundled offline addon sources (Chat Polish, Annotations, Shell Yeah, Recap, Generative UI), each copied into a runtime home the first time a bundle containing it starts there
+- `community-plugins/` — Prebundled offline addon sources (Chat Polish, Shell Yeah, Generative UI), each copied into a runtime home the first time a bundle containing it starts there
 - `plugin-process.js` — Bundled worker for isolated built-ins and installed plugins
 - `compiler-worker.js` — Plugin compilation isolate used by daemon and plugin workers
 - `package.json` — Packaged daemon name/version and ESM metadata
 - `server.mjs` — Standalone bundled daemon
 - `terminal-worker/` — Upstream's self-contained `terminal-worker.mjs` and `shell-integration/`
 - `worker-process.js` — Local speech worker
-- `web-ui/` — Static web client bundle
-- `runtime-node-modules.tgz` — PTY and speech dependencies, TypeScript, esbuild, and the build host's esbuild binary
+- `web-ui/` — Static web client bundle (raw assets only; `.br`/`.gz` precompressed copies are omitted for loopback serving)
+- `runtime-node-modules.tgz` — Trimmed host-platform PTY and speech dependencies (deduplicated `libonnxruntime`, no Windows `.pdb` symbols or C++ sources), `typescript` runtime library (without CLI/locale packs), `esbuild`, and the build host's esbuild binary
 - `bridge-plugin.bundle.mjs` — OpenCode v1 bridge runtime artifact
 - `v2/bridge-plugin.bundle.mjs` and `v2/state.mjs` — OpenCode v2 bridge and its shared state module; both must remain beside `server.mjs` under `v2/`
 - `builtin-plugins/` — Only the plugins in the daemon's built-in list (Antigravity provider, Claude, Codex and AIS Switch usage sources, Bots and embedded theme), loaded beside `server.mjs`; checkout-only `tsconfig.json` files are omitted because their parent configuration is not shipped

@@ -2611,8 +2611,7 @@ attachments are preserved. It throws when no editable composer is active for tha
 
 `client.addComposerPill({ id, workspaceId, agentId, button })` uses the same [button descriptor](#button-descriptor)
 and returns the same registration. It targets one agent's composer track alongside Tasks and
-Subagents. Pass `placement: "input"` to render a control inside the input toolbar instead;
-omitting it (or `"above"`) keeps the track placement. Composer pills always show the icon and `label` (or `title` when `label` is omitted).
+Subagents. Composer pills always show the icon and `label` (or `title` when `label` is omitted).
 Menus and popovers add an upward chevron on every layout, because their surface opens above the
 pill; actions show none, so a pill that runs on tap reads differently from one that opens something.
 The track keeps its space above the composer whether or not it has pills, so adding and removing
@@ -2667,12 +2666,6 @@ The [local plugin example](https://github.com/getpaseo/paseo/blob/main/plugin-ex
 replaces registrations on each snapshot and aborts the observation during entry cleanup, including pending bootstrap.
 
 ## Button descriptor
-
-A menu entry with `kind: "actions"`, `id`, `title`, and an `actions` array renders a
-label with icon buttons aligned to its right. Add `onPress` to make the whole row run a
-primary action; the icon buttons still run only their own actions. Each action has its own `id`,
-`title` (used for accessibility and its tooltip), `icon`, `onPress`, and optional `disabled`.
-Selecting an action closes the menu. Without `onPress`, selecting the label performs no action.
 
 These contracts are exported from `@getpaseo/plugin/client`.
 

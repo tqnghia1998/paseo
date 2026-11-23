@@ -15,7 +15,7 @@ import {
   type ResolvedPluginButton,
 } from "./validation";
 
-export type ButtonPlacement = "header" | "composer" | "composer-input";
+export type ButtonPlacement = "header" | "composer";
 
 export interface RegisteredPluginButton {
   key: number;
@@ -35,13 +35,7 @@ function resolveAction(
   if (path.length === 0) return behavior.kind === "action" ? behavior.onPress : null;
   if (behavior.kind !== "menu") return null;
   const item = behavior.items.find((entry) => entry.id === path[0]);
-  if (!item || item.kind === "separator" || item.visible === false || item.disabled) return null;
-  if (item.kind === "actions") {
-    if (path.length === 1) return item.onPress ?? null;
-    if (path.length !== 2) return null;
-    const action = item.actions.find((candidate) => candidate.id === path[1]);
-    return action && !action.disabled ? action.onPress : null;
-  }
+  if (!item || item.kind !== "item" || item.visible === false || item.disabled) return null;
   return resolveAction(item.behavior, path.slice(1));
 }
 
@@ -76,16 +70,11 @@ export class PluginButtonStore {
     input: PluginComposerPillContribution<PluginText>,
   ): PluginButtonRegistration<PluginText> {
     if (!input.agentId.trim()) throw new Error("Plugin composer pill needs an agent");
-    return this.add(
-      installation,
-      input,
-      input.placement === "input" ? "composer-input" : "composer",
-      {
-        context: "agent",
-        workspaceId: input.workspaceId.trim(),
-        agentId: input.agentId.trim(),
-      },
-    );
+    return this.add(installation, input, "composer", {
+      context: "agent",
+      workspaceId: input.workspaceId.trim(),
+      agentId: input.agentId.trim(),
+    });
   }
 
   private add(
@@ -184,7 +173,6 @@ export function buttonMatches(
   serverId: string,
   workspaceId: string,
   agentId: string | null,
-  placement: "above" | "input" = "above",
 ): boolean {
   if (
     entry.installation.serverId !== serverId ||
@@ -194,7 +182,7 @@ export function buttonMatches(
     return false;
   if (agentId === null) return entry.placement === "header";
   return (
-    entry.placement === (placement === "input" ? "composer-input" : "composer") &&
+    entry.placement === "composer" &&
     entry.context.context === "agent" &&
     entry.context.agentId === agentId
   );

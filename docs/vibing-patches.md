@@ -81,7 +81,7 @@ model loading can work in a warm process and fail after its next restart.
 
 ## Vibing Chief
 
-Chief (`vibing-chief`) is the app-wide manager Bot. It manages and operates the app: it
+Chief is the app-wide manager Bot. It manages and operates the app: it
 resolves merge requests, opens feature workspaces, hands the work to an ordinary Bot chat in
 that feature, and can do anything a user can do in Space App Vibing through the Vibing
 backend's HTTP API (see below). Feature Bots do the coding: Chief hands it over and does it
@@ -95,10 +95,6 @@ the active, ready session. `chief-quick-actions.ts` focuses the registered compo
 waiting for it to mount when needed and rechecking visibility/identity before applying
 pending focus. No draft text is replaced or sent. Cmd/Ctrl+Shift+K stays Vibing's
 workspace-switcher shortcut.
-
-Chief rejects a typed `/btw` through `chief-slash-policy.ts` (a leftover from the retired Side
-Chat addon, `paseo-sidechat`, which is no longer bundled; the next start removes the copy Vibing
-installed). It is harmless without the addon.
 
 The daemon owns Chief's single agent (`chief-session.ts`). Chief is a plain Full access
 agent with source-owned provider, tool configuration and instructions. It works
@@ -346,16 +342,12 @@ The separate customization catalog and redundant Mermaid plugin are removed;
 Paseo's native Markdown renderer handles Mermaid diagrams.
 
 [Chat Polish](../plugins/paseo-chat-polish/README.md) is the default chat restyler; it
-replaced Beautiful Chat. `paseo-chat-polish-vibing.patch`
+replaced Beautiful Chat (see [vibing-plugins.md](./vibing-plugins.md#what-ships) for its
+current pin and version). `paseo-chat-polish-vibing.patch`
 gives its CSS host-color fallbacks for embedded frames without the sidebar that sets them,
 and keeps its field and queued-message selectors working. Its native `sharp` dependency is
 not bundled: thumbnails fall back to the original image. Its optional headless browser is
 downloaded at runtime only when a user enables page checks in its dashboard.
-Chat Polish is pinned at 0.10.0 (`df399f50ca6c93fc93e29ad65a223da91b5b75ea`).
-Its protocol imports are all type-only, so the vendor patch keeps protocol in
-development dependencies with the host SDK/protocol 0.15.3 and Zod 4.4.3; runtime
-vendoring installs only its actual rendering dependencies. The isolated browser
-suite retains all 41 upstream/Vibing DOM checks, including image stacks.
 This vendored Chat Polish copy reports update state `local`; direct update requests
 explain that Space App Vibing manages it. It never invokes a separately installed
 `paseo` CLI, which could be incompatible or address another daemon. A source test
@@ -503,8 +495,7 @@ installs never run npm (company registry mirrors lack some packages).
 Bots and ordinary installed plugins run in workers with the owning daemon's
 `PASEO_HOME`, including isolated test homes. Workspace Bots and Live Design share one production home. Bots owns its screen,
 data and routines; native worktree navigation remains scoped. Connected apps and
-bots are configured by the user. Annotations always uses Queue. Its direct-send
-queue lasts only for the current client lifetime; sending through the normal
+bots are configured by the user. Sending through the normal
 composer uses native queued-message recovery. Live Design text attachments remain
 native and independent.
 
@@ -660,16 +651,6 @@ AIS credentials. The Bots sidebar shows separate AIS Switch and Codex cards thro
 the existing Usage modal and styles. See `plugins/ais-switch-usage-source/README.md`
 for the verified disk/API contract and its version boundary.
 
-Plugin menu `actions` rows accept an optional row-level `onPress` declared in
-`packages/plugin/src/client/buttons.ts` and documented in
-`public-docs/plugins/reference.md`. In `packages/app/src/plugins/buttons/`,
-`validation.ts` checks it, `model.ts` runs it for a one-segment row path, and
-`view.tsx` renders such a row as a pressable menu item whose trailing icon actions
-stop propagation so they never trigger the row. Pending or disabled buttons and
-disabled rows or actions run nothing; rows without `onPress` stay upstream labels.
-It no longer has a bundled consumer (Quick Prompts was its only one), but the behavior is
-kept and covered by `model.test.ts` and the Vibing bundle guard.
-
 Some fixes need the upstream execution path: active/archived Codex import
 pagination, terminal output event mapping, optional wait/protocol fields, Pi turn
 settlement, assistant-only citation normalization shared by transcript and clipboard HTML, retained-panel tooltip cleanup,
@@ -763,3 +744,15 @@ gallery detail routes only for the bound host. Removed the obsolete plugins-page
 test alongside upstream's component replacement; gallery UI lifecycle coverage
 has not yet been migrated. The built-in loader lifecycle test uses its own fixture
 instead of the retired Annotations plugin.
+
+### Refresh & Housekeeping 2026-11-23
+
+Rebased onto Paseo 0.17 with the built-in Antigravity provider and Chat Polish 0.15.5
+(`ceb74fb`; see [vibing-plugins.md](./vibing-plugins.md)). Removed dead fork leftovers:
+`chief-slash-policy.ts` (from retired Side Chat) and the unused Quick-Prompts plugin
+menu row `onPress` / `kind: "actions"` / `placement: "input"` divergence in
+`packages/plugin` and `packages/app/src/plugins/buttons/`. Trimmed standalone bundle
+bloat in `scripts/bundle-paseo-web.mjs`: deduplicated `libonnxruntime.dylib` via
+symlink, pruned Windows `.pdb` symbols / C++ sources / non-host prebuilds from
+`node-pty`, pruned CLI/server/locale files from `typescript`, and omitted redundant
+`.br`/`.gz` precompressed copies from loopback `web-ui/`.

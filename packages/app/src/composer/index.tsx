@@ -1,4 +1,3 @@
-import { rejectChiefSlashCommand } from "@/patches/vibing/chief-slash-policy";
 import {
   useComposerEditingSession,
   useComposerFullscreen,
@@ -130,7 +129,6 @@ import {
   persistAttachmentFromFileUri,
 } from "@/attachments/service";
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
-import { PluginComposerPills } from "@/plugins/buttons/view";
 import { registerComposerTextInsertion, registerComposerDraft } from "@/composer/text-insertion";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { useIsInputLive } from "./input/use-input-live";
@@ -1609,7 +1607,6 @@ function ComposerContentImpl({
 
   const runPluginClientSlashCommand = useCallback(
     (resolved: { command: (typeof pluginClientSlashCommands)[number]; args: string }): boolean => {
-      if (rejectChiefSlashCommand(`/${resolved.command.name}`, setSendError)) return true;
       if (blurOnSubmit) messageInputRef.current?.blur();
       clearDraft("sent");
       replaceUserInput("");
@@ -1829,7 +1826,6 @@ function ComposerContentImpl({
       forceSend?: boolean,
       onQueuedMessageSubmitted?: () => Promise<void>,
     ) => {
-      if (rejectChiefSlashCommand(outgoingMessage, setSendError)) return "failed" as const;
       const result = await submitAgentInput({
         message: outgoingMessage,
         attachments: outgoingAttachments,
@@ -1953,7 +1949,6 @@ function ComposerContentImpl({
 
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
-      if (rejectChiefSlashCommand(payload.text, setSendError)) return;
       const outgoingAttachments = buildOutgoingAttachments(attachments);
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
@@ -2207,7 +2202,6 @@ function ComposerContentImpl({
 
   const handleQueue = useCallback(
     (payload: MessagePayload) => {
-      if (rejectChiefSlashCommand(payload.text, setSendError)) return;
       const outgoingAttachments = buildOutgoingAttachments(attachments);
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
@@ -2476,15 +2470,6 @@ function ComposerContentImpl({
           showAgentControls: mode.showAgentControls,
           showToolbar: !isFullscreen,
         })}
-        {workspaceId ? (
-          <PluginComposerPills
-            serverId={serverId}
-            workspaceId={workspaceId}
-            agentId={agentId}
-            compact={isCompactLayout}
-            placement="input"
-          />
-        ) : null}
       </ComposerInputProvider>
     ),
     [
@@ -2496,7 +2481,6 @@ function ComposerContentImpl({
       isFullscreen,
       mode.showAgentControls,
       serverId,
-      workspaceId,
     ],
   );
 

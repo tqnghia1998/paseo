@@ -3,7 +3,6 @@ import type {
   PluginButton as SDKPluginButton,
   PluginButtonBehavior as SDKPluginButtonBehavior,
   PluginButtonIcon,
-  PluginButtonMenuAction,
 } from "@getpaseo/plugin/client";
 
 type PluginButton = SDKPluginButton<PluginText>;
@@ -66,32 +65,6 @@ function validateBehavior(
           if (ids.has(item.id)) throw new Error(`Duplicate plugin button menu item: ${item.id}`);
           ids.add(item.id);
           if (item.kind === "separator") return { ...item };
-          if (item.kind === "actions") {
-            const actionIds = new Set<string>();
-            if (item.onPress !== undefined && typeof item.onPress !== "function")
-              throw new Error("Plugin menu row action needs onPress");
-            if (!item.actions.length) throw new Error("Plugin menu action row needs actions");
-            return {
-              ...item,
-              title: requireText(item.title, "menu item title", resolve),
-              visible: optionalBoolean(item.visible, true),
-              disabled: optionalBoolean(item.disabled, false),
-              actions: item.actions.map((action) => {
-                requireButtonId(action.id);
-                if (actionIds.has(action.id))
-                  throw new Error(`Duplicate menu action: ${action.id}`);
-                actionIds.add(action.id);
-                if (typeof action.onPress !== "function")
-                  throw new Error("Menu action needs onPress");
-                return {
-                  ...action,
-                  title: requireText(action.title, "action title", resolve),
-                  icon: validation.parseIcon(action.icon),
-                  disabled: optionalBoolean(action.disabled, false),
-                };
-              }),
-            };
-          }
           if (item.kind !== "item") throw new Error("Invalid plugin button menu entry");
           return {
             ...item,
@@ -114,15 +87,6 @@ export type ResolvedPluginButtonBehavior =
   | { kind: "menu"; items: readonly ResolvedPluginButtonMenuEntry[] };
 export type ResolvedPluginButtonMenuEntry =
   | { kind: "separator"; id: string }
-  | {
-      kind: "actions";
-      id: string;
-      title: string;
-      visible?: boolean;
-      disabled?: boolean;
-      onPress?(): void | Promise<void>;
-      actions: readonly (Omit<PluginButtonMenuAction<PluginText>, "title"> & { title: string })[];
-    }
   | {
       kind: "item";
       id: string;

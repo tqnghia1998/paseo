@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -242,10 +243,15 @@ for (const id of communityPluginIds) {
 const webUiSrc = path.join(ROOT_DIR, "packages/server/dist/server/web-ui");
 const webUiDest = path.join(DEST_DIR, "web-ui");
 fs.rmSync(webUiDest, { recursive: true, force: true });
-fs.cpSync(webUiSrc, webUiDest, { recursive: true });
+// Standalone Vibing serves web-ui only over loopback; raw files avoid shipping .br/.gz duplicates.
+fs.cpSync(webUiSrc, webUiDest, {
+  recursive: true,
+  filter: (source) => !source.endsWith(".br") && !source.endsWith(".gz"),
+});
 
 console.log("6. Packaging runtime native modules...");
 const runtimeNmTmp = path.join(DEST_DIR, "runtime-nm-temp");
+fs.rmSync(runtimeNmTmp, { recursive: true, force: true });
 fs.mkdirSync(runtimeNmTmp, { recursive: true });
 
 const nodePtySrc = [
@@ -255,7 +261,49 @@ const nodePtySrc = [
 if (!nodePtySrc) {
   throw new Error("Could not find the node-pty runtime package");
 }
-fs.cpSync(nodePtySrc, path.join(runtimeNmTmp, "node-pty"), { recursive: true });
+const hostPrebuildDir = `${process.platform}-${process.arch}`;
+fs.cpSync(nodePtySrc, path.join(runtimeNmTmp, "node-pty"), {
+  recursive: true,
+  filter: (source) => {
+    const rel = path.relative(nodePtySrc, source);
+    if (!rel) return true;
+    const parts = rel.split(path.sep);
+    if (source.endsWith(".pdb") || source.endsWith(".map")) return false;
+    if (parts[0] === "src" || parts[0] === "deps" || parts[0] === "scripts") return false;
+    if (parts[0] === "binding.gyp" || parts[0] === "README.md") return false;
+    if (process.platform !== "win32" && parts[0] === "third_party") return false;
+    if (parts[0] === "prebuilds" && parts.length >= 2 && parts[1] !== hostPrebuildDir) return false;
+    return true;
+  },
+});
+
+const TS_PRUNED_LOCALES = new Set([
+  "cs",
+  "de",
+  "es",
+  "fr",
+  "it",
+  "ja",
+  "ko",
+  "pl",
+  "pt-br",
+  "ru",
+  "tr",
+  "zh-cn",
+  "zh-tw",
+]);
+const TS_PRUNED_LIB_FILES = new Set([
+  "_tsc.js",
+  "tsc.js",
+  "tsserver.js",
+  "_tsserver.js",
+  "tsserverlibrary.js",
+  "tsserverlibrary.d.ts",
+  "typingsInstaller.js",
+  "watchGuard.js",
+  "cancellationToken.js",
+  "protocol.d.ts",
+]);
 
 const sherpaPackage = "sherpa-onnx-node";
 const sherpaPlatformPackage = `sherpa-onnx-${SHERPA_PLATFORM}-${process.arch}`;
@@ -270,7 +318,46 @@ for (const packageName of [
   if (!fs.existsSync(source)) {
     throw new Error(`Could not find the ${packageName} runtime package`);
   }
-  fs.cpSync(source, path.join(runtimeNmTmp, packageName), { recursive: true });
+  fs.cpSync(source, path.join(runtimeNmTmp, packageName), {
+    recursive: true,
+    filter:
+      packageName === "typescript"
+        ? (entryPath) => {
+            const rel = path.relative(source, entryPath);
+            if (!rel) return true;
+            const parts = rel.split(path.sep);
+            if (parts[0] === "bin") return false;
+            if (parts[0] === "lib" && parts.length >= 2) {
+              if (TS_PRUNED_LOCALES.has(parts[1]) || TS_PRUNED_LIB_FILES.has(parts[1])) {
+                return false;
+              }
+            }
+            return true;
+          }
+        : (entryPath) => !entryPath.endsWith(".map"),
+  });
+}
+
+// sherpa-onnx ships libonnxruntime.dylib and libonnxruntime.<ver>.dylib as byte-identical copies
+// (~35 MB each); replace the unversioned duplicate with a symlink so tar stores it once.
+const sherpaPlatformDir = path.join(runtimeNmTmp, sherpaPlatformPackage);
+if (fs.existsSync(sherpaPlatformDir)) {
+  const unversioned = path.join(sherpaPlatformDir, "libonnxruntime.dylib");
+  const versionedName = fs
+    .readdirSync(sherpaPlatformDir)
+    .find((name) => /^libonnxruntime\.\d+.*\.dylib$/.test(name));
+  if (versionedName && fs.existsSync(unversioned)) {
+    const versioned = path.join(sherpaPlatformDir, versionedName);
+    const hashFile = (file) => createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    if (
+      !fs.lstatSync(unversioned).isSymbolicLink() &&
+      fs.statSync(unversioned).size === fs.statSync(versioned).size &&
+      hashFile(unversioned) === hashFile(versioned)
+    ) {
+      fs.rmSync(unversioned);
+      fs.symlinkSync(versionedName, unversioned);
+    }
+  }
 }
 
 // Zero mtimes so repeated builds produce a byte-identical archive (cpSync stamps copies with
@@ -295,5 +382,7 @@ execSync(
   )}" -C "${runtimeNmTmp}" .`,
 );
 fs.rmSync(runtimeNmTmp, { recursive: true, force: true });
+// Drop any stale unpacked node_modules beside the bundle so the next launch extracts the fresh archive.
+fs.rmSync(path.join(DEST_DIR, "node_modules"), { recursive: true, force: true });
 
 console.log("Done bundling paseo-web into", DEST_DIR);

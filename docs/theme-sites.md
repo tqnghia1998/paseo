@@ -287,8 +287,8 @@ Prose and tables only; update with the values, no code reads them.
 
 | Line | Hex       | Mode.role   |
 | ---- | --------- | ----------- |
-| 116  | `#959da5` | dark.faint  |
-| 159  | `#2f363d` | dark.hover  |
-| 159  | `#f4f4f7` | light.hover |
-| 162  | `#2f363d` | dark.hover  |
-| 162  | `#f4f4f7` | light.hover |
+| 118  | `#959da5` | dark.faint  |
+| 161  | `#2f363d` | dark.hover  |
+| 161  | `#f4f4f7` | light.hover |
+| 164  | `#2f363d` | dark.hover  |
+| 164  | `#f4f4f7` | light.hover |

@@ -11,13 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import {
-  Pressable,
-  Text,
-  View,
-  useWindowDimensions,
-  type GestureResponderEvent,
-} from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AlertCircle, ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -28,7 +22,6 @@ import {
   MenuSeparator,
   MenuSubTrigger,
   useMenuContext,
-  MENU_ITEM_HEIGHT,
   type MenuPageDefinition,
 } from "@/components/ui/menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -36,7 +29,6 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
 import {
   iconButtonChromeStyle,
-  useIconButtonChromeStyle,
   type IconButtonChromeState,
 } from "@/components/ui/icon-button-chrome";
 import { composerPillStyles } from "@/composer/pill-styles";
@@ -117,111 +109,13 @@ function visibleMenuItems(
 ): readonly PluginButtonMenuEntry[] {
   const visible: PluginButtonMenuEntry[] = [];
   for (const item of items) {
-    if (item.kind !== "separator" && item.visible === false) continue;
+    if (item.kind === "item" && item.visible === false) continue;
     if (item.kind === "separator" && (visible.length === 0 || visible.at(-1)?.kind === "separator"))
       continue;
     visible.push(item);
   }
   if (visible.at(-1)?.kind === "separator") visible.pop();
   return visible;
-}
-
-type InlineActionRow = Extract<PluginButtonMenuEntry, { kind: "actions" }>;
-
-function InlineMenuAction({
-  view,
-  row,
-  action,
-  path,
-}: {
-  view: ButtonView;
-  row: InlineActionRow;
-  action: InlineActionRow["actions"][number];
-  path: readonly string[];
-}) {
-  const menu = useMenuContext("PluginInlineMenuAction");
-  const disabled =
-    view.entry.pending ||
-    view.entry.button.disabled ||
-    row.disabled === true ||
-    action.disabled === true;
-  const buttonStyle = useIconButtonChromeStyle({
-    size: "small",
-    compact: view.props.layout.compact,
-    disabled,
-  });
-  const itemDataSet = useMemo(
-    () => ({ menuItem: "true", menuDisabled: disabled ? "true" : "false" }),
-    [disabled],
-  );
-  const select = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      menu.selectItem(() => pressButton(view, [...path, action.id]), true);
-    },
-    [menu, view, path, action.id],
-  );
-  return (
-    <Tooltip enabledOnMobile={false}>
-      <TooltipTrigger asChild>
-        <Pressable
-          accessibilityRole="menuitem"
-          accessibilityLabel={`${action.title} ${row.title}`}
-          disabled={disabled}
-          tabIndex={-1}
-          dataSet={itemDataSet}
-          onPress={select}
-          style={buttonStyle}
-        >
-          <ButtonIcon view={view} icon={action.icon} />
-        </Pressable>
-      </TooltipTrigger>
-      <TooltipContent>
-        <Text style={styles.tooltipLabel}>{action.title}</Text>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-function InlineMenuActions({
-  view,
-  row,
-  path,
-}: {
-  view: ButtonView;
-  row: InlineActionRow;
-  path: readonly string[];
-}) {
-  const select = useCallback(() => pressButton(view, path), [view, path]);
-  const actions = useMemo(
-    () => (
-      <View style={styles.inlineActions}>
-        {row.actions.map((action) => (
-          <InlineMenuAction key={action.id} view={view} row={row} action={action} path={path} />
-        ))}
-      </View>
-    ),
-    [row, view, path],
-  );
-  if (row.onPress) {
-    return (
-      <MenuItem
-        onSelect={select}
-        disabled={view.entry.pending || view.entry.button.disabled || row.disabled === true}
-        trailing={actions}
-      >
-        {row.title}
-      </MenuItem>
-    );
-  }
-  return (
-    <View style={styles.actionRow}>
-      <Text numberOfLines={1} style={styles.actionRowLabel}>
-        {row.title}
-      </Text>
-      {actions}
-    </View>
-  );
 }
 
 function ButtonMenuItem({
@@ -283,8 +177,6 @@ function ButtonBody({
   return visibleMenuItems(behavior.items).map((item) => {
     if (item.kind === "separator") return <MenuSeparator key={item.id} />;
     const itemPath = [...path, item.id];
-    if (item.kind === "actions")
-      return <InlineMenuActions key={item.id} view={view} row={item} path={itemPath} />;
     return (
       <ButtonMenuItem
         key={item.id}
@@ -334,7 +226,7 @@ function buttonPages(
 ): MenuPageDefinition[] {
   if (behavior.kind !== "menu") return [];
   return behavior.items.flatMap((item) => {
-    if (item.kind !== "item" || item.visible === false || item.behavior.kind === "action")
+    if (item.kind === "separator" || item.visible === false || item.behavior.kind === "action")
       return [];
     const itemPath = [...path, item.id];
     return [
@@ -352,8 +244,7 @@ function buttonPages(
 function ButtonControl({ view }: { view: ButtonView }) {
   const { entry, props } = view;
   const { button } = entry;
-  const composer = entry.placement !== "header";
-  const input = entry.placement === "composer-input";
+  const composer = entry.placement === "composer";
   const disabled = button.disabled || entry.pending;
   const expanded = button.behavior.kind !== "action";
   // A chevron marks a button that opens something. Composer pills keep their label on compact and
@@ -373,13 +264,13 @@ function ButtonControl({ view }: { view: ButtonView }) {
     ({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) =>
       composer
         ? [
-            input ? styles.inputButton : composerPillStyles.body,
+            composerPillStyles.body,
             styles.button,
-            (hovered || pressed || entry.open) && (input ? styles.inputActive : styles.active),
+            (hovered || pressed || entry.open) && styles.active,
             disabled && styles.disabled,
           ]
         : headerButtonStyle(props.layout.compact, { hovered, pressed, open: entry.open }, disabled),
-    [composer, input, disabled, entry.open, props.layout.compact],
+    [composer, disabled, entry.open, props.layout.compact],
   );
   const contents = (
     <>
@@ -391,10 +282,7 @@ function ButtonControl({ view }: { view: ButtonView }) {
         <ButtonIcon view={view} icon={button.icon} />
       )}
       {label ? (
-        <Text
-          numberOfLines={1}
-          style={[composer ? styles.composerLabel : styles.label, input && styles.inputLabel]}
-        >
+        <Text numberOfLines={1} style={composer ? styles.composerLabel : styles.label}>
           {label}
         </Text>
       ) : null}
@@ -663,21 +551,15 @@ function OverflowSurface({ entries }: { entries: readonly RegisteredPluginButton
   );
 }
 
-function useButtons(
-  serverId: string,
-  workspaceId: string,
-  agentId: string | null,
-  placement: "above" | "input" = "above",
-) {
+function useButtons(serverId: string, workspaceId: string, agentId: string | null) {
   const entries = useSyncExternalStore(
     pluginButtonStore.subscribe,
     pluginButtonStore.getSnapshot,
     pluginButtonStore.getSnapshot,
   );
   return useMemo(
-    () =>
-      entries.filter((entry) => buttonMatches(entry, serverId, workspaceId, agentId, placement)),
-    [entries, serverId, workspaceId, agentId, placement],
+    () => entries.filter((entry) => buttonMatches(entry, serverId, workspaceId, agentId)),
+    [entries, serverId, workspaceId, agentId],
   );
 }
 
@@ -686,15 +568,13 @@ export function PluginComposerPills({
   workspaceId,
   agentId,
   compact,
-  placement = "above",
 }: {
   serverId: string;
   workspaceId: string;
   agentId: string;
   compact: boolean;
-  placement?: "above" | "input";
 }) {
-  const entries = useButtons(serverId, workspaceId, agentId, placement);
+  const entries = useButtons(serverId, workspaceId, agentId);
   const hosts = useHosts();
   const hostLabel = hosts.find((host) => host.serverId === serverId)?.label ?? serverId;
   return entries.map((entry) => (
@@ -770,25 +650,6 @@ export function PluginHeaderButtons({
 }
 
 const styles = StyleSheet.create((theme) => ({
-  actionRow: {
-    minHeight: MENU_ITEM_HEIGHT,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[3],
-  },
-  actionRowLabel: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: theme.fontSize.base,
-    color: theme.colors.foreground,
-  },
-  inlineActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    flexShrink: 0,
-  },
   headerButtons: {
     flexDirection: "row",
     alignItems: "center",
@@ -807,16 +668,6 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.borderAccent,
   },
   button: { flexShrink: 1, minWidth: 0, maxWidth: 160 },
-  inputButton: {
-    height: 28,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
-  },
-  inputLabel: { fontSize: theme.fontSize.base, color: theme.colors.foregroundMuted, flexShrink: 1 },
-  inputActive: { backgroundColor: theme.colors.interactionHighlight },
   active: { backgroundColor: theme.colors.surface2 },
   disabled: { opacity: theme.opacity[50] },
   tooltipLabel: { fontSize: theme.fontSize.sm, color: theme.colors.foreground },
