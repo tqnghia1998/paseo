@@ -111,6 +111,7 @@ describe("turn stats", () => {
       root.render(
         <PortalProvider>
           <CompletedTurnFooterRow
+            contentMaxWidth={undefined}
             strategy={createNativeStreamStrategy()}
             items={[reply]}
             timing={COMPLETED_TIMING}

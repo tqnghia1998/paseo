@@ -14,7 +14,7 @@ import { join } from "node:path";
 
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { AgentManager } from "./agent-manager.js";
-import { sendPromptToAgent, waitForAgentRunStartWithTimeout } from "./agent-prompt.js";
+import { sendPreparedPromptToAgent, waitForAgentRunStartWithTimeout } from "./agent-prompt.js";
 import { AgentStorage } from "./agent-storage.js";
 import { ForegroundPromptStart } from "./agent-run-state.js";
 import type {
@@ -276,7 +276,7 @@ test("idle-only dispatch never replaces a run admitted while the prompt was load
   });
   try {
     await expect(
-      sendPromptToAgent({
+      sendPreparedPromptToAgent({
         agentId: scenario.agentId,
         agentManager: scenario.agentManager,
         agentStorage: storage,
@@ -304,7 +304,7 @@ test("idle-only dispatch refuses a chat archived while the prompt was loading", 
   const stream = vi.spyOn(scenario.agentManager, "streamAgent");
   try {
     await expect(
-      sendPromptToAgent({
+      sendPreparedPromptToAgent({
         agentId: scenario.agentId,
         agentManager: scenario.agentManager,
         agentStorage: storage,
@@ -329,7 +329,7 @@ test("idle-only dispatch reports an already archived chat instead of a successfu
   const stream = vi.spyOn(scenario.agentManager, "streamAgent");
   try {
     await expect(
-      sendPromptToAgent({
+      sendPreparedPromptToAgent({
         agentId: scenario.agentId,
         agentManager: scenario.agentManager,
         agentStorage: storage,
@@ -359,7 +359,7 @@ test("idle-only dispatch refuses a permission arriving while the prompt was load
   const stream = vi.spyOn(scenario.agentManager, "streamAgent");
   try {
     await expect(
-      sendPromptToAgent({
+      sendPreparedPromptToAgent({
         agentId: scenario.agentId,
         agentManager: scenario.agentManager,
         agentStorage: scenario.storage,
@@ -382,7 +382,7 @@ test("idle-only dispatch starts a new run in an unarchived idle chat", async () 
   const replace = vi.spyOn(scenario.agentManager, "replaceAgentRun");
   try {
     await expect(
-      sendPromptToAgent({
+      sendPreparedPromptToAgent({
         agentId: scenario.agentId,
         agentManager: scenario.agentManager,
         agentStorage: scenario.storage,

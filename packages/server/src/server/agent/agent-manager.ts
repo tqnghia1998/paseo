@@ -3725,8 +3725,10 @@ export class AgentManager {
     promptStart?: ForegroundPromptStart,
   ): Promise<AsyncGenerator<AgentStreamEvent>> {
     return this.runLifecycleMutation(agentId, async () => {
-      const record = await this.requireRegistry().get(agentId);
-      if (!record || record.archivedAt) throw new Error("Agent is archived or missing");
+      if (this.registry) {
+        const record = await this.registry.get(agentId);
+        if (!record || record.archivedAt) throw new Error("Agent is archived or missing");
+      }
       const agent = this.requireSessionAgent(agentId);
       if (
         agent.pendingPermissions.size ||
@@ -6931,7 +6933,7 @@ export class AgentManager {
       labels?: Record<string, string>;
       metadata?: AgentMetadata;
     },
-    pluginSessions: PluginSessionsRuntime | undefined = this.pluginSessions,
+    pluginSessions?: PluginSessionsRuntime,
   ): Promise<AgentLaunchContext> {
     let appendSystemPrompt: string[] | undefined;
     let mcpServers: AgentSessionConfig["mcpServers"];

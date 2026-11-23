@@ -8,7 +8,11 @@ import { createChiefBotBridge } from "../patches/vibing/chief-bot.js";
 import { verifyChiefReviewWorkspace } from "../patches/vibing/chief-review-workspace.js";
 import { createChiefHandoffs } from "../patches/vibing/chief-handoffs.js";
 import { ensureAgentLoaded } from "./agent/agent-loading.js";
-import { sendPromptToAgent, unarchiveAgentState } from "./agent/agent-prompt.js";
+import {
+  sendPreparedPromptToAgent,
+  sendPromptToAgent,
+  unarchiveAgentState,
+} from "./agent/agent-prompt.js";
 import { createChangeRequestWatches } from "./agent/change-request-watches/index.js";
 import { respondToAgentPermission } from "./agent/permission-response.js";
 import { createIdleRuntimeCleanup } from "./agent/idle-runtime-cleanup/index.js";
@@ -1460,7 +1464,7 @@ export async function createPaseoDaemon(
     )
       return false;
     try {
-      await sendPromptToAgent({
+      await sendPreparedPromptToAgent({
         agentId: id,
         prompt: text,
         agentManager,
@@ -1507,7 +1511,7 @@ export async function createPaseoDaemon(
         ),
       send: async (id, text) => {
         // A message from Chief never answers a permission the Bot is waiting on.
-        await sendPromptToAgent({
+        await sendPreparedPromptToAgent({
           agentId: id,
           prompt: text,
           agentManager,

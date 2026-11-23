@@ -1235,7 +1235,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
   const isBotsChat = isBotsChatPath(usePathname());
   const contentContainerStyle = useMemo((): CSSProperties => {
-    const desktopGutter = isBotsChat ? 36 : CHAT_COLUMN_BASE_GUTTER;
+    const desktopGutter = isBotsChat ? 48 : CHAT_COLUMN_BASE_GUTTER;
     const gutter = isMobileBreakpoint ? 8 : desktopGutter;
     const { paddingLeft, paddingRight } = resolveChatColumnGutters({
       gutter,

@@ -729,7 +729,7 @@ export function AdaptiveModalSheet({
   // longer commit the exit unmount, so drop it with the chat (as tooltips do).
   const isPanelActive = useRetainedPanelActive();
   const rendersWebPortal = shouldRenderWeb && isPanelActive;
-  const overlayPanelActive = !isWeb || isMobile || isPanelActive;
+  const overlayPanelActive = isSheet || isPanelActive;
   const modalLayer = useGlobalOverlayLayer(
     "modal",
     (visible || shouldRenderWeb) && overlayPanelActive,

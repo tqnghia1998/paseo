@@ -7,11 +7,13 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { usePathname } from "expo-router";
 import {
   CHAT_OUTLINE_GUTTER_INSET,
   CHAT_OUTLINE_MIN_PANEL_WIDTH,
 } from "@/agent-stream/chat-outline/geometry";
-import { resolveContentMaxWidth, useSettings } from "@/hooks/use-settings";
+import { useSettings } from "@/hooks/use-settings";
+import { resolveChatContentMaxWidth } from "@/patches/vibing/chat-appearance";
 import { useSessionStore } from "@/stores/session-store";
 import { CHAT_COLUMN_BASE_GUTTER, resolveChatColumnGutters } from "./gutters";
 import type { ChatColumnRailSurfaceProps, ChatOutlineRailState } from "./index";
@@ -70,7 +72,8 @@ export function ChatColumnRailSurface({ serverId, children }: ChatColumnRailSurf
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const [isBelow, setIsBelow] = useState(true);
   const chatOutlineEnabled = useSettings((settings) => settings.chatOutlineEnabled);
-  const contentMaxWidth = useSettings(resolveContentMaxWidth);
+  const pathname = usePathname();
+  const contentMaxWidth = useSettings((settings) => resolveChatContentMaxWidth(settings, pathname));
   const supportsChatOutline = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.agentTimelinePromptIndex === true,
   );

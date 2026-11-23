@@ -126,6 +126,13 @@ async function drainAgentRunIterator(
   }
 }
 
+function outOfBandAdmission(admit: StartAgentRunOptions["admit"]): (() => void) | undefined {
+  if (!admit) return undefined;
+  return () => {
+    if (!admit()) throw new Error("Queued agent message was withdrawn");
+  };
+}
+
 export async function startAgentRun(
   agentManager: AgentRunController,
   agentId: string,
@@ -150,14 +157,14 @@ export async function startAgentRun(
   // in-flight turn — replaceAgentRun would interrupt the running turn. The
   // intercept lives at this layer so it covers every prompt entrypoint.
   const admit = options?.admit;
-  const admitCommand = admit
-    ? () => {
-        if (!admit()) throw new Error("Queued agent message was withdrawn");
-      }
-    : undefined;
   if (
     !options?.idleOnly &&
-    (await agentManager.tryRunOutOfBand(agentId, prompt, options?.runOptions, admitCommand))
+    (await agentManager.tryRunOutOfBand(
+      agentId,
+      prompt,
+      options?.runOptions,
+      outOfBandAdmission(admit),
+    ))
   ) {
     options?.onDispatch?.("out_of_band");
     return { disposition: "out_of_band" };
