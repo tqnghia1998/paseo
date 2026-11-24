@@ -1,0 +1,6 @@
+{
+  "id": "reply-followups",
+  "name": "Reply follow-ups",
+  "description": "Turns suggested next prompts from the current chat into editable drafts.",
+  "requirements": { "paseo": ">=0.17.3" }
+}
