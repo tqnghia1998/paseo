@@ -32,6 +32,32 @@ async function copyRunner() {
   });
 }
 
+function copyCommunityPlugins() {
+  const destination = path.join(DEST_DIR, "community-plugins");
+  fs.rmSync(destination, { recursive: true, force: true });
+  for (const id of communityPluginIds) {
+    fs.cpSync(path.join(ROOT_DIR, "plugins", id), path.join(destination, id), {
+      recursive: true,
+      filter: (source) =>
+        path.basename(source) !== "tsconfig.json" && !/\.test\.[cm]?[jt]sx?$/.test(source),
+    });
+  }
+}
+
+// Addon-only refreshes reuse the daemon, embedded UI, and native runtime.
+if (process.argv.includes("--addons-only")) {
+  if (!fs.existsSync(path.join(DEST_DIR, "server.mjs"))) {
+    throw new Error("--addons-only requires an existing standalone bundle");
+  }
+  copyCommunityPlugins();
+  fs.copyFileSync(
+    path.join(ROOT_DIR, "scripts", "paseo-web-plugins.mjs"),
+    path.join(DEST_DIR, "paseo-web-plugins.mjs"),
+  );
+  console.log("Updated Paseo Web addons in", DEST_DIR);
+  process.exit(0);
+}
+
 // Runner-only fixes do not need to rebuild or replace the daemon and embedded UI.
 if (process.argv.includes("--runner-only")) {
   if (!fs.existsSync(path.join(DEST_DIR, "server.mjs"))) {
@@ -232,14 +258,7 @@ fs.cpSync(
   shellIntegrationDest,
   { recursive: true },
 );
-const communityPluginsDest = path.join(DEST_DIR, "community-plugins");
-fs.rmSync(communityPluginsDest, { recursive: true, force: true });
-for (const id of communityPluginIds) {
-  fs.cpSync(path.join(ROOT_DIR, "plugins", id), path.join(communityPluginsDest, id), {
-    recursive: true,
-    filter: (source) => path.basename(source) !== "tsconfig.json",
-  });
-}
+copyCommunityPlugins();
 const webUiSrc = path.join(ROOT_DIR, "packages/server/dist/server/web-ui");
 const webUiDest = path.join(DEST_DIR, "web-ui");
 fs.rmSync(webUiDest, { recursive: true, force: true });

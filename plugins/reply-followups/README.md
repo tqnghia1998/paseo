@@ -9,4 +9,8 @@ is no separate provider request. The Markdown suggestions remain visible in
 the transcript, and the latest completed turn can also show editable chips.
 A chip fills an empty composer without sending; an existing draft is left alone.
 
-The plugin is not bundled by default. Disable it in Settings > Plugins.
+Codex needs CLI 0.121.0 or newer to receive the suggestion instructions. On
+older or unverified Codex installations, chats still open without those
+instructions.
+
+Vibing bundles this plugin as an ordinary addon. Disable it in Settings > Plugins.

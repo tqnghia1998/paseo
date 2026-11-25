@@ -748,5 +748,10 @@ test("an update interrupted mid-swap restores the previous copy", async () => {
 
 test("the bundled community list excludes retired addons", async () => {
   const { communityPluginIds } = await import("./paseo-web-plugins.mjs");
-  assert.deepEqual(communityPluginIds, ["paseo-chat-polish", "shell-yeah", "genui"]);
+  assert.deepEqual(communityPluginIds, [
+    "paseo-chat-polish",
+    "shell-yeah",
+    "genui",
+    "reply-followups",
+  ]);
 });

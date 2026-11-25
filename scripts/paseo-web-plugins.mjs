@@ -13,7 +13,7 @@ import {
 import path from "node:path";
 
 // Prebundled under plugins/ and copied beside the runner as community-plugins/.
-export const communityPluginIds = ["paseo-chat-polish", "shell-yeah", "genui"];
+export const communityPluginIds = ["paseo-chat-polish", "shell-yeah", "genui", "reply-followups"];
 
 // Addons Vibing no longer ships. The copy Vibing installed is dropped once on the next start; a copy
 // installed from elsewhere stays. (Beautiful Chat is retired separately above: it has a replacement.)

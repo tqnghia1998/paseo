@@ -17,6 +17,7 @@ is the per-plugin reference and the upgrade procedure.
 | Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `ceb74fb`                  | 0.15.5        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
 | Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`             |
 | Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `e49b7e8` | 1.4.2         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`    |
+| Reply follow-ups (`reply-followups`)              | Fork-owned                                                                                             | —             | Community install          | Fork-owned                                    |
 
 - **Built in:** listed in `builtinPlugins` (`packages/server/src/server/plugins/builtin/index.ts`);
   the bundler copies them beside `server.mjs` and the daemon always loads them.

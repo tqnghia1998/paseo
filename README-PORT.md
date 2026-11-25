@@ -54,7 +54,7 @@ not in the environment inherited by providers, external commands, or terminals.
 
 - `paseo-web.js` — Executable CLI runner
 - `paseo-web-plugins.mjs` — One-time ordinary directory installation of each community addon in `communityPluginIds`
-- `community-plugins/` — Prebundled offline addon sources (Chat Polish, Shell Yeah, Generative UI), each copied into a runtime home the first time a bundle containing it starts there
+- `community-plugins/` — Offline addon sources (Chat Polish, Shell Yeah, Generative UI, Reply follow-ups), each copied into a runtime home the first time a bundle containing it starts there. For addon-only updates, run `node scripts/bundle-paseo-web.mjs --addons-only` with the same destination; it copies the addons and bootstrap module without compiling the UI or daemon.
 - `plugin-process.js` — Bundled worker for isolated built-ins and installed plugins
 - `compiler-worker.js` — Plugin compilation isolate used by daemon and plugin workers
 - `package.json` — Packaged daemon name/version and ESM metadata
