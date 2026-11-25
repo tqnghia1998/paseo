@@ -85,12 +85,14 @@ to one worktree per frame and to the host's native chat.
   chat still exists, is not archived, and has not been manually renamed. Existing chats
   and explicitly named chats are not backfilled. A failed attempt leaves the original
   title; the manual menu action remains available.
-- **Generate title with AI.** The chat menu suggests an editable title from up to four
-  user messages. It uses the chat's current provider and exact model without separate
-  configuration. Claude, Codex, Pi, Antigravity and their derived profiles run the request in a
-  separate non-persisted session with tools disabled; other providers are rejected.
-  Only confirming the existing rename dialog changes the saved title. The prompt
-  is adapted from Arman Khan's MIT-licensed Chat Titles plugin.
+- **Generate title with AI.** The chat menu generates a title from up to four
+  user messages and applies it directly without opening the rename dialog; manual
+  Rename remains a separate menu action. It uses the chat's current provider and exact
+  model without separate configuration. Claude, Codex, Pi, Antigravity and their derived
+  profiles run the request in a separate non-persisted session with tools disabled; other
+  providers are rejected. If the chat is renamed, archived or deleted while generating,
+  the generated title is skipped. The prompt is adapted from Arman Khan's MIT-licensed
+  Chat Titles plugin.
 - **Delete all chats.** The bot menu (kebab and right-click) has a destructive Delete all chats,
   between Archive bot and Delete bot (`shared/delete-chats.ts`). It lists the bot's chats fresh
   through the same query and `select` the sidebar uses (`scopeBotChats` in `shared/chat.ts`, so

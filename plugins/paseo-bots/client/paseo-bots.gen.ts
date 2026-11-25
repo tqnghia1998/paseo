@@ -5204,15 +5204,14 @@ function StartRow({ colors: colors2, label, hint, avatar, onPress }) {
     }
   );
 }
-function RenameDialog({ colors: colors2, title, initialValue, currentValue = initialValue, placeholder, submitLabel = "Rename", maxLength, onClose, onSubmit }) {
+function RenameDialog({ colors: colors2, title, initialValue, placeholder, submitLabel = "Rename", maxLength, onClose, onSubmit }) {
   const [draft, setDraft] = useState6(initialValue);
   const [error, setError] = useState6(null);
   const [pending3, setPending] = useState6(false);
   const invalid = !draft.trim();
-  const unchanged = draft.trim() === currentValue.trim();
-  const submitDisabled = pending3 || unchanged || invalid;
+  const submitDisabled = pending3 || draft === initialValue || invalid;
   const submit = async () => {
-    if (pending3 || unchanged) return;
+    if (pending3 || draft === initialValue) return;
     if (invalid) {
       setError("Name is required");
       return;
@@ -5318,6 +5317,26 @@ function botMenuEntries(actions) {
     { label: "Delete bot", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDelete }
   );
   return entries;
+}
+function canGenerateChatTitle(online, handle) {
+  return online && typeof handle?.suggestTitle === "function" && typeof handle?.rename === "function";
+}
+async function generateChatTitle(options) {
+  const handle = options.getHandle();
+  if (!handle?.suggestTitle) throw new Error("This Paseo host can't suggest titles");
+  if (!handle.rename) throw new Error("This Paseo host can't rename chats");
+  const initialSnapshot = options.getSnapshot?.();
+  const hadChat = Boolean(initialSnapshot?.loaded && initialSnapshot.chat);
+  const expectedTitle = (initialSnapshot?.chat ? initialSnapshot.chat.title : options.initialTitle) ?? null;
+  const suggestion = await handle.suggestTitle();
+  const latestSnapshot = options.getSnapshot?.();
+  if (latestSnapshot?.loaded) {
+    if (hadChat && !latestSnapshot.chat) return null;
+    if (latestSnapshot.chat?.archivedAt) return null;
+    if (latestSnapshot.chat && (latestSnapshot.chat.title ?? null) !== expectedTitle) return null;
+  }
+  await options.applyTitle(suggestion);
+  return suggestion;
 }
 function chatMenuEntries(actions) {
   const entries = [
@@ -15993,12 +16012,19 @@ Its chats stay on the host and remain in Paseo's history.`,
           (current2) => context.pinned ? unpin(current2) : { ...current2, pinnedChats: [...current2.pinnedChats, { botId: bot.id, chatId: chat.id }] }
         ),
         onRename: () => setRenamingChat({ bot, chat }),
-        onSuggestTitle: botHost.online && botHost.api?.agents.ref(chat.id)?.suggestTitle ? async () => {
+        onSuggestTitle: canGenerateChatTitle(botHost.online, botHost.api?.agents.ref(chat.id)) ? async () => {
+          const snapshot = () => {
+            const hostNow = resolveHost2(bot.hostId);
+            const list2 = queryClient.getQueryData(botChatsQuery(hostNow, bot.id).queryKey);
+            return { loaded: Array.isArray(list2), chat: list2?.find((entry) => entry.id === chat.id) };
+          };
           try {
-            const ref = botHost.api?.agents.ref(chat.id);
-            if (!ref?.suggestTitle) throw new Error("This Paseo host can't suggest titles");
-            const suggestion = await ref.suggestTitle();
-            setRenamingChat({ bot, chat, suggestion });
+            await generateChatTitle({
+              initialTitle: chat.title,
+              getHandle: () => resolveHost2(bot.hostId).api?.agents.ref(chat.id),
+              getSnapshot: snapshot,
+              applyTitle: (title) => renameChat(bot, chat, title)
+            });
           } catch (error) {
             toast.error(`Couldn't generate a title: ${errorText(error)}`);
           }
@@ -16366,9 +16392,8 @@ Its chats stay on the host and remain in Paseo's history.`,
             RenameDialog,
             {
               colors: colors2,
-              title: renamingChat.suggestion ? "Review suggested title" : "Rename chat",
-              initialValue: renamingChat.suggestion ?? displayTitle(renamingChat.chat.title),
-              currentValue: displayTitle(renamingChat.chat.title),
+              title: "Rename chat",
+              initialValue: displayTitle(renamingChat.chat.title),
               placeholder: "Chat name",
               maxLength: MAX_CHAT_TITLE_CHARS,
               onClose: () => setRenamingChat(null),

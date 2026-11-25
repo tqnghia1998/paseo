@@ -1,5 +1,5 @@
 diff --git a/client/BotDialogs.tsx b/client/BotDialogs.tsx
-index 7a58ebf..6112c38 100644
+index 7a58ebf..ba5aad3 100644
 --- a/client/BotDialogs.tsx
 +++ b/client/BotDialogs.tsx
 @@ -1,10 +1,11 @@
@@ -117,36 +117,24 @@ index 7a58ebf..6112c38 100644
        </Modal.Content>
      </Modal>
    );
-@@ -158,6 +186,8 @@ interface RenameDialogProps {
+@@ -158,6 +186,7 @@ interface RenameDialogProps {
    initialValue: string;
-+  currentValue?: string;
    placeholder?: string;
    submitLabel?: string;
 +  maxLength?: number;
    onClose(): void;
    onSubmit(value: string): Promise<void> | void;
  }
-@@ -166,15 +196,16 @@ interface RenameDialogProps {
+@@ -166,7 +195,7 @@ interface RenameDialogProps {
   * Paseo's AdaptiveRenameModal (components/rename-modal.tsx): the current name selected
   * in one input, the error inline, Cancel and Rename side by side. It stays open on errors.
   */
 -export function RenameDialog({ colors, title, initialValue, placeholder, submitLabel = "Rename", onClose, onSubmit }: RenameDialogProps) {
-+export function RenameDialog({ colors, title, initialValue, currentValue = initialValue, placeholder, submitLabel = "Rename", maxLength, onClose, onSubmit }: RenameDialogProps) {
++export function RenameDialog({ colors, title, initialValue, placeholder, submitLabel = "Rename", maxLength, onClose, onSubmit }: RenameDialogProps) {
    const [draft, setDraft] = useState(initialValue);
    const [error, setError] = useState<string | null>(null);
    const [pending, setPending] = useState(false);
-   const invalid = !draft.trim();
--  const submitDisabled = pending || draft === initialValue || invalid;
-+  const unchanged = draft.trim() === currentValue.trim();
-+  const submitDisabled = pending || unchanged || invalid;
- 
-   const submit = async () => {
--    if (pending || draft === initialValue) return;
-+    if (pending || unchanged) return;
-     if (invalid) {
-       setError("Name is required");
-       return;
-@@ -205,6 +236,7 @@ export function RenameDialog({ colors, title, initialValue, placeholder, submitL
+@@ -205,6 +234,7 @@ export function RenameDialog({ colors, title, initialValue, placeholder, submitL
                setError(null);
              }}
              placeholder={placeholder}
@@ -171,7 +159,7 @@ index 7a58ebf..6112c38 100644
    if (actions.onOpenInPaseo) entries.push({ label: "Open in Paseo", icon: "ExternalLink", onSelect: actions.onOpenInPaseo });
    entries.push({ label: bot.pinned ? "Unpin" : "Pin to top", icon: bot.pinned ? "PinOff" : "Pin", onSelect: actions.onTogglePin });
    if (actions.onMoveUp || actions.onMoveDown) {
-@@ -301,6 +334,7 @@ export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
+@@ -301,17 +334,61 @@ export function botMenuEntries(actions: BotMenuActions): MenuEntry[] {
      { label: "Copy bot ID", icon: "Copy", onSelect: actions.onCopyId },
      { kind: "separator" },
      { label: bot.archived ? "Unarchive bot" : "Archive bot", icon: bot.archived ? "ArchiveRestore" : "Archive", onSelect: actions.onToggleArchive },
@@ -179,7 +167,52 @@ index 7a58ebf..6112c38 100644
      { label: "Delete bot", icon: "Trash2", destructive: true, pendingLabel: "Deleting...", onSelect: actions.onDelete },
    );
    return entries;
-@@ -312,6 +346,8 @@ export interface ChatMenuActions {
+ }
+ 
++export interface TitleGeneratableHandle {
++  suggestTitle?(): Promise<string>;
++  rename?(name: string): Promise<void>;
++}
++
++export interface ChatTitleSnapshot {
++  title?: string | null;
++  archivedAt?: string | null;
++}
++
++export function canGenerateChatTitle(online: boolean, handle: TitleGeneratableHandle | undefined): boolean {
++  return online && typeof handle?.suggestTitle === "function" && typeof handle?.rename === "function";
++}
++
++/**
++ * Generates an AI chat title and applies it directly without opening the rename dialog.
++ * Skips applying the title if the chat was removed, archived, or renamed while generating.
++ */
++export async function generateChatTitle(options: {
++  initialTitle?: string | null;
++  getHandle(): TitleGeneratableHandle | undefined;
++  getSnapshot?(): { loaded: boolean; chat: ChatTitleSnapshot | undefined };
++  applyTitle(title: string): Promise<void>;
++}): Promise<string | null> {
++  const handle = options.getHandle();
++  if (!handle?.suggestTitle) throw new Error("This Paseo host can't suggest titles");
++  if (!handle.rename) throw new Error("This Paseo host can't rename chats");
++  const initialSnapshot = options.getSnapshot?.();
++  const hadChat = Boolean(initialSnapshot?.loaded && initialSnapshot.chat);
++  const expectedTitle = (initialSnapshot?.chat ? initialSnapshot.chat.title : options.initialTitle) ?? null;
++  const suggestion = await handle.suggestTitle();
++  const latestSnapshot = options.getSnapshot?.();
++  if (latestSnapshot?.loaded) {
++    if (hadChat && !latestSnapshot.chat) return null;
++    if (latestSnapshot.chat?.archivedAt) return null;
++    if (latestSnapshot.chat && (latestSnapshot.chat.title ?? null) !== expectedTitle) return null;
++  }
++  await options.applyTitle(suggestion);
++  return suggestion;
++}
++
+ export interface ChatMenuActions {
+   pinned: boolean;
+   onCopyPath(): void;
    onCopyId(): void;
    onCopyTranscript(): Promise<void>;
    onTogglePin(): void;
@@ -188,7 +221,7 @@ index 7a58ebf..6112c38 100644
    /** Present in manual order; undefined at an edge. `null` hides the pair (pinned chats, activity order). */
    move: { up?: () => void; down?: () => void } | null;
    onOpenInPaseo?: () => void;
-@@ -321,6 +357,10 @@ export interface ChatMenuActions {
+@@ -321,6 +398,10 @@ export interface ChatMenuActions {
  /** The chat menu, after Paseo's workspace menu (sidebar/sidebar-workspace-menu.tsx). */
  export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
    const entries: MenuEntry[] = [
@@ -199,7 +232,7 @@ index 7a58ebf..6112c38 100644
      { label: "Copy path", icon: "Copy", onSelect: actions.onCopyPath },
      { label: "Copy chat ID", icon: "Copy", onSelect: actions.onCopyId },
      { label: "Copy transcript", icon: "FileText", pendingLabel: "Copying...", onSelect: actions.onCopyTranscript },
-@@ -337,25 +373,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
+@@ -337,25 +418,31 @@ export function chatMenuEntries(actions: ChatMenuActions): MenuEntry[] {
  
  // ------------------------------------------------------------------ export
  
@@ -235,7 +268,7 @@ index 7a58ebf..6112c38 100644
          <SettingsCard>
            <SettingsSwitch
              label="Include memory"
-@@ -363,17 +405,24 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
+@@ -363,17 +450,24 @@ export function ExportDialog({ colors, bot, onClose }: { colors: Colors; bot: Bo
              value={includeMemory}
              onValueChange={setIncludeMemory}
            />
@@ -653,7 +686,7 @@ index dc4438c..7a14746 100644
    if (bucket === "running") {
      const offset = BADGE_OFFSET - (RING_FRAME - BADGE_SIZE) / 2;
 diff --git a/client/BotsSurface.tsx b/client/BotsSurface.tsx
-index 91d28cd..bf41e34 100644
+index 91d28cd..a214c40 100644
 --- a/client/BotsSurface.tsx
 +++ b/client/BotsSurface.tsx
 @@ -1,25 +1,30 @@
@@ -686,7 +719,7 @@ index 91d28cd..bf41e34 100644
 +import { applyVibingDefaults, DEFAULT_BOT_ID, fallbackDefaultBotId, preferredDefaultBotId } from "../shared/vibing-defaults";
  import { AvatarTheme } from "./Avatar";
 -import { botMenuEntries, chatMenuEntries, ExportDialog, NewBotDialog, RenameDialog } from "./BotDialogs";
-+import { botMenuEntries, chatMenuEntries, ExportDialog, NewBotDialog, RenameDialog, type ExportTarget } from "./BotDialogs";
++import { botMenuEntries, canGenerateChatTitle, chatMenuEntries, ExportDialog, generateChatTitle, NewBotDialog, RenameDialog, type ExportTarget } from "./BotDialogs";
  import { BotSidebar, type ChatMenuContext, type MenuSource, type Selection } from "./BotSidebar";
  import { ChatPane, type OutgoingMessage } from "./ChatPane";
 -import { useBotHost, useChatInvalidation, useHostResolver, useProviders, type LocalHost } from "./data";
@@ -773,7 +806,7 @@ index 91d28cd..bf41e34 100644
    }, [routeKey]);
    const [renaming, setRenaming] = useState<Bot | null>(null);
 -  const [exporting, setExporting] = useState<Bot | null>(null);
-+  const [renamingChat, setRenamingChat] = useState<{ bot: Bot; chat: PaseoAgent; suggestion?: string } | null>(null);
++  const [renamingChat, setRenamingChat] = useState<{ bot: Bot; chat: PaseoAgent } | null>(null);
 +  const [exporting, setExporting] = useState<ExportTarget | null>(null);
    const [drafts, setDrafts] = useState<Record<string, BotEdit>>({});
    // List state (collapsed groups, pins, order, display options) applies at once and saves behind.
@@ -796,14 +829,14 @@ index 91d28cd..bf41e34 100644
      const current = draftsRef.current;
      if (current[botId]) {
        const next = { ...current, [botId]: { ...current[botId], patch: { ...current[botId].patch, ...patch } } };
-@@ -253,8 +269,62 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -253,9 +269,63 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
    // "New bot" from the Command Center opens a fresh Bots screen; only that one consumes it.
    useEffect(() => {
      const intent = takeIntent();
 -    if (intent?.kind === "new-bot") setCreating(true);
 +    if (intent?.kind === "new-bot") setCreating("new");
-+  }, []);
-+
+   }, []);
+ 
 +  // Vibing's defaults: Codex and Claude bots (once, so deleting either sticks), and a minimum-width list.
 +  const seedingDefaults = useRef(false);
 +  // The bot a workspace opens on: Codex, or Claude when Codex can't run here or was deleted.
@@ -812,7 +845,7 @@ index 91d28cd..bf41e34 100644
 +  useEffect(() => {
 +    const timer = setTimeout(() => setDefaultBotWaitOver(true), DEFAULT_BOT_WAIT_MS);
 +    return () => clearTimeout(timer);
-   }, []);
++  }, []);
 +  const readyBots = settings.status === "ready" ? settings.values.bots : [];
 +  const defaultBotId =
 +    preferredDefaultBotId(readyBots, localProviders.data, host.id) ??
@@ -857,9 +890,10 @@ index 91d28cd..bf41e34 100644
 +    const open = groups.find((group) => group.id === currentUi().tab);
 +    if (open && open !== team) updateUi((current) => ({ ...current, tab: team?.id ?? ALL_BOTS_TAB }));
 +  }, [selection]);
- 
++
    if (settings.status !== "ready") {
      return (
+       <View style={{ flex: 1, padding: 24, gap: 12, backgroundColor: colors.surface0, justifyContent: settings.status === "loading" ? "center" : "flex-start", alignItems: settings.status === "loading" ? "center" : "stretch" }}>
 @@ -283,9 +353,9 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
      setDragWidths({});
      updateUi((current) => ({ ...current, [key]: Math.round(width) }));
@@ -943,37 +977,42 @@ index 91d28cd..bf41e34 100644
          onDelete: async () => {
            const confirmed = await confirmDialog({
              title: "Delete bot?",
-@@ -505,26 +598,116 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -505,26 +598,123 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
            updateUi((current) =>
              context.pinned ? unpin(current) : { ...current, pinnedChats: [...current.pinnedChats, { botId: bot.id, chatId: chat.id }] },
            ),
-+        onRename: () => setRenamingChat({ bot, chat }),
-+        onSuggestTitle: botHost.online && (botHost.api?.agents.ref(chat.id) as DeletableAgentHandle | undefined)?.suggestTitle ? async () => {
-+          try {
-+            const ref: DeletableAgentHandle | undefined = botHost.api?.agents.ref(chat.id);
-+            if (!ref?.suggestTitle) throw new Error("This Paseo host can't suggest titles");
-+            const suggestion = await ref.suggestTitle();
-+            setRenamingChat({ bot, chat, suggestion });
-+          } catch (error) {
-+            toast.error(`Couldn't generate a title: ${errorText(error)}`);
-+          }
-+        } : undefined,
-         move: context.pinned || listUi.chatSort !== "manual" ? null : { up: move(-1), down: move(1) },
+-        move: context.pinned || listUi.chatSort !== "manual" ? null : { up: move(-1), down: move(1) },
 -        onOpenInPaseo: openAgent && botHost.online ? () => openAgent({ agentId: chat.id, serverId: botHost.key }) : undefined,
 -        onArchive: async () => {
 -          if (!botHost.api) {
 -            toast.error("Host is not connected");
 -            return;
 -          }
--          try {
++        onRename: () => setRenamingChat({ bot, chat }),
++        onSuggestTitle: canGenerateChatTitle(botHost.online, botHost.api?.agents.ref(chat.id)) ? async () => {
++          const snapshot = () => {
++            const hostNow = resolveHost(bot.hostId);
++            const list = queryClient.getQueryData<PaseoAgent[]>(botChatsQuery(hostNow, bot.id).queryKey);
++            return { loaded: Array.isArray(list), chat: list?.find((entry) => entry.id === chat.id) };
++          };
+           try {
 -            await botHost.api.agents.ref(chat.id).archive();
 -            if (selection?.chatId === chat.id && selectionRef.current === selectionKey) setSelection({ botId: bot.id, chatId: null });
 -            if (context.pinned) updateUi(unpin);
 -            await queryClient.invalidateQueries({ queryKey: ["paseo-bots", "chats", botHost.key, bot.id] });
--          } catch (error) {
++            await generateChatTitle({
++              initialTitle: chat.title,
++              getHandle: () => resolveHost(bot.hostId).api?.agents.ref(chat.id),
++              getSnapshot: snapshot,
++              applyTitle: (title) => renameChat(bot, chat, title),
++            });
+           } catch (error) {
 -            toast.error(`Failed to archive chat: ${errorText(error)}`);
--          }
++            toast.error(`Couldn't generate a title: ${errorText(error)}`);
+           }
 -        },
++        } : undefined,
++        move: context.pinned || listUi.chatSort !== "manual" ? null : { up: move(-1), down: move(1) },
 +        onOpenInPaseo: !nativeChat && openAgent && botHost.online ? () => openAgent({ agentId: chat.id, serverId: botHost.key }) : undefined,
 +        onArchive: () => removeChat(bot, chat, context, "archive"),
        }),
@@ -1075,7 +1114,7 @@ index 91d28cd..bf41e34 100644
    const openDisplayMenu = (anchor: LayoutRectangle) => {
      menu.open({
        anchor,
-@@ -574,9 +747,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -574,9 +764,12 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
        onTogglePinnedSection={() => updateUi((current) => ({ ...current, pinnedCollapsed: !current.pinnedCollapsed }))}
        onShowArchived={() => updateUi((current) => ({ ...current, showArchived: true }))}
        onSelect={select}
@@ -1089,7 +1128,7 @@ index 91d28cd..bf41e34 100644
        onDisplayMenu={openDisplayMenu}
        onEditTeam={setEditingTeam}
        onTeamMap={() => routed ? openScreen!(teamMapScreen()) : setTeamMap(true)}
-@@ -584,17 +760,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -584,17 +777,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
    );
  
    const tabProps = openTab
@@ -1112,7 +1151,7 @@ index 91d28cd..bf41e34 100644
        localHost={localHost}
        panelOpen={panel.open}
        hostHeader={routed}
-@@ -607,7 +786,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -607,7 +803,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
        onStarted={(chatId) => {
          rememberStartedChat(host.id, params.draftId, chatId);
          // Finish the originating draft without interrupting a different conversation.
@@ -1121,7 +1160,7 @@ index 91d28cd..bf41e34 100644
          const next = { botId: selectedBot.id, chatId };
          if (surfaceVisibility.isVisible()) select(next);
          else setSelection(next);
-@@ -665,7 +844,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -665,7 +861,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
            setPanelVersion((version) => version + 1);
            toast.show("Restored. Undo it from History if needed.", { variant: "success" });
          }}
@@ -1130,7 +1169,7 @@ index 91d28cd..bf41e34 100644
          onOpenChat={(chatId) => {
            select({ botId: selectedBot.id, chatId });
            // On phones the panel covers the chat.
-@@ -688,13 +867,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -688,13 +884,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
      />
    ) : null;
  
@@ -1152,7 +1191,7 @@ index 91d28cd..bf41e34 100644
      {/* The host gives plugin surfaces no keyboard handling; lift everything above the keyboard. */}
      <View
        ref={surfaceVisibility.ref}
-@@ -763,6 +949,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -763,6 +966,7 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
        {creating ? (
          <NewBotDialog
            colors={colors}
@@ -1160,7 +1199,7 @@ index 91d28cd..bf41e34 100644
            onClose={() => setCreating(false)}
            presets={settings.status === "ready" ? (settings.values.presets ?? []) : []}
            defaults={settings.values.defaults ?? DEFAULT_BOT_DEFAULTS}
-@@ -780,8 +967,9 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -780,8 +984,9 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
            }}
            onImport={async (json) => {
              const { bots, teams } = await importTeam({ json });
@@ -1171,7 +1210,7 @@ index 91d28cd..bf41e34 100644
              const first = bots[0]?.bot;
              if (saved && first) {
                if (routed) openPanel(first, "overview");
-@@ -812,7 +1000,20 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
+@@ -812,7 +1017,19 @@ function BotsSurfaceContent({ theme, layout, host, navigation, params, screen =
          />
        ) : null}
  
@@ -1179,9 +1218,8 @@ index 91d28cd..bf41e34 100644
 +      {renamingChat ? (
 +        <RenameDialog
 +          colors={colors}
-+          title={renamingChat.suggestion ? "Review suggested title" : "Rename chat"}
-+          initialValue={renamingChat.suggestion ?? displayTitle(renamingChat.chat.title)}
-+          currentValue={displayTitle(renamingChat.chat.title)}
++          title="Rename chat"
++          initialValue={displayTitle(renamingChat.chat.title)}
 +          placeholder="Chat name"
 +          maxLength={MAX_CHAT_TITLE_CHARS}
 +          onClose={() => setRenamingChat(null)}
@@ -1193,7 +1231,7 @@ index 91d28cd..bf41e34 100644
      </View>
      </LibraryNavigation.Provider>
    );
-@@ -845,11 +1045,12 @@ function MobileNavigation({ colors, screen, params, openScreen }: {
+@@ -845,11 +1062,12 @@ function MobileNavigation({ colors, screen, params, openScreen }: {
    );
  }
  
@@ -1208,7 +1246,7 @@ index 91d28cd..bf41e34 100644
    selectionIdentity: string;
    localHost: LocalHost;
    panelOpen: boolean;
-@@ -865,9 +1066,12 @@ interface SelectedChatProps {
+@@ -865,9 +1083,12 @@ interface SelectedChatProps {
    onOpenBotChat?(botId: string, chatId: string): void;
  }
  
@@ -1223,7 +1261,7 @@ index 91d28cd..bf41e34 100644
    const ensureHome = useRpc(ensureBotHomeRpc);
    const compose = useRpc(systemPromptRpc);
    const mountServers = useRpc(mountRpc);
-@@ -879,15 +1083,20 @@ function SelectedChat({ colors, bot, library, selection, selectionIdentity, loca
+@@ -879,15 +1100,20 @@ function SelectedChat({ colors, bot, library, selection, selectionIdentity, loca
      if (!host.api) throw new Error(`${host.label} is offline.`);
      const release = beginDraftCreation(composerDrafts, composerDraftKey(host.key, bot.id, null));
      try {
@@ -1246,7 +1284,7 @@ index 91d28cd..bf41e34 100644
          library,
          ...(host.isLocal ? { agentId } : {}),
          plugin,
-@@ -899,16 +1108,24 @@ function SelectedChat({ colors, bot, library, selection, selectionIdentity, loca
+@@ -899,16 +1125,24 @@ function SelectedChat({ colors, bot, library, selection, selectionIdentity, loca
          attachments: message.attachments,
          clientMessageId: message.messageId,
        });
@@ -1273,7 +1311,7 @@ index 91d28cd..bf41e34 100644
      const api = host.api;
      const timer = setTimeout(() => {
        void ensureHome({ botId: bot.id })
-@@ -931,8 +1148,17 @@ function SelectedChat({ colors, bot, library, selection, selectionIdentity, loca
+@@ -931,8 +1165,17 @@ function SelectedChat({ colors, bot, library, selection, selectionIdentity, loca
      });
    }, [host.api, selection, selectionIdentity]);
  
@@ -1291,7 +1329,7 @@ index 91d28cd..bf41e34 100644
        colors={colors}
        bot={bot}
        host={host}
-@@ -949,6 +1175,7 @@ function SelectedChat({ colors, bot, library, selection, selectionIdentity, loca
+@@ -949,6 +1192,7 @@ function SelectedChat({ colors, bot, library, selection, selectionIdentity, loca
        onStart={start}
        onOpenChat={onOpenChat}
        onOpenBotChat={onOpenBotChat}
@@ -2034,7 +2072,7 @@ index 09b9b70..013189e 100644
    const toast = useToast();
    const queryClient = useQueryClient();
 diff --git a/client/paseo.ts b/client/paseo.ts
-index 8600f6d..1ba3ca7 100644
+index 8600f6d..2c93b8f 100644
 --- a/client/paseo.ts
 +++ b/client/paseo.ts
 @@ -6,6 +6,8 @@ import type { getPaseoClient } from "@getpaseo/plugin/client";
@@ -2268,9 +2306,10 @@ index 0000000..4a1816a
 +  return tabBuckets(tabs, (botId) => chats.get(botId) ?? []);
 +}
 diff --git a/client/ui/Menu.tsx b/client/ui/Menu.tsx
+index e53c798..b0ee0f5 100644
 --- a/client/ui/Menu.tsx
 +++ b/client/ui/Menu.tsx
-@@ -217,7 +217,7 @@
+@@ -217,7 +217,7 @@ function MenuRow({ colors, entry, compact, onClose }: { colors: Colors; entry: E
      >
        {entry.icon || entry.leading || pending ? (
          <View style={{ width: 16, alignItems: "center", justifyContent: "center" }}>
@@ -6019,10 +6058,10 @@ index 4fdc618..7f74e3b 100644
 +});
 diff --git a/tests/chat-menu.test.ts b/tests/chat-menu.test.ts
 new file mode 100644
-index 0000000..e5e18f6
+index 0000000..58ece52
 --- /dev/null
 +++ b/tests/chat-menu.test.ts
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,140 @@
 +import { describe, expect, it, vi } from "vitest";
 +
 +// BotDialogs pulls in React Native; the menu builder needs none of it.
@@ -6035,7 +6074,7 @@ index 0000000..e5e18f6
 +vi.mock("../client/panel/controls", () => ({}));
 +vi.mock("../client/web", () => ({}));
 +
-+const { chatMenuEntries } = await import("../client/BotDialogs");
++const { canGenerateChatTitle, chatMenuEntries, generateChatTitle } = await import("../client/BotDialogs");
 +
 +describe("chatMenuEntries", () => {
 +  it("leads with Rename, which runs only its own action", () => {
@@ -6058,9 +6097,13 @@ index 0000000..e5e18f6
 +    expect(noop).not.toHaveBeenCalled();
 +  });
 +
-+  it("offers title generation separately from manual rename when available", async () => {
++  it("offers title generation separately from manual rename and applies generated titles directly", async () => {
 +    const onRename = vi.fn();
-+    const onSuggestTitle = vi.fn(async () => {});
++    const suggestTitle = vi.fn(async () => "Fix Login Flow");
++    const rename = vi.fn(async (_name: string) => {});
++    const applyTitle = vi.fn(async (title: string) => {
++      await rename(title);
++    });
 +    const actions = {
 +      pinned: false,
 +      onCopyPath: vi.fn(),
@@ -6071,12 +6114,82 @@ index 0000000..e5e18f6
 +      move: null,
 +      onArchive: async () => {},
 +    };
++    expect(canGenerateChatTitle(false, { suggestTitle, rename })).toBe(false);
++    expect(canGenerateChatTitle(true, { suggestTitle })).toBe(false);
++    expect(canGenerateChatTitle(true, { rename })).toBe(false);
++    expect(canGenerateChatTitle(true, { suggestTitle, rename })).toBe(true);
 +    expect(chatMenuEntries(actions).some((entry) => "label" in entry && entry.label === "Generate title with AI")).toBe(false);
++
++    const onSuggestTitle = async () => {
++      await generateChatTitle({
++        initialTitle: "New chat",
++        getHandle: () => ({ suggestTitle, rename }),
++        getSnapshot: () => ({ loaded: true, chat: { title: "New chat", archivedAt: null } }),
++        applyTitle,
++      });
++    };
 +    const entry = chatMenuEntries({ ...actions, onSuggestTitle })[1];
 +    expect(entry).toMatchObject({ label: "Generate title with AI", pendingLabel: "Generating title..." });
 +    if (entry && "onSelect" in entry) await entry.onSelect?.();
-+    expect(onSuggestTitle).toHaveBeenCalledOnce();
++    expect(suggestTitle).toHaveBeenCalledOnce();
++    expect(applyTitle).toHaveBeenCalledWith("Fix Login Flow");
++    expect(rename).toHaveBeenCalledWith("Fix Login Flow");
 +    expect(onRename).not.toHaveBeenCalled();
++  });
++
++  it("skips applying a generated title if the chat was renamed, archived, or deleted in flight", async () => {
++    const applyTitle = vi.fn(async () => {});
++    let snapshot: { loaded: boolean; chat: { title?: string | null; archivedAt?: string | null } | undefined } = {
++      loaded: true,
++      chat: { title: "Initial title", archivedAt: null },
++    };
++
++    const renamedInFlight = await generateChatTitle({
++      initialTitle: "Initial title",
++      getHandle: () => ({
++        suggestTitle: async () => {
++          snapshot = { loaded: true, chat: { title: "Manual title", archivedAt: null } };
++          return "Generated title";
++        },
++        rename: async () => {},
++      }),
++      getSnapshot: () => snapshot,
++      applyTitle,
++    });
++    expect(renamedInFlight).toBeNull();
++    expect(applyTitle).not.toHaveBeenCalled();
++
++    snapshot = { loaded: true, chat: { title: "Initial title", archivedAt: null } };
++    const archivedInFlight = await generateChatTitle({
++      initialTitle: "Initial title",
++      getHandle: () => ({
++        suggestTitle: async () => {
++          snapshot = { loaded: true, chat: { title: "Initial title", archivedAt: "2026-11-25T00:00:00Z" } };
++          return "Generated title";
++        },
++        rename: async () => {},
++      }),
++      getSnapshot: () => snapshot,
++      applyTitle,
++    });
++    expect(archivedInFlight).toBeNull();
++    expect(applyTitle).not.toHaveBeenCalled();
++
++    snapshot = { loaded: true, chat: { title: "Initial title", archivedAt: null } };
++    const deletedInFlight = await generateChatTitle({
++      initialTitle: "Initial title",
++      getHandle: () => ({
++        suggestTitle: async () => {
++          snapshot = { loaded: true, chat: undefined };
++          return "Generated title";
++        },
++        rename: async () => {},
++      }),
++      getSnapshot: () => snapshot,
++      applyTitle,
++    });
++    expect(deletedInFlight).toBeNull();
++    expect(applyTitle).not.toHaveBeenCalled();
 +  });
 +});
 +
