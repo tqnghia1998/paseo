@@ -33,9 +33,11 @@ export function buildCodexDeveloperInstructions(
 ): string | undefined {
   const { session, nativeInstructions, modeInstructions } = input;
   const paseoInstructions = composeAgentSystemPrompt(session);
+  const hasExplicitSystemPrompt = Boolean(session.systemPrompt?.trim());
   return composeSystemPromptParts(
     modeInstructions,
-    paseoInstructions ?? (session.internal ? undefined : nativeInstructions),
+    !session.internal && !hasExplicitSystemPrompt ? nativeInstructions : undefined,
+    paseoInstructions,
     session.internal ? undefined : CODEX_QUESTION_INSTRUCTIONS,
   );
 }

@@ -179,6 +179,7 @@ it("renders copy, fork, and duration for a plugin-projected assistant reply", ()
   act(() =>
     root.render(
       <CompletedTurnFooterRow
+        contentMaxWidth={undefined}
         strategy={createNativeStreamStrategy()}
         items={[projectedReply]}
         timing={COMPLETED_TIMING}

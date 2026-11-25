@@ -1783,7 +1783,11 @@ describe("Codex app-server provider", () => {
         await appServer.waitForTurnStart();
         expect(
           appServer.requests().find((request) => request.method === method)?.params,
-        ).toMatchObject({ developerInstructions: "Configured role\n\nPlugin instructions" });
+        ).toMatchObject({
+          developerInstructions: expect.stringContaining(
+            "Configured role\n\nPlugin instructions\n\nUse request_user_input",
+          ),
+        });
         appServer.assertNoErrors();
       } finally {
         await session.close();

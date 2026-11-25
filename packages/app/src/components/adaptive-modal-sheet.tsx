@@ -680,6 +680,20 @@ function CompactSheetBody({
   );
 }
 
+function resolveRetainedOverlayState(
+  visible: boolean,
+  shouldRenderWeb: boolean,
+  isSheet: boolean,
+  isPanelActive: boolean,
+) {
+  const overlayPanelActive = isSheet || isPanelActive;
+  return {
+    rendersWebPortal: shouldRenderWeb && isPanelActive,
+    modalLayerActive: (visible || shouldRenderWeb) && overlayPanelActive,
+    overlayActive: visible && overlayPanelActive,
+  };
+}
+
 export function AdaptiveModalSheet({
   header,
   showCloseButton = true,
@@ -728,12 +742,13 @@ export function AdaptiveModalSheet({
   // The desktop portal escapes a hidden retained chat, whose frozen subtree can no
   // longer commit the exit unmount, so drop it with the chat (as tooltips do).
   const isPanelActive = useRetainedPanelActive();
-  const rendersWebPortal = shouldRenderWeb && isPanelActive;
-  const overlayPanelActive = isSheet || isPanelActive;
-  const modalLayer = useGlobalOverlayLayer(
-    "modal",
-    (visible || shouldRenderWeb) && overlayPanelActive,
+  const { rendersWebPortal, modalLayerActive, overlayActive } = resolveRetainedOverlayState(
+    visible,
+    shouldRenderWeb,
+    isSheet,
+    isPanelActive,
   );
+  const modalLayer = useGlobalOverlayLayer("modal", modalLayerActive);
   const handleDismiss = useCallback(() => {
     handleSheetDismiss();
     onDismiss?.();
@@ -779,7 +794,7 @@ export function AdaptiveModalSheet({
   const overlayKeys = useMemo(() => ["Escape", ...(keyboard?.keys ?? [])], [keyboard?.keys]);
   const setOverlayScope = useOverlayRegistration({
     keys: overlayKeys,
-    active: visible && overlayPanelActive,
+    active: overlayActive,
     layer: modalLayer,
     onKeyDown: handleOverlayKeyDown,
   });

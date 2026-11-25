@@ -4033,6 +4033,20 @@ class ClaudeAgentSession implements AgentSession {
     });
   }
 
+  private async applyRestrictedMcpEnv(
+    sdkEnv: Record<string, string>,
+    restrictToConfiguredMcp: boolean | undefined,
+  ): Promise<void> {
+    if (!restrictToConfiguredMcp) return;
+    Object.assign(sdkEnv, await loadClaudeConnectionEnv(claudeConfigDir(sdkEnv), sdkEnv));
+    // Keep resumed fixed-tool sessions on the classic wire format. Some Claude
+    // gateways reject mid-conversation system/tool-addition blocks when the
+    // host upgrades its sealed tool inventory. This changes formatting only.
+    sdkEnv.CLAUDE_CODE_MODEL_CAPABILITIES = "-mid_conv_system,-mid_conv_tool_change,-inline_tools";
+    sdkEnv.CLAUDE_CODE_INLINE_TOOLS = "0";
+    sdkEnv.CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD = "1";
+  }
+
   private async buildOptions(permissionMode: PermissionMode): Promise<ClaudeOptions> {
     const { thinking, effort } = this.resolveThinkingConfig();
     const appendedSystemPrompt = this.buildAppendedSystemPrompt();
@@ -4047,17 +4061,7 @@ class ClaudeAgentSession implements AgentSession {
     );
     const settingsOptions = await this.buildSettingsOptions(providerOptions);
     const sdkEnv = this.harnessEnvironment;
-    if (restrictToConfiguredMcp) {
-      Object.assign(sdkEnv, await loadClaudeConnectionEnv(claudeConfigDir(sdkEnv), sdkEnv));
-      // Keep resumed fixed-tool sessions on the classic wire format. Some Claude
-      // gateways reject mid-conversation system/tool-addition blocks when the
-      // host upgrades its sealed tool inventory. This changes formatting only.
-      sdkEnv.CLAUDE_CODE_MODEL_CAPABILITIES =
-        "-mid_conv_system,-mid_conv_tool_change,-inline_tools";
-      sdkEnv.CLAUDE_CODE_INLINE_TOOLS = "0";
-      sdkEnv.CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD = "1";
-    }
-    assertClaudeModeCanRun(permissionMode, sdkEnv);
+    await this.applyRestrictedMcpEnv(sdkEnv, restrictToConfiguredMcp);
 
     const claudeBinary = await this.resolveBinary();
     this.logger.debug(

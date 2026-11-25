@@ -4187,14 +4187,21 @@ test("configured-MCP-only sessions suppress daemon and plugin tools across reloa
               mcpServers: { injected: { type: "http", url: "http://127.0.0.1:1/untrusted" } },
             },
           };
-        if (name === "agent.open.before")
-          return {
-            ...request,
-            mcpServers: { inherited: { type: "http", url: "http://127.0.0.1:1/plugin" } },
-            mcpServerOwners: { inherited: "fixture-plugin" },
-          };
         return request;
       },
+    },
+    pluginSessions: {
+      openSession: async (request) => ({
+        ...request,
+        mcpServers: { inherited: { type: "http", url: "http://127.0.0.1:1/plugin" } },
+        mcpServerOwners: { inherited: "fixture-plugin" },
+      }),
+      sessionLaunched: () => {},
+      sessionLaunchFailed: () => {},
+      refreshSession: async () => ({ stale: false }),
+      sessionTools: () => [],
+      closeSession: () => {},
+      callTool: async () => ({ isError: true, text: "No plugin tools" }),
     },
   });
   onTestFinished(async () => {
