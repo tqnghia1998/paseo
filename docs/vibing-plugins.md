@@ -14,7 +14,7 @@ is the per-plugin reference and the upgrade procedure.
 | Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
 | AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
 | Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
-| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `ceb74fb`                  | 0.15.5        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
+| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `308b3e4`                  | 0.16.1        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
 | Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`             |
 | Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `e49b7e8` | 1.4.2         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`    |
 | Reply follow-ups (`reply-followups`)              | Fork-owned                                                                                             | —             | Community install          | Fork-owned                                    |
@@ -278,3 +278,14 @@ turns. The Vibing patch retains embedded styling and the offline bundle setup.
 Bots `ae40671` and Generative UI `cd50b2a` still match upstream HEAD. Shell
 Yeah stays at `e49b7e8` (1.4.2): the `shell-yeah/` tree is unchanged through
 monorepo HEAD `29befcc`.
+
+## Upstream and plugin refresh on November 26, 2026
+
+Paseo rebased onto `5c82a2e99` (0.17.4). Chat Polish `308b3e4` (0.16.1) stops
+following agents from other hosts, adapts sidebar separator and floating
+Explorer toggle styling to Paseo 0.17, maps new 0.17 icons, adds user-message
+code formatting, and asks before downloading a replacement headless browser.
+The Vibing patch retains embedded styling, light surface parity, and offline
+local-management guards. Bots `ae40671` (0.3.1), Generative UI `cd50b2a`
+(0.3.3), and Shell Yeah `e49b7e8` (1.4.2, unchanged through monorepo HEAD
+`29befcc`) remain current.

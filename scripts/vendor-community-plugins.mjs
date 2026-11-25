@@ -27,7 +27,7 @@ const plugins = [
   {
     id: "paseo-chat-polish",
     repository: "lthieu96/paseo-chat-polish",
-    revision: "ceb74fb6408b6636109fed635a5dafd3cb2b59de",
+    revision: "308b3e4f401222b797cec6a37ff4bbc2c2f81e9e",
     patch: "paseo-chat-polish-vibing.patch",
     // pele is inlined; sharp is native and loaded on demand, so thumbnails fall back to the original image.
     bundleDependencies: true,

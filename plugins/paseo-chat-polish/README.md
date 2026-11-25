@@ -1,7 +1,7 @@
 # paseo-chat-polish
 
 Bundled from [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) at
-`ceb74fb6408b6636109fed635a5dafd3cb2b59de` (version 0.15.5, MIT).
+`308b3e4f401222b797cec6a37ff4bbc2c2f81e9e` (version 0.16.1, MIT).
 
 Regenerate with `node scripts/vendor-community-plugins.mjs paseo-chat-polish` in the Paseo fork.
 Generated code uses the host SDK, React, React Native, React Query and Zod.
