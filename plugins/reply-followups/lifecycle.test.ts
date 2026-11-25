@@ -95,20 +95,24 @@ it.each(["claude", "pi", "antigravity"])(
   },
 );
 
-it("publishes completed-turn prompts and clears them when another turn starts", async () => {
+it("publishes completed-turn prompts under a turn-scoped id and keeps earlier turns when another turn starts", async () => {
   const { hooks, append, refetch, context, agent, event, page } = setup();
   refetch.mockResolvedValue(page);
+  await hooks["agent.turn.before"]({ agent, turnId: "turn-1" }, context);
   await hooks["agent.turn.after"](event, context);
-  await hooks["agent.turn.before"]({ agent }, context);
-  expect(append.mock.calls.map(([row]) => row.data.prompts)).toEqual([["Run tests"], []]);
+  await hooks["agent.turn.before"]({ agent, turnId: "turn-2" }, context);
+  await hooks["agent.turn.after"]({ ...event, turnId: "turn-2" }, context);
+  expect(append.mock.calls.map(([row]) => ({ id: row.id, prompts: row.data.prompts }))).toEqual([
+    { id: "reply-followups:turn-1", prompts: ["Run tests"] },
+  ]);
 });
 
-it("clears persisted suggestions on the first turn after the plugin restarts", async () => {
+it("does not write a placeholder row on a fresh turn", async () => {
   const { hooks, append, refetch, context, event } = setup();
-  await hooks["agent.turn.before"](event, context);
   refetch.mockResolvedValue({ entries: [] });
+  await hooks["agent.turn.before"](event, context);
   await hooks["agent.turn.after"](event, context);
-  expect(append.mock.calls.map(([row]) => row.data.prompts)).toEqual([[]]);
+  expect(append).not.toHaveBeenCalled();
 });
 
 it("does not write to a closed agent's timeline", async () => {
@@ -122,10 +126,10 @@ it("does not write to a closed agent's timeline", async () => {
 it("does not publish a completed turn if a newer turn starts during the history read", async () => {
   const { hooks, append, refetch, context, agent, event, page } = setup();
   const read = Promise.withResolvers<typeof page>();
-  refetch.mockReturnValue(read.promise);
+  refetch.mockReturnValueOnce(read.promise);
   const completed = hooks["agent.turn.after"](event, context);
-  await hooks["agent.turn.before"]({ agent }, context);
+  await hooks["agent.turn.before"]({ agent, turnId: "turn-2" }, context);
   read.resolve(page);
   await completed;
-  expect(append.mock.calls.map(([row]) => row.data.prompts)).toEqual([[]]);
+  expect(append).not.toHaveBeenCalled();
 });

@@ -122,6 +122,7 @@ import { useStreamHistoryWindow } from "./use-stream-history-window";
 import { PluginTimelineItemView, useInstalledTimelineTransform } from "@/plugins/timeline";
 import { ChiefQuickActions } from "@/patches/vibing/chief-quick-actions-view";
 import { isEmbeddedChiefView } from "@/patches/vibing/focus-mode";
+import { useHasReplyFollowups } from "@/patches/vibing/reply-followups";
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -411,6 +412,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? context.serverId ?? "";
     const transformTimelineItem = useInstalledTimelineTransform(resolvedServerId);
+    const hasReplyFollowups = useHasReplyFollowups(resolvedServerId);
 
     const client = useSessionStore((state) => state.sessions[resolvedServerId]?.client ?? null);
     const sessionStreamHead = useSessionStore((state) =>
@@ -546,6 +548,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           tail: effectiveStreamItems,
           head: effectiveStreamHead ?? EMPTY_STREAM_HEAD,
           transform: transformTimelineItem,
+          stripReplyFollowups: hasReplyFollowups && !readOnly,
           display: chatDisplay,
           autoExpandReasoning,
           expandedTurnHostIds,
@@ -557,6 +560,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         effectiveStreamItems,
         effectiveStreamHead,
         transformTimelineItem,
+        hasReplyFollowups,
+        readOnly,
         chatDisplay,
         autoExpandReasoning,
         expandedTurnHostIds,

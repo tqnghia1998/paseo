@@ -5,9 +5,10 @@ An already-open provider session may not pick up the new instructions until it
 reopens.
 
 Suggestions are optional and come from the chat's existing model reply. There
-is no separate provider request. The Markdown suggestions remain visible in
-the transcript, and the latest completed turn can also show editable chips.
-A chip fills an empty composer without sending; an existing draft is left alone.
+is no separate provider request. In Vibing's Paseo build, the trailing Markdown
+section is hidden from rendered replies while this plugin is enabled, so
+suggestions appear only as clickable chips below each reply. Clicking a chip
+sends that prompt directly without disabling the remaining chips.
 
 Codex needs CLI 0.121.0 or newer to receive the suggestion instructions. On
 older or unverified Codex installations, chats still open without those

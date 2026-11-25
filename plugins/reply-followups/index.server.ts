@@ -34,15 +34,16 @@ async function supportsInstructions(
 export default function contribute(server: PluginServerContext) {
   const pending = new Map<string, object>();
   const agentRef = (id: string, context: PluginHookContext) => context.paseo.agents.ref(id);
-  async function write(id: string, context: PluginHookContext, prompts: string[]) {
+  async function write(id: string, context: PluginHookContext, rowId: string, prompts: string[]) {
     await agentRef(id, context).timeline.append({
       type: "plugin",
-      id: ROW_KIND,
+      id: rowId,
       kind: ROW_KIND,
       version: 1,
       data: { prompts },
     });
   }
+
   const stop = [
     server.addHook("agent.open.before", async ({ request }, context) => {
       if (request.background || request.purpose !== "interactive") return;
@@ -53,9 +54,8 @@ export default function contribute(server: PluginServerContext) {
         appendSystemPrompt: [...(request.appendSystemPrompt ?? []), INSTRUCTIONS],
       };
     }),
-    server.addHook("agent.turn.before", async ({ agent }, context) => {
+    server.addHook("agent.turn.before", async ({ agent }) => {
       pending.delete(agent.id);
-      if (!agent.background && !context.signal.aborted) await write(agent.id, context, []);
     }),
     server.addHook("agent.close.after", async ({ agent }) => {
       pending.delete(agent.id);
@@ -84,7 +84,7 @@ export default function contribute(server: PluginServerContext) {
           return;
         const prompts = readSuggestions(reply.text);
         if (prompts.length === 0) return;
-        await write(agent.id, context, prompts);
+        await write(agent.id, context, `${ROW_KIND}:${turnId}`, prompts);
       } finally {
         if (pending.get(agent.id) === token) pending.delete(agent.id);
       }

@@ -1,5 +1,6 @@
 import { isTurnBoundary } from "./turn-membership";
 import type { ChatDisplay } from "@/hooks/use-settings";
+import { stripReplyFollowupsFromItems } from "@/patches/vibing/reply-followups";
 import type { TimelineItemTransform } from "@/plugins/timeline/model";
 import { projectPluginTimelineItems } from "@/plugins/timeline/projection";
 import {
@@ -9,7 +10,7 @@ import {
   type ToolCallDetailLevel,
   type ToolCallDetailProjection,
 } from "@/tool-calls/detail-level/projection";
-import type { StreamItem, UserMessageItem } from "@/types/stream";
+import type { AssistantMessageItem, StreamItem, UserMessageItem } from "@/types/stream";
 import { collapseTurns, type TurnCollapse } from "./turn-collapse/model";
 import type { ReadingRowReplacements } from "./reading-anchor";
 
@@ -17,6 +18,7 @@ interface PresentationInput {
   tail: StreamItem[];
   head: StreamItem[];
   transform: TimelineItemTransform | undefined;
+  stripReplyFollowups?: boolean;
   display: ChatDisplay;
   autoExpandReasoning?: boolean;
   /** User messages whose collapsed turn the reader opened. */
@@ -53,9 +55,11 @@ const NO_COLLAPSED_TURNS: StreamPresentation["turns"] = collapseTurns({
   previousSummaryRowsByHostId: new Map(),
 });
 
-/** Source messages reach plugins before display projection. */
+/** Source messages reach plugins before display projection (after optional Reply follow-ups footer stripping). */
 export function createStreamPresentation() {
   const userMessageCache = new WeakMap<UserMessageItem, UserMessageItem>();
+  const completeAssistantCache = new WeakMap<AssistantMessageItem, AssistantMessageItem | null>();
+  const streamingAssistantCache = new WeakMap<AssistantMessageItem, AssistantMessageItem | null>();
 
   function presentUserMessage(item: UserMessageItem): UserMessageItem {
     const cached = userMessageCache.get(item);
@@ -74,6 +78,7 @@ export function createStreamPresentation() {
 
   let historySource: StreamItem[] | undefined;
   let historyTransform: TimelineItemTransform | undefined;
+  let historyStripReplyFollowups: boolean | undefined;
   let historyRows: StreamItem[] = [];
   let preparedTail: StreamItem[] | undefined;
   let preparedAutoExpandReasoning: boolean | undefined;
@@ -161,16 +166,33 @@ export function createStreamPresentation() {
 
   return (input: PresentationInput): StreamPresentation => {
     const level: ToolCallDetailLevel = input.display === "full" ? "detailed" : "overview";
+    const stripReplyFollowups = Boolean(input.stripReplyFollowups);
     // Retained history is not reprojected or regrouped on each live text update.
-    if (historySource !== input.tail || historyTransform !== input.transform) {
-      historyRows = projectPluginTimelineItems(input.tail, input.transform).flatMap<StreamItem>(
-        (item) => presentRows(item),
-      );
+    if (
+      historySource !== input.tail ||
+      historyTransform !== input.transform ||
+      historyStripReplyFollowups !== stripReplyFollowups
+    ) {
+      const preparedTailInput = stripReplyFollowups
+        ? stripReplyFollowupsFromItems(input.tail, "complete", completeAssistantCache)
+        : input.tail;
+      historyRows = projectPluginTimelineItems(
+        preparedTailInput,
+        input.transform,
+      ).flatMap<StreamItem>((item) => presentRows(item));
       historySource = input.tail;
       historyTransform = input.transform;
+      historyStripReplyFollowups = stripReplyFollowups;
     }
+    const preparedHeadInput = stripReplyFollowups
+      ? stripReplyFollowupsFromItems(input.head, "streaming", streamingAssistantCache)
+      : input.head;
     const head: StreamItem[] = [];
-    for (const item of projectPluginTimelineItems(input.head, input.transform, "streaming")) {
+    for (const item of projectPluginTimelineItems(
+      preparedHeadInput,
+      input.transform,
+      "streaming",
+    )) {
       const blocks = presentRows(item);
       head.push(...blocks);
     }

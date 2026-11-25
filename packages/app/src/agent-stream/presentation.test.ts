@@ -890,3 +890,84 @@ it.each([false, true])(
     expect(opened.groupsByHostId.size).toBe(0);
   },
 );
+
+it("strips reply-followups footers before plugin transformers and while streaming when enabled", () => {
+  const present = createStreamPresentation();
+  const timestamp = new Date("2026-01-01T00:00:00.000Z");
+  const reply: StreamItem = {
+    kind: "assistant_message",
+    id: "reply-1",
+    text: "Done.\n\n**Possible next prompts**\n- Run the focused tests",
+    timestamp,
+  };
+  const live: StreamItem = {
+    kind: "assistant_message",
+    id: "reply-2",
+    text: "Working on it.\n\n**Possible next prompts**\n- Check",
+    timestamp,
+  };
+  const transform = installedTransform(installProbe("assistant_message"));
+
+  const withPluginOff = present({
+    ...presentationOptions,
+    transform: undefined,
+    stripReplyFollowups: false,
+    tail: [reply],
+    head: [live],
+  });
+  expect(withPluginOff.tail[0]).toMatchObject({
+    kind: "assistant_message",
+    text: reply.text,
+  });
+  expect(withPluginOff.head[0]).toMatchObject({
+    kind: "assistant_message",
+    text: live.text,
+  });
+
+  const withPluginOn = present({
+    ...presentationOptions,
+    transform: undefined,
+    stripReplyFollowups: true,
+    tail: [reply],
+    head: [live],
+  });
+  expect(withPluginOn.tail[0]).toMatchObject({ kind: "assistant_message", text: "Done." });
+  expect(withPluginOn.head[0]).toMatchObject({
+    kind: "assistant_message",
+    text: "Working on it.",
+  });
+
+  const transformed = present({
+    ...presentationOptions,
+    transform,
+    stripReplyFollowups: true,
+    tail: [reply],
+    head: [live],
+  });
+  expect(transformed.tail[0]).toMatchObject({
+    kind: "plugin",
+    itemKind: "probe",
+    data: { text: "Done.", phase: "complete" },
+  });
+  expect(transformed.head[0]).toMatchObject({
+    kind: "plugin",
+    itemKind: "probe",
+    data: { text: "Working on it.", phase: "streaming" },
+  });
+
+  const footerOnly: StreamItem = {
+    kind: "assistant_message",
+    id: "reply-empty",
+    text: "**Possible next prompts**\n- Run tests",
+    timestamp,
+  };
+  expect(
+    present({
+      ...presentationOptions,
+      transform: undefined,
+      stripReplyFollowups: true,
+      tail: [footerOnly],
+      head: [],
+    }).tail,
+  ).toEqual([]);
+});
