@@ -1,8 +1,20 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { execCommand } from "@getpaseo/plugin/server";
-import { runAcpProvider, type AcpTransformer } from "@getpaseo/plugin/server/acp";
+import {
+  runAcpProvider,
+  type AcpConfigChange,
+  type AcpConfigureContext,
+  type AcpTransformer,
+} from "@getpaseo/plugin/server/acp";
 import {
   PROVIDER_PROTOCOL_VERSION,
+  type ProviderConnection,
+  type ProviderEvent,
   type ProviderInstallationLaunch,
+  type ProviderLaunch,
   type ProviderRegistration,
 } from "@getpaseo/plugin/server/provider";
 import { z } from "zod";
@@ -29,6 +41,33 @@ const builtInCommands = new Set([
   "boost",
 ]);
 
+async function configureLegacyModel(
+  change: AcpConfigChange,
+  { apply, catalog }: Pick<AcpConfigureContext, "apply" | "catalog">,
+): Promise<"handled" | "pass"> {
+  // COMPAT(antigravityStreamJson): added in v0.16.2, remove after 2027-11-19.
+  if (change.target === "model" && change.value) {
+    const legacyModel = /^(.*)-(xhigh|high|medium|low|minimal)$/.exec(change.value);
+    if (legacyModel) {
+      const { models } = catalog();
+      const [, model, effort] = legacyModel;
+      if (
+        model &&
+        effort &&
+        !models.some((option) => option.id === change.value) &&
+        models.some((option) => option.id === model)
+      ) {
+        await apply({ target: "model", value: model });
+        if (catalog().thinkingOptions?.some((option) => option.id === effort)) {
+          await apply({ target: "thinking", value: effort });
+        }
+        return "handled";
+      }
+    }
+  }
+  return "pass";
+}
+
 const antigravity: AcpTransformer = {
   command(command) {
     return { ...command, kind: builtInCommands.has(command.name) ? "command" : "skill" };
@@ -45,28 +84,76 @@ const antigravity: AcpTransformer = {
           : undefined,
     };
   },
-  async configure(change, { apply, catalog }) {
-    // COMPAT(antigravityStreamJson): added in v0.16.2, remove after 2027-11-19.
-    if (change.target === "model" && change.value) {
-      const legacyModel = /^(.*)-(xhigh|high|medium|low|minimal)$/.exec(change.value);
-      if (legacyModel) {
-        const { models } = catalog();
-        const [, model, effort] = legacyModel;
-        if (
-          !models.some((option) => option.id === change.value) &&
-          models.some((option) => option.id === model)
-        ) {
-          await apply({ target: "model", value: model });
-          if (catalog().thinkingOptions?.some((option) => option.id === effort)) {
-            await apply({ target: "thinking", value: effort });
-          }
-          return "handled";
-        }
-      }
+  configure: configureLegacyModel,
+};
+
+const restrictedAntigravity: AcpTransformer = {
+  toolCall: mapToolCall,
+  sessionOpen({ persistence, systemPrompt, agentMetadata }) {
+    if (persistence !== undefined) {
+      throw new Error("Restricted Antigravity sessions cannot load or resume persisted sessions");
     }
-    return "pass";
+    if (systemPrompt) {
+      if (!systemPromptCapability.safeParse(agentMetadata).success) {
+        throw new Error(
+          "Antigravity restricted sessions require a CLI version that supports system prompt injection",
+        );
+      }
+      return { metadata: { antigravity: { systemPrompt: { append: systemPrompt } } } };
+    }
+    return {};
+  },
+  async configure(change, context) {
+    if (change.target === "mode") {
+      if (change.value !== "default") {
+        throw new Error("Unattended modes are disabled in restricted Antigravity sessions");
+      }
+      if (!context.catalog().modes.some((mode) => mode.id === "default")) {
+        return "handled";
+      }
+      return "pass";
+    }
+    return configureLegacyModel(change, context);
   },
 };
+
+function buildRestrictedLaunch(
+  launch: ProviderLaunch | undefined,
+  agentDir: string,
+  agentName: string,
+): ProviderLaunch {
+  if (!launch) {
+    throw new Error("Antigravity restricted sessions require a CLI launch");
+  }
+  const acpIndex = launch.args.indexOf("acp");
+  if (acpIndex === -1) {
+    throw new Error("Antigravity restricted sessions require the acp subcommand");
+  }
+  const prefix = launch.args.slice(0, acpIndex);
+  if (prefix.some((arg) => arg.startsWith("-"))) {
+    throw new Error(
+      "Antigravity restricted sessions do not allow CLI flags before the acp subcommand",
+    );
+  }
+  return {
+    command: launch.command,
+    env: launch.env,
+    args: [
+      ...prefix,
+      "acp",
+      "--disable-telemetry",
+      "--dangerously-skip-permissions=false",
+      "--include-default-customizations=false",
+      "--add-dir",
+      agentDir,
+      `--agent=${agentName}`,
+    ],
+  };
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /** The release `agy --version` reports, or its first line when it names no release. */
 async function readAgyVersion(
@@ -102,12 +189,13 @@ function describeSignIn(env: Readonly<Record<string, string>>): string {
 }
 
 export function createAntigravityProvider(): ProviderRegistration {
+  const baseCommand = ["agy", "acp", "--disable-telemetry"] as const;
   const provider = runAcpProvider({
     id: "antigravity",
     label: "Antigravity",
     description: "Antigravity CLI on your host",
     icon: "icon.svg",
-    command: ["agy", "acp", "--disable-telemetry"],
+    command: baseCommand,
     acpOptions: {
       // agy 1.5.14 lists thinking options for the selected model only, and none for Orchestrator.
       perModelThinkingOptions: true,
@@ -142,8 +230,262 @@ export function createAntigravityProvider(): ProviderRegistration {
     },
     transformers: [antigravity],
   });
+
+  const restrictedProvider = runAcpProvider({
+    id: "antigravity",
+    label: "Antigravity",
+    description: "Antigravity CLI on your host",
+    icon: "icon.svg",
+    command: baseCommand,
+    acpOptions: {
+      perModelThinkingOptions: true,
+      loadReplayQuietPeriodMs: 200,
+    },
+    transformers: [restrictedAntigravity],
+  });
+
   return {
     ...provider,
+    async connect(request): Promise<ProviderConnection> {
+      const baseConnection = await provider.connect(request);
+      const listeners = new Set<(event: ProviderEvent) => void>();
+      const restrictedSessions = new Set<string>();
+      const pendingRestrictedOpens = new Map<string, string>();
+      let closed = false;
+      let closePromise: Promise<void> | null = null;
+
+      interface RestrictedRuntimeState {
+        agentDir: string;
+        connection: ProviderConnection;
+        unsubscribe: () => void;
+      }
+      let restrictedPromise: Promise<RestrictedRuntimeState> | null = null;
+
+      const emit = (event: ProviderEvent) => {
+        if (closed) return;
+        for (const listener of listeners) listener(event);
+      };
+
+      const unsubscribeBase = baseConnection.onEvent((event) => emit(event));
+
+      const getRestrictedState = (): Promise<RestrictedRuntimeState> => {
+        if (restrictedPromise) return restrictedPromise;
+        const init = (async (): Promise<RestrictedRuntimeState> => {
+          const agentDir = await mkdtemp(path.join(tmpdir(), "paseo-antigravity-restricted-"));
+          const agentName = `paseo-restricted-${randomUUID()}`;
+          try {
+            const restrictedLaunch = buildRestrictedLaunch(request.launch, agentDir, agentName);
+            const definitionDir = path.join(agentDir, ".agents", "agents", agentName);
+            await mkdir(definitionDir, { recursive: true });
+            await writeFile(
+              path.join(definitionDir, "agent.md"),
+              [
+                "---",
+                `name: ${agentName}`,
+                "description: Internal Paseo restricted tool-free agent",
+                "mainAgent: true",
+                "subagent: false",
+                "inheritCustomizations: false",
+                "excludeDefaultComponents: true",
+                "tools: []",
+                "mcpServers: []",
+                "skills: []",
+                "rules: []",
+                "plugins: []",
+                "---",
+                "Follow the system instructions exactly. Do not use any tools.",
+                "",
+              ].join("\n"),
+            );
+            const restrictedConnection = await restrictedProvider.connect({
+              ...request,
+              capabilities: [...new Set([...request.capabilities, "permission"])],
+              launch: restrictedLaunch,
+            });
+            try {
+              if (closed) {
+                await restrictedConnection.close();
+                await rm(agentDir, { recursive: true, force: true }).catch(() => undefined);
+                throw new Error("ACP provider connection is closed");
+              }
+              const unsubscribe = restrictedConnection.onEvent((event) => {
+                if (event.type === "session.permission") {
+                  void restrictedConnection
+                    .send({
+                      type: "session.permission",
+                      permissionId: event.request.id,
+                      sessionId: event.sessionId,
+                      response: { behavior: "deny" },
+                    })
+                    .catch(() => undefined);
+                  return;
+                }
+                if (event.type === "session.permission_resolved") {
+                  return;
+                }
+                if (event.type === "session.opened") {
+                  if (event.requestId) pendingRestrictedOpens.delete(event.requestId);
+                } else if (event.type === "request.failed") {
+                  const failedSessionId = pendingRestrictedOpens.get(event.requestId);
+                  if (failedSessionId) {
+                    pendingRestrictedOpens.delete(event.requestId);
+                    restrictedSessions.delete(failedSessionId);
+                  }
+                } else if (event.type === "session.closed") {
+                  restrictedSessions.delete(event.sessionId);
+                }
+                emit(event);
+              });
+              return { agentDir, connection: restrictedConnection, unsubscribe };
+            } catch (error) {
+              await restrictedConnection.close().catch(() => undefined);
+              throw error;
+            }
+          } catch (error) {
+            await rm(agentDir, { recursive: true, force: true }).catch(() => undefined);
+            throw error;
+          }
+        })();
+        const tracked = init.catch((error) => {
+          if (restrictedPromise === tracked) restrictedPromise = null;
+          throw error;
+        });
+        restrictedPromise = tracked;
+        return tracked;
+      };
+
+      return {
+        version: baseConnection.version,
+        capabilities: baseConnection.capabilities,
+        async send(input) {
+          if (closed) throw new Error("ACP provider connection is closed");
+          if (
+            input.type === "session.open" &&
+            input.config.providerOptions?.restrictToConfiguredMcp === true
+          ) {
+            if (restrictedSessions.has(input.sessionId)) {
+              throw new Error(`Session already exists: ${input.sessionId}`);
+            }
+            if (Object.keys(input.config.mcpServers).length > 0) {
+              emit({
+                type: "request.failed",
+                requestId: input.requestId,
+                error: {
+                  message: "Antigravity supports only tool-free planning in restricted sessions",
+                },
+              });
+              return;
+            }
+            if (input.persistence !== undefined) {
+              emit({
+                type: "request.failed",
+                requestId: input.requestId,
+                error: {
+                  message:
+                    "Restricted Antigravity sessions cannot load or resume persisted sessions",
+                },
+              });
+              return;
+            }
+            if (input.config.mode !== undefined && input.config.mode !== "default") {
+              emit({
+                type: "request.failed",
+                requestId: input.requestId,
+                error: {
+                  message: "Unattended modes are disabled in restricted Antigravity sessions",
+                },
+              });
+              return;
+            }
+            let state: RestrictedRuntimeState;
+            try {
+              state = await getRestrictedState();
+            } catch (error) {
+              emit({
+                type: "request.failed",
+                requestId: input.requestId,
+                error: { message: describeError(error) },
+              });
+              return;
+            }
+            restrictedSessions.add(input.sessionId);
+            pendingRestrictedOpens.set(input.requestId, input.sessionId);
+            const { restrictToConfiguredMcp: _restricted, ...settings } = input.config.settings;
+            try {
+              await state.connection.send({
+                ...input,
+                config: {
+                  ...input.config,
+                  mode: "default",
+                  mcpServers: {},
+                  settings,
+                },
+              });
+            } catch (error) {
+              pendingRestrictedOpens.delete(input.requestId);
+              restrictedSessions.delete(input.sessionId);
+              throw error;
+            }
+            return;
+          }
+
+          if ("sessionId" in input && restrictedSessions.has(input.sessionId)) {
+            if (
+              input.type === "session.configure" &&
+              input.changes.mode !== undefined &&
+              input.changes.mode !== "default"
+            ) {
+              emit({
+                type: "request.failed",
+                requestId: input.requestId,
+                error: {
+                  message: "Unattended modes are disabled in restricted Antigravity sessions",
+                },
+              });
+              return;
+            }
+            const state = await getRestrictedState();
+            await state.connection.send(input);
+            return;
+          }
+
+          await baseConnection.send(input);
+        },
+        onEvent(listener) {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        close() {
+          if (closePromise) return closePromise;
+          closed = true;
+          closePromise = (async () => {
+            const pendingRestricted = restrictedPromise;
+            try {
+              await baseConnection.close();
+            } finally {
+              unsubscribeBase();
+              if (pendingRestricted) {
+                const state = await pendingRestricted.catch(() => null);
+                if (state) {
+                  try {
+                    await state.connection.close();
+                  } finally {
+                    state.unsubscribe();
+                    await rm(state.agentDir, { recursive: true, force: true }).catch(
+                      () => undefined,
+                    );
+                  }
+                }
+              }
+              restrictedSessions.clear();
+              pendingRestrictedOpens.clear();
+              listeners.clear();
+            }
+          })();
+          return closePromise;
+        },
+      };
+    },
     docsUrl: "https://paseo.sh/docs/supported-providers/antigravity#troubleshooting",
     // agy documents no update command and no release source, so there is nothing to check or run.
     installation: {

@@ -8,7 +8,7 @@ is the per-plugin reference and the upgrade procedure.
 
 | Plugin                                            | Source and pin                                                                                         | Version       | Ships as                   | Modified                                      |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------- | -------------------------- | --------------------------------------------- |
-| Antigravity (`antigravity-provider`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                            |
+| Antigravity (`antigravity-provider`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, tool-free restricted sessions            |
 | Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `ae40671`                                    | 0.3.1         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch`    |
 | Claude usage (`claude-usage-source`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                            |
 | Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
@@ -87,7 +87,7 @@ to one worktree per frame and to the host's native chat.
   title; the manual menu action remains available.
 - **Generate title with AI.** The chat menu suggests an editable title from up to four
   user messages. It uses the chat's current provider and exact model without separate
-  configuration. Claude, Codex, Pi and their derived profiles run the request in a
+  configuration. Claude, Codex, Pi, Antigravity and their derived profiles run the request in a
   separate non-persisted session with tools disabled; other providers are rejected.
   Only confirming the existing rename dialog changes the saved title. The prompt
   is adapted from Arman Khan's MIT-licensed Chat Titles plugin.
@@ -153,6 +153,17 @@ Tests: `tests/bots.test.ts`, `chief.test.ts`, `groups.test.ts`, `scheduler.test.
 patched checkout.
 `sharing-dialogs.test.tsx` needs jsdom, which the checkout does not install, so `vitest run`
 reports two unhandled errors that are not failures.
+
+### Antigravity (in place, `plugins/antigravity-provider/`)
+
+Wraps `connect()` so `restrictToConfiguredMcp: true` sessions (used by Bots AI chat title
+generation) launch `agy acp` with an allowlisted argv (`--dangerously-skip-permissions=false`,
+`--include-default-customizations=false`, `--add-dir <tmp>`, `--agent=<name>`) backed by an
+isolated custom agent (`tools: []`, `inheritCustomizations: false`,
+`excludeDefaultComponents: true`), force `default` mode without `autoAcceptMode`, refuse
+persisted session loads, nonempty MCP servers and CLIs without `systemPrompt.append`, and deny
+permission requests immediately (`plugins/antigravity-provider/server/provider.test.ts`).
+Keep on every rebase.
 
 ### Codex usage (in place, `plugins/codex-usage-source/`)
 

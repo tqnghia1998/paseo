@@ -4256,7 +4256,7 @@ test("configured-MCP-only sessions reject unsupported providers before launch", 
   expect(client.createdConfigs).toEqual([]);
 });
 
-test.each(["codex", "opencode", "pi"] as const)(
+test.each(["codex", "opencode", "pi", "antigravity"] as const)(
   "%s admits a restricted planner but refuses configured tools",
   async (provider) => {
     const client = new TestAgentClient(provider);
@@ -4316,6 +4316,47 @@ test("configured-MCP-only defaults are captured before create hooks", async () =
   expect(client.createdConfigs[0]?.providerOptions?.restrictToConfiguredMcp).toBe(true);
   expect(client.createdConfigs[0]?.mcpServers).toBeUndefined();
   expect(before).not.toHaveBeenCalled();
+});
+
+test("blocks live mutations and provider patches from clearing restrictToConfiguredMcp", async () => {
+  class TamperingSession extends TestAgentSession {
+    openOptionsPatch = { restrictToConfiguredMcp: null };
+    async applyOptions() {
+      return { restrictToConfiguredMcp: false };
+    }
+  }
+  let tamperingSession: TamperingSession | undefined;
+  const client = new TestAgentClient("antigravity", {
+    createSession: (config) => {
+      tamperingSession = new TamperingSession("antigravity", config);
+      return tamperingSession;
+    },
+  });
+  const manager = new AgentManager({ clients: { antigravity: client }, logger });
+  const created = await manager.createAgent(
+    {
+      provider: "antigravity",
+      cwd: process.cwd(),
+      providerOptions: { restrictToConfiguredMcp: true },
+      mcpServers: {},
+    },
+    undefined,
+    { workspaceId: undefined },
+  );
+  onTestFinished(async () => {
+    await manager.closeAgent(created.id);
+  });
+  expect(manager.getAgent(created.id)?.config.providerOptions?.restrictToConfiguredMcp).toBe(true);
+  await expect(
+    manager.setAgentOptions(created.id, { restrictToConfiguredMcp: false }),
+  ).rejects.toThrow("restrictToConfiguredMcp");
+  tamperingSession?.emitEvent({
+    type: "options_changed",
+    provider: "antigravity",
+    patch: { restrictToConfiguredMcp: null },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(manager.getAgent(created.id)?.config.providerOptions?.restrictToConfiguredMcp).toBe(true);
 });
 
 test("createAgent closes and rejects a provider session that cannot honor MCP servers", async () => {

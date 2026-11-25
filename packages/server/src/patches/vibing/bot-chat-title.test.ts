@@ -14,13 +14,13 @@ it("waits for a substantive message and excludes explicitly named or background 
 });
 
 describe("prepareBotChatTitle", () => {
-  it("uses the live model and exact provider profile with only bounded user text", () => {
+  it("uses the live model and exact provider profile without forwarding stale thinking options", () => {
     const result = prepareBotChatTitle(
       {
         provider: "custom-codex",
         labels: { "paseo-bots.bot": "general" },
         runtimeInfo: { model: "routed--current" },
-        config: { model: "old-model", thinkingOptionId: "high" },
+        config: { model: "old-model", thinkingOptionId: "xhigh" },
       },
       [
         { type: "user_message", text: "Fix login" },
@@ -32,12 +32,12 @@ describe("prepareBotChatTitle", () => {
     expect(result.agentConfig).toMatchObject({
       provider: "custom-codex",
       model: "routed--current",
-      thinkingOptionId: "high",
       cwd: "/isolated",
       internal: true,
       providerOptions: { restrictToConfiguredMcp: true },
       mcpServers: {},
     });
+    expect(result.agentConfig.thinkingOptionId).toBeUndefined();
     const { userRequests } = JSON.parse(result.prompt);
     expect(userRequests[0]).toBe("Fix login");
     expect(userRequests[1]).toHaveLength(800);
@@ -72,11 +72,18 @@ describe("suggestBotChatTitle", () => {
       getTimelineRows: vi.fn(async () => [
         { seq: 1, timestamp: "", item: { type: "user_message" as const, text: "Fix login" } },
       ]),
-      createAgent: vi.fn(async () => ({
-        id: "temporary",
-        provider: "codex",
-        config: { model: "relay--example" },
-      })),
+      createAgent: vi.fn(
+        async (): Promise<{
+          id: string;
+          provider: string;
+          config: { model?: string };
+          runtimeInfo?: { model?: string | null };
+        }> => ({
+          id: "temporary",
+          provider: "codex",
+          config: { model: "relay--example" },
+        }),
+      ),
       runAgent: vi.fn(async () => ({
         sessionId: "temporary",
         finalText: '{"title":"Fix the login flow"}',
@@ -100,11 +107,60 @@ describe("suggestBotChatTitle", () => {
     expect(manager.deleteAgentState).toHaveBeenCalledWith("temporary");
   });
 
-  it("fails closed on unsupported providers and model substitution", async () => {
+  it("supports Antigravity chats including legacy combined model IDs and default model selection", async () => {
+    const manager = setup();
+    manager.getProviderAdapter.mockReturnValue("antigravity");
+    manager.createAgent.mockResolvedValueOnce({
+      id: "temporary-agy",
+      provider: "antigravity",
+      config: { model: "gemini-4-neon-high" },
+      runtimeInfo: { model: "gemini-4-neon" },
+    });
+    await expect(
+      suggestBotChatTitle(manager, "chat-agy", async () => ({
+        provider: "antigravity",
+        labels: { "paseo-bots.bot": "general" },
+        config: { model: "gemini-4-neon-high", thinkingOptionId: "high" },
+        internal: false,
+      })),
+    ).resolves.toBe("Fix the login flow");
+    expect(manager.createAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "antigravity",
+        model: "gemini-4-neon-high",
+        internal: true,
+        providerOptions: { restrictToConfiguredMcp: true },
+        mcpServers: {},
+      }),
+      undefined,
+      { persistSession: false, workspaceId: undefined },
+    );
+    expect(manager.createAgent.mock.calls[0]?.[0].thinkingOptionId).toBeUndefined();
+    expect(manager.closeAgent).toHaveBeenCalledWith("temporary-agy");
+    expect(manager.deleteAgentState).toHaveBeenCalledWith("temporary-agy");
+
+    manager.createAgent.mockResolvedValueOnce({
+      id: "temporary-default",
+      provider: "antigravity",
+      config: { model: "gemini-4-neon" },
+      runtimeInfo: { model: "gemini-4-neon" },
+    });
+    await expect(
+      suggestBotChatTitle(manager, "chat-default", async () => ({
+        provider: "antigravity",
+        labels: { "paseo-bots.bot": "general" },
+        config: { model: "default" },
+        internal: false,
+      })),
+    ).resolves.toBe("Fix the login flow");
+  });
+
+  it("fails closed on unsupported providers and config or runtime model substitution", async () => {
     const manager = setup();
     manager.getProviderAdapter.mockReturnValueOnce("opencode");
     await expect(suggestBotChatTitle(manager, "chat", load)).rejects.toThrow(/tool-free/);
     expect(manager.createAgent).not.toHaveBeenCalled();
+
     manager.createAgent.mockResolvedValueOnce({
       id: "temporary",
       provider: "codex",
@@ -113,5 +169,69 @@ describe("suggestBotChatTitle", () => {
     await expect(suggestBotChatTitle(manager, "chat", load)).rejects.toThrow(/exact model/);
     expect(manager.runAgent).not.toHaveBeenCalled();
     expect(manager.deleteAgentState).toHaveBeenCalledWith("temporary");
+
+    manager.createAgent.mockResolvedValueOnce({
+      id: "temporary-runtime-fallback",
+      provider: "codex",
+      config: { model: "relay--example" },
+      runtimeInfo: { model: "different-runtime-model" },
+    });
+    await expect(suggestBotChatTitle(manager, "chat", load)).rejects.toThrow(/exact model/);
+    expect(manager.deleteAgentState).toHaveBeenCalledWith("temporary-runtime-fallback");
+  });
+
+  it("times out hung agent creation or runs without unhandled rejections and cleans up late agents", async () => {
+    vi.useFakeTimers();
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const manager = setup();
+      let rejectRun: ((error: Error) => void) | undefined;
+      manager.runAgent.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRun = reject;
+          }),
+      );
+      manager.closeAgent.mockImplementationOnce(async () => {
+        rejectRun?.(new Error("Agent closed"));
+      });
+      const pendingRun = suggestBotChatTitle(manager, "chat-timeout-run", load);
+      const assertion = expect(pendingRun).rejects.toThrow(/timed out/);
+      await vi.waitFor(() => expect(manager.runAgent).toHaveBeenCalled());
+      await vi.advanceTimersByTimeAsync(30_000);
+      await assertion;
+      await Promise.resolve();
+      expect(manager.closeAgent).toHaveBeenCalledWith("temporary");
+      expect(unhandled).toEqual([]);
+
+      let resolveLateCreate:
+        | ((agent: { id: string; provider: string; config: { model?: string } }) => void)
+        | undefined;
+      manager.createAgent.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLateCreate = resolve;
+          }),
+      );
+      const pendingCreate = suggestBotChatTitle(manager, "chat-timeout-create", load);
+      const createAssertion = expect(pendingCreate).rejects.toThrow(/timed out/);
+      await vi.waitFor(() => expect(manager.createAgent).toHaveBeenCalledTimes(2));
+      await vi.advanceTimersByTimeAsync(30_000);
+      await createAssertion;
+      resolveLateCreate?.({
+        id: "late-agent",
+        provider: "codex",
+        config: { model: "relay--example" },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(manager.closeAgent).toHaveBeenCalledWith("late-agent");
+      expect(manager.deleteAgentState).toHaveBeenCalledWith("late-agent");
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      vi.useRealTimers();
+    }
   });
 });

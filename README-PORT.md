@@ -120,6 +120,7 @@ copies the runner automatically; do not hand-edit generated artifacts.
 # In the Paseo checkout
 npm run test --workspace=@getpaseo/app -- --project unit src/patches/vibing --bail=1 --maxWorkers=1
 npm run test:unit --workspace=@getpaseo/server -- src/server/plugins/builtin/index.test.ts -t "standalone bundles resolve|listed built-ins resolve" --bail=1 --maxWorkers=1
+npx vitest run plugins/antigravity-provider/server/provider.test.ts --bail=1
 node --test scripts/paseo-web.test.mjs
 npm run typecheck
 npm run lint

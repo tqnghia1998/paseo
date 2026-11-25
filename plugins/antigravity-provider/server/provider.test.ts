@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import type { ProviderEvent } from "@getpaseo/plugin/server/provider";
@@ -956,5 +956,375 @@ child.on("exit", (code) => process.exit(code ?? 1));
     });
   } finally {
     await connection.close();
+  }
+});
+
+it("isolates restricted tool-free sessions with an allowlisted argv, hardened agent.md, default mode, and fail-closed guards", async () => {
+  const { directory, launch } = await launchAgent(`
+    const { appendFileSync, readFileSync } = require("node:fs");
+    const { join } = require("node:path");
+    const { createInterface } = require("node:readline");
+    const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...message }) + "\\n");
+    const addDirIndex = process.argv.indexOf("--add-dir");
+    const agentArg = process.argv.find((arg) => arg.startsWith("--agent="));
+    const agentDir = addDirIndex !== -1 ? process.argv[addDirIndex + 1] : null;
+    const agentName = agentArg ? agentArg.slice("--agent=".length) : null;
+    const agentDefinition =
+      agentDir && agentName
+        ? readFileSync(join(agentDir, ".agents", "agents", agentName, "agent.md"), "utf8")
+        : null;
+    appendFileSync(
+      process.env.CAPTURE,
+      JSON.stringify({ kind: "launch", argv: process.argv.slice(2), agentDir, agentName, agentDefinition }) + "\\n",
+    );
+    const configOptions = [
+      { id: "model", name: "Model", category: "model", type: "select", currentValue: "gemini-4-neon",
+        options: [{ value: "gemini-4-neon", name: "Gemini 4 Neon" }, { value: "gemini-3.8-flash", name: "Gemini 3.8 Flash" }] },
+      { id: "mode", name: "Mode", category: "mode", type: "select", currentValue: "auto",
+        options: [{ value: "default", name: "Default" }, { value: "auto", name: "Auto" }, { value: "plan", name: "Plan" }] },
+    ];
+    let pendingPromptId = null;
+    createInterface({ input: process.stdin }).on("line", (line) => {
+      appendFileSync(process.env.CAPTURE, line + "\\n");
+      const msg = JSON.parse(line);
+      if (msg.id === 99 && pendingPromptId !== null) {
+        send({
+          method: "session/update",
+          params: {
+            sessionId: "restricted-1",
+            update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: JSON.stringify(msg.result) } },
+          },
+        });
+        send({ id: pendingPromptId, result: { stopReason: "end_turn" } });
+        pendingPromptId = null;
+        return;
+      }
+      switch (msg.method) {
+        case "initialize":
+          send({
+            id: msg.id,
+            result: {
+              protocolVersion: 1,
+              agentCapabilities: {
+                loadSession: true,
+                _meta: {
+                  antigravity: {
+                    systemPrompt: { append: process.env.DISABLE_APPEND !== "1" },
+                  },
+                },
+              },
+            },
+          });
+          break;
+        case "session/new":
+          send({ id: msg.id, result: { sessionId: "restricted-1", configOptions } });
+          break;
+        case "session/set_config_option": {
+          const option = configOptions.find((entry) => entry.id === msg.params.configId);
+          if (!option) {
+            send({ id: msg.id, error: { code: -32602, message: "Unknown option " + msg.params.configId } });
+            break;
+          }
+          option.currentValue = msg.params.value;
+          send({ id: msg.id, result: { configOptions } });
+          break;
+        }
+        case "session/prompt":
+          pendingPromptId = msg.id;
+          send({
+            id: 99,
+            method: "session/request_permission",
+            params: {
+              sessionId: "restricted-1",
+              toolCall: {
+                toolCallId: "tc-1",
+                title: "Run command",
+                kind: "execute",
+                status: "pending",
+                content: [],
+                rawInput: {},
+              },
+              options: [
+                { optionId: "allow", name: "Allow", kind: "allow_once" },
+                { optionId: "reject", name: "Reject", kind: "reject_once" },
+              ],
+            },
+          });
+          break;
+        case "session/close":
+          send({ id: msg.id, result: {} });
+          break;
+      }
+    });
+  `);
+  const provider = createAntigravityProvider();
+  const connection = await provider.connect({
+    launch: {
+      ...launch,
+      args: [
+        ...launch.args,
+        "-dangerously-skip-permissions",
+        "--agent",
+        "-dangerously-skip-permissions",
+        "--ide-mcp-port=9999",
+        "--include-default-customizations=true",
+        "--",
+        "extra-positional",
+      ],
+    },
+    versions: [1],
+    capabilities: ["prompt.message", "session.configure", "session.persistence", "permission"],
+  });
+  const events: ProviderEvent[] = [];
+  connection.onEvent((event) => events.push(event));
+  let capturedAgentDir: string | null = null;
+  try {
+    await connection.send({
+      type: "session.open",
+      requestId: "open-restricted",
+      sessionId: "restricted-session",
+      history: "skip",
+      config: {
+        cwd: directory,
+        model: "gemini-3.8-flash",
+        systemPrompt: "Title instructions",
+        env: {},
+        mcpServers: {},
+        settings: { restrictToConfiguredMcp: true },
+        providerOptions: { restrictToConfiguredMcp: true },
+        persist: false,
+      },
+    });
+    await expect
+      .poll(
+        () =>
+          events.find((event) => event.type === "session.ready" || event.type === "request.failed"),
+        { timeout: 3_000 },
+      )
+      .toMatchObject({ type: "session.ready" });
+
+    // Full-access mode must not be advertised or enabled on restricted sessions; mode is forced to default.
+    const configEvent = events.findLast((event) => event.type === "session.config");
+    expect(configEvent?.config.mode).toBe("default");
+    expect(configEvent?.config.modes.map((mode) => mode.id)).not.toContain("full-access");
+
+    // Switching out of default mode is rejected.
+    await connection.send({
+      type: "session.configure",
+      requestId: "switch-auto",
+      sessionId: "restricted-session",
+      changes: { mode: "auto" },
+    });
+    await expect
+      .poll(
+        () =>
+          events.find(
+            (event) => event.type === "request.failed" && event.requestId === "switch-auto",
+          ),
+        { timeout: 3_000 },
+      )
+      .toMatchObject({
+        type: "request.failed",
+        error: { message: expect.stringContaining("Unattended modes") },
+      });
+
+    await connection.send({
+      type: "session.prompt",
+      sessionId: "restricted-session",
+      prompt: {
+        clientMessageId: "title-turn",
+        delivery: "auto",
+        input: { type: "message", content: [{ type: "text", text: "Name this chat" }] },
+      },
+    });
+    await expect
+      .poll(
+        () =>
+          events.find(
+            (event) =>
+              event.type === "session.turn" &&
+              event.turnId === "acp:title-turn" &&
+              event.state === "completed",
+          ),
+        { timeout: 3_000 },
+      )
+      .toBeDefined();
+
+    // Restricted sessions must never emit permission prompts or auto-allow them.
+    expect(events.some((event) => event.type === "session.permission")).toBe(false);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "timeline.item",
+        item: expect.objectContaining({
+          type: "assistant_message",
+          text: JSON.stringify({ outcome: { outcome: "selected", optionId: "reject" } }),
+        }),
+      }),
+    );
+
+    const captured = (await readFile(launch.env.CAPTURE, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const launchRecord = captured.findLast((entry) => entry.kind === "launch");
+    expect(launchRecord.argv).toEqual([
+      "acp",
+      "--disable-telemetry",
+      "--dangerously-skip-permissions=false",
+      "--include-default-customizations=false",
+      "--add-dir",
+      launchRecord.agentDir,
+      `--agent=${launchRecord.agentName}`,
+    ]);
+    expect(launchRecord.agentName).toMatch(/^paseo-restricted-/);
+    expect(launchRecord.agentDefinition).toContain("inheritCustomizations: false");
+    expect(launchRecord.agentDefinition).toContain("excludeDefaultComponents: true");
+    expect(launchRecord.agentDefinition).toContain("tools: []");
+    expect(launchRecord.agentDefinition).toContain("mcpServers: []");
+    expect(launchRecord.agentDefinition).toContain("skills: []");
+    expect(launchRecord.agentDefinition).toContain("rules: []");
+    expect(launchRecord.agentDefinition).toContain("plugins: []");
+    capturedAgentDir = launchRecord.agentDir;
+    expect(capturedAgentDir).toBeTruthy();
+
+    // Forces mode=default and model=gemini-3.8-flash without sending restrictToConfiguredMcp.
+    const configOptionCalls = captured.filter(
+      (entry) => entry.method === "session/set_config_option",
+    );
+    expect(configOptionCalls.map((entry) => [entry.params.configId, entry.params.value])).toEqual([
+      ["model", "gemini-3.8-flash"],
+      ["mode", "default"],
+    ]);
+
+    // Rejects nonempty configured MCP servers and persisted session loads in restricted sessions.
+    await connection.send({
+      type: "session.open",
+      requestId: "open-with-mcp",
+      sessionId: "restricted-with-mcp",
+      history: "skip",
+      config: {
+        cwd: directory,
+        env: {},
+        mcpServers: { injected: { type: "http", url: "http://127.0.0.1:1" } },
+        settings: {},
+        providerOptions: { restrictToConfiguredMcp: true },
+        persist: false,
+      },
+    });
+    await expect
+      .poll(
+        () =>
+          events.find(
+            (event) => event.type === "request.failed" && event.requestId === "open-with-mcp",
+          ),
+        { timeout: 3_000 },
+      )
+      .toMatchObject({
+        type: "request.failed",
+        error: { message: expect.stringContaining("tool-free planning") },
+      });
+
+    await connection.send({
+      type: "session.open",
+      requestId: "open-persisted",
+      sessionId: "restricted-persisted",
+      history: "replay",
+      persistence: { version: 1, data: { sessionId: "saved" } },
+      config: {
+        cwd: directory,
+        env: {},
+        mcpServers: {},
+        settings: {},
+        providerOptions: { restrictToConfiguredMcp: true },
+        persist: true,
+      },
+    });
+    await expect
+      .poll(
+        () =>
+          events.find(
+            (event) => event.type === "request.failed" && event.requestId === "open-persisted",
+          ),
+        { timeout: 3_000 },
+      )
+      .toMatchObject({
+        type: "request.failed",
+        error: { message: expect.stringContaining("persisted sessions") },
+      });
+  } finally {
+    await connection.close();
+  }
+  expect(capturedAgentDir).not.toBeNull();
+  if (capturedAgentDir) {
+    await expect(access(capturedAgentDir)).rejects.toThrow();
+  }
+
+  // Fails closed if flags appear before acp or if the CLI lacks systemPrompt.append.
+  const preAcpConnection = await provider.connect({
+    launch: {
+      ...launch,
+      args: [launch.args[0] ?? "", "--settings=/tmp/evil.json", "acp"],
+    },
+    versions: [1],
+    capabilities: ["prompt.message"],
+  });
+  const preAcpEvents: ProviderEvent[] = [];
+  preAcpConnection.onEvent((event) => preAcpEvents.push(event));
+  try {
+    await preAcpConnection.send({
+      type: "session.open",
+      requestId: "pre-acp-flags",
+      sessionId: "s1",
+      history: "skip",
+      config: {
+        cwd: directory,
+        env: {},
+        mcpServers: {},
+        settings: {},
+        providerOptions: { restrictToConfiguredMcp: true },
+        persist: false,
+      },
+    });
+    await expect
+      .poll(() => preAcpEvents.find((event) => event.type === "request.failed"), { timeout: 3_000 })
+      .toMatchObject({
+        type: "request.failed",
+        error: { message: expect.stringContaining("before the acp subcommand") },
+      });
+  } finally {
+    await preAcpConnection.close();
+  }
+
+  const legacyCliConnection = await provider.connect({
+    launch: { ...launch, env: { ...launch.env, DISABLE_APPEND: "1" } },
+    versions: [1],
+    capabilities: ["prompt.message"],
+  });
+  const legacyEvents: ProviderEvent[] = [];
+  legacyCliConnection.onEvent((event) => legacyEvents.push(event));
+  try {
+    await legacyCliConnection.send({
+      type: "session.open",
+      requestId: "no-append",
+      sessionId: "s2",
+      history: "skip",
+      config: {
+        cwd: directory,
+        systemPrompt: "Title instructions",
+        env: {},
+        mcpServers: {},
+        settings: {},
+        providerOptions: { restrictToConfiguredMcp: true },
+        persist: false,
+      },
+    });
+    await expect
+      .poll(() => legacyEvents.find((event) => event.type === "request.failed"), { timeout: 3_000 })
+      .toMatchObject({
+        type: "request.failed",
+        error: { message: expect.stringContaining("system prompt injection") },
+      });
+  } finally {
+    await legacyCliConnection.close();
   }
 });

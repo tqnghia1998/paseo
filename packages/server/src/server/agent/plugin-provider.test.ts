@@ -3937,3 +3937,49 @@ describe("plugin provider tool policy", () => {
     expect(result.opened[0]).toMatchObject({ config: { toolPolicy } });
   });
 });
+
+test("omits restrictToConfiguredMcp from plugin settings and preserves it across rewind replay reopens", async () => {
+  const harness = createRewindProviderHarness();
+  const antigravityRegistration = { ...harness.registration, id: "antigravity" };
+  const logger = createTestLogger();
+  const registry = new PluginAgentClientRegistry(logger);
+  registry.replace([antigravityRegistration]);
+  const manager = new AgentManager({
+    logger,
+    clients: registry.clients(),
+    providerDefinitions: registry.definitions(),
+  });
+  const agent = await manager.createAgent(
+    {
+      provider: "antigravity",
+      cwd: tmpdir(),
+      internal: true,
+      providerOptions: { restrictToConfiguredMcp: true, customSetting: "keep" },
+      mcpServers: {},
+    },
+    undefined,
+    { workspaceId: undefined },
+  );
+  try {
+    await manager.runAgent(agent.id, "A", { clientMessageId: "client-A" });
+    await manager.runAgent(agent.id, "B", { clientMessageId: "client-B" });
+    await manager.rewind(agent.id, "user-B", "conversation");
+
+    const opens = harness.inputs.filter(
+      (input): input is Extract<ProviderInput, { type: "session.open" }> =>
+        input.type === "session.open",
+    );
+    expect(opens.length).toBeGreaterThanOrEqual(2);
+    for (const open of opens) {
+      expect(open.config.providerOptions).toMatchObject({
+        restrictToConfiguredMcp: true,
+        customSetting: "keep",
+      });
+      expect(open.config.settings).not.toHaveProperty("restrictToConfiguredMcp");
+      expect(open.config.settings).toMatchObject({ customSetting: "keep" });
+    }
+  } finally {
+    await manager.closeAgent(agent.id);
+    await registry.shutdown();
+  }
+});

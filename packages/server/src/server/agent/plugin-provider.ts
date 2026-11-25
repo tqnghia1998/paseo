@@ -1282,12 +1282,17 @@ class PluginAgentClient implements AgentClient {
       this.attachPendingChildren();
     };
     const config = mapSessionConfig(input.config, input.launchContext, input.persist);
+    const internalOptions =
+      input.config.providerOptions?.restrictToConfiguredMcp !== undefined
+        ? { restrictToConfiguredMcp: input.config.providerOptions.restrictToConfiguredMcp }
+        : undefined;
     const session = new PluginAgentSession(
       this.provider,
       bridge,
       forget,
       async (persistence, state, options) => {
         forget();
+        const mergedOptions = internalOptions ? { ...options, ...internalOptions } : options;
         return await this.runtime.openSession({
           sessionId: randomUUID(),
           config: {
@@ -1295,8 +1300,8 @@ class PluginAgentClient implements AgentClient {
             model: state.model,
             mode: state.mode,
             thinkingOption: state.thinkingOption,
-            settings: options,
-            providerOptions: options,
+            settings: toJsonObject(omitInternalPluginSettings(mergedOptions), "provider settings"),
+            providerOptions: mergedOptions,
           },
           persistence,
           history: "replay",
@@ -2171,12 +2176,21 @@ function mapSessionConfig(
     mode: config.modeId,
     thinkingOption: config.thinkingOptionId,
     // The plugin SDK reads composer values from `settings`; they are options here.
-    settings: toJsonObject(config.providerOptions ?? {}, "provider settings"),
+    // Omit Paseo's internal restriction flag from composer settings so ACP does not send it as a session config option.
+    settings: toJsonObject(omitInternalPluginSettings(config.providerOptions), "provider settings"),
     providerOptions: config.providerOptions,
     title: config.title ?? undefined,
     persist,
     ...(launchContext?.wrap ? { wrap: launchContext.wrap } : {}),
   };
+}
+
+function omitInternalPluginSettings(
+  options: AgentSessionConfig["providerOptions"],
+): Record<string, unknown> {
+  if (!options) return {};
+  const { restrictToConfiguredMcp: _restricted, ...settings } = options;
+  return settings;
 }
 
 function combineSystemPrompts(

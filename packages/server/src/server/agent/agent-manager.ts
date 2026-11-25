@@ -2920,6 +2920,14 @@ export class AgentManager {
     return this.runLifecycleMutation(agentId, () =>
       this.withLiveInteractiveSessionUnlocked(agentId, async (agent) => {
         const patch = this.convertLegacyOptions(agent.provider, requested);
+        if ("restrictToConfiguredMcp" in requested || "restrictToConfiguredMcp" in patch) {
+          throw new ProviderOptionsValidationError(agent.provider, [
+            {
+              path: ["restrictToConfiguredMcp"],
+              message: "cannot change on a running session; it applies when the agent is opened",
+            },
+          ]);
+        }
         let ended: ProviderOptionsPatch = {};
         let sent: ProviderOptionsPatch = {};
         if (Object.keys(patch).length > 0) {
@@ -2939,7 +2947,7 @@ export class AgentManager {
           const resolved = this.effectiveOptionsFor(agent.provider, set);
           sent = Object.fromEntries(Object.keys(patch).map((key) => [key, resolved[key] ?? null]));
           const modelBefore = agent.runtimeInfo?.model;
-          ended = (await agent.session.applyOptions(sent)) ?? {};
+          ended = this.omitRestrictedOptionPatch((await agent.session.applyOptions(sent)) ?? {});
           // Changes the provider made on its own while applying are older than its final answer.
           await this.drainSessionEvents(agentId);
           await this.refreshRuntimeInfo(agent, { emit: false });
@@ -2958,13 +2966,21 @@ export class AgentManager {
     );
   }
 
+  private omitRestrictedOptionPatch(patch: ProviderOptionsPatch): ProviderOptionsPatch {
+    if (!("restrictToConfiguredMcp" in patch)) return patch;
+    const { restrictToConfiguredMcp: _restricted, ...rest } = patch;
+    return rest;
+  }
+
   /** The config as the opened session left it: its own difference from the options it was given. */
   private withOpenedOptions(input: {
     config: AgentSessionConfig;
     session: AgentSession;
   }): AgentSessionConfig {
     const { config } = input;
-    const opened = input.session.openOptionsPatch;
+    const opened = input.session.openOptionsPatch
+      ? this.omitRestrictedOptionPatch(input.session.openOptionsPatch)
+      : undefined;
     if (!opened || Object.keys(opened).length === 0) return config;
     const own = applyProviderOptionsPatch({ options: config.providerOptions, patch: opened });
     return { ...config, providerOptions: Object.keys(own).length > 0 ? own : undefined };
@@ -2974,7 +2990,7 @@ export class AgentManager {
     const { agent } = input;
     const own = applyProviderOptionsPatch({
       options: agent.config.providerOptions,
-      patch: input.patch,
+      patch: this.omitRestrictedOptionPatch(input.patch),
     });
     agent.config.providerOptions = Object.keys(own).length > 0 ? own : undefined;
   }
@@ -2991,7 +3007,7 @@ export class AgentManager {
   }): void {
     input.agent.effectiveOptions = applyProviderOptionsPatch({
       options: input.agent.effectiveOptions,
-      patch: { ...input.sent, ...input.reported },
+      patch: this.omitRestrictedOptionPatch({ ...input.sent, ...input.reported }),
     });
   }
 
@@ -3005,7 +3021,7 @@ export class AgentManager {
   }): ProviderOptions {
     return applyProviderOptionsPatch({
       options: input.launchedOptions,
-      patch: input.session.openOptionsPatch ?? {},
+      patch: this.omitRestrictedOptionPatch(input.session.openOptionsPatch ?? {}),
     });
   }
 
@@ -6854,7 +6870,7 @@ export class AgentManager {
     if (config.providerOptions?.restrictToConfiguredMcp === true) {
       let provider: string | null | undefined = config.provider;
       const visited = new Set<string>();
-      const supported = new Set(["claude", "codex", "opencode", "pi"]);
+      const supported = new Set(["claude", "codex", "opencode", "pi", "antigravity"]);
       while (provider && !supported.has(provider) && !visited.has(provider)) {
         visited.add(provider);
         provider = this.providerDefinitions.get(provider)?.derivedFromProviderId;

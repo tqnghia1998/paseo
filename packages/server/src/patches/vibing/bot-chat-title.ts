@@ -17,6 +17,7 @@ const TitleSchema = z.object({
     .max(72)
     .regex(/^[^\r\n]+$/),
 });
+const TITLE_TIMEOUT_MS = 30_000;
 const inFlight = new Set<string>();
 
 interface AutoTitleChat {
@@ -66,7 +67,7 @@ interface TitleChat {
 
 export function prepareBotChatTitle(chat: TitleChat, items: readonly TitleMessage[], cwd: string) {
   if (!chat.labels?.["paseo-bots.bot"]) throw new Error("This is not a Bots chat.");
-  const model = chat.runtimeInfo?.model || chat.config.model;
+  const model = (chat.runtimeInfo?.model || chat.config.model)?.trim();
   if (!model) throw new Error("The chat's current model is unavailable.");
   const userRequests: string[] = [];
   for (const item of items) {
@@ -80,7 +81,6 @@ export function prepareBotChatTitle(chat: TitleChat, items: readonly TitleMessag
   const agentConfig: AgentSessionConfig = {
     provider: chat.provider,
     model,
-    thinkingOptionId: chat.config.thinkingOptionId,
     cwd,
     internal: true,
     title: "Chat title suggestion",
@@ -91,14 +91,32 @@ export function prepareBotChatTitle(chat: TitleChat, items: readonly TitleMessag
   return { agentConfig, prompt: JSON.stringify({ userRequests }) };
 }
 
+function matchesRequestedTitleModel(
+  adapter: string,
+  requestedModel: string | undefined,
+  actualModel: string | undefined,
+): boolean {
+  if (!requestedModel || !actualModel) return false;
+  if (actualModel === requestedModel) return true;
+  if (requestedModel.toLowerCase() === "default") return true;
+  if (adapter === "antigravity") {
+    const legacy = /^(.*)-(xhigh|high|medium|low|minimal)$/.exec(requestedModel);
+    if (legacy?.[1] && actualModel === legacy[1]) return true;
+  }
+  return false;
+}
+
 export async function suggestBotChatTitle(
   manager: Pick<
     AgentManager,
     "getProviderAdapter" | "getTimelineRows" | "runAgent" | "closeAgent" | "deleteAgentState"
   > & {
-    createAgent(
-      ...args: Parameters<AgentManager["createAgent"]>
-    ): Promise<Pick<ManagedAgent, "id" | "provider"> & { config: { model?: string } }>;
+    createAgent(...args: Parameters<AgentManager["createAgent"]>): Promise<
+      Pick<ManagedAgent, "id" | "provider"> & {
+        config: { model?: string };
+        runtimeInfo?: { model?: string | null };
+      }
+    >;
   },
   chatId: string,
   loadChat: () => Promise<TitleChat & Pick<ManagedAgent, "internal">>,
@@ -110,45 +128,64 @@ export async function suggestBotChatTitle(
   let cwd: string | undefined;
   let generatorId: string | undefined;
   let timeout: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
   try {
-    const chat = await loadChat();
-    if (chat.internal || !chat.labels?.["paseo-bots.bot"])
-      throw new Error("This is not a Bots chat.");
-    const adapter = manager.getProviderAdapter(chat.provider);
-    if (adapter !== "claude" && adapter !== "codex" && adapter !== "pi") {
-      throw new Error("This provider does not support tool-free title generation.");
-    }
-    cwd = await mkdtemp(join(tmpdir(), "paseo-chat-title-"));
-    const items = liveItems ?? (await manager.getTimelineRows(chatId)).map(({ item }) => item);
-    const { agentConfig, prompt } = prepareBotChatTitle(chat, items, cwd);
-    const agent = await manager.createAgent(agentConfig, undefined, {
-      persistSession: false,
-      workspaceId: undefined,
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        timedOut = true;
+        reject(new Error("Title generation timed out."));
+      }, TITLE_TIMEOUT_MS);
     });
-    generatorId = agent.id;
-    if (agent.config.model !== agentConfig.model || agent.provider !== chat.provider) {
-      throw new Error("The chat's exact model is unavailable for title generation.");
-    }
-    const generation = getStructuredAgentResponse({
-      prompt,
-      schema: TitleSchema,
-      maxRetries: 0,
-      caller: async (input) => {
-        const result = await manager.runAgent(agent.id, input);
-        if (result.timeline.some((item) => item.type === "tool_call")) {
-          throw new Error("Unexpected tool call during title generation.");
-        }
-        if (result.canceled) throw new Error("Title generation was canceled.");
-        return result.finalText;
-      },
-    });
-    const { title } = await Promise.race([
-      generation,
-      new Promise<never>((_, reject) => {
-        timeout = setTimeout(() => reject(new Error("Title generation timed out.")), 30_000);
-      }),
-    ]);
-    return title;
+    const work = (async (): Promise<string> => {
+      const chat = await loadChat();
+      if (chat.internal || !chat.labels?.["paseo-bots.bot"])
+        throw new Error("This is not a Bots chat.");
+      const adapter = manager.getProviderAdapter(chat.provider);
+      if (
+        adapter !== "claude" &&
+        adapter !== "codex" &&
+        adapter !== "pi" &&
+        adapter !== "antigravity"
+      ) {
+        throw new Error("This provider does not support tool-free title generation.");
+      }
+      cwd = await mkdtemp(join(tmpdir(), "paseo-chat-title-"));
+      const items = liveItems ?? (await manager.getTimelineRows(chatId)).map(({ item }) => item);
+      const { agentConfig, prompt } = prepareBotChatTitle(chat, items, cwd);
+      const agent = await manager.createAgent(agentConfig, undefined, {
+        persistSession: false,
+        workspaceId: undefined,
+      });
+      if (timedOut) {
+        await manager.closeAgent(agent.id).catch(() => undefined);
+        await manager.deleteAgentState(agent.id).catch(() => undefined);
+        throw new Error("Title generation timed out.");
+      }
+      generatorId = agent.id;
+      const actualModel = (agent.runtimeInfo?.model || agent.config.model)?.trim();
+      if (
+        agent.provider !== chat.provider ||
+        !matchesRequestedTitleModel(adapter, agentConfig.model, actualModel)
+      ) {
+        throw new Error("The chat's exact model is unavailable for title generation.");
+      }
+      const { title } = await getStructuredAgentResponse({
+        prompt,
+        schema: TitleSchema,
+        maxRetries: 0,
+        caller: async (input) => {
+          const result = await manager.runAgent(agent.id, input);
+          if (result.timeline.some((item) => item.type === "tool_call")) {
+            throw new Error("Unexpected tool call during title generation.");
+          }
+          if (result.canceled) throw new Error("Title generation was canceled.");
+          return result.finalText;
+        },
+      });
+      return title;
+    })();
+    void work.catch(() => undefined);
+    return await Promise.race([work, timeoutPromise]);
   } finally {
     clearTimeout(timeout);
     if (generatorId) {
