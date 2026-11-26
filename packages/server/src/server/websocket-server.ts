@@ -670,6 +670,12 @@ export class VoiceAssistantWebSocketServer {
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
   private readonly hubRelationships: HubRelationshipManagement | null;
+  private readonly startingUpgradeWaiters: Array<() => void> = [];
+  private readonly startingMessageQueue: Array<{
+    ws: WebSocketLike;
+    data: Buffer | ArrayBuffer | Buffer[] | string;
+    message: Extract<WSInboundMessage, { type: "session" }>;
+  }> = [];
   private connectionLifecycle: "starting" | "accepting" | "stopping" = "accepting";
   private readonly advertiseDaemonStatusRpc: boolean;
   private readonly advertiseRelayConfig: boolean;
@@ -1027,7 +1033,7 @@ export class VoiceAssistantWebSocketServer {
     hostnames: HostnamesConfig | undefined,
     callback: (res: boolean, code?: number, message?: string) => void,
   ): void {
-    if (this.connectionLifecycle !== "accepting") {
+    if (this.connectionLifecycle !== "accepting" && this.connectionLifecycle !== "starting") {
       callback(false, 503, "Server not ready");
       return;
     }
@@ -1085,7 +1091,7 @@ export class VoiceAssistantWebSocketServer {
         ws,
         request,
         undefined,
-        false,
+        true,
         hasHeaderCredential ? OWNER_SESSION_ADMISSION : null,
       );
     } finally {
@@ -1223,11 +1229,29 @@ export class VoiceAssistantWebSocketServer {
 
   public prepareForShutdown(): void {
     this.connectionLifecycle = "stopping";
+    this.startingMessageQueue.length = 0;
+    const waiters = this.startingUpgradeWaiters.splice(0);
+    for (const resume of waiters) resume();
   }
 
   public beginAcceptingConnections(): void {
     if (this.connectionLifecycle === "starting") {
       this.connectionLifecycle = "accepting";
+      const waiters = this.startingUpgradeWaiters.splice(0);
+      for (const resume of waiters) resume();
+      const queued = this.startingMessageQueue.splice(0);
+      for (const item of queued) {
+        const conn = this.sessions.get(item.ws);
+        if (!conn) continue;
+        void this.dispatchSessionMessage(item.ws, conn, item.message).catch((error: unknown) => {
+          this.handleRawMessageError({
+            ws: item.ws,
+            data: item.data,
+            error,
+            log: conn.connectionLogger,
+          });
+        });
+      }
     }
   }
 
@@ -2673,14 +2697,25 @@ export class VoiceAssistantWebSocketServer {
     }
   }
 
+  private maybeQueueStartingSessionMessage(
+    ws: WebSocketLike,
+    data: Buffer | ArrayBuffer | Buffer[] | string,
+    message: Extract<WSInboundMessage, { type: "session" }>,
+  ): boolean {
+    if (this.connectionLifecycle !== "starting" || this.pluginSocketIds.has(ws)) {
+      return false;
+    }
+    if (this.startingMessageQueue.length < 512) {
+      this.startingMessageQueue.push({ ws, data, message });
+    }
+    return true;
+  }
+
   private handleRawMessage(
     ws: WebSocketLike,
     data: Buffer | ArrayBuffer | Buffer[] | string,
   ): void {
-    if (
-      this.connectionLifecycle === "stopping" ||
-      (this.connectionLifecycle === "starting" && !this.pluginSocketIds.has(ws))
-    ) {
+    if (this.connectionLifecycle === "stopping") {
       return;
     }
 
@@ -2761,6 +2796,9 @@ export class VoiceAssistantWebSocketServer {
       }
 
       if (message.type === "session") {
+        if (this.maybeQueueStartingSessionMessage(ws, data, message)) {
+          return;
+        }
         void this.dispatchSessionMessage(ws, activeConnection, message).catch((error: unknown) => {
           this.handleRawMessageError({ ws, data, error, log: activeConnection.connectionLogger });
         });

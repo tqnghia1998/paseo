@@ -97,6 +97,11 @@ export interface AcpOptions {
          * in the daemon launch environment.
          */
         sharedEnv?: Readonly<Record<string, string>>;
+        /**
+         * Idle timeout in milliseconds before closing a shared ACP process with no active sessions.
+         * Defaults to `PASEO_IDLE_RUNTIME_TIMEOUT_MS` when positive, or 3 minutes.
+         */
+        idleTimeoutMs?: number;
       };
 }
 

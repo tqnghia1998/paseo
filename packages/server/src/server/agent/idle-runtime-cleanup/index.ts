@@ -154,9 +154,14 @@ export function createIdleRuntimeCleanup(options: Options) {
       timer.unref();
       return () => clearInterval(timer);
     });
-  const cancel = schedule(() => {
-    void sweep().catch((error) => options.logger.warn({ err: error }, "Idle runtime sweep failed"));
-  }, 60_000);
+  const cancel = schedule(
+    () => {
+      void sweep().catch((error) =>
+        options.logger.warn({ err: error }, "Idle runtime sweep failed"),
+      );
+    },
+    Math.min(30_000, idlePeriodMs),
+  );
   return {
     sweep,
     setEnabled(value: boolean) {

@@ -7886,9 +7886,7 @@ export class Session {
       }
       const { workspace, projectsBefore, workspacesBefore } = opened;
       const project = await this.projectRegistry.get(workspace.projectId);
-      await this.syncWorkspaceGitObserverForWorkspace(workspace);
       const descriptor = await this.describeWorkspaceRecord(workspace);
-      await this.emitWorkspaceUpdateForWorkspaceId(workspace.workspaceId);
       this.sessionLogger.info(
         {
           requestedCwd,
@@ -7915,6 +7913,8 @@ export class Session {
           error: null,
         },
       });
+      await this.syncWorkspaceGitObserverForWorkspace(workspace);
+      await this.emitWorkspaceUpdateForWorkspaceId(workspace.workspaceId);
       void this.workspaceGitService
         .getSnapshot(workspace.cwd, {
           force: true,

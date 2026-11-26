@@ -420,10 +420,23 @@ export function createWorkspaceProvisioningService(deps: {
       );
     // Prefer the active duplicate the user recently used; preserve oldest-first
     // ordering for ties and archived workspace recovery.
+    const activeCandidates = workspaces.filter((workspace) => !workspace.archivedAt);
     const agentActivity =
-      (await deps.getRecentAgentActivityByWorkspace?.()) ?? new Map<string, Date>();
-    const active = preferActiveWorkspaceByAgentActivity(workspaces, agentActivity);
-    if (active) return refreshWorkspaceRecord(active);
+      activeCandidates.length > 1
+        ? ((await deps.getRecentAgentActivityByWorkspace?.()) ?? new Map<string, Date>())
+        : new Map<string, Date>();
+    const active =
+      activeCandidates.length === 1
+        ? activeCandidates[0]
+        : preferActiveWorkspaceByAgentActivity(workspaces, agentActivity);
+    if (active) {
+      const project = await projectRegistry.get(active.projectId);
+      if (project && !project.archivedAt) {
+        void refreshWorkspaceRecord(active).catch(() => undefined);
+        return active;
+      }
+      return refreshWorkspaceRecord(active);
+    }
     const archived = workspaces.find((workspace) => workspace.archivedAt);
     if (archived) {
       const project = await projectRegistry.get(archived.projectId);

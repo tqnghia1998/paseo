@@ -204,6 +204,24 @@ interface ServeWebUiFileOptions {
   res: Parameters<RequestHandler>[1];
 }
 
+const webUiHashedAssetBufferCache = new Map<string, Buffer>();
+
+function readCachedHashedAsset(finalFile: string): Buffer | undefined {
+  const existing = webUiHashedAssetBufferCache.get(finalFile);
+  if (existing) return existing;
+  try {
+    const buffer = readFileSync(finalFile);
+    if (webUiHashedAssetBufferCache.size >= 8) {
+      const oldest = webUiHashedAssetBufferCache.keys().next().value;
+      if (oldest) webUiHashedAssetBufferCache.delete(oldest);
+    }
+    webUiHashedAssetBufferCache.set(finalFile, buffer);
+    return buffer;
+  } catch {
+    return undefined;
+  }
+}
+
 function serveWebUiFile(options: ServeWebUiFileOptions): void {
   const { distDir, requestPath, label, req, res } = options;
 
@@ -237,6 +255,15 @@ function serveWebUiFile(options: ServeWebUiFileOptions): void {
   if (isIndexHtml) {
     sendIndexHtml(res, finalFile, req, label);
     return;
+  }
+
+  if (!contentEncoding && isHashedAsset(resolvedFile)) {
+    const cachedBuffer = readCachedHashedAsset(finalFile);
+    if (cachedBuffer) {
+      res.setHeader("Content-Length", String(cachedBuffer.byteLength));
+      res.status(200).end(cachedBuffer);
+      return;
+    }
   }
 
   const stream = createReadStream(finalFile);

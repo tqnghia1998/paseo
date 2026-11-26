@@ -33,6 +33,7 @@ const RETIRED_REPLACEMENT = "better-paseo";
 // Each Vibing-installed copy records the fingerprint of the bundle it came from, so later starts
 // can tell an untouched copy (safe to update) from one someone edited.
 const FINGERPRINT_FILE = ".vibing-bundle.json";
+const SOURCE_FINGERPRINTS_CACHE_FILE = ".vibing-source-fingerprints.json";
 // Copies installed before fingerprints carry the README the vendoring script writes.
 const VENDORED_README = "node scripts/vendor-community-plugins.mjs";
 const UPDATE_SUFFIX = ".vibing-update";
@@ -109,6 +110,7 @@ function installPendingPlugins({ pending, seen, plugins, home, sourceRoot, retir
 function updateInstalledPlugins({ home, sourceRoot, readPersistedConfig }) {
   const installedRoot = path.join(home, "installed-plugins");
   if (!existsSync(installedRoot)) return;
+  const sourceCache = readSourceFingerprintCache(home);
   const outdated = [];
   for (const id of communityPluginIds) {
     const source = path.join(sourceRoot, id);
@@ -116,7 +118,7 @@ function updateInstalledPlugins({ home, sourceRoot, readPersistedConfig }) {
     try {
       recoverInterruptedUpdate(directory);
       if (!existsSync(source) || !existsSync(directory)) continue;
-      const bundle = fingerprint(source);
+      const bundle = resolveSourceFingerprint(id, source, sourceCache);
       const recorded = readFingerprint(directory);
       if (recorded === bundle) continue;
       const untouched = recorded ? fingerprint(directory) === recorded : isVendoredCopy(directory);
@@ -125,6 +127,7 @@ function updateInstalledPlugins({ home, sourceRoot, readPersistedConfig }) {
       console.warn(`[Paseo] Couldn't check the community plugin ${id}:`, error);
     }
   }
+  writeSourceFingerprintCache(home, sourceCache);
   if (!outdated.length) return;
   const { plugins = {} } = readPersistedConfig(home, {
     defaultsIfMissing: true,
@@ -142,6 +145,61 @@ function updateInstalledPlugins({ home, sourceRoot, readPersistedConfig }) {
       console.warn(`[Paseo] Couldn't update the community plugin ${id}:`, error);
     }
   }
+}
+
+function readSourceFingerprintCache(home) {
+  const file = path.join(home, SOURCE_FINGERPRINTS_CACHE_FILE);
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { entries: { ...parsed }, dirty: false };
+    }
+  } catch {}
+  return { entries: {}, dirty: false };
+}
+
+function writeSourceFingerprintCache(home, cache) {
+  if (!cache.dirty) return;
+  const file = path.join(home, SOURCE_FINGERPRINTS_CACHE_FILE);
+  try {
+    writeFileSync(`${file}.tmp`, `${JSON.stringify(cache.entries)}\n`);
+    renameSync(`${file}.tmp`, file);
+  } catch {}
+}
+
+function resolveSourceFingerprint(id, source, cache) {
+  const meta = metadataFingerprint(source);
+  const hit = cache.entries[id];
+  if (hit && hit.meta === meta && typeof hit.fingerprint === "string") {
+    return hit.fingerprint;
+  }
+  const value = fingerprint(source);
+  cache.entries[id] = { meta, fingerprint: value };
+  cache.dirty = true;
+  return value;
+}
+
+function metadataFingerprint(root) {
+  const hash = createHash("sha256");
+  const visit = (relative) => {
+    const names = readdirSync(path.join(root, relative)).sort();
+    for (const name of names) {
+      const child = path.join(relative, name);
+      if (child === FINGERPRINT_FILE) continue;
+      const target = path.join(root, child);
+      const stats = lstatSync(target, { bigint: true });
+      if (stats.isDirectory()) visit(child);
+      else if (stats.isSymbolicLink()) {
+        hash.update(`L:${child.split(path.sep).join("/")}:${readlinkSync(target)}\0`);
+      } else {
+        hash.update(
+          `F:${child.split(path.sep).join("/")}:${stats.size}:${stats.mtimeNs}:${stats.ctimeNs}\0`,
+        );
+      }
+    }
+  };
+  visit("");
+  return hash.digest("hex");
 }
 
 function installCopy(source, directory) {

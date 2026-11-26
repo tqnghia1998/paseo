@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import path from "node:path";
+import module from "node:module";
 import { prepareCommunityPlugins } from "./paseo-web-plugins.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -13,6 +14,57 @@ delete process.env.PASEO_WORKTREE_CLEANUP_TOKEN;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function parseArgs(args) {
+  let port = 6768;
+  let host = "127.0.0.1";
+  let home = null;
+  let cleanupWorktrees = null;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--port" || arg === "-p") {
+      port = parseInt(args[++i], 10);
+    } else if (arg.startsWith("--port=")) {
+      port = parseInt(arg.slice("--port=".length), 10);
+    } else if (arg === "--host" || arg === "-h") {
+      host = args[++i];
+    } else if (arg.startsWith("--host=")) {
+      host = arg.slice("--host=".length);
+    } else if (arg === "--home" || arg === "--data-dir") {
+      home = args[++i];
+    } else if (arg.startsWith("--home=")) {
+      home = arg.slice("--home=".length);
+    } else if (arg.startsWith("--cleanup-worktrees=")) {
+      cleanupWorktrees = JSON.parse(arg.slice("--cleanup-worktrees=".length));
+    }
+  }
+
+  if (
+    cleanupWorktrees !== null &&
+    (!Array.isArray(cleanupWorktrees) ||
+      cleanupWorktrees.some(
+        (targetPath) => typeof targetPath !== "string" || !path.isAbsolute(targetPath),
+      ))
+  ) {
+    throw new Error("--cleanup-worktrees must be a JSON array of absolute paths");
+  }
+  return { port, host, home, cleanupWorktrees };
+}
+
+const { port, host, home: customHome, cleanupWorktrees } = parseArgs(process.argv.slice(2));
+const home = customHome || path.join(os.homedir(), ".paseo-web");
+
+// Enable persistent V8 bytecode cache before loading the 24 MB daemon bundle so
+// both server.mjs and forked worker/plugin processes skip cold JS parsing.
+if (!cleanupWorktrees || fs.existsSync(home)) {
+  const compileCacheDir = process.env.NODE_COMPILE_CACHE || path.join(home, ".compile-cache");
+  process.env.NODE_COMPILE_CACHE = compileCacheDir;
+  try {
+    fs.mkdirSync(compileCacheDir, { recursive: true });
+    module.enableCompileCache?.(compileCacheDir);
+  } catch {}
+}
 
 // Enable voice features for embedded mode
 process.env.PASEO_DICTATION_ENABLED = "true";
@@ -61,46 +113,6 @@ const {
   savePersistedConfig,
   getStructuredAgentResponse,
 } = await import(`file://${serverModulePath}`);
-
-function parseArgs(args) {
-  let port = 6768;
-  let host = "127.0.0.1";
-  let home = null;
-  let cleanupWorktrees = null;
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--port" || arg === "-p") {
-      port = parseInt(args[++i], 10);
-    } else if (arg.startsWith("--port=")) {
-      port = parseInt(arg.slice("--port=".length), 10);
-    } else if (arg === "--host" || arg === "-h") {
-      host = args[++i];
-    } else if (arg.startsWith("--host=")) {
-      host = arg.slice("--host=".length);
-    } else if (arg === "--home" || arg === "--data-dir") {
-      home = args[++i];
-    } else if (arg.startsWith("--home=")) {
-      home = arg.slice("--home=".length);
-    } else if (arg.startsWith("--cleanup-worktrees=")) {
-      cleanupWorktrees = JSON.parse(arg.slice("--cleanup-worktrees=".length));
-    }
-  }
-
-  if (
-    cleanupWorktrees !== null &&
-    (!Array.isArray(cleanupWorktrees) ||
-      cleanupWorktrees.some(
-        (targetPath) => typeof targetPath !== "string" || !path.isAbsolute(targetPath),
-      ))
-  ) {
-    throw new Error("--cleanup-worktrees must be a JSON array of absolute paths");
-  }
-  return { port, host, home, cleanupWorktrees };
-}
-
-const { port, host, home: customHome, cleanupWorktrees } = parseArgs(process.argv.slice(2));
-const home = customHome || path.join(os.homedir(), ".paseo-web");
 
 if (!cleanupWorktrees)
   prepareCommunityPlugins({

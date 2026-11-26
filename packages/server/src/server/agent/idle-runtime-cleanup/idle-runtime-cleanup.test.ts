@@ -55,7 +55,11 @@ function scenario(enabled = true, idlePeriodMs?: number) {
     runtimes: () => runtimes.filter((item) => !item.closed).map((item) => item.capture()),
     isProtected: () => protectedCaller,
     schedule: (callback, interval) => {
-      expect(interval).toBe(60_000);
+      const effectiveIdlePeriodMs =
+        typeof idlePeriodMs === "number" && Number.isSafeInteger(idlePeriodMs) && idlePeriodMs > 0
+          ? idlePeriodMs
+          : 60 * 60_000;
+      expect(interval).toBe(Math.min(30_000, effectiveIdlePeriodMs));
       tick = callback;
       return () => {};
     },

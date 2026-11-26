@@ -44,7 +44,7 @@ import {
   type ProviderInput,
 } from "@getpaseo/plugin/server/provider";
 import type { PluginLogEntry } from "@getpaseo/protocol/messages";
-import { compileDirectoryPlugin } from "./compiler.js";
+import { compileDirectoryPlugin, DEFAULT_COMPILE_CACHE_DIR } from "./compiler.js";
 import type { PluginRequirements } from "@getpaseo/protocol/messages";
 import type {
   PluginProcessMessage,
@@ -308,11 +308,18 @@ function resolveWorkerExecArgv(): string[] {
 }
 
 function spawnPluginChild(paseoHome?: string): PluginChild {
+  const compileCache =
+    process.env.NODE_COMPILE_CACHE ||
+    (paseoHome ? path.join(paseoHome, ".compile-cache") : DEFAULT_COMPILE_CACHE_DIR);
   return fork(fileURLToPath(resolveWorkerUrl()), [], {
     execArgv: resolveWorkerExecArgv(),
     serialization: "advanced",
     stdio: ["ignore", "pipe", "pipe", "ipc"],
-    ...(paseoHome ? { env: { ...process.env, PASEO_HOME: paseoHome } } : {}),
+    env: {
+      ...process.env,
+      NODE_COMPILE_CACHE: compileCache,
+      ...(paseoHome ? { PASEO_HOME: paseoHome } : {}),
+    },
   }) as PluginChild;
 }
 
@@ -444,7 +451,12 @@ export class PluginRuntime {
     if (this.plugins.has(input.id)) throw new Error(`Plugin is already running: ${input.id}`);
     this.appendLog(input.id, "stdout", "[paseo] Loading plugin");
     const directory = path.resolve(input.directory);
-    const bundles = await compileDirectoryPlugin(directory, this.daemonVersion, input.id);
+    const bundles = await compileDirectoryPlugin(
+      directory,
+      this.daemonVersion,
+      input.id,
+      this.dependencies.paseoHome,
+    );
     const { manifest } = bundles;
     if (!bundles.serverBundle) throw new Error(`Built-in plugin ${input.id} needs a server entry`);
     const loaded = await this.launchPlugin({
@@ -1068,7 +1080,12 @@ export class PluginRuntime {
     canPublish: () => boolean,
   ): Promise<LoadedPlugin> {
     const directory = path.resolve(configuredPath);
-    const bundles = await compileDirectoryPlugin(directory, this.daemonVersion);
+    const bundles = await compileDirectoryPlugin(
+      directory,
+      this.daemonVersion,
+      undefined,
+      this.dependencies.paseoHome,
+    );
     const { manifest } = bundles;
     if (!canPublish()) throw new Error(`Plugin start cancelled: ${pluginId}`);
     const serverBundle = bundles.serverBundle;

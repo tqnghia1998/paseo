@@ -1,5 +1,9 @@
 import { type ChildProcess, fork } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import fsPromises from "node:fs/promises";
 import { createRequire } from "node:module";
+import os from "node:os";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 import pLimit from "p-limit";
 import { ZodError } from "zod";
@@ -30,6 +34,10 @@ interface TaskResult {
 }
 
 const IDLE_TIMEOUT_MS = 1_000;
+const COMPILER_POOL_SIZE = 2;
+export const DEFAULT_COMPILE_CACHE_DIR = path.join(os.tmpdir(), "paseo-v8-compile-cache");
+const SHARED_PLUGIN_COMPILE_CACHE_DIR = path.join(os.tmpdir(), "paseo-plugin-compile-cache-v1");
+const PLUGIN_COMPILE_CACHE_SCHEMA = "v1";
 const source = import.meta.url.endsWith(".ts");
 const workerUrl = new URL(
   source ? "./compiler-worker.ts" : "./compiler-worker.js",
@@ -42,41 +50,62 @@ const workerExecArgv = source
 interface CompilerProcess {
   child: ChildProcess;
   exited: Promise<void>;
+  idleTimer: ReturnType<typeof setTimeout> | null;
+  retired: boolean;
 }
 
-// Reuse the process during a build batch, then release TypeScript's heap.
+// Reuse a small pool of processes during a build batch, then release TypeScript's heap.
 // esbuild starts a native child. Terminating a worker thread closes its libuv
 // loop before it can reap that child, leaving a zombie under the daemon PID.
 class PluginCompiler {
-  private readonly queue = pLimit(1);
-  private worker: CompilerProcess | null = null;
-  private idleTimer: ReturnType<typeof setTimeout> | null = null;
-  private stopping: Promise<unknown> = Promise.resolve();
+  private readonly queue = pLimit(COMPILER_POOL_SIZE);
+  private readonly idleWorkers: CompilerProcess[] = [];
+  private readonly activeWorkers = new Set<CompilerProcess>();
 
   run<T extends CompilerTask>(
     task: T,
     onLog?: (data: Record<string, unknown>, message: string) => void,
   ): Promise<TaskResult[T["kind"]]> {
     return this.queue(async () => {
-      if (this.idleTimer) clearTimeout(this.idleTimer);
-      this.idleTimer = null;
-      await this.stopping;
-      const worker = this.worker ?? this.startWorker();
+      const worker = this.acquireWorker();
       worker.child.ref();
       worker.child.channel?.ref();
       try {
         return await this.request<T>(worker, task, onLog);
       } finally {
-        if (this.worker === worker) {
-          worker.child.unref();
-          worker.child.channel?.unref();
-          this.idleTimer = setTimeout(() => this.stopWorker(worker), IDLE_TIMEOUT_MS);
-          this.idleTimer.unref();
-        } else {
-          await this.stopping;
-        }
+        this.releaseWorker(worker);
       }
     });
+  }
+
+  private acquireWorker(): CompilerProcess {
+    while (this.idleWorkers.length > 0) {
+      const candidate = this.idleWorkers.pop()!;
+      if (candidate.idleTimer) {
+        clearTimeout(candidate.idleTimer);
+        candidate.idleTimer = null;
+      }
+      if (!candidate.retired && candidate.child.connected) {
+        this.activeWorkers.add(candidate);
+        return candidate;
+      }
+    }
+    const created = this.startWorker();
+    this.activeWorkers.add(created);
+    return created;
+  }
+
+  private releaseWorker(worker: CompilerProcess): void {
+    this.activeWorkers.delete(worker);
+    if (worker.retired || !worker.child.connected) {
+      this.stopWorker(worker);
+      return;
+    }
+    worker.child.unref();
+    worker.child.channel?.unref();
+    worker.idleTimer = setTimeout(() => this.stopWorker(worker), IDLE_TIMEOUT_MS);
+    worker.idleTimer.unref();
+    this.idleWorkers.push(worker);
   }
 
   private startWorker(): CompilerProcess {
@@ -84,6 +113,10 @@ class PluginCompiler {
       execArgv: workerExecArgv,
       serialization: "advanced",
       stdio: ["ignore", "inherit", "inherit", "ipc"],
+      env: {
+        ...process.env,
+        NODE_COMPILE_CACHE: process.env.NODE_COMPILE_CACHE || DEFAULT_COMPILE_CACHE_DIR,
+      },
     });
     const exited = new Promise<void>((resolve) => {
       child.once("exit", () => resolve());
@@ -91,19 +124,20 @@ class PluginCompiler {
         if (child.pid === undefined) resolve();
       });
     });
-    const worker = { child, exited };
-    this.worker = worker;
+    const worker: CompilerProcess = { child, exited, idleTimer: null, retired: false };
     child.once("disconnect", () => this.stopWorker(worker));
     void exited.then(() => this.stopWorker(worker));
     return worker;
   }
 
   private stopWorker(worker: CompilerProcess): void {
-    if (this.worker !== worker) return;
-    this.worker = null;
-    if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = null;
-    this.stopping = worker.exited;
+    if (worker.retired) return;
+    worker.retired = true;
+    this.activeWorkers.delete(worker);
+    const idx = this.idleWorkers.indexOf(worker);
+    if (idx !== -1) this.idleWorkers.splice(idx, 1);
+    if (worker.idleTimer) clearTimeout(worker.idleTimer);
+    worker.idleTimer = null;
     // Close IPC so the compiler can finish any in-flight work and exit. Its
     // pipes close with it, ending esbuild's service.
     if (worker.child.connected) worker.child.disconnect();
@@ -169,6 +203,129 @@ export function compilePlugin(entries: Parameters<typeof build.compilePlugin>[0]
   return runCompilerTask({ kind: "entries", entries });
 }
 
-export function compileDirectoryPlugin(directory: string, version: string, builtinId?: string) {
-  return runCompilerTask({ kind: "directory", directory, version, builtinId });
+async function computePluginDirectoryCacheKey(
+  directory: string,
+  version: string,
+  builtinId?: string,
+): Promise<string> {
+  const canonical = await fsPromises.realpath(directory);
+  const hash = createHash("sha256");
+  hash.update(
+    `${PLUGIN_COMPILE_CACHE_SCHEMA}\0${version ?? ""}\0${builtinId ?? ""}\0${canonical}\0`,
+  );
+  const visit = async (relative: string): Promise<void> => {
+    const names = (await fsPromises.readdir(path.join(canonical, relative))).sort();
+    for (const name of names) {
+      if (name === ".git" || name === "node_modules") continue;
+      const child = relative ? path.join(relative, name) : name;
+      const target = path.join(canonical, child);
+      const stats = await fsPromises.lstat(target, { bigint: true });
+      const posix = child.split(path.sep).join("/");
+      if (stats.isDirectory()) {
+        hash.update(`D:${posix}\0`);
+        await visit(child);
+      } else if (stats.isSymbolicLink()) {
+        hash.update(`L:${posix}:${await fsPromises.readlink(target)}\0`);
+      } else {
+        hash.update(`F:${posix}:${stats.size}:${stats.mtimeNs}:${stats.ctimeNs}\0`);
+      }
+    }
+  };
+  await visit("");
+  return hash.digest("hex");
+}
+
+async function computePluginDirectoryContentKey(
+  directory: string,
+  version: string,
+  builtinId?: string,
+): Promise<string> {
+  const canonical = await fsPromises.realpath(directory);
+  const hash = createHash("sha256");
+  hash.update(`${PLUGIN_COMPILE_CACHE_SCHEMA}:content\0${version ?? ""}\0${builtinId ?? ""}\0`);
+  const visit = async (relative: string): Promise<void> => {
+    const names = (await fsPromises.readdir(path.join(canonical, relative))).sort();
+    for (const name of names) {
+      if (name === ".git" || name === "node_modules" || name === ".vibing-bundle.json") continue;
+      const child = relative ? path.join(relative, name) : name;
+      const target = path.join(canonical, child);
+      const stats = await fsPromises.lstat(target);
+      const posix = child.split(path.sep).join("/");
+      if (stats.isDirectory()) {
+        hash.update(`D:${posix}\0`);
+        await visit(child);
+      } else if (stats.isSymbolicLink()) {
+        hash.update(`L:${posix}:${await fsPromises.readlink(target)}\0`);
+      } else {
+        hash.update(`F:${posix}\0`);
+        hash.update(await fsPromises.readFile(target));
+        hash.update("\0");
+      }
+    }
+  };
+  await visit("");
+  return hash.digest("hex");
+}
+
+async function readCachedPluginBundles(filePath: string): Promise<TaskResult["directory"] | null> {
+  try {
+    const cached = JSON.parse(await fsPromises.readFile(filePath, "utf8")) as Partial<
+      TaskResult["directory"]
+    >;
+    if (
+      cached &&
+      typeof cached === "object" &&
+      cached.manifest &&
+      "serverBundle" in cached &&
+      "clientBundle" in cached
+    ) {
+      return cached as TaskResult["directory"];
+    }
+  } catch {}
+  return null;
+}
+
+async function writeCachedPluginBundles(
+  filePath: string,
+  compiled: TaskResult["directory"],
+): Promise<void> {
+  try {
+    await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+    const tempFile = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+    await fsPromises.writeFile(tempFile, JSON.stringify(compiled));
+    await fsPromises.rename(tempFile, filePath);
+  } catch {}
+}
+
+export async function compileDirectoryPlugin(
+  directory: string,
+  version: string,
+  builtinId?: string,
+  cacheHome?: string,
+): Promise<TaskResult["directory"]> {
+  let metaCacheFile: string | null = null;
+  if (cacheHome) {
+    try {
+      const metaKey = await computePluginDirectoryCacheKey(directory, version, builtinId);
+      metaCacheFile = path.join(cacheHome, ".plugin-compile-cache", `${metaKey}.json`);
+      const metaHit = await readCachedPluginBundles(metaCacheFile);
+      if (metaHit) return metaHit;
+    } catch {}
+  }
+  let sharedCacheFile: string | null = null;
+  if (cacheHome) {
+    try {
+      const contentKey = await computePluginDirectoryContentKey(directory, version, builtinId);
+      sharedCacheFile = path.join(SHARED_PLUGIN_COMPILE_CACHE_DIR, `${contentKey}.json`);
+      const sharedHit = await readCachedPluginBundles(sharedCacheFile);
+      if (sharedHit) {
+        if (metaCacheFile) await writeCachedPluginBundles(metaCacheFile, sharedHit);
+        return sharedHit;
+      }
+    } catch {}
+  }
+  const compiled = await runCompilerTask({ kind: "directory", directory, version, builtinId });
+  if (metaCacheFile) await writeCachedPluginBundles(metaCacheFile, compiled);
+  if (sharedCacheFile) await writeCachedPluginBundles(sharedCacheFile, compiled);
+  return compiled;
 }

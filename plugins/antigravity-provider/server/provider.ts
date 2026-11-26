@@ -302,6 +302,64 @@ export function createAntigravityProvider(): ProviderRegistration {
         unsubscribe: () => void;
       }
       let restrictedPromise: Promise<RestrictedRuntimeState> | null = null;
+      let restrictedIdleTimer: ReturnType<typeof setTimeout> | null = null;
+      const configuredIdleMs = Number(
+        (
+          request.launch?.env?.PASEO_IDLE_RUNTIME_TIMEOUT_MS ??
+          process.env.PASEO_IDLE_RUNTIME_TIMEOUT_MS ??
+          ""
+        ).trim(),
+      );
+      const restrictedIdleTimeoutMs =
+        Number.isSafeInteger(configuredIdleMs) && configuredIdleMs > 0
+          ? configuredIdleMs
+          : 3 * 60_000;
+
+      const clearRestrictedIdleTimer = () => {
+        if (restrictedIdleTimer !== null) {
+          clearTimeout(restrictedIdleTimer);
+          restrictedIdleTimer = null;
+        }
+      };
+
+      const closeRestrictedState = async (pending: Promise<RestrictedRuntimeState> | null) => {
+        if (!pending) return;
+        const state = await pending.catch(() => null);
+        if (!state) return;
+        try {
+          await state.connection.close();
+        } finally {
+          state.unsubscribe();
+          await rm(state.agentDir, { recursive: true, force: true }).catch(() => undefined);
+        }
+      };
+
+      const scheduleRestrictedIdleReap = () => {
+        clearRestrictedIdleTimer();
+        if (
+          closed ||
+          !restrictedPromise ||
+          restrictedSessions.size > 0 ||
+          pendingRestrictedOpens.size > 0
+        ) {
+          return;
+        }
+        restrictedIdleTimer = setTimeout(() => {
+          restrictedIdleTimer = null;
+          if (
+            closed ||
+            !restrictedPromise ||
+            restrictedSessions.size > 0 ||
+            pendingRestrictedOpens.size > 0
+          ) {
+            return;
+          }
+          const expiring = restrictedPromise;
+          restrictedPromise = null;
+          void closeRestrictedState(expiring);
+        }, restrictedIdleTimeoutMs);
+        restrictedIdleTimer.unref?.();
+      };
 
       const emit = (event: ProviderEvent) => {
         if (closed) return;
@@ -311,6 +369,7 @@ export function createAntigravityProvider(): ProviderRegistration {
       const unsubscribeBase = baseConnection.onEvent((event) => emit(event));
 
       const getRestrictedState = (): Promise<RestrictedRuntimeState> => {
+        clearRestrictedIdleTimer();
         if (restrictedPromise) return restrictedPromise;
         const init = (async (): Promise<RestrictedRuntimeState> => {
           const agentDir = await mkdtemp(path.join(tmpdir(), "paseo-antigravity-restricted-"));
@@ -372,9 +431,11 @@ export function createAntigravityProvider(): ProviderRegistration {
                   if (failedSessionId) {
                     pendingRestrictedOpens.delete(event.requestId);
                     restrictedSessions.delete(failedSessionId);
+                    scheduleRestrictedIdleReap();
                   }
                 } else if (event.type === "session.closed") {
                   restrictedSessions.delete(event.sessionId);
+                  scheduleRestrictedIdleReap();
                 }
                 emit(event);
               });
@@ -466,6 +527,7 @@ export function createAntigravityProvider(): ProviderRegistration {
             } catch (error) {
               pendingRestrictedOpens.delete(input.requestId);
               restrictedSessions.delete(input.sessionId);
+              scheduleRestrictedIdleReap();
               throw error;
             }
             return;
@@ -499,26 +561,16 @@ export function createAntigravityProvider(): ProviderRegistration {
         },
         close() {
           if (closePromise) return closePromise;
+          clearRestrictedIdleTimer();
           closed = true;
           closePromise = (async () => {
             const pendingRestricted = restrictedPromise;
+            restrictedPromise = null;
             try {
               await baseConnection.close();
             } finally {
               unsubscribeBase();
-              if (pendingRestricted) {
-                const state = await pendingRestricted.catch(() => null);
-                if (state) {
-                  try {
-                    await state.connection.close();
-                  } finally {
-                    state.unsubscribe();
-                    await rm(state.agentDir, { recursive: true, force: true }).catch(
-                      () => undefined,
-                    );
-                  }
-                }
-              }
+              await closeRestrictedState(pendingRestricted);
               restrictedSessions.clear();
               pendingRestrictedOpens.clear();
               listeners.clear();

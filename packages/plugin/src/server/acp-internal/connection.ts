@@ -72,21 +72,52 @@ interface AcpBoundarySession {
   mutationLane: Promise<void>;
 }
 
+const DEFAULT_SHARED_ACP_IDLE_TIMEOUT_MS = 3 * 60_000;
+
 interface NormalizedShareProcess {
   enabled: boolean;
   ignoredEnvKeys: ReadonlySet<string>;
   sharedEnv: Readonly<Record<string, string>>;
+  idleTimeoutMs: number;
+}
+
+function resolveSharedAcpIdleTimeoutMs(
+  configured: number | undefined,
+  launchEnv: Readonly<Record<string, string | undefined>> | undefined,
+): number {
+  if (Number.isSafeInteger(configured) && configured! > 0) return configured!;
+  const fromEnv = Number(
+    (
+      launchEnv?.PASEO_IDLE_RUNTIME_TIMEOUT_MS ??
+      process.env.PASEO_IDLE_RUNTIME_TIMEOUT_MS ??
+      ""
+    ).trim(),
+  );
+  return Number.isSafeInteger(fromEnv) && fromEnv > 0
+    ? fromEnv
+    : DEFAULT_SHARED_ACP_IDLE_TIMEOUT_MS;
 }
 
 function normalizeShareProcess(
   option: NonNullable<RunAcpProviderOptions["acpOptions"]>["shareProcess"],
+  launchEnv: Readonly<Record<string, string | undefined>> | undefined,
 ): NormalizedShareProcess {
-  if (!option) return { enabled: false, ignoredEnvKeys: new Set(), sharedEnv: {} };
-  if (option === true) return { enabled: true, ignoredEnvKeys: new Set(), sharedEnv: {} };
+  if (!option) {
+    return { enabled: false, ignoredEnvKeys: new Set(), sharedEnv: {}, idleTimeoutMs: 0 };
+  }
+  if (option === true) {
+    return {
+      enabled: true,
+      ignoredEnvKeys: new Set(),
+      sharedEnv: {},
+      idleTimeoutMs: resolveSharedAcpIdleTimeoutMs(undefined, launchEnv),
+    };
+  }
   return {
     enabled: true,
     ignoredEnvKeys: new Set(option.ignoredEnvKeys ?? []),
     sharedEnv: option.sharedEnv ?? {},
+    idleTimeoutMs: resolveSharedAcpIdleTimeoutMs(option.idleTimeoutMs, launchEnv),
   };
 }
 
@@ -122,12 +153,13 @@ export async function createAcpProviderConnection(
   if (!request.versions.includes(PROVIDER_PROTOCOL_VERSION)) {
     throw new Error(`ACP adapter requires provider protocol ${PROVIDER_PROTOCOL_VERSION}`);
   }
-  const shareConfig = normalizeShareProcess(options.acpOptions?.shareProcess);
+  const shareConfig = normalizeShareProcess(options.acpOptions?.shareProcess, request.launch?.env);
   const probe = await AcpTransport.start({
     options,
     launch: request.launch,
     env: shareConfig.enabled ? buildSharedProcessEnv(request.launch, shareConfig.sharedEnv) : {},
     shared: shareConfig.enabled,
+    idleTimeoutMs: shareConfig.idleTimeoutMs,
   });
   const supportedCapabilities: ProviderCapability[] = [...ADAPTER_CAPABILITIES];
   // A connector stream has no process of its own to wrap.
@@ -174,9 +206,12 @@ export async function createAcpProviderConnection(
     sharedTransportPromise: null,
   };
   if (shareEnabled) {
-    probe.setOnUnexpectedExit(() => {
+    const clearSharedIfCurrent = () => {
       if (state.sharedTransport === probe) state.sharedTransport = null;
-    });
+    };
+    probe.setOnUnexpectedExit(clearSharedIfCurrent);
+    probe.setOnIdleReap(clearSharedIfCurrent);
+    probe.scheduleIdleReap();
   }
 
   return {
@@ -260,6 +295,7 @@ interface AcpConnectionState {
 async function acquireSharedTransport(state: AcpConnectionState): Promise<AcpTransport> {
   if (state.isClosed()) throw new Error("ACP provider connection is closed");
   if (state.sharedTransport && !state.sharedTransport.isClosedOrFailed()) {
+    state.sharedTransport.clearIdleTimer();
     return state.sharedTransport;
   }
   if (state.sharedTransportPromise) return state.sharedTransportPromise;
@@ -268,6 +304,7 @@ async function acquireSharedTransport(state: AcpConnectionState): Promise<AcpTra
     launch: state.launch,
     env: buildSharedProcessEnv(state.launch, state.shareConfig.sharedEnv),
     shared: true,
+    idleTimeoutMs: state.shareConfig.idleTimeoutMs,
   })
     .then(async (transport) => {
       if (state.isClosed()) {
@@ -275,9 +312,12 @@ async function acquireSharedTransport(state: AcpConnectionState): Promise<AcpTra
         throw new Error("ACP provider connection is closed");
       }
       state.sharedTransport = transport;
-      transport.setOnUnexpectedExit(() => {
+      const clearSharedIfCurrent = () => {
         if (state.sharedTransport === transport) state.sharedTransport = null;
-      });
+      };
+      transport.setOnUnexpectedExit(clearSharedIfCurrent);
+      transport.setOnIdleReap(clearSharedIfCurrent);
+      transport.scheduleIdleReap();
       return transport;
     })
     .finally(() => {
@@ -615,6 +655,7 @@ interface StartTransportOptions {
   wrap?: readonly [string, ...string[]];
   signal?: AbortSignal;
   shared: boolean;
+  idleTimeoutMs?: number;
 }
 
 class AcpTransport {
@@ -643,6 +684,9 @@ class AcpTransport {
   private failed = false;
   private failureMessage: string | null = null;
   private onUnexpectedExit: (() => void) | null = null;
+  private onIdleReap: (() => void) | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly idleTimeoutMs: number;
 
   static async start(options: StartTransportOptions): Promise<AcpTransport> {
     options.signal?.throwIfAborted();
@@ -722,6 +766,7 @@ class AcpTransport {
     whenConnectorClosed: () => Promise<void> | null,
     private readonly options: StartTransportOptions,
   ) {
+    this.idleTimeoutMs = options.idleTimeoutMs ?? 0;
     this.shared = options.shared;
     this.child = child;
     this.closeConnector = closeConnector;
@@ -753,6 +798,39 @@ class AcpTransport {
     this.onUnexpectedExit = callback;
   }
 
+  setOnIdleReap(callback: () => void): void {
+    this.onIdleReap = callback;
+  }
+
+  clearIdleTimer(): void {
+    if (this.idleTimer !== null) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  private isIdle(): boolean {
+    return (
+      this.shared &&
+      !this.closing &&
+      !this.failed &&
+      this.runtimes.size === 0 &&
+      this.openingSessions === 0
+    );
+  }
+
+  scheduleIdleReap(): void {
+    this.clearIdleTimer();
+    if (!this.isIdle() || !(this.idleTimeoutMs > 0)) return;
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      if (!this.isIdle()) return;
+      this.onIdleReap?.();
+      void this.close().catch(() => undefined);
+    }, this.idleTimeoutMs);
+    this.idleTimer.unref?.();
+  }
+
   isClosedOrFailed(): boolean {
     return this.closing || this.failed;
   }
@@ -778,16 +856,21 @@ class AcpTransport {
   }
 
   registerRuntime(runtime: AcpRuntime): void {
+    this.clearIdleTimer();
     this.runtimes.add(runtime);
   }
 
   beginSessionOpen(): void {
+    this.clearIdleTimer();
     this.openingSessions += 1;
   }
 
   endSessionOpen(): void {
     this.openingSessions = Math.max(0, this.openingSessions - 1);
-    if (this.openingSessions === 0) this.pendingSessionUpdates.clear();
+    if (this.openingSessions === 0) {
+      this.pendingSessionUpdates.clear();
+      this.scheduleIdleReap();
+    }
   }
 
   bindNativeSession(nativeSessionId: string, runtime: AcpRuntime): void {
@@ -810,6 +893,7 @@ class AcpTransport {
       this.sessionUpdateWireSeqs.delete(nativeSessionId);
       this.pendingSessionUpdates.delete(nativeSessionId);
     }
+    this.scheduleIdleReap();
   }
 
   call<Value>(operation: Promise<Value>): Promise<Value> {
@@ -826,6 +910,7 @@ class AcpTransport {
 
   close(options?: { force?: boolean; timeoutMs?: number }): Promise<void> {
     if (this.closePromise) return this.closePromise;
+    this.clearIdleTimer();
     this.closing = true;
     const promise = this.closeInternal(options).catch((error) => {
       if (this.closePromise === promise) this.closePromise = null;
