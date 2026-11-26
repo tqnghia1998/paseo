@@ -102,7 +102,7 @@ The daemon owns Chief's single agent (`chief-session.ts`). Chief is a plain Full
 agent with source-owned provider, tool configuration and instructions. It works
 in `PASEO_CHIEF_WORKDIR` (the Vibing backend's `GIT_BASE_DIR`; without it the daemon falls back to
 `~/Documents/space-app-vibing`, created when missing) and runs on Codex GPT-6.2 Sol (high reasoning) in Full Access
-(`full-access`) by default in `config()`. A Chief saved on another provider starts over on it. Its system prompt is the Bots broker's prepared prompt
+(`full-access`) by default in `config()`, automatically falling back to the provider's default (or first) selectable model whenever the default or saved model is absent from the provider's available catalog (both on daemon connect/create/resume and in the live Chief frame). A Chief saved on another provider starts over on it. Its system prompt is the Bots broker's prepared prompt
 followed by `CHIEF_PERSONA`.
 The source config keeps host tools, folder and persona canonical at create/resume/rebind,
 while preserving the conversation's model, mode, thinking level and feature values. Private

@@ -1088,6 +1088,8 @@ export async function createPaseoDaemon(
     loadAgent: (id) => ensureAgentLoaded(id, { agentManager, agentStorage, logger }),
     prepareBot: (identity) => chiefBot.prepare(identity),
     deleteAgent: deleteAgentLikeUser,
+    listModels: (provider, dir) =>
+      providerSnapshotManager.listModels({ provider, cwd: dir, wait: true }),
   });
   const chiefHandoffs = createChiefHandoffs({
     agentStorage,

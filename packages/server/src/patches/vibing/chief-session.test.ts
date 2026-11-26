@@ -7,8 +7,12 @@ import {
   CHIEF_TOOLS,
   ChiefProviderUnavailableError,
   createChiefSession,
+  resolveChiefModelSelection,
 } from "./chief-session.js";
-import type { AgentSessionConfig } from "../../server/agent/agent-sdk-types.js";
+import type {
+  AgentModelDefinition,
+  AgentSessionConfig,
+} from "../../server/agent/agent-sdk-types.js";
 import type { CreateAgentOptions } from "../../server/agent/agent-manager.js";
 
 interface FixtureAgent {
@@ -35,20 +39,20 @@ afterEach(async () => {
   await Promise.all(homes.splice(0).map((home) => fs.rm(home, { recursive: true, force: true })));
 });
 
-async function fixture() {
+async function fixture(options: { listModels?: () => Promise<AgentModelDefinition[]> } = {}) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "chief-session-"));
   homes.push(home);
   const records = new Map<string, FixtureAgent>();
   const workspaces = new Map<string, FixtureWorkspace>();
   const manager = {
     createAgent: vi.fn(
-      async (config: AgentSessionConfig, id: string, options: CreateAgentOptions) => {
+      async (config: AgentSessionConfig, id: string, createOptions: CreateAgentOptions) => {
         const agent = {
           id,
           config,
           cwd: config.cwd,
           provider: config.provider,
-          ...options,
+          ...createOptions,
           capabilities: { supportsMcpServers: true },
         };
         records.set(id, agent);
@@ -97,6 +101,7 @@ async function fixture() {
     deleteAgent: vi.fn(async (id: string) => {
       records.delete(id);
     }),
+    ...(options.listModels ? { listModels: vi.fn(options.listModels) } : {}),
   };
   const service = createChiefSession(
     dependencies as unknown as Parameters<typeof createChiefSession>[0],
@@ -738,4 +743,162 @@ test("Chief uses endpoints exclusively for Vibing and reports coverage gaps", ()
   expect(CHIEF_PERSONA).toContain("Never use computer use");
   expect(CHIEF_PERSONA).toContain("report the missing endpoint or capability");
   expect(CHIEF_PERSONA).toContain("per-run");
+});
+
+test("resolveChiefModelSelection keeps available models and auto-reselects when unavailable", () => {
+  const routedModels: AgentModelDefinition[] = [
+    {
+      provider: "codex",
+      id: "hidden-model",
+      label: "Hidden",
+      isSelectable: false,
+      isDefault: true,
+    },
+    {
+      provider: "codex",
+      id: "relaydeck--gpt-6.2-sol",
+      label: "GPT-6.2 Sol (Relaydeck)",
+      aliases: ["relay-sol"],
+      thinkingOptions: [
+        { id: "medium", label: "Medium", isDefault: true },
+        { id: "high", label: "High" },
+      ],
+      defaultThinkingOptionId: "medium",
+    },
+    {
+      provider: "codex",
+      id: "quotahub-self--gpt-6.2-sol",
+      label: "GPT-6.2 Sol (QuotaHub)",
+      isDefault: true,
+      thinkingOptions: [{ id: "low", label: "Low", isDefault: true }],
+      defaultThinkingOptionId: "low",
+    },
+  ];
+
+  // Unavailable requested model falls back to the selectable provider default and reconciles thinking.
+  expect(resolveChiefModelSelection("gpt-6.2-sol", "high", routedModels)).toEqual({
+    model: "quotahub-self--gpt-6.2-sol",
+    thinkingOptionId: "low",
+  });
+
+  // Non-selectable models are treated as unavailable.
+  expect(resolveChiefModelSelection("hidden-model", "high", routedModels)).toEqual({
+    model: "quotahub-self--gpt-6.2-sol",
+    thinkingOptionId: "low",
+  });
+
+  // Exact IDs and aliases are preserved and canonicalized with valid thinking kept.
+  expect(resolveChiefModelSelection("relay-sol", "high", routedModels)).toEqual({
+    model: "relaydeck--gpt-6.2-sol",
+    thinkingOptionId: "high",
+  });
+
+  // Fallback with no thinking options clears an unsupported thinking level.
+  expect(
+    resolveChiefModelSelection("gpt-6.2-sol", "high", [
+      { provider: "codex", id: "plain-model", label: "Plain" },
+    ]),
+  ).toEqual({
+    model: "plain-model",
+    thinkingOptionId: undefined,
+  });
+
+  // Empty or missing catalog leaves requested settings untouched.
+  expect(resolveChiefModelSelection("gpt-6.2-sol", "high", [])).toEqual({
+    model: "gpt-6.2-sol",
+    thinkingOptionId: "high",
+  });
+});
+
+test("first connect auto-reselects a valid model when the hardcoded default is unavailable", async () => {
+  const models: AgentModelDefinition[] = [
+    {
+      provider: "codex",
+      id: "relaydeck--gpt-6.2-sol",
+      label: "GPT-6.2 Sol (Relaydeck)",
+      thinkingOptions: [{ id: "high", label: "High" }],
+    },
+    {
+      provider: "codex",
+      id: "quotahub-self--gpt-6.2-sol",
+      label: "GPT-6.2 Sol (QuotaHub)",
+      isDefault: true,
+      thinkingOptions: [
+        { id: "medium", label: "Medium", isDefault: true },
+        { id: "high", label: "High" },
+      ],
+      defaultThinkingOptionId: "medium",
+    },
+  ];
+  const { service, manager } = await fixture({ listModels: async () => models });
+  await service.connect(URL_A);
+  expect(manager.createAgent).toHaveBeenCalledTimes(1);
+  expect(manager.createAgent.mock.calls[0]![0]).toMatchObject({
+    provider: "codex",
+    model: "quotahub-self--gpt-6.2-sol",
+    thinkingOptionId: "high",
+  });
+});
+
+test("reconnect auto-reselects a valid model when the saved model disappears from the catalog", async () => {
+  let available: AgentModelDefinition[] = [
+    {
+      provider: "codex",
+      id: "relaydeck--gpt-6.2-sol",
+      label: "GPT-6.2 Sol (Relaydeck)",
+      thinkingOptions: [{ id: "high", label: "High" }],
+    },
+    {
+      provider: "codex",
+      id: "quotahub-self--gpt-6.2-sol",
+      label: "GPT-6.2 Sol (QuotaHub)",
+      isDefault: true,
+      thinkingOptions: [{ id: "medium", label: "Medium", isDefault: true }],
+      defaultThinkingOptionId: "medium",
+    },
+  ];
+  const { service, records, manager } = await fixture({ listModels: async () => available });
+  const first = await service.connect(URL_A);
+  const agent = records.get(first.agentId)!;
+  agent.config = { ...agent.config, model: "relaydeck--gpt-6.2-sol", thinkingOptionId: "high" };
+
+  // While the model is still available, reconnect keeps it without reloading.
+  await service.connect(URL_A);
+  expect(manager.reloadAgentSession).not.toHaveBeenCalled();
+  expect(agent.config.model).toBe("relaydeck--gpt-6.2-sol");
+
+  // Once Relaydeck disappears from the catalog, reconnect reloads onto the valid default.
+  available = available.filter((model) => model.id !== "relaydeck--gpt-6.2-sol");
+  await service.connect(URL_A);
+  expect(manager.reloadAgentSession).toHaveBeenCalledTimes(1);
+  expect(agent.config).toMatchObject({
+    model: "quotahub-self--gpt-6.2-sol",
+    thinkingOptionId: "medium",
+  });
+
+  // After connect completes, seal does not retain a stale catalog and allows newly chosen models.
+  const sealedAfterConnect = service.seal(first.agentId, {
+    ...agent.config,
+    model: "brand-new-model",
+    thinkingOptionId: "xhigh",
+  });
+  expect(sealedAfterConnect).toMatchObject({
+    model: "brand-new-model",
+    thinkingOptionId: "xhigh",
+  });
+});
+
+test("a failing model lookup does not block Chief from connecting", async () => {
+  const { service, manager } = await fixture({
+    listModels: async () => {
+      throw new Error("catalog offline");
+    },
+  });
+  await service.connect(URL_A);
+  expect(manager.createAgent).toHaveBeenCalledTimes(1);
+  expect(manager.createAgent.mock.calls[0]![0]).toMatchObject({
+    provider: "codex",
+    model: "gpt-6.2-sol",
+    thinkingOptionId: "high",
+  });
 });

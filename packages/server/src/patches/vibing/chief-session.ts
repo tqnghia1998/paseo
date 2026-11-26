@@ -7,7 +7,11 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import type { AgentManager, ManagedAgent } from "../../server/agent/agent-manager.js";
-import type { AgentSessionConfig } from "../../server/agent/agent-sdk-types.js";
+import {
+  filterSelectableAgentModels,
+  type AgentModelDefinition,
+  type AgentSessionConfig,
+} from "../../server/agent/agent-sdk-types.js";
 import type { AgentStorage } from "../../server/agent/agent-storage.js";
 import type { WorkspaceRegistry } from "../../server/workspace-registry.js";
 import { CHIEF_BOT_ID, CHIEF_BOT_TOOLS } from "./chief-bot.js";
@@ -36,6 +40,62 @@ const CHIEF_PROVIDER = "codex";
 const CHIEF_MODEL = "gpt-6.2-sol";
 const CHIEF_THINKING = "high";
 const CHIEF_MODE = "full-access";
+
+function resolveThinkingForModel(
+  model: AgentModelDefinition,
+  requestedThinking: string | undefined,
+  modelChanged: boolean,
+): string | undefined {
+  const options = model.thinkingOptions;
+  if (!options || options.length === 0) {
+    if (options !== undefined || modelChanged) return undefined;
+    return requestedThinking;
+  }
+  const trimmed = requestedThinking?.trim();
+  if (trimmed && options.some((option) => option.id === trimmed)) {
+    return trimmed;
+  }
+  return (
+    model.defaultThinkingOptionId ??
+    options.find((option) => option.isDefault)?.id ??
+    options[0]?.id
+  );
+}
+
+/**
+ * Keeps the requested model when it is in the provider's selectable catalog (resolving
+ * aliases to canonical IDs); otherwise auto-reselects the provider's default or first
+ * selectable model and reconciles thinking level against that model's options.
+ */
+export function resolveChiefModelSelection(
+  requestedModel: string | undefined,
+  requestedThinking: string | undefined,
+  availableModels: readonly AgentModelDefinition[] | null | undefined,
+): { model: string | undefined; thinkingOptionId: string | undefined } {
+  const selectable = filterSelectableAgentModels(
+    availableModels ? [...availableModels] : undefined,
+  );
+  if (selectable.length === 0) {
+    return { model: requestedModel, thinkingOptionId: requestedThinking };
+  }
+  const trimmed = requestedModel?.trim();
+  const matched = trimmed
+    ? (selectable.find((model) => model.id === trimmed) ??
+      selectable.find((model) => model.aliases?.includes(trimmed)) ??
+      null)
+    : null;
+  if (matched) {
+    return {
+      model: matched.id,
+      thinkingOptionId: resolveThinkingForModel(matched, requestedThinking, false),
+    };
+  }
+  const fallback = selectable.find((model) => model.isDefault) ?? selectable[0]!;
+  return {
+    model: fallback.id,
+    thinkingOptionId: resolveThinkingForModel(fallback, requestedThinking, true),
+  };
+}
 
 const NAVIGATION_CHIEF_TOOLS = ["list_apps", "list_workspaces", "open_workspace"] as const;
 const HANDOFF_CHIEF_TOOLS = [
@@ -143,6 +203,8 @@ interface Dependencies {
   prepareBot(identity: { agentId: string; cwd: string }): Promise<string>;
   /** Permanently removes an agent and its history, like the user's own Delete. */
   deleteAgent(id: string): Promise<void>;
+  /** Selectable models currently advertised by a provider; used to fall back when unavailable. */
+  listModels?(provider: string, cwd: string): Promise<AgentModelDefinition[]>;
 }
 
 /** Private session state grants the managed identity; recovery markers only deny resumption. */
@@ -162,6 +224,7 @@ export function createChiefSession(deps: Dependencies) {
   let connecting: Promise<ChiefDescriptor> | null = null;
   let restarting: Promise<ChiefDescriptor> | null = null;
   let botPrompt: string | null = null;
+  let activeConnectModels: AgentModelDefinition[] | null = null;
 
   function privateMetadata(metadata: Stats) {
     return (
@@ -199,10 +262,13 @@ export function createChiefSession(deps: Dependencies) {
   function config(url = currentUrl): AgentSessionConfig {
     if (!state || !url) throw new Error("Chief session is not initialized");
     if (botPrompt === null) throw new Error("Chief Bot infrastructure unavailable");
+    const resolved = resolveChiefModelSelection(CHIEF_MODEL, CHIEF_THINKING, activeConnectModels);
     return {
       provider: CHIEF_PROVIDER,
-      model: CHIEF_MODEL,
-      thinkingOptionId: CHIEF_THINKING,
+      ...(resolved.model !== undefined ? { model: resolved.model } : {}),
+      ...(resolved.thinkingOptionId !== undefined
+        ? { thinkingOptionId: resolved.thinkingOptionId }
+        : {}),
       // Codex's "Full Access": Chief is a plain agent, not a sealed one.
       modeId: CHIEF_MODE,
       cwd,
@@ -243,13 +309,23 @@ export function createChiefSession(deps: Dependencies) {
     if (state?.retired.includes(id)) throw new Error("Chief unavailable");
     if (!state || state.agentId !== id) return null;
     if (state.state === "removed") throw new Error("Chief unavailable");
-    return {
+    const resolved = resolveChiefModelSelection(
+      candidate.model,
+      candidate.thinkingOptionId,
+      activeConnectModels,
+    );
+    const next: AgentSessionConfig = {
       ...config(),
-      model: candidate.model,
-      modeId: candidate.modeId,
-      thinkingOptionId: candidate.thinkingOptionId,
-      providerOptions: candidate.providerOptions,
     };
+    if (resolved.model !== undefined) next.model = resolved.model;
+    else delete next.model;
+    if (candidate.modeId !== undefined) next.modeId = candidate.modeId;
+    else delete next.modeId;
+    if (resolved.thinkingOptionId !== undefined) next.thinkingOptionId = resolved.thinkingOptionId;
+    else delete next.thinkingOptionId;
+    if (candidate.providerOptions !== undefined) next.providerOptions = candidate.providerOptions;
+    else delete next.providerOptions;
+    return next;
   }
 
   async function validateRoot() {
@@ -411,27 +487,41 @@ export function createChiefSession(deps: Dependencies) {
       throw new Error("Chief history was removed");
     }
     await ensureWorkspace();
-    await requireProvider(config().provider);
-    const live = deps.agentManager.getAgent(identity.agentId);
-    if (live) {
-      const next = seal(live.id, live.config);
-      if (!next) throw new Error("Chief authority changed");
-      if (!isDeepStrictEqual(stripInternalPaseoMcpServer(live.config), next)) {
-        await deps.agentManager.reloadAgentSession(live.id, next);
+    await requireProvider(CHIEF_PROVIDER);
+    let connectModels: AgentModelDefinition[] | null = null;
+    if (deps.listModels) {
+      try {
+        connectModels = await deps.listModels(CHIEF_PROVIDER, cwd);
+      } catch {
+        connectModels = null;
       }
     }
-    const agent = record
-      ? await deps.loadAgent(identity.agentId)
-      : await deps.agentManager.createAgent(config(), identity.agentId, {
-          workspaceId: identity.workspaceId,
-          background: true,
-          labels: {
-            "paseo-chief.policy": "chief-v1",
-            "paseo-bots.bot": CHIEF_BOT_ID,
-          },
-          initialTitle: "Vibing Chief",
-        });
-    verifyAgent(agent);
+    activeConnectModels = connectModels;
+    let agent: ManagedAgent;
+    try {
+      const live = deps.agentManager.getAgent(identity.agentId);
+      if (live) {
+        const next = seal(live.id, live.config);
+        if (!next) throw new Error("Chief authority changed");
+        if (!isDeepStrictEqual(stripInternalPaseoMcpServer(live.config), next)) {
+          await deps.agentManager.reloadAgentSession(live.id, next);
+        }
+      }
+      agent = record
+        ? await deps.loadAgent(identity.agentId)
+        : await deps.agentManager.createAgent(config(), identity.agentId, {
+            workspaceId: identity.workspaceId,
+            background: true,
+            labels: {
+              "paseo-chief.policy": "chief-v1",
+              "paseo-bots.bot": CHIEF_BOT_ID,
+            },
+            initialTitle: "Vibing Chief",
+          });
+      verifyAgent(agent);
+    } finally {
+      activeConnectModels = null;
+    }
     await deps.agentManager.updateAgentMetadata(agent.id, {
       labels: {
         "paseo-bots.bot": CHIEF_BOT_ID,

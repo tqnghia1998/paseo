@@ -6,6 +6,7 @@ import { NativeBotChat } from "./bot-chat";
 import { useChiefActivityReport } from "./chief-activity";
 import { getChiefHandshake, useChiefState } from "./chief-host";
 import type { ChiefHandshake } from "./chief-handshake";
+import { ChiefModelAutoReselect } from "./chief-model-fallback";
 import type { ChiefSession } from "./chief-session";
 import { verifyChiefAgent } from "./chief-verify";
 
@@ -86,6 +87,12 @@ function ChiefNativeChat({
   });
   return (
     <View style={styles.root}>
+      <ChiefModelAutoReselect
+        serverId={session.serverId}
+        agentId={session.agentId}
+        cwd={session.cwd}
+        active={active}
+      />
       <NativeBotChat
         serverId={session.serverId}
         botId="vibing-chief"
