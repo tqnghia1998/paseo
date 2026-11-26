@@ -1,7 +1,7 @@
 # better-paseo
 
 Bundled from [RoundRedDot/better-paseo](https://github.com/RoundRedDot/better-paseo) at
-`127d8c7ae5839d89659d461e089b8bcb04df952e` (version 1.7.0, MIT).
+`cf97c28f093e7ebf860ab0655456e53abac60f74` (version 1.7.0, MIT).
 
 Regenerate with `node scripts/vendor-community-plugins.mjs better-paseo` in the Paseo fork.
 Generated code uses the host SDK, React, React Native, React Query and Zod.

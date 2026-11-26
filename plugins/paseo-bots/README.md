@@ -1,7 +1,7 @@
 # paseo-bots
 
 Bundled from [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) at
-`ae406719e8ca22f7d49f377150b8de04e7f1d2f0` (version 0.3.1, MIT).
+`3a85a8d7f0340fff46376c6b202e818a33efb3f1` (version 0.3.1, MIT).
 
 Regenerate with `node scripts/vendor-community-plugins.mjs paseo-bots` in the Paseo fork.
 Generated code uses the host SDK, React, React Native, React Query and Zod.
