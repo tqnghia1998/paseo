@@ -72,6 +72,49 @@ interface AcpBoundarySession {
   mutationLane: Promise<void>;
 }
 
+interface NormalizedShareProcess {
+  enabled: boolean;
+  ignoredEnvKeys: ReadonlySet<string>;
+  sharedEnv: Readonly<Record<string, string>>;
+}
+
+function normalizeShareProcess(
+  option: NonNullable<RunAcpProviderOptions["acpOptions"]>["shareProcess"],
+): NormalizedShareProcess {
+  if (!option) return { enabled: false, ignoredEnvKeys: new Set(), sharedEnv: {} };
+  if (option === true) return { enabled: true, ignoredEnvKeys: new Set(), sharedEnv: {} };
+  return {
+    enabled: true,
+    ignoredEnvKeys: new Set(option.ignoredEnvKeys ?? []),
+    sharedEnv: option.sharedEnv ?? {},
+  };
+}
+
+function buildSharedProcessEnv(
+  launch: ProviderLaunch | undefined,
+  sharedEnv: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(sharedEnv)) {
+    if (launch?.env[key] === undefined) result[key] = value;
+  }
+  return result;
+}
+
+function canUseSharedProcess(
+  env: Readonly<Record<string, string>>,
+  launch: ProviderLaunch | undefined,
+  share: NormalizedShareProcess,
+): boolean {
+  if (!share.enabled) return false;
+  for (const [key, value] of Object.entries(env)) {
+    if (share.ignoredEnvKeys.has(key)) continue;
+    if (launch?.env[key] === value) continue;
+    return false;
+  }
+  return true;
+}
+
 export async function createAcpProviderConnection(
   options: RunAcpProviderOptions,
   request: ProviderConnectRequest,
@@ -79,12 +122,12 @@ export async function createAcpProviderConnection(
   if (!request.versions.includes(PROVIDER_PROTOCOL_VERSION)) {
     throw new Error(`ACP adapter requires provider protocol ${PROVIDER_PROTOCOL_VERSION}`);
   }
-  const probe = await AcpRuntime.start({
+  const shareConfig = normalizeShareProcess(options.acpOptions?.shareProcess);
+  const probe = await AcpTransport.start({
     options,
     launch: request.launch,
-    boundarySessionId: "capability-probe",
-    env: {},
-    emit: () => undefined,
+    env: shareConfig.enabled ? buildSharedProcessEnv(request.launch, shareConfig.sharedEnv) : {},
+    shared: shareConfig.enabled,
   });
   const supportedCapabilities: ProviderCapability[] = [...ADAPTER_CAPABILITIES];
   // A connector stream has no process of its own to wrap.
@@ -101,7 +144,11 @@ export async function createAcpProviderConnection(
   if (options.acpOptions?.deferTurnOnRunningTools) {
     supportedCapabilities.push("prompt.steer");
   }
-  await probe.close();
+  const shareEnabled =
+    shareConfig.enabled && probe.agentCapabilities.sessionCapabilities?.close !== undefined;
+  if (!shareEnabled) {
+    await probe.close();
+  }
   const capabilities = negotiateProviderCapabilities(request.capabilities, supportedCapabilities);
   const listeners = new Set<(event: ProviderEvent) => void>();
   const sessions = new Map<string, AcpBoundarySession>();
@@ -122,7 +169,15 @@ export async function createAcpProviderConnection(
     sessions,
     emit,
     isClosed: () => closed,
+    shareConfig: shareEnabled ? shareConfig : { ...shareConfig, enabled: false },
+    sharedTransport: shareEnabled ? probe : null,
+    sharedTransportPromise: null,
   };
+  if (shareEnabled) {
+    probe.setOnUnexpectedExit(() => {
+      if (state.sharedTransport === probe) state.sharedTransport = null;
+    });
+  }
 
   return {
     version: PROVIDER_PROTOCOL_VERSION,
@@ -172,6 +227,17 @@ export async function createAcpProviderConnection(
         const active = [...sessions.values()];
         sessions.clear();
         await Promise.all(active.map(({ runtime }) => runtime.closeSession()));
+        const pendingShared = state.sharedTransportPromise;
+        const currentShared = state.sharedTransport;
+        state.sharedTransport = null;
+        state.sharedTransportPromise = null;
+        const transportsToClose = new Set<AcpTransport>();
+        if (currentShared) transportsToClose.add(currentShared);
+        if (pendingShared) {
+          const started = await pendingShared.catch(() => null);
+          if (started) transportsToClose.add(started);
+        }
+        await Promise.all([...transportsToClose].map((transport) => transport.close()));
         listeners.clear();
       })();
       return closePromise;
@@ -186,6 +252,39 @@ interface AcpConnectionState {
   sessions: Map<string, AcpBoundarySession>;
   emit(event: ProviderEvent): void;
   isClosed(): boolean;
+  shareConfig: NormalizedShareProcess;
+  sharedTransport: AcpTransport | null;
+  sharedTransportPromise: Promise<AcpTransport> | null;
+}
+
+async function acquireSharedTransport(state: AcpConnectionState): Promise<AcpTransport> {
+  if (state.isClosed()) throw new Error("ACP provider connection is closed");
+  if (state.sharedTransport && !state.sharedTransport.isClosedOrFailed()) {
+    return state.sharedTransport;
+  }
+  if (state.sharedTransportPromise) return state.sharedTransportPromise;
+  const starting = AcpTransport.start({
+    options: state.options,
+    launch: state.launch,
+    env: buildSharedProcessEnv(state.launch, state.shareConfig.sharedEnv),
+    shared: true,
+  })
+    .then(async (transport) => {
+      if (state.isClosed()) {
+        await transport.close();
+        throw new Error("ACP provider connection is closed");
+      }
+      state.sharedTransport = transport;
+      transport.setOnUnexpectedExit(() => {
+        if (state.sharedTransport === transport) state.sharedTransport = null;
+      });
+      return transport;
+    })
+    .finally(() => {
+      if (state.sharedTransportPromise === starting) state.sharedTransportPromise = null;
+    });
+  state.sharedTransportPromise = starting;
+  return starting;
 }
 
 function validateAdmission(
@@ -304,7 +403,18 @@ async function withRequestRuntime<Result>(
   },
 ): Promise<void> {
   const { signal } = request;
-  const runtime = await AcpRuntime.start({
+  signal.throwIfAborted();
+  const transport = state.shareConfig.enabled
+    ? await acquireSharedTransport(state)
+    : await AcpTransport.start({
+        options: state.options,
+        launch: state.launch,
+        cwd: request.cwd,
+        env: {},
+        shared: false,
+        signal,
+      });
+  const runtime = new AcpRuntime(transport, {
     options: state.options,
     launch: state.launch,
     boundarySessionId: request.boundarySessionId,
@@ -387,7 +497,19 @@ async function openSession(
 ): Promise<void> {
   if (state.sessions.has(input.sessionId))
     throw new Error(`Session already exists: ${input.sessionId}`);
-  const runtime = await AcpRuntime.start({
+  const useShared =
+    !input.config.wrap && canUseSharedProcess(input.config.env, state.launch, state.shareConfig);
+  const transport = useShared
+    ? await acquireSharedTransport(state)
+    : await AcpTransport.start({
+        options: state.options,
+        launch: state.launch,
+        cwd: input.config.cwd,
+        env: input.config.env,
+        wrap: input.config.wrap,
+        shared: false,
+      });
+  const runtime = new AcpRuntime(transport, {
     options: state.options,
     launch: state.launch,
     boundarySessionId: input.sessionId,
@@ -410,7 +532,7 @@ async function openSession(
     });
     state.emit({ type: "session.ready", requestId: input.requestId, sessionId: input.sessionId });
   } catch (error) {
-    await runtime.close();
+    await runtime.closeSession();
     throw error;
   }
 }
@@ -485,11 +607,384 @@ interface AcpToolCallState {
   presentation: AcpToolCallSnapshot;
 }
 
-class AcpRuntime {
+interface StartTransportOptions {
+  launch?: ProviderLaunch;
+  options: RunAcpProviderOptions;
+  cwd?: string;
+  env: Readonly<Record<string, string>>;
+  wrap?: readonly [string, ...string[]];
+  signal?: AbortSignal;
+  shared: boolean;
+}
+
+class AcpTransport {
   readonly connection: ClientSideConnection;
   agentCapabilities: AgentCapabilities = {};
-  nativeSessionId = "";
+  readonly shared: boolean;
   private readonly child: ChildProcessWithoutNullStreams | null;
+  private readonly closeConnector: (options?: {
+    force?: boolean;
+    timeoutMs?: number;
+  }) => Promise<void>;
+  private readonly whenConnectorClosedFn: () => Promise<void> | null;
+  private readonly runtimes = new Set<AcpRuntime>();
+  private readonly sessionsByNativeId = new Map<string, AcpRuntime>();
+  private readonly sessionUpdateWireSeqs = new Map<string, number[]>();
+  private readonly fallbackUpdateWireSeqs: number[] = [];
+  private readonly pendingSessionUpdates = new Map<
+    string,
+    Array<{ notification: SessionNotification; wireSeq: number }>
+  >();
+  private readonly promptRequests = new Map<string | number, string>();
+  private openingSessions = 0;
+  private incomingWireSeq = 0;
+  private closing = false;
+  private closePromise: Promise<void> | null = null;
+  private failed = false;
+  private failureMessage: string | null = null;
+  private onUnexpectedExit: (() => void) | null = null;
+
+  static async start(options: StartTransportOptions): Promise<AcpTransport> {
+    options.signal?.throwIfAborted();
+    let child: ChildProcessWithoutNullStreams | null = null;
+    let spawnFailure: Promise<never> | null = null;
+    let stream: Stream;
+    let closeConnector: (options?: {
+      force?: boolean;
+      timeoutMs?: number;
+    }) => Promise<void> = async () => {};
+    let whenConnectorClosed: () => Promise<void> | null = () => null;
+    let onPartialWireRead: (() => void) | null = null;
+    if (options.options.command) {
+      // COMPAT(pluginProviderLaunch): added in v0.10.0, remove after 2027-03-29 once plugin host floor >= v0.10.0.
+      // Standalone callers and older hosts do not send a daemon-resolved launch.
+      const launch = options.launch ?? {
+        command: options.options.command[0],
+        args: options.options.command.slice(1),
+        env: process.env,
+      };
+      child = spawnProcess(launch.command, launch.args, {
+        wrap: options.wrap,
+        cwd: options.cwd,
+        env: { ...launch.env, ...options.env },
+        stdio: "pipe",
+      });
+      spawnFailure = new Promise<never>((_resolve, reject) => child!.once("error", reject));
+      child.stderr.on("data", () => undefined);
+      const output = Writable.toWeb(child.stdin) as unknown as Parameters<typeof ndJsonStream>[0];
+      const rawInput = Readable.toWeb(child.stdout) as unknown as ReadableStream<Uint8Array>;
+      const input = observePartialWireReads(rawInput, () => onPartialWireRead?.()) as Parameters<
+        typeof ndJsonStream
+      >[1];
+      stream = ndJsonStream(output, input);
+    } else {
+      if (options.wrap) throw new Error("An ACP connector cannot run behind a launch wrap");
+      const owned = ownConnectorStream(await options.options.connector());
+      stream = owned.stream;
+      closeConnector = owned.close;
+      whenConnectorClosed = owned.whenClosed;
+    }
+    const transport = new AcpTransport(stream, child, closeConnector, whenConnectorClosed, options);
+    onPartialWireRead = () => transport.notePartialWireRead();
+    const closeOnAbort = () => void transport.close().catch(() => undefined);
+    options.signal?.addEventListener("abort", closeOnAbort, { once: true });
+    try {
+      const initialize = withTimeout(
+        transport.call(
+          transport.connection.initialize({
+            protocolVersion: PROTOCOL_VERSION,
+            clientCapabilities: {},
+            clientInfo: { name: "paseo", version: "1" },
+          }),
+        ),
+        options.options.acpOptions?.startupTimeoutMs ?? 10_000,
+        `ACP provider ${options.options.id} did not initialize`,
+      );
+      const initialized = spawnFailure
+        ? await Promise.race([initialize, spawnFailure])
+        : await initialize;
+      options.signal?.throwIfAborted();
+      transport.agentCapabilities = initialized.agentCapabilities ?? {};
+      return transport;
+    } catch (error) {
+      await transport.close();
+      options.signal?.throwIfAborted();
+      throw error;
+    } finally {
+      options.signal?.removeEventListener("abort", closeOnAbort);
+    }
+  }
+
+  private constructor(
+    stream: Stream,
+    child: ChildProcessWithoutNullStreams | null,
+    closeConnector: (options?: { force?: boolean; timeoutMs?: number }) => Promise<void>,
+    whenConnectorClosed: () => Promise<void> | null,
+    private readonly options: StartTransportOptions,
+  ) {
+    this.shared = options.shared;
+    this.child = child;
+    this.closeConnector = closeConnector;
+    this.whenConnectorClosedFn = whenConnectorClosed;
+    const client: Client = {
+      requestPermission: (request) => this.handlePermissionRequest(request),
+      sessionUpdate: (notification) => this.handleSessionUpdate(notification),
+    };
+    this.connection = new ClientSideConnection(
+      () => client,
+      routeMessages(
+        stream,
+        (method, params) => this.handleVendorNotification(method, params),
+        (message) => this.observeIncomingMessage(message),
+        (message) => this.observeOutgoingMessage(message),
+      ),
+    );
+    if (!child) void this.connection.closed.then(() => this.handleUnexpectedTransportClose());
+    child?.on("error", (error) => {
+      this.handleProcessFailure(describeError(error));
+    });
+    child?.once("close", (code, signal) => {
+      if (this.closing || this.failed) return;
+      this.handleProcessFailure(`ACP process exited (${signal ?? code ?? "unknown"})`);
+    });
+  }
+
+  setOnUnexpectedExit(callback: () => void): void {
+    this.onUnexpectedExit = callback;
+  }
+
+  isClosedOrFailed(): boolean {
+    return this.closing || this.failed;
+  }
+
+  isFailed(): boolean {
+    return this.failed;
+  }
+
+  getFailureMessage(): string | null {
+    return this.failureMessage;
+  }
+
+  currentWireSeq(): number {
+    return this.incomingWireSeq;
+  }
+
+  whenConnectorClosed(): Promise<void> | null {
+    return this.whenConnectorClosedFn();
+  }
+
+  activeRuntimeCount(): number {
+    return this.runtimes.size;
+  }
+
+  registerRuntime(runtime: AcpRuntime): void {
+    this.runtimes.add(runtime);
+  }
+
+  beginSessionOpen(): void {
+    this.openingSessions += 1;
+  }
+
+  endSessionOpen(): void {
+    this.openingSessions = Math.max(0, this.openingSessions - 1);
+    if (this.openingSessions === 0) this.pendingSessionUpdates.clear();
+  }
+
+  bindNativeSession(nativeSessionId: string, runtime: AcpRuntime): void {
+    this.sessionsByNativeId.set(nativeSessionId, runtime);
+    const buffered = this.pendingSessionUpdates.get(nativeSessionId);
+    if (buffered) {
+      this.pendingSessionUpdates.delete(nativeSessionId);
+      for (const { notification, wireSeq } of buffered) {
+        void runtime.enqueueSessionUpdate(notification, wireSeq);
+      }
+    }
+  }
+
+  unbindRuntime(runtime: AcpRuntime, nativeSessionId: string): void {
+    this.runtimes.delete(runtime);
+    if (nativeSessionId) {
+      if (this.sessionsByNativeId.get(nativeSessionId) === runtime) {
+        this.sessionsByNativeId.delete(nativeSessionId);
+      }
+      this.sessionUpdateWireSeqs.delete(nativeSessionId);
+      this.pendingSessionUpdates.delete(nativeSessionId);
+    }
+  }
+
+  call<Value>(operation: Promise<Value>): Promise<Value> {
+    if (this.connection.signal.aborted) {
+      return Promise.reject(new Error("ACP transport is closed"));
+    }
+    return Promise.race([
+      operation,
+      this.connection.closed.then(() => {
+        throw new Error("ACP transport closed unexpectedly");
+      }),
+    ]);
+  }
+
+  close(options?: { force?: boolean; timeoutMs?: number }): Promise<void> {
+    if (this.closePromise) return this.closePromise;
+    this.closing = true;
+    const promise = this.closeInternal(options).catch((error) => {
+      if (this.closePromise === promise) this.closePromise = null;
+      throw error;
+    });
+    this.closePromise = promise;
+    return promise;
+  }
+
+  private async closeInternal(options?: { force?: boolean; timeoutMs?: number }): Promise<void> {
+    this.promptRequests.clear();
+    this.pendingSessionUpdates.clear();
+    await this.closeConnector(options);
+    const child = this.child;
+    if (!child || this.failed) return;
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
+    await terminateProcess(child, "SIGTERM");
+    if (await settlesWithin(closed, 1_000)) return;
+    await terminateProcess(child);
+    if (!(await settlesWithin(closed, 1_000))) {
+      throw new Error(`ACP provider ${this.options.options.id} did not terminate after SIGKILL`);
+    }
+  }
+
+  private singleRuntime(): AcpRuntime | undefined {
+    if (this.shared || this.runtimes.size !== 1) return undefined;
+    return this.runtimes.values().next().value;
+  }
+
+  private observeOutgoingMessage(message: unknown): void {
+    if (typeof message !== "object" || message === null) return;
+    const record = message as Record<string, unknown>;
+    if (
+      record.method === "session/prompt" &&
+      (typeof record.id === "string" || typeof record.id === "number") &&
+      typeof record.params === "object" &&
+      record.params !== null &&
+      typeof (record.params as Record<string, unknown>).sessionId === "string"
+    ) {
+      this.promptRequests.set(
+        record.id,
+        (record.params as Record<string, unknown>).sessionId as string,
+      );
+    }
+  }
+
+  private observeIncomingMessage(message: unknown): void {
+    if (typeof message !== "object" || message === null) return;
+    const record = message as Record<string, unknown>;
+    if (record.method === "session/update") {
+      this.recordIncomingSessionUpdate(record.params);
+      return;
+    }
+    if (!("method" in record) && "id" in record) {
+      this.recordIncomingResponse(record.id, record.result);
+    }
+  }
+
+  private recordIncomingSessionUpdate(params: unknown): void {
+    const wireSeq = ++this.incomingWireSeq;
+    const sessionId = readSessionIdField(params);
+    if (!sessionId) {
+      this.fallbackUpdateWireSeqs.push(wireSeq);
+      return;
+    }
+    let queue = this.sessionUpdateWireSeqs.get(sessionId);
+    if (!queue) {
+      queue = [];
+      this.sessionUpdateWireSeqs.set(sessionId, queue);
+    }
+    queue.push(wireSeq);
+  }
+
+  private recordIncomingResponse(reqId: unknown, result: unknown): void {
+    let promptSessionId: string | undefined;
+    if (typeof reqId === "string" || typeof reqId === "number") {
+      promptSessionId = this.promptRequests.get(reqId);
+      if (promptSessionId !== undefined) this.promptRequests.delete(reqId);
+    }
+    if (
+      typeof result !== "object" ||
+      result === null ||
+      typeof (result as Record<string, unknown>).stopReason !== "string"
+    ) {
+      return;
+    }
+    const wireSeq = ++this.incomingWireSeq;
+    const target =
+      (promptSessionId ? this.sessionsByNativeId.get(promptSessionId) : undefined) ??
+      this.singleRuntime();
+    target?.notePromptResponseWireSeq(wireSeq);
+  }
+
+  private handlePermissionRequest(
+    request: RequestPermissionRequest,
+  ): Promise<RequestPermissionResponse> {
+    const runtime = this.sessionsByNativeId.get(request.sessionId) ?? this.singleRuntime();
+    if (!runtime) return Promise.resolve({ outcome: { outcome: "cancelled" } });
+    return runtime.requestPermission(request);
+  }
+
+  private handleSessionUpdate(notification: SessionNotification): Promise<void> {
+    const queue = this.sessionUpdateWireSeqs.get(notification.sessionId);
+    const wireSeq = queue?.shift() ?? this.fallbackUpdateWireSeqs.shift() ?? ++this.incomingWireSeq;
+    if (queue && queue.length === 0) this.sessionUpdateWireSeqs.delete(notification.sessionId);
+    const runtime = this.sessionsByNativeId.get(notification.sessionId) ?? this.singleRuntime();
+    if (runtime) return runtime.enqueueSessionUpdate(notification, wireSeq);
+    if (this.openingSessions > 0) {
+      let buffered = this.pendingSessionUpdates.get(notification.sessionId);
+      if (!buffered) {
+        buffered = [];
+        this.pendingSessionUpdates.set(notification.sessionId, buffered);
+      }
+      buffered.push({ notification, wireSeq });
+    }
+    return Promise.resolve();
+  }
+
+  private handleVendorNotification(method: string, params: unknown): void {
+    const sessionId =
+      typeof params === "object" &&
+      params !== null &&
+      typeof (params as Record<string, unknown>).sessionId === "string"
+        ? ((params as Record<string, unknown>).sessionId as string)
+        : null;
+    if (sessionId) {
+      this.sessionsByNativeId.get(sessionId)?.vendorNotification(method, params);
+      return;
+    }
+    for (const runtime of this.runtimes) {
+      runtime.vendorNotification(method, params);
+    }
+  }
+
+  private notePartialWireRead(): void {
+    for (const runtime of this.runtimes) runtime.notePartialWireRead();
+  }
+
+  private handleProcessFailure(message: string): void {
+    this.failed = true;
+    this.failureMessage = message;
+    this.onUnexpectedExit?.();
+    for (const runtime of this.runtimes) {
+      runtime.handleTransportFailure(message);
+    }
+  }
+
+  private handleUnexpectedTransportClose(): void {
+    if (this.closing || this.failed) return;
+    this.handleProcessFailure("ACP transport closed unexpectedly");
+  }
+}
+
+class AcpRuntime {
+  readonly connection: ClientSideConnection;
+  readonly agentCapabilities: AgentCapabilities;
+  nativeSessionId = "";
+  private readonly transport: AcpTransport;
   private emit: (event: ProviderEvent) => void;
   private readonly messages = new Map<string, string>();
   private readonly toolCalls = new Map<string, AcpToolCallState>();
@@ -531,141 +1026,43 @@ class AcpRuntime {
   private processFailureMessage: string | null = null;
   private configTransaction = false;
   private stagedTransformerConfig: ProviderConfigState | null = null;
-  private readonly closeConnector: (options?: {
-    force?: boolean;
-    timeoutMs?: number;
-  }) => Promise<void>;
-  private readonly whenConnectorClosed: () => Promise<void> | null;
   private notificationLane: Promise<void> = Promise.resolve();
-  private incomingWireSeq = 0;
-  private readonly sessionUpdateWireSeqs: number[] = [];
   private autoAccept = false;
   private activePrompt: ActivePrompt | null = null;
   private lastUsage: ProviderUsage = {};
 
-  static async start(options: StartRuntimeOptions): Promise<AcpRuntime> {
-    options.signal?.throwIfAborted();
-    let child: ChildProcessWithoutNullStreams | null = null;
-    let spawnFailure: Promise<never> | null = null;
-    let stream: Stream;
-    let closeConnector: (options?: {
-      force?: boolean;
-      timeoutMs?: number;
-    }) => Promise<void> = async () => {};
-    let whenConnectorClosed: () => Promise<void> | null = () => null;
-    let onPartialWireRead: (() => void) | null = null;
-    if (options.options.command) {
-      // COMPAT(pluginProviderLaunch): added in v0.10.0, remove after 2027-03-29 once plugin host floor >= v0.10.0.
-      // Standalone callers and older hosts do not send a daemon-resolved launch.
-      const launch = options.launch ?? {
-        command: options.options.command[0],
-        args: options.options.command.slice(1),
-        env: process.env,
-      };
-      child = spawnProcess(launch.command, launch.args, {
-        wrap: options.wrap,
-        cwd: options.cwd,
-        env: { ...launch.env, ...options.env },
-        stdio: "pipe",
-      });
-      spawnFailure = new Promise<never>((_resolve, reject) => child!.once("error", reject));
-      child.stderr.on("data", () => undefined);
-      const output = Writable.toWeb(child.stdin) as unknown as Parameters<typeof ndJsonStream>[0];
-      const rawInput = Readable.toWeb(child.stdout) as unknown as ReadableStream<Uint8Array>;
-      const input = observePartialWireReads(rawInput, () => onPartialWireRead?.()) as Parameters<
-        typeof ndJsonStream
-      >[1];
-      stream = ndJsonStream(output, input);
-    } else {
-      if (options.wrap) throw new Error("An ACP connector cannot run behind a launch wrap");
-      const owned = ownConnectorStream(await options.options.connector());
-      stream = owned.stream;
-      closeConnector = owned.close;
-      whenConnectorClosed = owned.whenClosed;
-    }
-    const runtime = new AcpRuntime(stream, child, closeConnector, whenConnectorClosed, options);
-    onPartialWireRead = () => runtime.notePartialWireRead();
-    // Closing ends the transport, which fails the pending initialize below.
-    const closeOnAbort = () => void runtime.close().catch(() => undefined);
-    options.signal?.addEventListener("abort", closeOnAbort, { once: true });
-    try {
-      const initialize = withTimeout(
-        runtime.call(
-          runtime.connection.initialize({
-            protocolVersion: PROTOCOL_VERSION,
-            clientCapabilities: {},
-            clientInfo: { name: "paseo", version: "1" },
-          }),
-        ),
-        options.options.acpOptions?.startupTimeoutMs ?? 10_000,
-        `ACP provider ${options.options.id} did not initialize`,
-      );
-      const initialized = spawnFailure
-        ? await Promise.race([initialize, spawnFailure])
-        : await initialize;
-      options.signal?.throwIfAborted();
-      runtime.agentCapabilities = initialized.agentCapabilities ?? {};
-      return runtime;
-    } catch (error) {
-      await runtime.close();
-      options.signal?.throwIfAborted();
-      throw error;
-    } finally {
-      options.signal?.removeEventListener("abort", closeOnAbort);
+  constructor(
+    transport: AcpTransport,
+    private readonly options: StartRuntimeOptions,
+  ) {
+    this.transport = transport;
+    this.connection = transport.connection;
+    this.agentCapabilities = transport.agentCapabilities;
+    this.emit = options.emit;
+    this.transformers = options.options.transformers ?? [];
+    this.transport.registerRuntime(this);
+  }
+
+  enqueueSessionUpdate(notification: SessionNotification, wireSeq: number): Promise<void> {
+    return this.enqueueNotification(() => this.sessionUpdate(notification, wireSeq));
+  }
+
+  notePromptResponseWireSeq(wireSeq: number): void {
+    if (this.activePrompt && this.activePrompt.lastPromptResponseWireSeq === null) {
+      this.activePrompt.lastPromptResponseWireSeq = wireSeq;
     }
   }
 
-  private constructor(
-    stream: Stream,
-    child: ChildProcessWithoutNullStreams | null,
-    closeConnector: (options?: { force?: boolean; timeoutMs?: number }) => Promise<void>,
-    whenConnectorClosed: () => Promise<void> | null,
-    private readonly options: StartRuntimeOptions,
-  ) {
-    this.child = child;
-    this.closeConnector = closeConnector;
-    this.whenConnectorClosed = whenConnectorClosed;
-    this.emit = options.emit;
-    this.transformers = options.options.transformers ?? [];
-    const client: Client = {
-      requestPermission: (request) => this.requestPermission(request),
-      sessionUpdate: (notification) => {
-        const wireSeq = this.sessionUpdateWireSeqs.shift() ?? ++this.incomingWireSeq;
-        return this.enqueueNotification(() => this.sessionUpdate(notification, wireSeq));
-      },
-    };
-    this.connection = new ClientSideConnection(
-      () => client,
-      routeIncomingMessages(
-        stream,
-        (method, params) => this.vendorNotification(method, params),
-        (message) => this.observeWireMessage(message),
-      ),
-    );
-    if (!child) void this.connection.closed.then(() => this.handleUnexpectedTransportClose());
-    child?.on("error", (error) => {
-      const message = describeError(error);
-      this.processFailed = true;
-      this.processFailureMessage = message;
-      this.settlePendingWork(message);
-      if (this.closing || !this.nativeSessionId) return;
-      this.emit({
-        type: "session.runtime_failed",
-        sessionId: this.options.boundarySessionId,
-        error: { message },
-      });
-    });
-    child?.once("close", (code, signal) => {
-      if (this.closing || this.processFailed || !this.nativeSessionId) return;
-      const message = `ACP process exited (${signal ?? code ?? "unknown"})`;
-      this.processFailed = true;
-      this.processFailureMessage = message;
-      this.settlePendingWork(message);
-      this.emit({
-        type: "session.runtime_failed",
-        sessionId: this.options.boundarySessionId,
-        error: { message },
-      });
+  handleTransportFailure(message: string): void {
+    if (this.processFailed) return;
+    this.processFailed = true;
+    this.processFailureMessage = message;
+    this.settlePendingWork(message);
+    if (this.closing || !this.nativeSessionId) return;
+    this.emit({
+      type: "session.runtime_failed",
+      sessionId: this.options.boundarySessionId,
+      error: { message },
     });
   }
 
@@ -690,6 +1087,8 @@ class AcpRuntime {
         persistence: input.persistence,
         systemPrompt: input.config.systemPrompt,
         agentMetadata: jsonValue(this.agentCapabilities._meta ?? null),
+        env: input.config.env,
+        sharedProcess: this.transport.shared,
       });
       nativeSessionId ??= prepared?.sessionId ?? null;
       Object.assign(metadata, prepared?.metadata);
@@ -699,6 +1098,7 @@ class AcpRuntime {
       // ACP agents replay the loaded session's updates before session/load resolves,
       // so the native id must be registered first for them to pass the session filter.
       this.nativeSessionId = nativeSessionId;
+      this.transport.bindNativeSession(nativeSessionId, this);
       this.replayWindow = input.history === "replay" ? "replay" : "skip";
       response = await this.call(
         this.connection.loadSession({
@@ -711,15 +1111,21 @@ class AcpRuntime {
       await this.drainNotifications();
       if (!this.options.options.acpOptions?.loadReplayQuietPeriodMs) this.replayWindow = null;
     } else {
-      const newSession = await this.call(
-        this.connection.newSession({
-          cwd: input.config.cwd,
-          mcpServers,
-          _meta: metadata,
-        }),
-      );
-      response = newSession;
-      this.nativeSessionId = newSession.sessionId;
+      this.transport.beginSessionOpen();
+      try {
+        const newSession = await this.call(
+          this.connection.newSession({
+            cwd: input.config.cwd,
+            mcpServers,
+            _meta: metadata,
+          }),
+        );
+        response = newSession;
+        this.nativeSessionId = newSession.sessionId;
+        this.transport.bindNativeSession(newSession.sessionId, this);
+      } finally {
+        this.transport.endSessionOpen();
+      }
     }
     this.modes = response.modes ?? null;
     this.configOptions = response.configOptions ?? [];
@@ -765,10 +1171,17 @@ class AcpRuntime {
     if (cwd === undefined && this.options.options.acpOptions?.workspaceOnlyCatalog) {
       return { models: [], modes: [] };
     }
-    const response = await this.call(
-      this.connection.newSession({ cwd: cwd ?? process.cwd(), mcpServers: [] }),
-    );
-    this.nativeSessionId = response.sessionId;
+    this.transport.beginSessionOpen();
+    let response: NewSessionResponse;
+    try {
+      response = await this.call(
+        this.connection.newSession({ cwd: cwd ?? process.cwd(), mcpServers: [] }),
+      );
+      this.nativeSessionId = response.sessionId;
+      this.transport.bindNativeSession(response.sessionId, this);
+    } finally {
+      this.transport.endSessionOpen();
+    }
     this.modes = response.modes ?? null;
     this.configOptions = response.configOptions ?? [];
     let catalog = toProviderCatalog(this.modes, this.configOptions);
@@ -976,13 +1389,33 @@ class AcpRuntime {
       }
     }
     // ACP v1 has no response or end boundary for session/cancel once session/prompt
-    // already returned. Close the process first while the turn still appears running,
-    // then emit the canceled turn synchronously before request.completed and session.closed
-    // so queued work and config changes immediately observe the retired session.
+    // already returned. Close the session (or the dedicated process) first while the turn
+    // still appears running, then emit the canceled turn synchronously before
+    // request.completed and session.closed so queued work immediately observes retirement.
+    if (this.transport.shared) {
+      let closeSessionFailed = false;
+      if (this.nativeSessionId && !this.closing && !this.transport.isClosedOrFailed()) {
+        try {
+          await withTimeout(
+            this.call(this.connection.closeSession({ sessionId: this.nativeSessionId })),
+            1_000,
+            `ACP session ${this.nativeSessionId} did not close`,
+          );
+        } catch {
+          closeSessionFailed = true;
+        }
+      }
+      await this.close({ force: cancelTimedOut, timeoutMs: 1_000 });
+      if (closeSessionFailed && this.transport.activeRuntimeCount() === 0) {
+        await this.transport.close({ force: true, timeoutMs: 1_000 }).catch(() => undefined);
+      }
+      this.finalizeDeferredTurn(deferredTurnId, false);
+      return true;
+    }
     try {
       await this.close({ force: cancelTimedOut, timeoutMs: 1_000 });
     } catch (error) {
-      void this.whenConnectorClosed()?.then(
+      void this.transport.whenConnectorClosed()?.then(
         () => this.finalizeDeferredTurn(deferredTurnId, true),
         () => undefined,
       );
@@ -1117,7 +1550,7 @@ class AcpRuntime {
   }
 
   async closeSession(): Promise<void> {
-    if (this.nativeSessionId) {
+    if (this.nativeSessionId && !this.transport.isClosedOrFailed()) {
       await withTimeout(
         this.call(this.connection.closeSession({ sessionId: this.nativeSessionId })),
         1_000,
@@ -1140,17 +1573,9 @@ class AcpRuntime {
 
   private async closeInternal(options?: { force?: boolean; timeoutMs?: number }): Promise<void> {
     this.settlePendingWork();
-    await this.closeConnector(options);
-    const child = this.child;
-    if (!child || this.processFailed) return;
-    if (child.exitCode !== null || child.signalCode !== null) return;
-    const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
-    await terminateProcess(child, "SIGTERM");
-    if (await settlesWithin(closed, 1_000)) return;
-    await terminateProcess(child);
-    if (!(await settlesWithin(closed, 1_000))) {
-      throw new Error(`ACP provider ${this.options.options.id} did not terminate after SIGKILL`);
-    }
+    this.transport.unbindRuntime(this, this.nativeSessionId);
+    if (this.transport.shared) return;
+    await this.transport.close(options);
   }
 
   private async applyInitialConfig(config: ProviderSessionConfig): Promise<void> {
@@ -1369,9 +1794,7 @@ class AcpRuntime {
     }
   }
 
-  private async requestPermission(
-    request: RequestPermissionRequest,
-  ): Promise<RequestPermissionResponse> {
+  async requestPermission(request: RequestPermissionRequest): Promise<RequestPermissionResponse> {
     await this.notificationLane;
     if (this.closing || this.processFailed || this.activePrompt?.cancelling) {
       return { outcome: { outcome: "cancelled" } };
@@ -1413,26 +1836,6 @@ class AcpRuntime {
         },
       });
     });
-  }
-
-  private observeWireMessage(message: unknown): void {
-    if (typeof message !== "object" || message === null) return;
-    const record = message as Record<string, unknown>;
-    if (record.method === "session/update") {
-      this.sessionUpdateWireSeqs.push(++this.incomingWireSeq);
-      return;
-    }
-    if (
-      !("method" in record) &&
-      "id" in record &&
-      typeof record.result === "object" &&
-      record.result !== null &&
-      typeof (record.result as Record<string, unknown>).stopReason === "string" &&
-      this.activePrompt &&
-      this.activePrompt.lastPromptResponseWireSeq === null
-    ) {
-      this.activePrompt.lastPromptResponseWireSeq = ++this.incomingWireSeq;
-    }
   }
 
   private isPostWirePrompt(active: ActivePrompt, wireSeq: number): boolean {
@@ -1724,7 +2127,7 @@ class AcpRuntime {
     this.noteDeferredToolTransition(wasOpenQualifying, isOpenQualifying, isOpen, snapshot, wireSeq);
   }
 
-  private vendorNotification(method: string, params: unknown): void {
+  vendorNotification(method: string, params: unknown): void {
     const notification = { method, params: jsonValue(params) };
     const context = { sessionId: this.options.boundarySessionId };
     for (const transformer of this.transformers) {
@@ -1765,35 +2168,13 @@ class AcpRuntime {
   }
 
   private call<Value>(operation: Promise<Value>): Promise<Value> {
-    if (this.connection.signal.aborted) {
-      return Promise.reject(new Error("ACP transport is closed"));
-    }
-    return Promise.race([
-      operation,
-      this.connection.closed.then(() => {
-        throw new Error("ACP transport closed unexpectedly");
-      }),
-    ]);
+    return this.transport.call(operation);
   }
 
   private enqueueNotification(operation: () => void): Promise<void> {
     const result = this.notificationLane.then(operation);
     this.notificationLane = result.catch(() => undefined);
     return result;
-  }
-
-  private handleUnexpectedTransportClose(): void {
-    if (this.closing || this.processFailed) return;
-    const message = "ACP transport closed unexpectedly";
-    this.processFailed = true;
-    this.processFailureMessage = message;
-    this.settlePendingWork(message);
-    if (!this.nativeSessionId) return;
-    this.emit({
-      type: "session.runtime_failed",
-      sessionId: this.options.boundarySessionId,
-      error: { message },
-    });
   }
 
   private settlePendingWork(failureMessage?: string): void {
@@ -1943,7 +2324,7 @@ class AcpRuntime {
         }
       } finally {
         if (active.lastPromptResponseWireSeq === null) {
-          active.lastPromptResponseWireSeq = this.incomingWireSeq;
+          active.lastPromptResponseWireSeq = this.transport.currentWireSeq();
         }
         active.wirePromptsInFlight -= 1;
         this.scheduleDeferredSettle();
@@ -2098,7 +2479,7 @@ class AcpRuntime {
       });
   }
 
-  private notePartialWireRead(): void {
+  notePartialWireRead(): void {
     if (this.replayWindow) this.lastPartialWireAt = performance.now();
   }
 
@@ -2178,14 +2559,27 @@ function isSessionStateUpdate(update: SessionUpdate): boolean {
   );
 }
 
-function routeIncomingMessages(
+function routeMessages(
   stream: Stream,
   receiveVendor: (method: string, params: unknown) => void,
-  observeWire: (message: unknown) => void,
+  observeIncoming: (message: unknown) => void,
+  observeOutgoing: (message: unknown) => void,
 ): Stream {
   const clientMethods = new Set<string>(Object.values(CLIENT_METHODS));
+  const writer = stream.writable.getWriter();
   return {
-    writable: stream.writable,
+    writable: new WritableStream({
+      write(message) {
+        observeOutgoing(message);
+        return writer.write(message);
+      },
+      close() {
+        return writer.close();
+      },
+      abort(reason) {
+        return writer.abort(reason);
+      },
+    }),
     readable: stream.readable.pipeThrough(
       new TransformStream({
         transform(message, controller) {
@@ -2198,7 +2592,7 @@ function routeIncomingMessages(
               console.error("Error handling ACP vendor notification", error);
             }
           } else {
-            observeWire(message);
+            observeIncoming(message);
             controller.enqueue(message);
           }
         },
@@ -2344,6 +2738,12 @@ function toAcpPrompt(
 
 function nativePersistence(sessionId: string): ProviderPersistence {
   return { version: 1, data: { sessionId } };
+}
+
+function readSessionIdField(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) return null;
+  const sessionId = (value as Record<string, unknown>).sessionId;
+  return typeof sessionId === "string" ? sessionId : null;
 }
 
 function readNativeSessionId(persistence: ProviderPersistence | undefined): string | null {

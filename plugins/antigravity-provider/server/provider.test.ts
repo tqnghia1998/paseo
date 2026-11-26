@@ -1328,3 +1328,165 @@ it("isolates restricted tool-free sessions with an allowlisted argv, hardened ag
     await legacyCliConnection.close();
   }
 });
+
+it("reuses one warm agy acp process across Paseo/genui sessions and injects the literal thread storage path", async () => {
+  const { directory, launch } = await launchAgent(`
+    const { appendFileSync } = require("node:fs");
+    const { createInterface } = require("node:readline");
+    const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...message }) + "\\n");
+    appendFileSync(
+      process.env.CAPTURE,
+      JSON.stringify({
+        kind: "boot",
+        pid: process.pid,
+        bbStorage: process.env.BB_THREAD_STORAGE ?? null,
+        custom: process.env.CUSTOM_AGY_ENV ?? null,
+      }) + "\\n",
+    );
+    let seq = 0;
+    createInterface({ input: process.stdin }).on("line", (line) => {
+      const { id, method, params } = JSON.parse(line);
+      appendFileSync(process.env.CAPTURE, JSON.stringify({ kind: "rpc", pid: process.pid, method, params }) + "\\n");
+      switch (method) {
+        case "initialize":
+          send({ id, result: { protocolVersion: 1, agentCapabilities: {
+            loadSession: true,
+            sessionCapabilities: { close: {} },
+            _meta: { antigravity: { systemPrompt: { append: true } } },
+          } } });
+          break;
+        case "session/new": {
+          const sessionId = "agy-" + (++seq);
+          send({ id, result: { sessionId, modes: {
+            currentModeId: "default", availableModes: [{ id: "default", name: "Default" }],
+          } } });
+          send({ method: "session/update", params: { sessionId, update: {
+            sessionUpdate: "available_commands_update", availableCommands: [],
+          } } });
+          break;
+        }
+        case "session/close":
+          send({ id, result: {} });
+          break;
+      }
+    });
+  `);
+  const connection = await createAntigravityProvider().connect({
+    launch,
+    versions: [1],
+    capabilities: ["prompt.message"],
+  });
+  const events: ProviderEvent[] = [];
+  connection.onEvent((event) => events.push(event));
+  try {
+    await connection.send({ type: "catalog", requestId: "cat", cwd: directory });
+    await expect
+      .poll(() => events.find((event) => event.type === "catalog" && event.requestId === "cat"))
+      .toBeDefined();
+
+    await connection.send({
+      type: "session.open",
+      requestId: "open-1",
+      sessionId: "chat-1",
+      history: "skip",
+      config: {
+        cwd: directory,
+        systemPrompt: "Base prompt",
+        env: {
+          PASEO_AGENT_ID: "agent-1",
+          PASEO_AGENT_CWD: directory,
+          PASEO_WORKSPACE_ID: "wks-1",
+          BB_THREAD_STORAGE: "/tmp/opencode/genui-storage/agent-1",
+          PASEO_THREAD_STORAGE: "/tmp/opencode/genui-storage/agent-1",
+        },
+        mcpServers: {},
+        settings: {},
+        persist: false,
+      },
+    });
+    await connection.send({
+      type: "session.open",
+      requestId: "open-2",
+      sessionId: "chat-2",
+      history: "skip",
+      config: {
+        cwd: directory,
+        systemPrompt: "Second prompt",
+        env: {
+          PASEO_AGENT_ID: "agent-2",
+          PASEO_AGENT_CWD: directory,
+          PASEO_WORKSPACE_ID: "wks-2",
+          BB_THREAD_STORAGE: "/tmp/opencode/genui-storage/agent-2",
+          PASEO_THREAD_STORAGE: "/tmp/opencode/genui-storage/agent-2",
+        },
+        mcpServers: {},
+        settings: {},
+        persist: false,
+      },
+    });
+    await expect
+      .poll(() =>
+        events.find((event) => event.type === "session.ready" && event.sessionId === "chat-1"),
+      )
+      .toBeDefined();
+    await expect
+      .poll(() =>
+        events.find((event) => event.type === "session.ready" && event.sessionId === "chat-2"),
+      )
+      .toBeDefined();
+
+    // Non-ignored custom env still spawns an isolated dedicated process without adding the shared-process hint.
+    await connection.send({
+      type: "session.open",
+      requestId: "open-3",
+      sessionId: "chat-isolated",
+      history: "skip",
+      config: {
+        cwd: directory,
+        systemPrompt: "Isolated prompt",
+        env: {
+          CUSTOM_AGY_ENV: "yes",
+          BB_THREAD_STORAGE: "/tmp/opencode/genui-storage/agent-3",
+        },
+        mcpServers: {},
+        settings: {},
+        persist: false,
+      },
+    });
+    await expect
+      .poll(() =>
+        events.find(
+          (event) => event.type === "session.ready" && event.sessionId === "chat-isolated",
+        ),
+      )
+      .toBeDefined();
+
+    const captured = (await readFile(launch.env.CAPTURE, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const boots = captured.filter((entry) => entry.kind === "boot");
+    expect(boots).toHaveLength(2);
+    expect(boots[0].bbStorage).toContain("genui-storage");
+    expect(boots[0].custom).toBeNull();
+    expect(boots[1].custom).toBe("yes");
+
+    const newCalls = captured.filter(
+      (entry) =>
+        entry.kind === "rpc" && entry.method === "session/new" && entry.params?._meta?.antigravity,
+    );
+    expect(newCalls).toHaveLength(3);
+    expect(newCalls[0].pid).toBe(boots[0].pid);
+    expect(newCalls[1].pid).toBe(boots[0].pid);
+    expect(newCalls[2].pid).toBe(boots[1].pid);
+    expect(newCalls[0].params._meta.antigravity.systemPrompt.append).toContain(
+      "/tmp/opencode/genui-storage/agent-1",
+    );
+    expect(newCalls[1].params._meta.antigravity.systemPrompt.append).toContain(
+      "/tmp/opencode/genui-storage/agent-2",
+    );
+    expect(newCalls[2].params._meta.antigravity.systemPrompt.append).toBe("Isolated prompt");
+  } finally {
+    await connection.close();
+  }
+});

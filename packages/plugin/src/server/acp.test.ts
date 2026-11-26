@@ -7455,3 +7455,406 @@ lines.on("line", (line) => {
     await connection.close();
   });
 });
+
+describe("ACP shared warm process", () => {
+  const tempDirectories: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      tempDirectories.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+    );
+  });
+
+  async function writeSharedAgentScript(extraCode = "") {
+    const directory = await mkdtemp(path.join(tmpdir(), "paseo-acp-shared-"));
+    tempDirectories.push(directory);
+    const scriptPath = path.join(directory, "agent.cjs");
+    const capturePath = path.join(directory, "capture.ndjson");
+    await writeFile(
+      scriptPath,
+      `
+      const { appendFileSync } = require("node:fs");
+      const { createInterface } = require("node:readline");
+      const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...message }) + "\\n");
+      const record = (entry) => appendFileSync(process.env.CAPTURE, JSON.stringify({ pid: process.pid, ...entry }) + "\\n");
+      record({ kind: "boot", sharedStorage: process.env.BB_THREAD_STORAGE ?? null, custom: process.env.CUSTOM_VAR ?? null });
+      let sessionCounter = 0;
+      const closedSessions = new Set();
+      createInterface({ input: process.stdin }).on("line", (line) => {
+        if (!line.trim()) return;
+        const msg = JSON.parse(line);
+        const { id, method, params } = msg;
+        if (!method) return;
+        record({ kind: "rpc", method, sessionId: params?.sessionId ?? null });
+        ${extraCode}
+        switch (method) {
+          case "initialize":
+            send({ id, result: { protocolVersion: 1, agentCapabilities: {
+              loadSession: true,
+              sessionCapabilities: { close: {}, list: {} },
+            } } });
+            break;
+          case "session/new": {
+            const sessionId = "native-" + (++sessionCounter);
+            send({ id, result: { sessionId, modes: {
+              currentModeId: "default", availableModes: [{ id: "default", name: "Default" }],
+            } } });
+            break;
+          }
+          case "session/list":
+            send({ id, result: { sessions: [{ sessionId: "listed-1", cwd: "/repo", title: "Listed" }] } });
+            break;
+          case "session/prompt": {
+            const text = params.prompt?.[0]?.text ?? "";
+            if (text === "crash-now") {
+              process.exit(1);
+            }
+            if (text.startsWith("defer:")) {
+              send({ method: "session/update", params: { sessionId: params.sessionId, update: {
+                sessionUpdate: "tool_call", toolCallId: "bg-" + params.sessionId, name: "run_command",
+                title: "Background job", status: "in_progress", rawInput: { CommandLine: "sleep 10" },
+              } } });
+              send({ id, result: { stopReason: "end_turn" } });
+              break;
+            }
+            send({ method: "session/update", params: { sessionId: params.sessionId, update: {
+              sessionUpdate: "agent_message_chunk", content: { type: "text", text: "echo:" + params.sessionId + ":" + text },
+            } } });
+            send({ id, result: { stopReason: "end_turn" } });
+            break;
+          }
+          case "session/cancel":
+            break;
+          case "session/close":
+            closedSessions.add(params.sessionId);
+            send({ id, result: {} });
+            break;
+        }
+      });
+      `,
+    );
+    return {
+      directory,
+      capturePath,
+      launch: {
+        command: process.execPath,
+        args: [scriptPath],
+        env: { CAPTURE: capturePath },
+      },
+    };
+  }
+
+  async function readCapture(capturePath: string) {
+    const raw = await readFile(capturePath, "utf8");
+    return raw
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+  }
+
+  it("reuses one warm process across probe, catalog, session listing, and concurrent sessions while isolating non-ignored env overrides", async () => {
+    const { directory, capturePath, launch } = await writeSharedAgentScript();
+    const registration = runAcpProvider({
+      id: "shared-acp",
+      label: "Shared ACP",
+      command: [process.execPath, launch.args[0]!],
+      acpOptions: {
+        shareProcess: {
+          ignoredEnvKeys: ["PASEO_AGENT_ID", "BB_THREAD_STORAGE"],
+          sharedEnv: { BB_THREAD_STORAGE: "/tmp/shared-fallback" },
+        },
+      },
+    });
+    const connection = await registration.connect({
+      launch,
+      versions: [1],
+      capabilities: ["prompt.message", "session.list"],
+    });
+    const events: ProviderEvent[] = [];
+    connection.onEvent((event) => events.push(event));
+    try {
+      await connection.send({ type: "catalog", requestId: "cat-1", cwd: directory });
+      await waitForEvent(
+        events,
+        (event) => event.type === "catalog" && event.requestId === "cat-1",
+      );
+
+      await connection.send({ type: "sessions", requestId: "list-1" });
+      await waitForEvent(
+        events,
+        (event) => event.type === "sessions" && event.requestId === "list-1",
+      );
+
+      await Promise.all([
+        connection.send({
+          type: "session.open",
+          requestId: "open-a",
+          sessionId: "session-a",
+          history: "skip",
+          config: {
+            cwd: directory,
+            env: { PASEO_AGENT_ID: "agent-a", BB_THREAD_STORAGE: "/tmp/storage-a" },
+            mcpServers: {},
+            settings: {},
+            persist: false,
+          },
+        }),
+        connection.send({
+          type: "session.open",
+          requestId: "open-b",
+          sessionId: "session-b",
+          history: "skip",
+          config: {
+            cwd: directory,
+            env: { PASEO_AGENT_ID: "agent-b", BB_THREAD_STORAGE: "/tmp/storage-b" },
+            mcpServers: {},
+            settings: {},
+            persist: false,
+          },
+        }),
+      ]);
+      await waitForEvent(
+        events,
+        (event) => event.type === "session.ready" && event.sessionId === "session-a",
+      );
+      await waitForEvent(
+        events,
+        (event) => event.type === "session.ready" && event.sessionId === "session-b",
+      );
+
+      await Promise.all([
+        connection.send({
+          type: "session.prompt",
+          sessionId: "session-a",
+          prompt: {
+            clientMessageId: "msg-a",
+            delivery: "auto",
+            input: { type: "message", content: [{ type: "text", text: "alpha" }] },
+          },
+        }),
+        connection.send({
+          type: "session.prompt",
+          sessionId: "session-b",
+          prompt: {
+            clientMessageId: "msg-b",
+            delivery: "auto",
+            input: { type: "message", content: [{ type: "text", text: "beta" }] },
+          },
+        }),
+      ]);
+      await waitForEvent(
+        events,
+        (event) =>
+          event.type === "session.turn" &&
+          event.sessionId === "session-a" &&
+          event.state === "completed",
+      );
+      await waitForEvent(
+        events,
+        (event) =>
+          event.type === "session.turn" &&
+          event.sessionId === "session-b" &&
+          event.state === "completed",
+      );
+
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "timeline.item",
+          sessionId: "session-a",
+          item: expect.objectContaining({
+            type: "assistant_message",
+            text: expect.stringContaining(":alpha"),
+          }),
+        }),
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "timeline.item",
+          sessionId: "session-b",
+          item: expect.objectContaining({
+            type: "assistant_message",
+            text: expect.stringContaining(":beta"),
+          }),
+        }),
+      );
+
+      // Closing session-a must not disrupt session-b on the shared process.
+      await connection.send({
+        type: "session.close",
+        requestId: "close-a",
+        sessionId: "session-a",
+      });
+      await waitForEvent(
+        events,
+        (event) => event.type === "session.closed" && event.sessionId === "session-a",
+      );
+
+      await connection.send({
+        type: "session.prompt",
+        sessionId: "session-b",
+        prompt: {
+          clientMessageId: "msg-b-2",
+          delivery: "auto",
+          input: { type: "message", content: [{ type: "text", text: "still-alive" }] },
+        },
+      });
+      await waitForEvent(
+        events,
+        (event) =>
+          event.type === "session.turn" &&
+          event.sessionId === "session-b" &&
+          event.turnId === "acp:msg-b-2" &&
+          event.state === "completed",
+      );
+
+      // A session with a non-ignored custom env override gets its own dedicated process.
+      await connection.send({
+        type: "session.open",
+        requestId: "open-custom",
+        sessionId: "session-custom",
+        history: "skip",
+        config: {
+          cwd: directory,
+          env: { CUSTOM_VAR: "isolated-1" },
+          mcpServers: {},
+          settings: {},
+          persist: false,
+        },
+      });
+      await waitForEvent(
+        events,
+        (event) => event.type === "session.ready" && event.sessionId === "session-custom",
+      );
+
+      const captured = await readCapture(capturePath);
+      const boots = captured.filter((entry) => entry.kind === "boot");
+      expect(boots).toHaveLength(2);
+      expect(boots[0]).toMatchObject({ sharedStorage: "/tmp/shared-fallback", custom: null });
+      expect(boots[1]).toMatchObject({ custom: "isolated-1" });
+    } finally {
+      await connection.close();
+    }
+  });
+
+  it("recovers cleanly after a shared process exits unexpectedly and retires deferred turns per session", async () => {
+    const { directory, capturePath, launch } = await writeSharedAgentScript();
+    const registration = runAcpProvider({
+      id: "shared-acp-recover",
+      label: "Shared ACP Recover",
+      command: [process.execPath, launch.args[0]!],
+      acpOptions: {
+        shareProcess: true,
+        deferTurnOnRunningTools: {},
+      },
+    });
+    const connection = await registration.connect({
+      launch,
+      versions: [1],
+      capabilities: ["prompt.message", "prompt.steer"],
+    });
+    const events: ProviderEvent[] = [];
+    connection.onEvent((event) => events.push(event));
+    try {
+      await connection.send({
+        type: "session.open",
+        requestId: "open-1",
+        sessionId: "s-1",
+        history: "skip",
+        config: { cwd: directory, env: {}, mcpServers: {}, settings: {}, persist: false },
+      });
+      await connection.send({
+        type: "session.open",
+        requestId: "open-2",
+        sessionId: "s-2",
+        history: "skip",
+        config: { cwd: directory, env: {}, mcpServers: {}, settings: {}, persist: false },
+      });
+      await waitForEvent(
+        events,
+        (event) => event.type === "session.ready" && event.sessionId === "s-1",
+      );
+      await waitForEvent(
+        events,
+        (event) => event.type === "session.ready" && event.sessionId === "s-2",
+      );
+
+      // Start a deferred turn on s-1, interrupt it, and verify s-2 stays alive on the same process.
+      await connection.send({
+        type: "session.prompt",
+        sessionId: "s-1",
+        prompt: {
+          clientMessageId: "defer-1",
+          delivery: "auto",
+          input: { type: "message", content: [{ type: "text", text: "defer:work" }] },
+        },
+      });
+      await waitForEvent(
+        events,
+        (event) =>
+          event.type === "timeline.item" &&
+          event.sessionId === "s-1" &&
+          event.item.type === "tool_call" &&
+          event.item.status === "running",
+      );
+      await connection.send({ type: "session.interrupt", requestId: "stop-1", sessionId: "s-1" });
+      await waitForEvent(
+        events,
+        (event) => event.type === "session.closed" && event.sessionId === "s-1",
+      );
+
+      await connection.send({
+        type: "session.prompt",
+        sessionId: "s-2",
+        prompt: {
+          clientMessageId: "after-stop",
+          delivery: "auto",
+          input: { type: "message", content: [{ type: "text", text: "still-here" }] },
+        },
+      });
+      await waitForEvent(
+        events,
+        (event) =>
+          event.type === "session.turn" &&
+          event.sessionId === "s-2" &&
+          event.turnId === "acp:after-stop" &&
+          event.state === "completed",
+      );
+      expect(
+        (await readCapture(capturePath)).filter((entry) => entry.kind === "boot"),
+      ).toHaveLength(1);
+
+      // Crash the shared process; s-2 should report runtime_failed and a new session should respawn cleanly.
+      await connection.send({
+        type: "session.prompt",
+        sessionId: "s-2",
+        prompt: {
+          clientMessageId: "crash-turn",
+          delivery: "auto",
+          input: { type: "message", content: [{ type: "text", text: "crash-now" }] },
+        },
+      });
+      await waitForEvent(
+        events,
+        (event) => event.type === "session.runtime_failed" && event.sessionId === "s-2",
+      );
+
+      await connection.send({
+        type: "session.open",
+        requestId: "open-3",
+        sessionId: "s-3",
+        history: "skip",
+        config: { cwd: directory, env: {}, mcpServers: {}, settings: {}, persist: false },
+      });
+      await waitForEvent(
+        events,
+        (event) => event.type === "session.ready" && event.sessionId === "s-3",
+      );
+      expect(
+        (await readCapture(capturePath)).filter((entry) => entry.kind === "boot"),
+      ).toHaveLength(2);
+    } finally {
+      await connection.close();
+    }
+  });
+});

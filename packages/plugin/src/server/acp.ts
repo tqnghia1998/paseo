@@ -79,6 +79,25 @@ export interface AcpOptions {
     nativeMode: string;
     default?: boolean;
   };
+  /**
+   * Reuse one initialized ACP process across discovery, session listing, and concurrent sessions
+   * when the agent advertises `sessionCapabilities.close`. Enable only for ACP agents that
+   * multiplex sessions cleanly on one connection.
+   */
+  shareProcess?:
+    | boolean
+    | {
+        /**
+         * Per-session environment variables ignored when deciding whether a session can reuse
+         * the shared process. Any other per-session env override spawns a dedicated process.
+         */
+        ignoredEnvKeys?: readonly string[];
+        /**
+         * Fallback environment variables set on the shared process when not already present
+         * in the daemon launch environment.
+         */
+        sharedEnv?: Readonly<Record<string, string>>;
+      };
 }
 
 export interface AcpContext {
@@ -140,6 +159,8 @@ export interface AcpTransformer {
     persistence?: ProviderPersistence;
     systemPrompt?: string;
     agentMetadata: JsonValue;
+    env?: Readonly<Record<string, string>>;
+    sharedProcess?: boolean;
   }): { sessionId?: string; metadata?: Readonly<Record<string, JsonValue>> };
 
   discover?(

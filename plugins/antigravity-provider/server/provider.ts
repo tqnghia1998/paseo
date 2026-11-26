@@ -41,6 +41,36 @@ const builtInCommands = new Set([
   "boost",
 ]);
 
+// Per-session Paseo/genui metadata env vars that should not force a fresh `agy acp` process.
+// Any other per-session env override still gets a dedicated process.
+const SHARED_PROCESS_IGNORED_ENV_KEYS = [
+  "PASEO_AGENT_ID",
+  "PASEO_AGENT_CWD",
+  "PASEO_WORKSPACE_ID",
+  "BB_THREAD_STORAGE",
+  "PASEO_THREAD_STORAGE",
+] as const;
+
+const SHARED_THREAD_STORAGE_DIR =
+  process.platform === "win32"
+    ? path.join(tmpdir(), "opencode", "genui-storage", "shared")
+    : "/tmp/opencode/genui-storage/shared";
+
+function buildAppendedSystemPrompt(
+  systemPrompt: string | undefined,
+  env: Readonly<Record<string, string>> | undefined,
+  sharedProcess: boolean | undefined,
+): string | undefined {
+  const threadStorageDir = sharedProcess
+    ? (env?.BB_THREAD_STORAGE ?? env?.PASEO_THREAD_STORAGE)?.trim() || undefined
+    : undefined;
+  const storageHint = threadStorageDir
+    ? `This session shares a warm Antigravity process; use the literal path ${threadStorageDir} instead of $BB_THREAD_STORAGE or $PASEO_THREAD_STORAGE in shell commands and Load() calls.`
+    : undefined;
+  if (systemPrompt && storageHint) return `${systemPrompt}\n\n${storageHint}`;
+  return systemPrompt ?? storageHint;
+}
+
 async function configureLegacyModel(
   change: AcpConfigChange,
   { apply, catalog }: Pick<AcpConfigureContext, "apply" | "catalog">,
@@ -73,14 +103,15 @@ const antigravity: AcpTransformer = {
     return { ...command, kind: builtInCommands.has(command.name) ? "command" : "skill" };
   },
   toolCall: mapToolCall,
-  sessionOpen({ persistence, systemPrompt, agentMetadata }) {
+  sessionOpen({ persistence, systemPrompt, agentMetadata, env, sharedProcess }) {
     // COMPAT(antigravityStreamJson): added in v0.16.2, remove after 2027-11-19.
     const saved = legacySession.safeParse(persistence);
+    const appendedPrompt = buildAppendedSystemPrompt(systemPrompt, env, sharedProcess);
     return {
       sessionId: saved.success ? saved.data.data.conversationId : undefined,
       metadata:
-        systemPrompt && systemPromptCapability.safeParse(agentMetadata).success
-          ? { antigravity: { systemPrompt: { append: systemPrompt } } }
+        appendedPrompt && systemPromptCapability.safeParse(agentMetadata).success
+          ? { antigravity: { systemPrompt: { append: appendedPrompt } } }
           : undefined,
     };
   },
@@ -227,6 +258,13 @@ export function createAntigravityProvider(): ProviderRegistration {
         nativeMode: "default",
         default: true,
       },
+      shareProcess: {
+        ignoredEnvKeys: SHARED_PROCESS_IGNORED_ENV_KEYS,
+        sharedEnv: {
+          BB_THREAD_STORAGE: SHARED_THREAD_STORAGE_DIR,
+          PASEO_THREAD_STORAGE: SHARED_THREAD_STORAGE_DIR,
+        },
+      },
     },
     transformers: [antigravity],
   });
@@ -240,6 +278,9 @@ export function createAntigravityProvider(): ProviderRegistration {
     acpOptions: {
       perModelThinkingOptions: true,
       loadReplayQuietPeriodMs: 200,
+      shareProcess: {
+        ignoredEnvKeys: SHARED_PROCESS_IGNORED_ENV_KEYS,
+      },
     },
     transformers: [restrictedAntigravity],
   });
@@ -247,6 +288,7 @@ export function createAntigravityProvider(): ProviderRegistration {
   return {
     ...provider,
     async connect(request): Promise<ProviderConnection> {
+      await mkdir(SHARED_THREAD_STORAGE_DIR, { recursive: true }).catch(() => undefined);
       const baseConnection = await provider.connect(request);
       const listeners = new Set<(event: ProviderEvent) => void>();
       const restrictedSessions = new Set<string>();
