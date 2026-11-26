@@ -137,6 +137,7 @@ interface PluginRequestOptions {
 
 interface LoadedPlugin {
   id: string;
+  builtin?: boolean;
   instanceId: string;
   requirements: PluginRequirements | undefined;
   clientBundle: string;
@@ -456,6 +457,7 @@ export class PluginRuntime {
       bundle: bundles.serverBundle,
       clientBundle: bundles.clientBundle ?? "",
     });
+    loaded.builtin = true;
     this.plugins.set(input.id, loaded);
     this.appendLog(input.id, "stdout", "[paseo] Plugin ready");
   }
@@ -481,13 +483,18 @@ export class PluginRuntime {
     requirements?: PluginRequirements;
   }> {
     return [...this.plugins.values()]
+      .sort((left, right) => {
+        if (Boolean(left.builtin) !== Boolean(right.builtin)) {
+          return left.builtin ? -1 : 1;
+        }
+        return left.id.localeCompare(right.id);
+      })
       .map(({ id, clientBundle, clientBundleHash, requirements }) => ({
         id,
         clientBundle,
         clientBundleHash,
         requirements,
-      }))
-      .sort((left, right) => left.id.localeCompare(right.id));
+      }));
   }
 
   getProviderRegistrations(pluginId: string): readonly PluginProviderMetadata[] {

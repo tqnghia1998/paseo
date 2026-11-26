@@ -8,7 +8,8 @@ import {
   subscribeToHostMessages,
 } from "./host-messages";
 import { Redirect, usePathname, type Href } from "expo-router";
-import { isEmbeddedChiefView } from "./focus-mode";
+import { isEmbeddedChiefView, isEmbeddedTasksView } from "./focus-mode";
+import { useEmbeddedTasksShortcuts } from "./host-agent-open";
 import {
   embeddedWorkspaceRoute,
   getEmbeddedWorkspace,
@@ -20,6 +21,7 @@ export function EmbeddedNavigationBoundary({ children }: { children: ReactNode }
   const pathname = usePathname();
   if (isEmbeddedRouteAllowed(pathname)) return children;
   if (isEmbeddedChiefView) return <Redirect href={"/?view=chief" as Href} />;
+  if (isEmbeddedTasksView) return <Redirect href={"/?view=tasks" as Href} />;
   const route = embeddedWorkspaceRoute();
   return route ? (
     <Redirect href={route as Href} />
@@ -29,6 +31,7 @@ export function EmbeddedNavigationBoundary({ children }: { children: ReactNode }
 }
 
 export function useEmbeddedSettingsHandoff(): void {
+  useEmbeddedTasksShortcuts();
   const pathname = usePathname();
   useEffect(() => {
     if (parseHostWorkspaceRouteFromPathname(pathname) || pathname.includes("/plugin/paseo-bots/"))

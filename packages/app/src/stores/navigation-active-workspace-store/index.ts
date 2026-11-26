@@ -5,6 +5,7 @@ import {
   getEmbeddedWorkspace,
   isEmbeddedRouteAllowed,
 } from "@/patches/vibing/workspace-boundary";
+import { isEmbeddedTasksView } from "@/patches/vibing/focus-mode";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -86,6 +87,11 @@ export function navigateToWorkspace(input: NavigateToWorkspaceInput): string {
 }
 
 export function navigateToLastWorkspace(): boolean {
+  if (isEmbeddedTasksView) {
+    if (router.canGoBack()) router.back();
+    else router.replace("/?view=tasks" as Href);
+    return true;
+  }
   const embedded = getEmbeddedWorkspace();
   if (embedded) {
     navigateToWorkspace(embedded);

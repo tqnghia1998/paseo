@@ -5,7 +5,7 @@ import {
   parseHostWorkspaceRouteFromPathname,
   parseHostAgentRouteFromPathname,
 } from "@/utils/host-routes";
-import { isEmbeddedChiefView, isEmbeddedFocusMode } from "./focus-mode";
+import { isEmbeddedChiefView, isEmbeddedFocusMode, isEmbeddedTasksView } from "./focus-mode";
 import { resolveEmbeddedToolEntryRoute } from "./embedded-tools";
 
 interface Workspace {
@@ -104,6 +104,11 @@ export function isEmbeddedRouteAllowed(path: string): boolean {
   const pathname = path.split(/[?#]/, 1)[0].replace(/\/$/, "") || "/";
   // Chief renders inside the entry route and never reaches host, settings or workspace routes.
   if (isEmbeddedChiefView) return pathname === "/";
+  if (isEmbeddedTasksView) {
+    if (pathname === "/" || /^\/h\/[^/]+$/.test(pathname)) return true;
+    if (pathname === "/settings" || pathname.startsWith("/settings/")) return true;
+    return Boolean(parsePluginSurfaceRoute(pathname));
+  }
   if (!workspace) return pathname === "/" || /^\/h\/[^/]+$/.test(pathname);
   const target = parseHostWorkspaceRouteFromPathname(pathname);
   if (target) return false;

@@ -20,7 +20,7 @@ const replaceUserMessage: TimelineItemTransform = ({ item, sourceId }) => {
     {
       type: "plugin",
       id: sourceId,
-      pluginId: "paseo-chat-polish",
+      pluginId: "better-paseo",
       kind: "user-message",
       version: 1,
       data: { text: item.text },
@@ -80,7 +80,7 @@ describe("plugin timeline projection", () => {
     expect(projectPluginTimelineItems([source], transform)).toMatchObject([
       {
         kind: "plugin",
-        id: "paseo-chat-polish/user-1",
+        id: "better-paseo/user-1",
         data: { text: "Update the page" },
       },
     ]);

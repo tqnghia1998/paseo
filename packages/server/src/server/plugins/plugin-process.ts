@@ -50,6 +50,37 @@ import { createPluginClientId } from "./plugin-session-identity.js";
 import { PluginSettingsStore } from "./settings/index.js";
 import { readPluginProviderIcon } from "./provider-icon.js";
 import { initializeEnvironmentProxy } from "../network/index.js";
+const HOST_DAEMON_GETTERS = Symbol.for("paseo.pluginHostDaemonGetters");
+
+type HostDaemonGlobal = typeof globalThis & {
+  __paseoPluginHostDaemon?: () => unknown;
+  [HOST_DAEMON_GETTERS]?: Set<() => unknown>;
+};
+
+function registerHostDaemonGetter(getter: () => unknown): () => void {
+  const hostGlobal = globalThis as HostDaemonGlobal;
+  let getters = hostGlobal[HOST_DAEMON_GETTERS];
+  if (!getters) {
+    getters = new Set();
+    hostGlobal[HOST_DAEMON_GETTERS] = getters;
+  }
+  getters.add(getter);
+  hostGlobal.__paseoPluginHostDaemon = () => {
+    for (const candidate of getters!) {
+      const value = candidate();
+      if (value) return value;
+    }
+    return null;
+  };
+  return () => {
+    getters!.delete(getter);
+    if (getters!.size === 0) {
+      delete hostGlobal.__paseoPluginHostDaemon;
+      delete hostGlobal[HOST_DAEMON_GETTERS];
+    }
+  };
+}
+
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -492,6 +523,8 @@ export function createPluginWorker(options: {
     },
   });
 
+  let unregisterHostDaemon: (() => void) | null = null;
+
   async function initialize(message: Extract<PluginProcessRequest, { type: "initialize" }>) {
     daemonClient = new DaemonClient({
       url: `ipc://plugin/${encodeURIComponent(message.pluginId)}`,
@@ -507,6 +540,18 @@ export function createPluginWorker(options: {
     });
     paseo = createPaseoApi(daemonClient);
     await daemonClient.connect();
+    const currentClient = daemonClient;
+    unregisterHostDaemon = registerHostDaemonGetter(() =>
+      daemonClient === currentClient && currentClient
+        ? new Proxy(currentClient, {
+            get(target, prop) {
+              if (prop === "close") return async () => {};
+              const value = Reflect.get(target, prop, target);
+              return typeof value === "function" ? value.bind(target) : value;
+            },
+          })
+        : null,
+    );
     settingsStore = message.settingsDirectory
       ? new PluginSettingsStore(message.settingsDirectory, (settingsId) =>
           send({ type: "settings.changed", settingsId }),
@@ -580,6 +625,8 @@ export function createPluginWorker(options: {
     await Promise.all([...providerConnections.keys()].map(closeProviderConnection));
     await releaseApi;
     await daemonClient?.close().catch(() => undefined);
+    unregisterHostDaemon?.();
+    unregisterHostDaemon = null;
     await sendAndWait({ type: "paseo_close" });
     daemonClient = null;
     paseo = null;

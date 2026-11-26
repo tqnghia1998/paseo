@@ -6,18 +6,18 @@ is the per-plugin reference and the upgrade procedure.
 
 ## What ships
 
-| Plugin                                            | Source and pin                                                                                         | Version       | Ships as                   | Modified                                      |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------- | -------------------------- | --------------------------------------------- |
-| Antigravity (`antigravity-provider`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, tool-free restricted sessions            |
-| Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `ae40671`                                    | 0.3.1         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch`    |
-| Claude usage (`claude-usage-source`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                            |
-| Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                   |
-| AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
-| Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                    |
-| Chat Polish (`paseo-chat-polish`)                 | [lthieu96/paseo-chat-polish](https://github.com/lthieu96/paseo-chat-polish) `308b3e4`                  | 0.16.1        | Community install          | Yes: `scripts/paseo-chat-polish-vibing.patch` |
-| Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`             |
-| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `e49b7e8` | 1.4.2         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch`    |
-| Reply follow-ups (`reply-followups`)              | Fork-owned                                                                                             | —             | Community install          | Fork-owned                                    |
+| Plugin                                            | Source and pin                                                                                         | Version       | Ships as                   | Modified                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------- | -------------------------- | ------------------------------------------ |
+| Antigravity (`antigravity-provider`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, tool-free restricted sessions         |
+| Bots (`paseo-bots`)                               | [oliexe/paseo-bots](https://github.com/oliexe/paseo-bots) `ae40671`                                    | 0.3.1         | Built in, isolated process | Heavily: `scripts/paseo-bots-vibing.patch` |
+| Claude usage (`claude-usage-source`)              | Upstream Paseo                                                                                         | follows Paseo | Built in                   | No                                         |
+| Codex usage (`codex-usage-source`)                | Upstream Paseo                                                                                         | follows Paseo | Built in                   | Yes, in place (`052e4718d`)                |
+| AIS Switch usage (`ais-switch-usage-source`)      | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                 |
+| Space App Vibing theme (`space-app-vibing-theme`) | Fork-owned                                                                                             | —             | Built in                   | Fork-owned                                 |
+| Better Paseo (`better-paseo`)                     | [RoundRedDot/better-paseo](https://github.com/RoundRedDot/better-paseo) `127d8c7`                      | 1.7.0         | Community install          | Yes: `scripts/better-paseo-vibing.patch`   |
+| Generative UI (`genui`)                           | [anh-chu/paseo-plugin-genui](https://github.com/anh-chu/paseo-plugin-genui) `cd50b2a`                  | 0.3.3         | Community install          | Yes: `scripts/genui-vibing.patch`          |
+| Shell Yeah (`shell-yeah`)                         | [stevecastaneda/paseo-plugins](https://github.com/stevecastaneda/paseo-plugins) `shell-yeah` `e49b7e8` | 1.4.2         | Community install          | Cleanup: `scripts/shell-yeah-vibing.patch` |
+| Reply follow-ups (`reply-followups`)              | Fork-owned                                                                                             | —             | Community install          | Fork-owned                                 |
 
 - **Built in:** listed in `builtinPlugins` (`packages/server/src/server/plugins/builtin/index.ts`);
   the bundler copies them beside `server.mjs` and the daemon always loads them.
@@ -36,7 +36,7 @@ is the per-plugin reference and the upgrade procedure.
   `<id>.vibing-previous` first, so an interrupted update restores the previous copy on the next
   start; a failure logs a warning and never blocks startup.
 - **Not shipped:** the other upstream provider and usage-source plugins stay in `plugins/` for
-  their own tests. Beautiful Chat (replaced by Chat Polish), Fold Turns (Chat Polish already
+  their own tests. Chat Polish and Beautiful Chat (replaced by Better Paseo), Fold Turns (Better Paseo already
   merges the steps between replies), Mermaid, Doc Viewer, Annotations, Recap and Side Chat are retired; do not restore them.
 
 The pins live in `scripts/vendor-community-plugins.mjs`, which fetches each source, applies its
@@ -210,16 +210,18 @@ Embedded frames show the theme of the host's light/dark mode, chosen in memory f
 `themeMode` query and `space:theme-mode` messages (`patches/vibing/host-theme-mode.ts` and
 `theme.ts`); the choice is never saved to the shared settings.
 
-### Chat Polish (`scripts/paseo-chat-polish-vibing.patch`)
+### Better Paseo (`scripts/better-paseo-vibing.patch`)
 
-`client/web/restyle-css.ts` adds `:root` fallbacks from Paseo's own colour variables, so embedded
-frames without the sidebar that normally calls `setNativeColors` still get its colours, and keeps
-its queued-message action icons and chat-outline preview styled after Paseo 0.14's markup.
-`client/web/selectors.ts` limits its composer chip styling to the toolbar: the model sheet
-reuses `mode-control` as a labelled row, and the chip rule that hides a third child would
-otherwise hide its current mode (Plan mode, Auto mode).
-Covered by `test/web.test.mjs`. Native `sharp` is not bundled, so thumbnails fall back to the
-original image; the optional headless browser downloads only when a user enables page checks.
+Checks directory installations before querying the external plugin registry so vendored copies report
+`local` offline, connects its Tasks server capabilities over the plugin worker's IPC `DaemonClient`,
+exposes `tasks.bots` from `<PASEO_HOME>/plugin-settings/paseo-bots/bots.json` so Bot Chat cards and
+filters display their Paseo Bot names and badge colours (`Bot`, `Feature`, `App`, `Provider`), excludes
+internal helper sessions (`vibing-chief`, `live-design`, title/translation helpers), keeps the original
+Overview/Breakdown sidebar when no card is selected while replacing the selected-card sidebar with the
+host's full interactive Paseo Bot Chat (`sidebarBotChat` / `tasks-sidebar-bot-chat.tsx`), enables
+`liveUiReplies` by default so replies with `ui` or `app` fences yield to `genui`, and forwards
+embedded Bots file clicks to Vibing's VS Code (`paseo:open-file`). Inlines its locked Shiki and `remend`
+dependencies.
 
 ### Generative UI (`scripts/genui-vibing.patch`)
 

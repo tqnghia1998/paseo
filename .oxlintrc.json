@@ -7,7 +7,7 @@
     ".dev/**",
     "packages/react-native-enriched-markdown/**",
     "plugins/genui/gallery/**",
-    "plugins/{annotations,genui,mermaid,paseo-bots,paseo-chat-polish,paseo-doc-viewer,paseo-recap,shell-yeah}/**/*.gen.ts"
+    "plugins/{annotations,better-paseo,genui,mermaid,paseo-bots,paseo-doc-viewer,paseo-recap,reply-followups,shell-yeah}/**/*.gen.ts"
   ],
   "plugins": ["react", "react-perf", "unicorn", "typescript", "oxc", "import", "promise"],
   "jsPlugins": ["./scripts/oxlint/paseo-plugin.mjs"],

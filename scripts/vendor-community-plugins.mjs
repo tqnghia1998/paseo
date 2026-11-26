@@ -25,11 +25,10 @@ const plugins = [
     patch: "shell-yeah-vibing.patch",
   },
   {
-    id: "paseo-chat-polish",
-    repository: "lthieu96/paseo-chat-polish",
-    revision: "308b3e4f401222b797cec6a37ff4bbc2c2f81e9e",
-    patch: "paseo-chat-polish-vibing.patch",
-    // pele is inlined; sharp is native and loaded on demand, so thumbnails fall back to the original image.
+    id: "better-paseo",
+    repository: "RoundRedDot/better-paseo",
+    revision: "127d8c7ae5839d89659d461e089b8bcb04df952e",
+    patch: "better-paseo-vibing.patch",
     bundleDependencies: true,
   },
   {

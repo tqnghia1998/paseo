@@ -39,6 +39,7 @@ import { openFileInHost } from "./host-file-open";
 import type { NativeBotChatProps } from "./bot-chat-types";
 import { botChatDraftId } from "./bot-chat-scope";
 import { useEmbeddedHostActive } from "./host-visibility";
+import { EmbeddedTasksSidebarBotChat } from "./tasks-sidebar-bot-chat";
 import { SheetPaneHostProvider, type SheetPaneHost } from "@/screens/workspace/sheet-pane/host";
 import { buildWorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
@@ -48,7 +49,11 @@ const spinnerColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted })
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
 export function embeddedBotChatProps(pluginId: string) {
-  if (!isEmbeddedFocusMode || pluginId !== "paseo-bots") return {};
+  if (!isEmbeddedFocusMode) return {};
+  if (pluginId === "better-paseo") {
+    return { sidebarBotChat: EmbeddedTasksSidebarBotChat };
+  }
+  if (pluginId !== "paseo-bots") return {};
   const bound = getEmbeddedWorkspace();
   const directory = getEmbeddedWorkspaceDirectory();
   return {

@@ -1,7 +1,7 @@
 import { cp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { DaemonClient } from "../test-utils/daemon-client.js";
 import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
 
@@ -71,33 +71,52 @@ test("vendored GenUI serves gallery examples, their data and the sketch font fro
   });
 }, 60_000);
 
-test("vendored Chat Polish reports local updates without depending on an external Paseo CLI", async () => {
-  await withPlugin("paseo-chat-polish", async (client, directory) => {
-    await expect(client.invokePluginRpc("paseo-chat-polish", "update.check", {})).resolves.toEqual({
-      state: "local",
-      links: [],
+test("vendored Better Paseo reports local updates and host daemon capabilities without an external Paseo CLI", async () => {
+  await withPlugin("better-paseo", async (client, directory) => {
+    await client.invokePluginRpc("better-paseo", "settings.update-check", { action: "check" });
+    await vi.waitFor(async () => {
+      await expect(
+        client.invokePluginRpc("better-paseo", "settings.update-check", { action: "status" }),
+      ).resolves.toEqual({ state: "local" });
     });
-    await expect(
-      client.invokePluginRpc("paseo-chat-polish", "update.apply", {}),
-    ).resolves.toMatchObject({ error: expect.stringContaining("Space App Vibing") });
+    await expect(client.invokePluginRpc("better-paseo", "tasks.capabilities", {})).resolves.toEqual(
+      {
+        stop: true,
+        read: true,
+      },
+    );
+    await expect(client.invokePluginRpc("better-paseo", "tasks.bots", {})).resolves.toMatchObject({
+      bots: expect.arrayContaining([
+        expect.objectContaining({ id: "vibing-general", name: "Codex", archived: false }),
+        expect.objectContaining({ id: "vibing-claude", name: "Claude", archived: false }),
+      ]),
+    });
     // Native source-path upgrades keep settings and avoid older bundle bootstrap copies.
-    const prefs = await client.invokePluginRpc("paseo-chat-polish", "prefs.get", {});
     const config = (await client.getDaemonConfig()).config;
     const upgraded = `${directory}-upgraded`;
     await cp(directory, upgraded, { recursive: true });
     await client.patchDaemonConfig({
       plugins: {
         ...config.plugins,
-        "paseo-chat-polish": { ...config.plugins!["paseo-chat-polish"]!, path: upgraded },
+        "better-paseo": { ...config.plugins!["better-paseo"]!, path: upgraded },
       },
     });
-    await expect(client.reloadPlugin("paseo-chat-polish")).resolves.toMatchObject({
+    await expect(client.reloadPlugin("better-paseo")).resolves.toMatchObject({
       enabled: true,
       status: "running",
       path: upgraded,
     });
-    await expect(client.invokePluginRpc("paseo-chat-polish", "prefs.get", {})).resolves.toEqual(
-      prefs,
+    await expect(client.invokePluginRpc("better-paseo", "tasks.capabilities", {})).resolves.toEqual(
+      {
+        stop: true,
+        read: true,
+      },
     );
+    await expect(client.invokePluginRpc("better-paseo", "tasks.bots", {})).resolves.toMatchObject({
+      bots: expect.arrayContaining([
+        expect.objectContaining({ id: "vibing-general", name: "Codex", archived: false }),
+        expect.objectContaining({ id: "vibing-claude", name: "Claude", archived: false }),
+      ]),
+    });
   });
 }, 60_000);

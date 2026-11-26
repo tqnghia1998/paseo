@@ -1,0 +1,2827 @@
+diff --git a/client/i18n/file-open-error.ts b/client/i18n/file-open-error.ts
+index 1587b52..12e3466 100644
+--- a/client/i18n/file-open-error.ts
++++ b/client/i18n/file-open-error.ts
+@@ -5,6 +5,36 @@ import type { FileOpenErrorKind } from "../../shared/file-rpc";
+ 
+ type RevealResult = { error: string | null; errorKind?: FileOpenErrorKind; errorApp?: FileOpenApp; errorCode?: "system_opener_unavailable" };
+ 
++function tryOpenInEmbeddedHost(cwd: string, rawPath: string): boolean {
++  if (typeof window === "undefined" || window.parent === window || !cwd) return false;
++  if (typeof window.name !== "string" || !window.name.startsWith("paseo-workspace:bots:")) return false;
++  let origin: string | null = null;
++  try {
++    origin = document.referrer
++      ? new URL(document.referrer).origin
++      : (window.location.ancestorOrigins?.[0] ?? null);
++  } catch {
++    return false;
++  }
++  if (!origin) return false;
++  const trimmed = rawPath.trim();
++  const match = /^(.*?)(?:(?::|#L)(\d+)(?:[:-]L?\d+)*)?$/.exec(trimmed);
++  const candidate = (match?.[1] || trimmed).trim();
++  const line = match?.[2] ? Math.max(1, Number.parseInt(match[2], 10) || 1) : 1;
++  const root = cwd.replace(/\/+$/, "");
++  let relative = candidate;
++  if (candidate.startsWith("/")) {
++    if (!root || !candidate.startsWith(`${root}/`)) return false;
++    relative = candidate.slice(root.length + 1);
++  }
++  relative = relative.replace(/^(?:\.\/)+/, "");
++  if (!relative || /^([/\\]|[a-zA-Z]:)/.test(relative) || relative.split(/[/\\]/).includes("..")) {
++    return false;
++  }
++  window.parent.postMessage({ type: "paseo:open-file", path: relative, line }, origin);
++  return true;
++}
++
+ /**
+  * A path press: opens or reveals the path on the host with the current file
+  * open setting, and shows any failure in a toast.
+@@ -15,7 +45,9 @@ export function revealWithSetting(
+   cwd: string,
+   path: string,
+ ): void {
+-  void revealPath({ cwd, path, expectedApp: getEnhancerPreferences().fileOpenApp })
++  const expectedApp = getEnhancerPreferences().fileOpenApp;
++  if (expectedApp === "system" && tryOpenInEmbeddedHost(cwd, path)) return;
++  void revealPath({ cwd, path, expectedApp })
+     .then((result) => { if (result.error) toast.error(fileOpenError(result)); })
+     .catch((error: unknown) => toast.error(String(error)));
+ }
+diff --git a/client/preferences.ts b/client/preferences.ts
+index 4ec2f4a..ffeb6eb 100644
+--- a/client/preferences.ts
++++ b/client/preferences.ts
+@@ -241,7 +241,7 @@ export const DEFAULT_PREFERENCES: Readonly<EnhancerPreferences> = {
+   enhancedUserBubble: false,
+   selectionActions: true,
+   assistantMarkdown: true,
+-  liveUiReplies: false,
++  liveUiReplies: true,
+   markdownVariant: "document",
+   rowLabelStyle: "icon",
+   compactRowSpacing: true,
+diff --git a/client/tasks/board/board-screen.tsx b/client/tasks/board/board-screen.tsx
+index b54daca..6a01e99 100644
+--- a/client/tasks/board/board-screen.tsx
++++ b/client/tasks/board/board-screen.tsx
+@@ -22,6 +22,11 @@ import { useBoard, type BoardLayoutHandlers } from "./use-board";
+ import { TaskQuestionDialog } from "../cards/question-dialog";
+ import { consumeBoardOpen } from "./params";
+ import { openedTask } from "../data";
++import type { TasksSidebarBotChatSlotProps } from "./details-sidebar";
++
++type TasksBoardScreenProps = PluginScreenProps & {
++  sidebarBotChat?: React.ComponentType<TasksSidebarBotChatSlotProps>;
++};
+ 
+ /**
+  * The Tasks board (`addScreen` id `tasks`): the lanes side by side, scrolling
+@@ -81,7 +86,7 @@ function BoardBlank(props: PluginScreenProps) {
+ }
+ 
+ /** The layout follows the host's: the phone layout on its compact layout, the lanes everywhere else. */
+-function BoardContent(props: PluginScreenProps) {
++function BoardContent(props: TasksBoardScreenProps) {
+   const rootRef = useRef<View>(null);
+   // The board can open before any chat row resolved the theme's selection fill.
+   const colorKey = themeKey(props.theme);
+@@ -90,7 +95,7 @@ function BoardContent(props: PluginScreenProps) {
+   const compact = boardIsCompact(props.layout.compact);
+   const board = useBoard(props, rootRef, handlers, compact);
+   const Layout = compact ? PhoneBoard : DesktopBoard;
+-  const layout = useMemo(() => <Layout screen={props} board={board} rootRef={rootRef} handlers={handlers} />, [Layout, props, board]);
++  const layout = useMemo(() => <Layout screen={props} board={board} rootRef={rootRef} handlers={handlers} sidebarBotChat={props.sidebarBotChat} />, [Layout, props, board]);
+   return (
+     <TasksTypography theme={props.theme}>
+       <View {...pluginRoot} style={{ flex: 1, backgroundColor: props.theme.colors.surface0 }}>
+diff --git a/client/tasks/board/desktop-board.tsx b/client/tasks/board/desktop-board.tsx
+index 64c6793..ea3a932 100644
+--- a/client/tasks/board/desktop-board.tsx
++++ b/client/tasks/board/desktop-board.tsx
+@@ -24,7 +24,7 @@ import { buildFilterOptions } from "./filter-options";
+ import { SWITCH_MS } from "../../ui/switch-track";
+ import { LANES, boardKeyReducer, clampFocus, boardLaneLayout, type BoardFocus, type LaneShape } from "./navigation";
+ import { menuChrome } from "./menu-model";
+-import { DetailsSidebar } from "./details-sidebar";
++import { DetailsSidebar, type TasksSidebarBotChatSlotProps } from "./details-sidebar";
+ import { BoardTips } from "../cards/card-hints";
+ import { LaneMotionLayer, LaneMotionProvider, scrollNode, useLaneCovered, useLaneMotion, useLaneTarget } from "./lane-motion";
+ import { laneChurn } from "./lane-motion-plan";
+@@ -41,6 +41,7 @@ import {
+   sheetHeight,
+   sidebarMode,
+   sidebarWidth,
++  uncoverLaneScrollX,
+   writeSidebarPreference,
+   type SheetDetent,
+   type SidebarMode,
+@@ -75,6 +76,11 @@ function isTyping(active: HTMLElement | null): boolean {
+   return !!active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
+ }
+ 
++/** True when an element lives inside the interactive Bot Chat sidebar. */
++function inBotChatSidebar(node: Element | null | undefined): boolean {
++  return Boolean(node?.closest?.('[data-testid="sidebar-bot-chat"]'));
++}
++
+ /** The band an overlay scrollbar (macOS's, the board row's thin one) covers at a scroller's edge. */
+ const OVERLAY_SCROLLBAR = 16;
+ 
+@@ -105,7 +111,7 @@ function claimKeys(rootRef: RefObject<View | null>, clearFocus: () => void, acti
+       if (typeof document === "undefined") return;
+       const root = rootRef.current as unknown as HTMLElement | null;
+       const target = event.target as HTMLElement | null;
+-      if (!root || isTyping(target)) return;
++      if (!root || isTyping(target) || inBotChatSidebar(target)) return;
+       const active = document.activeElement as HTMLElement | null;
+       if (active && root.contains(active)) return;
+       focusTaskBoard(root);
+@@ -132,6 +138,7 @@ export function DesktopBoard(props: {
+   board: BoardController;
+   rootRef: RefObject<View | null>;
+   handlers: RefObject<BoardLayoutHandlers | null>;
++  sidebarBotChat?: React.ComponentType<TasksSidebarBotChatSlotProps>;
+ }) {
+   const { screen, rootRef } = props;
+   const [filtersOpen, setFiltersOpen] = useState(false);
+@@ -257,9 +264,13 @@ export function DesktopBoard(props: {
+   // The lanes read it from here: a new room once the sheet is in, out or at another height drew every lane again (50-95 ms on an Android foldable).
+   const [laneRoom] = useState(createLaneRoom);
+   useLayoutEffect(() => laneRoom.set(sheetRoom), [laneRoom, sheetRoom]);
++  const chatSelected = Boolean(props.sidebarBotChat && selection.id !== null);
++  const preferredSidebarWidth = chatSelected ? (preference.chatWidth ?? SIDEBAR.chatWidth) : preference.width;
++  const defaultSidebarWidth = chatSelected ? SIDEBAR.chatWidth : SIDEBAR.width;
++  const maxSidebarWidth = chatSelected ? SIDEBAR.chatMax : SIDEBAR.max;
+   const panelWidth = tabletFloating
+     ? tabletSidebarWidth(boardWidth, floatingDragWidth ?? preference.floatingWidth)
+-    : sidebarWidth(boardWidth, dragWidth ?? preference.width, narrow || floating ? "floating" : "inline");
++    : sidebarWidth(boardWidth, dragWidth ?? preferredSidebarWidth, narrow || floating ? "floating" : "inline", chatSelected);
+   const lanesWidth = Math.max(0, boardWidth - (inline ? panelWidth + SIDEBAR.gap : 0));
+   const laneSizing = touch ? "stable" : "fit";
+   const laneWidth = boardLaneLayout(boardWidth, laneOrder, collapsed, board.laneWidth, lanesWidth, laneSizing).laneWidth;
+@@ -308,9 +319,9 @@ export function DesktopBoard(props: {
+     if (selectedGone) dispatch({ type: "clear" });
+   }, [selectedGone]);
+ 
+-  const floatWidth = touch ? tabletSidebarWidth(boardWidth, preference.floatingWidth) : sidebarWidth(boardWidth, preference.width, "floating");
+-  const latest = useRef({ board, live, emptyLanesSwitch, focus, shapes, menu, searchExpanded, selection, floating, open, narrow, preferred: preference.open, toggleSidebar, boardWidth, lanesWidth, inSheet, floatWidth, laneWidth: layout.laneWidth, collapsed });
+-  latest.current = { board, live, emptyLanesSwitch, focus, shapes, menu, searchExpanded, selection, floating, open, narrow, preferred: preference.open, toggleSidebar, boardWidth, lanesWidth, inSheet, floatWidth, laneWidth: layout.laneWidth, collapsed };
++  const floatWidth = touch ? tabletSidebarWidth(boardWidth, preference.floatingWidth) : sidebarWidth(boardWidth, preferredSidebarWidth, "floating", chatSelected);
++  const latest = useRef({ board, live, emptyLanesSwitch, focus, shapes, menu, searchExpanded, selection, floating, open, narrow, preferred: preference.open, preference, chatSelected, drawnOrder: archivedSwitch.drawn, toggleSidebar, boardWidth, lanesWidth, inSheet, floatWidth, laneWidth: layout.laneWidth, collapsed });
++  latest.current = { board, live, emptyLanesSwitch, focus, shapes, menu, searchExpanded, selection, floating, open, narrow, preferred: preference.open, preference, chatSelected, drawnOrder: archivedSwitch.drawn, toggleSidebar, boardWidth, lanesWidth, inSheet, floatWidth, laneWidth: layout.laneWidth, collapsed };
+   const sheetMode = mode === "sheet";
+   const sheetModeRef = useRef(sheetMode);
+   sheetModeRef.current = sheetMode;
+@@ -330,8 +341,8 @@ export function DesktopBoard(props: {
+   // not the sidebar's (`boardLaneLayout`).
+   const dragViewRef = useRef<(width: number) => string>(() => "");
+   dragViewRef.current = (width: number) => {
+-    if (floating) return lanesInView(laneOrder, collapsed, layout.laneWidth, rowScrollX.current, lanesWidth - sidebarWidth(boardWidth, width, "floating") - SIDEBAR.gap);
+-    const viewport = Math.max(0, boardWidth - sidebarWidth(boardWidth, width, "inline") - SIDEBAR.gap);
++    if (floating) return lanesInView(laneOrder, collapsed, layout.laneWidth, rowScrollX.current, lanesWidth - sidebarWidth(boardWidth, width, "floating", chatSelected) - SIDEBAR.gap);
++    const viewport = Math.max(0, boardWidth - sidebarWidth(boardWidth, width, "inline", chatSelected) - SIDEBAR.gap);
+     const lanes = boardLaneLayout(boardWidth, archivedSwitch.drawn, collapsedState, board.laneWidth, viewport, laneSizing);
+     return `${lanes.scroll}${lanesInView(laneOrder, collapsed, lanes.laneWidth, rowScrollX.current, viewport)}`;
+   };
+@@ -351,8 +362,8 @@ export function DesktopBoard(props: {
+     floatingView.current = view;
+     setFloatingDragWidth(width);
+   }, []);
+-  const fitInline = useCallback((width: number) => sidebarWidth(latest.current.boardWidth, width, "inline"), []);
+-  const fitFloating = useCallback((width: number) => sidebarWidth(latest.current.boardWidth, width, "floating"), []);
++  const fitInline = useCallback((width: number) => sidebarWidth(latest.current.boardWidth, width, "inline", latest.current.chatSelected), []);
++  const fitFloating = useCallback((width: number) => sidebarWidth(latest.current.boardWidth, width, "floating", latest.current.chatSelected), []);
+   // The view the board last drew for the dragged width.
+   const dragView = useRef<string | null>(null);
+   // `drawn`: the column already took the width on the page. The board then
+@@ -370,25 +381,33 @@ export function DesktopBoard(props: {
+   }, []);
+   const highlightedLane = board.highlighted ? findCard(lanes, board.highlighted)?.lane ?? null : null;
+ 
+-  // A floating panel lands on the lanes' right side, where the card just
+-  // clicked may sit: the row scrolls that card's lane out from under it. A
+-  // sheet covers no lane's side (`cover` 0), but a lane clicked at the
+-  // board's edge still comes into view whole.
+-  // `laneWidth` is the lanes' width once a lane about to open has opened. True when the row scrolls.
++  const reduced = useReducedMotion();
++
++  // Scrolls the horizontal lanes row so `lane` sits completely clear of an
++  // inline or floating sidebar (`cover` is the right-side width taken by the
++  // sidebar and its outer margin; 0 for a bottom sheet).
+   const uncover = useCallback((lane: LaneId, cover: number, laneWidth = latest.current.laneWidth) => {
+     const now = latest.current;
+-    const order = now.board.laneOrder;
++    if (now.boardWidth <= 0) return false;
++    const order = now.drawnOrder;
+     const index = order.indexOf(lane);
++    if (index < 0) return false;
+     const left = LANES.edge + order.slice(0, index).reduce((sum, id) => sum + (now.collapsed.includes(id) ? LANES.collapsed : laneWidth) + LANES.gap, 0);
+-    const right = left + laneWidth;
++    const right = left + (now.collapsed.includes(lane) ? LANES.collapsed : laneWidth);
+     const visible = now.boardWidth - cover;
+-    const x = rowScrollX.current;
+-    if (right - x <= visible && left - LANES.edge >= x) return false;
+-    const target = Math.max(0, Math.min(left - LANES.edge, right - visible));
+-    // After the render that gives the row its room to scroll under the panel.
+-    setTimeout(() => rowRef.current?.scrollTo({ x: target, animated: true }), 50);
++    const target = uncoverLaneScrollX({
++      laneLeft: left,
++      laneRight: right,
++      edge: LANES.edge,
++      visibleWidth: visible,
++      scrollX: rowScrollX.current,
++    });
++    if (target === null) return false;
++    requestAnimationFrame(() => {
++      rowRef.current?.scrollTo({ x: target, animated: !reduced });
++    });
+     return true;
+-  }, []);
++  }, [reduced]);
+ 
+   // A stat in the sidebar: its lane opens if folded, scrolls into view if it
+   // is not all in view (beside the inline sidebar, or out from under a
+@@ -433,25 +452,45 @@ export function DesktopBoard(props: {
+   };
+ 
+   // A click, tap or keyboard preview puts a card in the sidebar.
+-  // Selecting a card brings a put-away sidebar up for the moment.
++  // Selecting a card brings a put-away sidebar up for the moment and scrolls
++  // the lanes horizontally so the card is never overlapped by the sidebar.
++  const hasBotChatSidebar = Boolean(props.sidebarBotChat);
+   const showCard = useCallback(
+     (card: TaskCard, preview = false, parent?: string) => {
+       if (!preview) setFocus(null);
+       dispatch({ type: "click", id: card.id, parent });
+       const now = latest.current;
+       if (!now.open) setShown("card");
+-      if (!now.narrow && now.preferred) return;
+       if (sheetModeRef.current) {
+         // The sheet covers the lanes' lower part: the card's list brings it to the top, above the sheet.
+         const location = findCard(now.board.lanes, card.id);
+         if (location) setTimeout(() => scrollTo(location.lane, location.index, 0.05), 80);
+-        uncover(card.lane, LANES.edge);
+-      } else {
+-        uncover(card.lane, now.floatWidth + (touch ? SIDEBAR.gap : 2 * SIDEBAR.gap));
++        uncover(card.lane, 0);
++        return;
+       }
++      const targetMode = now.narrow || !now.preferred ? "floating" : "inline";
++      const targetPreferred = hasBotChatSidebar ? (now.preference.chatWidth ?? SIDEBAR.chatWidth) : now.preference.width;
++      const targetWidth = touch && targetMode === "floating"
++        ? tabletSidebarWidth(now.boardWidth, now.preference.floatingWidth)
++        : sidebarWidth(now.boardWidth, targetPreferred, targetMode, hasBotChatSidebar);
++      uncover(card.lane, targetWidth + (touch && targetMode === "floating" ? 0 : SIDEBAR.gap));
+     },
+-    [touch, uncover, scrollTo],
++    [hasBotChatSidebar, touch, uncover, scrollTo],
+   );
++
++  const isSidebarIdle = dragWidth === null && floatingDragWidth === null;
++  useEffect(() => {
++    if (!open || !selection.id || inSheet || boardWidth <= 0 || !isSidebarIdle) return;
++    const now = latest.current;
++    const cardLane = findCard(now.board.lanes, selection.id)?.lane ?? now.board.cardById(selection.id)?.lane;
++    if (!cardLane) return;
++    const cover = panelWidth + (tabletFloating ? 0 : SIDEBAR.gap);
++    uncover(cardLane, cover);
++    const settleTimer = setTimeout(() => {
++      uncover(cardLane, cover);
++    }, 260);
++    return () => clearTimeout(settleTimer);
++  }, [open, selection.id, chatSelected, inSheet, panelWidth, boardWidth, isSidebarIdle, tabletFloating, uncover]);
+   const callbacks = useMemo<CardCallbacks>(() => ({ ...board.callbacks, onSelect: showCard }), [board.callbacks, showCard]);
+ 
+   // A click or tap on the lanes that no card, button or list takes: the lanes'
+@@ -497,7 +536,7 @@ export function DesktopBoard(props: {
+       const active = document.activeElement as HTMLElement | null;
+       if (root?.querySelector?.('[data-testid="task-card-menu"]')) return;
+       if (active && active !== document.body && root && !root.contains(active)) return;
+-      if (isTyping(active)) return;
++      if (isTyping(active) || inBotChatSidebar(active)) return;
+       const now = latest.current;
+       const domCardId = focusedTaskCardId(root);
+       const keyFocus = domCardId ? findCard(now.board.lanes, domCardId) : now.focus;
+@@ -611,6 +650,7 @@ export function DesktopBoard(props: {
+       const root = rootRef.current as unknown as HTMLElement | null;
+       if (root?.querySelector?.('[data-testid="task-card-menu"]')) return;
+       const active = document.activeElement as HTMLElement | null;
++      if (inBotChatSidebar(active)) return;
+       const inBoard = !!active && !!root && root.contains(active);
+       const disarmed = latest.current.board.stop.cancelAll();
+       if (inBoard && latest.current.searchExpanded) {
+@@ -635,7 +675,6 @@ export function DesktopBoard(props: {
+   }, [board.visible, rootRef, showCard, scale]);
+ 
+   const breathing = useBreathing(!tasks.ready && board.visible);
+-  const reduced = useReducedMotion();
+   // Native: after a switch that adds or hides cards in every lane (subtasks),
+   // a lane out of the row's view shows its cards as they were for a moment,
+   // so only the cards on screen mount in the switch's frame. A lane wanted in
+@@ -687,6 +726,7 @@ export function DesktopBoard(props: {
+       tabs={!inSheet || touch}
+       sheetToggle={inSheet ? sheetToggle : undefined}
+       onSheetClose={inSheet ? closeSheet : undefined}
++      sidebarBotChat={props.sidebarBotChat}
+     />
+   );
+   const activeCardId = focus ? `task-card-${lanes[focus.lane].cards[focus.index]!.id}` : undefined;
+@@ -815,7 +855,7 @@ export function DesktopBoard(props: {
+           {unfilteredEmpty ? <BoardEmpty board={board} theme={theme} /> : null}
+         </View>
+         {mode === "inline" && !floating ? (
+-          <SidebarColumn open={inline} width={panelWidth} theme={theme} label={strings.sidebar.resize} fit={fitInline} onDrag={dragSidebar} onResize={(width) => setPreference((current) => ({ ...current, width }))}>
++          <SidebarColumn open={inline} width={panelWidth} defaultWidth={defaultSidebarWidth} maxWidth={maxSidebarWidth} theme={theme} label={strings.sidebar.resize} fit={fitInline} onDrag={dragSidebar} onResize={(width) => setPreference((current) => (chatSelected ? { ...current, chatWidth: width } : { ...current, width }))}>
+             {sidebar}
+           </SidebarColumn>
+         ) : null}
+@@ -834,7 +874,7 @@ export function DesktopBoard(props: {
+             {sidebar}
+           </BoardSheet>
+         ) : !touch ? (
+-          <SidebarColumn open={floating} floating width={panelWidth} theme={theme} label={strings.sidebar.resize} fit={fitFloating} onDrag={dragSidebar} onResize={(width) => setPreference((current) => ({ ...current, width }))}>
++          <SidebarColumn open={floating} floating width={panelWidth} defaultWidth={defaultSidebarWidth} maxWidth={maxSidebarWidth} theme={theme} label={strings.sidebar.resize} fit={fitFloating} onDrag={dragSidebar} onResize={(width) => setPreference((current) => (chatSelected ? { ...current, chatWidth: width } : { ...current, width }))}>
+             {sidebar}
+           </SidebarColumn>
+         ) : floating ? (
+@@ -1017,6 +1057,8 @@ function SidebarColumn(props: {
+   open: boolean;
+   floating?: boolean;
+   width: number;
++  defaultWidth?: number;
++  maxWidth?: number;
+   theme: PluginTheme;
+   label: string;
+   fit(width: number): number;
+@@ -1060,7 +1102,7 @@ function SidebarColumn(props: {
+   const pan = useMemo(() => {
+     let touchX = 0;
+     let startWidth = 0;
+-    const widthAt = (event: GestureResponderEvent) => live.current.fit(clampWidth(startWidth + touchX - event.nativeEvent.pageX));
++    const widthAt = (event: GestureResponderEvent) => live.current.fit(clampWidth(startWidth + touchX - event.nativeEvent.pageX, live.current.maxWidth));
+     return PanResponder.create({
+       onStartShouldSetPanResponderCapture: (event) => {
+         touchX = event.nativeEvent.pageX;
+@@ -1102,7 +1144,7 @@ function SidebarColumn(props: {
+     const at = Date.now();
+     if (at - lastDown.current < 350) {
+       lastDown.current = 0;
+-      live.current.onResize(SIDEBAR.width);
++      live.current.onResize(live.current.defaultWidth ?? SIDEBAR.width);
+       return;
+     }
+     lastDown.current = at;
+@@ -1125,7 +1167,7 @@ function SidebarColumn(props: {
+     let frame = 0;
+     let pointerY = event.nativeEvent.clientY;
+     const move = (moved: PointerEvent) => {
+-      width = clampWidth(width0 + (x0 - moved.pageX));
++      width = clampWidth(width0 + (x0 - moved.pageX), live.current.maxWidth);
+       if (moved.pageX !== x0) setResizing(handle, true);
+       pointerY = moved.clientY;
+       if (!frame) {
+@@ -1168,12 +1210,12 @@ function SidebarColumn(props: {
+       accessible
+       accessibilityRole="adjustable"
+       accessibilityLabel={props.label}
+-      accessibilityValue={{ min: SIDEBAR.min, max: props.fit(SIDEBAR.max), now: props.width }}
++      accessibilityValue={{ min: SIDEBAR.min, max: props.fit(props.maxWidth ?? SIDEBAR.max), now: props.width }}
+       accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+       onAccessibilityAction={(event) => {
+         const action = event.nativeEvent.actionName;
+         if (action !== "increment" && action !== "decrement") return;
+-        props.onResize(props.fit(clampWidth(props.width + (action === "increment" ? 20 : -20))));
++        props.onResize(props.fit(clampWidth(props.width + (action === "increment" ? 20 : -20), props.maxWidth)));
+       }}
+       testID="sidebar-resize"
+       style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 12, alignItems: "center", justifyContent: "center", zIndex: 5 }}
+diff --git a/client/tasks/board/details-sidebar.tsx b/client/tasks/board/details-sidebar.tsx
+index 7ee363a..2bf9ac8 100644
+--- a/client/tasks/board/details-sidebar.tsx
++++ b/client/tasks/board/details-sidebar.tsx
+@@ -14,7 +14,7 @@ import { liftStyle, scaleStyle, surfaceLift } from "../cards/surface-lift";
+ import { usePressCue } from "../cards/action-pressable";
+ import { hoverFill } from "../hover-fill";
+ import { HoverControl } from "../hover-control";
+-import { BrandMark, DETAIL_CARD, DetailActionBar, DetailCard, detailGutter, detailScrollProps, outsideIndicator, ProjectIcon, requestInSection, StatusIcon, TagMark, TaskDetailCards, taskTokens, tildePath, type DetailNotice, type TaskTokens } from "../cards";
++import { BrandMark, DETAIL_CARD, DetailActionBar, DetailCard, detailCardFrame, detailGutter, detailScrollProps, outsideIndicator, ProjectIcon, requestInSection, RoundIcon, StatusIcon, TagMark, TaskDetailCards, taskTokens, tildePath, type DetailNotice, type TaskTokens } from "../cards";
+ import { LANE_STATUS, turnRunning, type LaneId, type TaskCard } from "../model";
+ import { activeStopChildren } from "../actions/stop-targets";
+ import { SheetFoot, SheetScrollRoom } from "../sheet-motion";
+@@ -39,6 +39,17 @@ import { useTitleUpdateState } from "../actions/title-update";
+ type GroupKind = (typeof FILTER_GROUP_ORDER)[number];
+ const GROUP_KINDS: readonly GroupKind[] = FILTER_GROUP_ORDER;
+ 
++export interface TasksSidebarBotChatSlotProps {
++  serverId: string;
++  paseo: BoardController["paseo"];
++  agentId: string;
++  workspaceId: string | null;
++  cwd: string | null;
++  botName?: string | null;
++  active: boolean;
++  onSelectAgent: (agentId: string | null) => void;
++}
++
+ export interface DetailsSidebarProps {
+   board: BoardController;
+   theme: PluginTheme;
+@@ -57,6 +68,7 @@ export interface DetailsSidebarProps {
+   tabs?: boolean;
+   sheetToggle?: { full: boolean; label: string; onPress(): void };
+   onSheetClose?(): void;
++  sidebarBotChat?: React.ComponentType<TasksSidebarBotChatSlotProps>;
+   testID?: string;
+ }
+ 
+@@ -118,7 +130,9 @@ function DetailsSidebarView(props: DetailsSidebarProps) {
+   const backId = selection.back[selection.back.length - 1]?.id;
+   const backCard = backId ? board.cardById(backId) : undefined;
+ 
+-  const showStats = props.stats !== false;
++  const BotChatSlot = props.sidebarBotChat;
++  const chatAgentId = card && BotChatSlot ? (card.subagent === "provider" ? (card.parent?.id ?? null) : card.id) : null;
++  const showStats = props.stats !== false && !chatAgentId;
+   // The counts' summary and the groups read the same options: built once here, and only while one of them is shown.
+   const optionsShown = showStats || card === undefined;
+   const showEmpty = board.showEmptyGroups;
+@@ -131,6 +145,43 @@ function DetailsSidebarView(props: DetailsSidebarProps) {
+   const tabs = props.tabs === true && card !== undefined;
+   const columns = !tabs && props.scrollAll === true && card !== undefined && layout.wide;
+   const short = !tabs && !columns && (props.scrollAll === true || layout.short);
++  // Whether the column's size can change what it draws. A touch card in tabs
++  // (the tablet's sheet and floating panel) ignores it: there the layout that
++  // follows a card's first frame only drew the whole card again, the same,
++  // for 70 ms on an Android foldable, and the sheet waited for it to slide in.
++  const layoutUsed = chatAgentId ? false : card ? (tabs ? !(props.touch || props.scrollAll === true) : true) : props.scrollAll !== true;
++  const usedNow = useRef(layoutUsed);
++  usedNow.current = layoutUsed;
++  // The last size measured while it was not used; taken once it is.
++  const measured = useRef(layout);
++  useLayoutEffect(() => {
++    if (!layoutUsed) return;
++    const next = measured.current;
++    setLayout((was) => was.short === next.short && was.wide === next.wide ? was : next);
++  }, [layoutUsed]);
++
++  if (card && BotChatSlot && chatAgentId) {
++    return (
++      <SidebarBotChatView
++        board={board}
++        card={card}
++        agentId={chatAgentId}
++        backId={backId}
++        backCard={backCard}
++        theme={theme}
++        tokens={tokens}
++        touch={props.touch}
++        dispatch={dispatch}
++        sheetToggle={props.sheetToggle}
++        onSheetClose={props.onSheetClose}
++        menu={menu}
++        onOpenMenu={openMenu}
++        onCloseMenu={() => setMenu(null)}
++        BotChatSlot={BotChatSlot}
++        testID={props.testID}
++      />
++    );
++  }
+   const content = (
+     <>
+       {menu && board.cardById(menu.id) ? <SidebarCardMenu board={board} card={board.cardById(menu.id)!} theme={theme} point={menu.point} onClose={() => setMenu(null)} /> : null}
+@@ -163,20 +214,6 @@ function DetailsSidebarView(props: DetailsSidebarProps) {
+     </>
+   );
+   const sheetActions = !tabs && card && props.onSheetClose && !requestInSection(card, board.buttonsFor(card)) ? <SheetFoot><DetailActionBar {...detailActions(board, card)} theme={theme} sidebar onClose={props.onSheetClose} /></SheetFoot> : null;
+-  // Whether the column's size can change what it draws. A touch card in tabs
+-  // (the tablet's sheet and floating panel) ignores it: there the layout that
+-  // follows a card's first frame only drew the whole card again, the same,
+-  // for 70 ms on an Android foldable, and the sheet waited for it to slide in.
+-  const layoutUsed = card ? (tabs ? !(props.touch || props.scrollAll === true) : true) : props.scrollAll !== true;
+-  const usedNow = useRef(layoutUsed);
+-  usedNow.current = layoutUsed;
+-  // The last size measured while it was not used; taken once it is.
+-  const measured = useRef(layout);
+-  useLayoutEffect(() => {
+-    if (!layoutUsed) return;
+-    const next = measured.current;
+-    setLayout((was) => was.short === next.short && was.wide === next.wide ? was : next);
+-  }, [layoutUsed]);
+   const onLayout = (event: { nativeEvent: { layout: { width: number; height: number } } }) => {
+     const height = Math.round(event.nativeEvent.layout.height);
+     const short = height > 0 && height < SHORT_COLUMN;
+@@ -384,12 +421,12 @@ function StatsCard(props: { board: BoardController; options: ShownFilterOptions;
+   const summary = filterSummary(board.params, board.defaults, options, board.strings);
+   return (
+     <DetailCard tokens={tokens} style={{ paddingHorizontal: 8, paddingTop: 8, paddingBottom: props.touch ? 4 : 8, gap: 6 }} testID="sidebar-stats">
+-      <View style={{ paddingHorizontal: 4, flexDirection: "row", alignItems: "baseline", gap: 8 }}>
++      <View style={{ paddingHorizontal: 4, flexDirection: "row", alignItems: "center", gap: 8 }}>
+         <View style={{ flexShrink: 0 }}>
+           <RollingTotal board={board} style={{ fontSize: F.base, fontWeight: "600", color: tokens.foreground, fontVariant: ["tabular-nums"] }} />
+         </View>
+         {summary ? (
+-          <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: F.sm, color: tokens.foregroundMuted }}>
++          <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: F.sm, color: tokens.foregroundMuted }}>
+             {summary}
+           </Text>
+         ) : null}
+@@ -544,7 +581,7 @@ function GroupCard(props: { board: BoardController; options: ShownFilterOptions;
+   }, []);
+   // All four labels appear together, only after every current measurement fits.
+   const showLabels = GROUP_KINDS.every((id) => labelFits[id]?.key === `${strings.groups[id]}|${scale}` && labelFits[id]?.fits);
+-  const [kind, setKind] = useState<GroupKind>("agent");
++  const [kind, setKind] = useState<GroupKind>("label");
+   const [queries, setQueries] = useState<Record<GroupKind, string>>({ agent: "", project: "", workspace: "", label: "" });
+   const [searchFocused, setSearchFocused] = useState(false);
+   const query = queries[kind];
+@@ -804,6 +841,175 @@ function GroupRowView(props: { row: GroupRow; tokens: TaskTokens; touch: boolean
+   );
+ }
+ 
++function SidebarBotChatView(props: {
++  board: BoardController;
++  card: TaskCard;
++  agentId: string;
++  backId: string | undefined;
++  backCard: TaskCard | undefined;
++  theme: PluginTheme;
++  tokens: TaskTokens;
++  touch: boolean;
++  dispatch(action: SelectionAction): void;
++  sheetToggle?: { full: boolean; label: string; onPress(): void };
++  onSheetClose?(): void;
++  menu: { id: string; point: { x: number; y: number } } | null;
++  onOpenMenu(id: string, point: { x: number; y: number }): void;
++  onCloseMenu(): void;
++  BotChatSlot: React.ComponentType<TasksSidebarBotChatSlotProps>;
++  testID?: string;
++}) {
++  const { board, card, agentId, theme, tokens, dispatch, BotChatSlot } = props;
++  const scale = useTasksFontScale();
++  const menuRef = useRef<View>(null);
++  const strings = cardStrings(board.language);
++  const homeDirectory = useHomeDirectory();
++  const botTag = card.labels[0];
++  const featureName = card.location.workspaceName || card.location.projectName || tildePath(card.location.cwd, homeDirectory);
++  const buttonSize = taskControlHeight(props.touch ? 32 : 28, scale);
++  const iconSize = props.touch ? 16 : taskControlHeight(15, scale);
++  const closeLabel = board.strings.sidebar.close;
++  const menuLabel = board.language === "zh" ? "对话菜单" : "Chat menu";
++  const backLabel = props.backCard?.title ?? strings.parentUnknown;
++  const onSelectAgent = useCallback(
++    (nextAgentId: string | null) => {
++      if (nextAgentId) dispatch({ type: "click", id: nextAgentId });
++      else if (props.onSheetClose) props.onSheetClose();
++      else dispatch({ type: "clear" });
++    },
++    [dispatch, props.onSheetClose],
++  );
++
++  return (
++    <View style={{ flex: 1, minHeight: 0 }} testID={props.testID ?? "details-sidebar"}>
++      {props.menu && board.cardById(props.menu.id) ? (
++        <SidebarCardMenu board={board} card={board.cardById(props.menu.id)!} theme={theme} point={props.menu.point} onClose={props.onCloseMenu} />
++      ) : null}
++      <View
++        testID="sidebar-bot-chat"
++        style={[
++          detailCardFrame(tokens),
++          {
++            flex: 1,
++            minHeight: 0,
++            overflow: "hidden",
++            backgroundColor: theme.colors.surface0,
++          },
++        ]}
++      >
++        <View
++          testID="sidebar-bot-chat-header"
++          style={{
++            flexShrink: 0,
++            flexDirection: "row",
++            alignItems: "center",
++            gap: 8,
++            paddingLeft: props.backId ? 6 : 12,
++            paddingRight: 6,
++            paddingVertical: 6,
++            backgroundColor: tokens.card.background,
++            borderBottomWidth: StyleSheet.hairlineWidth,
++            borderBottomColor: tokens.card.border,
++          }}
++        >
++          {props.backId ? (
++            <RoundIcon
++              icon="ArrowLeft"
++              label={backLabel}
++              size={buttonSize}
++              iconSize={iconSize}
++              tokens={tokens}
++              onPress={() => dispatch({ type: "back" })}
++              testID="sidebar-bot-chat-back"
++            />
++          ) : null}
++          <StatusIcon kind={card.stoppedManually ? "stopped" : card.status} size={14} theme={theme} animated={board.visible} />
++          <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
++            <Text numberOfLines={1} {...tipProps(card.title)} style={{ fontSize: F.base, fontWeight: "600", color: tokens.foreground }}>
++              {card.title}
++            </Text>
++            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 }}>
++              {botTag ? (
++                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0, maxWidth: "50%" }}>
++                  <TagMark size={11} color={botTag.color} hole={tokens.card.background} />
++                  <Text numberOfLines={1} style={{ fontSize: F.sm, color: tokens.foregroundMuted }}>
++                    {botTag.name}
++                  </Text>
++                </View>
++              ) : null}
++              {botTag && featureName ? (
++                <Text style={{ fontSize: F.sm, color: tokens.foregroundMuted }}>·</Text>
++              ) : null}
++              {featureName ? (
++                <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: F.sm, color: tokens.foregroundMuted }}>
++                  {featureName}
++                </Text>
++              ) : null}
++            </View>
++          </View>
++          <View style={{ flexDirection: "row", alignItems: "center", gap: 2, flexShrink: 0 }}>
++            {board.callbacks.onOpen ? (
++              <RoundIcon
++                icon="ArrowUpRight"
++                label={strings.openTab}
++                size={buttonSize}
++                iconSize={iconSize}
++                tokens={tokens}
++                onPress={() => board.callbacks.onOpen?.(agentId)}
++                testID="sidebar-bot-chat-open-workspace"
++              />
++            ) : null}
++            <View ref={menuRef} collapsable={false}>
++              <RoundIcon
++                icon="MoreVertical"
++                label={menuLabel}
++                size={buttonSize}
++                iconSize={iconSize}
++                tokens={tokens}
++                onPress={() => menuRef.current?.measureInWindow((x, y, width, height) => props.onOpenMenu(card.id, { x: x + width, y: y + height }))}
++                testID="sidebar-bot-chat-menu"
++              />
++            </View>
++            {props.sheetToggle ? (
++              <RoundIcon
++                icon={props.sheetToggle.full ? "Minimize2" : "Maximize2"}
++                label={props.sheetToggle.label}
++                size={buttonSize}
++                iconSize={iconSize}
++                tokens={tokens}
++                onPress={props.sheetToggle.onPress}
++                testID="sidebar-bot-chat-sheet-toggle"
++              />
++            ) : null}
++            <RoundIcon
++              icon="X"
++              label={closeLabel}
++              size={buttonSize}
++              iconSize={iconSize}
++              tokens={tokens}
++              onPress={props.onSheetClose ?? (() => dispatch({ type: "clear" }))}
++              testID="sidebar-bot-chat-close"
++            />
++          </View>
++        </View>
++        <View style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
++          <BotChatSlot
++            key={agentId}
++            serverId={board.hostId}
++            paseo={board.paseo}
++            agentId={agentId}
++            workspaceId={card.location.workspaceId}
++            cwd={card.location.cwd}
++            botName={botTag?.name ?? null}
++            active={board.visible}
++            onSelectAgent={onSelectAgent}
++          />
++        </View>
++      </View>
++    </View>
++  );
++}
++
+ /** Whether a card is still somewhere the sidebar can show it. */
+ export function sidebarCard(board: BoardController, id: string | null): TaskCard | undefined {
+   return id ? board.cardById(id) : undefined;
+diff --git a/client/tasks/board/filter-bar.tsx b/client/tasks/board/filter-bar.tsx
+index 6d56583..c0d5526 100644
+--- a/client/tasks/board/filter-bar.tsx
++++ b/client/tasks/board/filter-bar.tsx
+@@ -567,10 +567,10 @@ function DesktopFilterBarView(props: {
+   };
+   // Every word the buttons drop when icon-only: the toggles' only while they show.
+   const fit = useLabelFit([
+-    words.agent,
+     words.label,
+-    words.project,
+     words.workspace,
++    words.project,
++    words.agent,
+     { text: words.sort, maxWidth: SORT_LABEL_MAX_WIDTH },
+   ], !tablet, strings.laneWidth.label);
+   const compact = tablet || fit.compact;
+@@ -635,23 +635,24 @@ function DesktopFilterBarView(props: {
+       <View pointerEvents="box-none" onLayout={fit.box("filters")} style={{ flex: 1, minWidth: tablet ? 4 * toolbarButtonSize(scale) + 3 * TOOLBAR_GAP : FILTERS_MIN_WIDTH, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: TOOLBAR_GAP, zIndex: menu && menu !== "sort" ? 2 : 1 }}>
+         {/* The buttons hold one line: once their words would wrap them, they draw their icons alone. */}
+         <View testID="filter-bar-controls" pointerEvents="box-none" onLayout={fit.box("controls")} style={{ flexShrink: 0, flexDirection: "row", alignItems: "center", gap: TOOLBAR_GAP, zIndex: 1 }}>
+-          <MenuButton icon={FILTER_ICONS.agent} label={words.agent} compact={compact} tip={tip(words.agent, strings.tips.agent)} open={menu === "agent"} onPress={() => toggle("agent")} theme={theme}>
++          <MenuButton icon={FILTER_ICONS.label} label={words.label} compact={compact} tip={tip(words.label, strings.tips.labels)} open={menu === "label"} onPress={() => toggle("label")} theme={theme}>
+             <CascadeMenu
+-              sections={withEmptyGroups(agentMenuSections(shown, theme, strings, (id) => setParams((p) => ({ ...p, providers: toggleItem(p.providers, id) }))))}
++              sections={withEmptyGroups(labelMenuSections(shown, theme, strings, (id) => setParams((p) => ({ ...p, labels: toggleItem(p.labels, id) }))))}
+               theme={theme}
+-              width={menuWidth(240, scale, window.width - MENU_EDGE * 2)}
++              width={menuWidth(220, scale, window.width - MENU_EDGE * 2)}
+               top={toolbarButtonSize(scale) + 6}
+               align="left"
+               onClose={() => setMenu(null)}
+             />
+           </MenuButton>
+-          <MenuButton icon={FILTER_ICONS.label} label={words.label} compact={compact} tip={tip(words.label, strings.tips.labels)} open={menu === "label"} onPress={() => toggle("label")} theme={theme}>
++          <MenuButton icon={FILTER_ICONS.workspace} label={words.workspace} compact={compact} tip={tip(words.workspace, strings.tips.workspace)} open={menu === "workspace"} onPress={() => toggle("workspace")} theme={theme}>
+             <CascadeMenu
+-              sections={labelMenuSections(shown, theme, strings, (id) => setParams((p) => ({ ...p, labels: toggleItem(p.labels, id) })))}
++              sections={withEmptyGroups(workspaceMenuSections(shown, theme, strings, board.hostId, (id) => setParams((p) => ({ ...p, workspaceIds: toggleItem(p.workspaceIds, id) }))))}
+               theme={theme}
+-              width={menuWidth(200, scale, window.width - MENU_EDGE * 2)}
++              width={menuWidth(260, scale, window.width - MENU_EDGE * 2)}
+               top={toolbarButtonSize(scale) + 6}
+               align="left"
++              search={strings.menuSearch}
+               onClose={() => setMenu(null)}
+             />
+           </MenuButton>
+@@ -666,14 +667,13 @@ function DesktopFilterBarView(props: {
+               onClose={() => setMenu(null)}
+             />
+           </MenuButton>
+-          <MenuButton icon={FILTER_ICONS.workspace} label={words.workspace} compact={compact} tip={tip(words.workspace, strings.tips.workspace)} open={menu === "workspace"} onPress={() => toggle("workspace")} theme={theme}>
++          <MenuButton icon={FILTER_ICONS.agent} label={words.agent} compact={compact} tip={tip(words.agent, strings.tips.agent)} open={menu === "agent"} onPress={() => toggle("agent")} theme={theme}>
+             <CascadeMenu
+-              sections={withEmptyGroups(workspaceMenuSections(shown, theme, strings, board.hostId, (id) => setParams((p) => ({ ...p, workspaceIds: toggleItem(p.workspaceIds, id) }))))}
++              sections={withEmptyGroups(agentMenuSections(shown, theme, strings, (id) => setParams((p) => ({ ...p, providers: toggleItem(p.providers, id) }))))}
+               theme={theme}
+-              width={menuWidth(260, scale, window.width - MENU_EDGE * 2)}
++              width={menuWidth(240, scale, window.width - MENU_EDGE * 2)}
+               top={toolbarButtonSize(scale) + 6}
+               align="left"
+-              search={strings.menuSearch}
+               onClose={() => setMenu(null)}
+             />
+           </MenuButton>
+diff --git a/client/tasks/board/filter-options.ts b/client/tasks/board/filter-options.ts
+index 6754b24..25d5524 100644
+--- a/client/tasks/board/filter-options.ts
++++ b/client/tasks/board/filter-options.ts
+@@ -219,18 +219,17 @@ export type ChipGroupKind = "workspace" | "label" | "agent";
+ export type FilterUnit = "agent" | "project" | "workspace" | "label";
+ 
+ /**
+- * Agent, Labels, Project, Workspace. The filter bar, the sidebar's tabs,
+- * the filter sheet and a card's filter menu all follow this order. A card
+- * menu has no single label, so it keeps the other three in this sequence.
++ * Bot, Feature, App, Provider. The filter bar, the sidebar's tabs,
++ * the filter sheet and a card's filter menu all follow this order.
+  */
+-export const FILTER_GROUP_ORDER = ["agent", "label", "project", "workspace"] as const satisfies readonly FilterUnit[];
++export const FILTER_GROUP_ORDER = ["label", "workspace", "project", "agent"] as const satisfies readonly FilterUnit[];
+ 
+ /** Each unit's Lucide icon, the same in the filter buttons, folded chips, chip menus and the sidebar's groups. */
+ export const FILTER_ICONS: Readonly<Record<FilterUnit, string>> = {
+-  agent: "Bot",
++  label: "Bot",
++  workspace: "GitBranch",
+   project: "FolderKanban",
+-  workspace: "FolderGit2",
+-  label: "Tag",
++  agent: "Cpu",
+ };
+ 
+ /**
+@@ -394,8 +393,8 @@ export function clearedParams(params: BoardParams): BoardParams {
+   return { ...params, query: "", workspaceIds: [], providers: [], labels: [], hideSubtasks: null, doneWindow: null };
+ }
+ 
+-/** What a card's menu can filter the board to: its agent, its workspace or its project. */
+-export type CardFilterKind = "agent" | "workspace" | "project";
++/** What a card's menu can filter the board to: its Bot, feature, app or provider. */
++export type CardFilterKind = "label" | "workspace" | "project" | "agent";
+ 
+ /** Per kind: null when the card lacks the value (no workspace, a project Paseo does not list), else whether the board shows only it now. */
+ export type CardFilterState = Record<CardFilterKind, boolean | null>;
+@@ -409,7 +408,8 @@ function projectWorkspaceIds(card: TaskCard, workspaces: readonly WorkspaceOptio
+ const sameSet = (list: readonly string[], ids: readonly string[]): boolean =>
+   ids.length > 0 && list.length === ids.length && ids.every((id) => list.includes(id));
+ 
+-function cardFilterValue(card: TaskCard, workspaces: readonly WorkspaceOption[], by: CardFilterKind): { key: "providers" | "workspaceIds"; ids: string[] } {
++function cardFilterValue(card: TaskCard, workspaces: readonly WorkspaceOption[], by: CardFilterKind): { key: "labels" | "providers" | "workspaceIds"; ids: string[] } {
++  if (by === "label") return { key: "labels", ids: card.labels[0] ? [card.labels[0].name] : [] };
+   if (by === "agent") return { key: "providers", ids: card.provider ? [card.provider] : [] };
+   if (by === "workspace") return { key: "workspaceIds", ids: card.location.workspaceId ? [card.location.workspaceId] : [] };
+   return { key: "workspaceIds", ids: projectWorkspaceIds(card, workspaces) };
+@@ -420,7 +420,7 @@ export function cardFilterState(params: BoardParams, card: TaskCard, workspaces:
+     const { key, ids } = cardFilterValue(card, workspaces, by);
+     return ids.length ? sameSet(params[key], ids) : null;
+   };
+-  return { agent: state("agent"), workspace: state("workspace"), project: state("project") };
++  return { label: state("label"), workspace: state("workspace"), project: state("project"), agent: state("agent") };
+ }
+ 
+ /**
+diff --git a/client/tasks/board/filter-sheet.tsx b/client/tasks/board/filter-sheet.tsx
+index a7042ad..e3bb325 100644
+--- a/client/tasks/board/filter-sheet.tsx
++++ b/client/tasks/board/filter-sheet.tsx
+@@ -15,7 +15,7 @@ import { SwitchTrack } from "../../ui/switch-track";
+ import { useSwitchSpace } from "../../ui/use-switch-space";
+ import { useReducedMotion } from "../../ui/use-reduced-motion";
+ import { easing } from "../../ui/tokens/motion";
+-import { clearedParams, emptyGroupsIcon, searchWorkspaceGroups, shownFilterOptions, toggleProject, type FilterOption, type FilterOptions } from "./filter-options";
++import { FILTER_ICONS, clearedParams, emptyGroupsIcon, searchWorkspaceGroups, shownFilterOptions, toggleProject, type FilterOption, type FilterOptions } from "./filter-options";
+ import { matchesSearch, searchWords } from "./search";
+ import { iconlessProjects, useRequestProjectIcons } from "./project-icons";
+ import { detailScrollProps } from "../cards/detail-scrollbar";
+@@ -169,40 +169,40 @@ export function FilterSheetBody(props: {
+             </>
+           ) : null}
+           {!props.phone && !props.tablet && props.laneWidth ? range : null}
+-          <CollapsibleGroup title={strings.agent} icon="Bot" theme={theme} testID="filter-sheet-agents">
+-            {shown.agents.length === 0 ? <Muted text={strings.noOptions} theme={theme} /> : null}
++          <CollapsibleGroup title={strings.labels} icon={FILTER_ICONS.label} theme={theme} testID="filter-sheet-labels">
++            {shown.labels.length === 0 ? <Muted text={strings.noOptions} theme={theme} /> : null}
+             <ChipWrap>
+-              {shown.agents.map((agent) => (
++              {shown.labels.map((label) => (
+                 <Chip
+-                  key={agent.id}
+-                  option={agent}
++                  key={label.id}
++                  option={label}
+                   theme={theme}
+                   pill={props.phone}
+-                  leading={<BrandMark provider={agent.id} size={16} tokens={taskTokens(theme)} />}
+-                  hideCount
+-                  onPress={() => setParams((p) => ({ ...p, providers: toggleItem(p.providers, agent.id) }))}
++                  leading={<TagMark size={14} color={label.color ?? colors.foregroundMuted} hole={label.on ? taskTokens(theme).accentSoft : colors.surface0} />}
++                  onPress={() => setParams((p) => ({ ...p, labels: toggleItem(p.labels, label.id) }))}
+                 />
+               ))}
+             </ChipWrap>
+           </CollapsibleGroup>
+-          <CollapsibleGroup title={strings.labels} icon="Tag" theme={theme} testID="filter-sheet-labels">
+-            {shown.labels.length === 0 ? <Muted text={strings.noOptions} theme={theme} /> : null}
++          <CollapsibleGroup title={strings.agent} icon={FILTER_ICONS.agent} theme={theme} testID="filter-sheet-agents">
++            {shown.agents.length === 0 ? <Muted text={strings.noOptions} theme={theme} /> : null}
+             <ChipWrap>
+-              {shown.labels.map((label) => (
++              {shown.agents.map((agent) => (
+                 <Chip
+-                  key={label.id}
+-                  option={label}
++                  key={agent.id}
++                  option={agent}
+                   theme={theme}
+                   pill={props.phone}
+-                  leading={<TagMark size={14} color={label.color ?? colors.foregroundMuted} hole={label.on ? taskTokens(theme).accentSoft : colors.surface0} />}
+-                  onPress={() => setParams((p) => ({ ...p, labels: toggleItem(p.labels, label.id) }))}
++                  leading={<BrandMark provider={agent.id} size={16} tokens={taskTokens(theme)} />}
++                  hideCount
++                  onPress={() => setParams((p) => ({ ...p, providers: toggleItem(p.providers, agent.id) }))}
+                 />
+               ))}
+             </ChipWrap>
+           </CollapsibleGroup>
+         </View>
+         <View testID="filter-sheet-project-header" style={{ paddingHorizontal: inset, backgroundColor: props.phone ? colors.surface0 : colors.surface1 }}>
+-          <CollapsibleTitle text={strings.project} icon="FolderKanban" theme={theme} open={projectsOpen} onPress={() => { setProjectSearching(false); setProjectsOpen((value) => !value); }} testID="filter-sheet-projects-toggle" />
++          <CollapsibleTitle text={strings.project} icon={FILTER_ICONS.project} theme={theme} open={projectsOpen} onPress={() => { setProjectSearching(false); setProjectsOpen((value) => !value); }} testID="filter-sheet-projects-toggle" />
+           {projectsOpen && shown.projects.length === 0 ? <Muted text={strings.noOptions} theme={theme} /> : null}
+           {projectsOpen && shown.projects.length > 0 ? <SheetSearch value={projectQuery} onChange={setProjectQuery} placeholder={strings.sheetSearch} clear={strings.menuSearch.clear} theme={theme} onFocus={() => { setProjectSearching(true); setTimeout(() => scrollRef.current?.scrollTo({ y: projectsY.current, animated: true }), 0); }} onBlur={() => setProjectSearching(false)} /> : null}
+         </View>
+@@ -211,7 +211,7 @@ export function FilterSheetBody(props: {
+           {projectsOpen ? <ChipWrap>{projects.map((project) => <Chip key={project.id} option={project} theme={theme} leading={<ProjectIcon location={project.group} size={16} hostId={board.hostId} />} onPress={() => setParams((p) => toggleProject(p, project))} />)}</ChipWrap> : null}
+         </View>
+         <View testID="filter-sheet-workspace-header" onLayout={(event: LayoutChangeEvent) => (workspacesY.current = event.nativeEvent.layout.y)} style={{ paddingHorizontal: inset, backgroundColor: props.phone ? colors.surface0 : colors.surface1 }}>
+-          <CollapsibleTitle text={strings.workspace} icon="FolderGit2" theme={theme} open={workspacesOpen} onPress={() => { setSearching(false); setWorkspacesOpen((value) => !value); }} testID="filter-sheet-workspaces-toggle" />
++          <CollapsibleTitle text={strings.workspace} icon={FILTER_ICONS.workspace} theme={theme} open={workspacesOpen} onPress={() => { setSearching(false); setWorkspacesOpen((value) => !value); }} testID="filter-sheet-workspaces-toggle" />
+           {workspacesOpen && shown.workspaceGroups.length === 0 ? <Muted text={strings.noOptions} theme={theme} /> : null}
+           {workspacesOpen && shown.workspaceGroups.length > 0 ? (
+             <SheetSearch
+diff --git a/client/tasks/board/phone-board.tsx b/client/tasks/board/phone-board.tsx
+index 0c0bea6..4fc3d8a 100644
+--- a/client/tasks/board/phone-board.tsx
++++ b/client/tasks/board/phone-board.tsx
+@@ -45,7 +45,7 @@ import { SearchQueryChip } from "./filter-bar";
+ import { PhoneSearch } from "./phone-search";
+ import { defaultLane, laneAfter, swallowsTap, swipeStep, tabsOverflow, type TabBox } from "./navigation";
+ import { activeFilterCount, rememberLane, rememberedLane, rememberPhoneLaneOffset, rememberedPhoneLaneOffset, rememberPhoneTabsOffset, rememberedPhoneTabsOffset, resolveBoardParams } from "./params";
+-import { sameDetailsBoard, useDetailReads, useParentTitle } from "./details-sidebar";
++import { sameDetailsBoard, useDetailReads, useParentTitle, type TasksSidebarBotChatSlotProps } from "./details-sidebar";
+ import { LANE_EMPTY_ICON, sortLabel } from "./strings";
+ import { sortsLoadedOnly } from "./sort";
+ import { findCard, type BoardController, type BoardLayoutHandlers } from "./use-board";
+@@ -81,6 +81,7 @@ export function PhoneBoard(props: {
+   board: BoardController;
+   rootRef: RefObject<View | null>;
+   handlers: RefObject<BoardLayoutHandlers | null>;
++  sidebarBotChat?: React.ComponentType<TasksSidebarBotChatSlotProps>;
+ }) {
+   const { screen, board, rootRef } = props;
+   const theme = screen.theme;
+diff --git a/client/tasks/board/sidebar-model.ts b/client/tasks/board/sidebar-model.ts
+index cecbf8f..247509b 100644
+--- a/client/tasks/board/sidebar-model.ts
++++ b/client/tasks/board/sidebar-model.ts
+@@ -12,8 +12,12 @@ import { deviceSidebarSource, LEGACY_SIDEBAR_KEY } from "../device-settings";
+ export const SIDEBAR = {
+   /** The width it opens at, and where a double click on its edge puts it back. */
+   width: 380,
++  /** Default width when showing an interactive Bot Chat for a selected card. */
++  chatWidth: 680,
+   min: 260,
+   max: 800,
++  /** Maximum width when dragging the interactive Bot Chat sidebar. */
++  chatMax: 1100,
+   /** Between the lanes and the sidebar, and its margin at the board's right. */
+   gap: 12,
+   /** Inline from this board width; floating below `floatBelow`; between the two it keeps its mode. */
+@@ -24,6 +28,8 @@ export const SIDEBAR = {
+   sheetBelow: 760,
+   /** What an inline sidebar leaves the lanes at least: two lanes at their scroll width and the edges. */
+   lanesMin: 612,
++  /** Minimum unobstructed width left for at least one full lane beside an interactive Bot Chat sidebar. */
++  chatLanesMin: 360,
+   /** At most this many cards to go back through. */
+   history: 20,
+ } as const;
+@@ -71,14 +77,44 @@ export function sheetRelease(detent: SheetDetent, dy: number, vy: number): Sheet
+ }
+ 
+ /** The sidebar's width: the user's, made narrower (down to the minimum) when an inline one would squeeze the lanes. */
+-export function sidebarWidth(boardWidth: number, preferred: number, mode: SidebarMode): number {
+-  const wanted = clampWidth(preferred);
+-  if (mode === "floating") return Math.min(wanted, Math.max(SIDEBAR.min, boardWidth - 2 * SIDEBAR.gap));
+-  return Math.max(SIDEBAR.min, Math.min(wanted, boardWidth - SIDEBAR.gap - SIDEBAR.lanesMin));
++export function sidebarWidth(boardWidth: number, preferred: number, mode: SidebarMode, chat = false): number {
++  const wanted = clampWidth(preferred, chat ? SIDEBAR.chatMax : SIDEBAR.max);
++  if (mode === "floating") {
++    const maxFloating = chat
++      ? Math.max(SIDEBAR.min, boardWidth - SIDEBAR.chatLanesMin)
++      : Math.max(SIDEBAR.min, boardWidth - 2 * SIDEBAR.gap);
++    return Math.min(wanted, maxFloating);
++  }
++  const lanesMin = chat ? SIDEBAR.chatLanesMin : SIDEBAR.lanesMin;
++  return Math.max(SIDEBAR.min, Math.min(wanted, boardWidth - SIDEBAR.gap - lanesMin));
++}
++
++export function clampWidth(width: number, max: number = SIDEBAR.max): number {
++  return Math.round(Math.max(SIDEBAR.min, Math.min(max, width)));
+ }
+ 
+-export function clampWidth(width: number): number {
+-  return Math.round(Math.max(SIDEBAR.min, Math.min(SIDEBAR.max, width)));
++/**
++ * Horizontal scroll offset that keeps `[laneLeft - edge, laneRight + edge]` unobstructed inside `[scrollX, scrollX + visibleWidth]`;
++ * `null` when the lane is already completely clear of both edges and the sidebar.
++ */
++export function uncoverLaneScrollX(input: {
++  laneLeft: number;
++  laneRight: number;
++  edge: number;
++  visibleWidth: number;
++  scrollX: number;
++}): number | null {
++  const { laneLeft, laneRight, edge, visibleWidth, scrollX } = input;
++  if (visibleWidth <= 0) return null;
++  const minScroll = laneRight + edge - visibleWidth;
++  const maxScroll = laneLeft - edge;
++  if (maxScroll <= minScroll) {
++    const aligned = Math.max(0, maxScroll);
++    return Math.abs(aligned - scrollX) > 0.5 ? aligned : null;
++  }
++  if (scrollX < minScroll - 0.5) return Math.max(0, minScroll);
++  if (scrollX > maxScroll + 0.5) return Math.max(0, maxScroll);
++  return null;
+ }
+ 
+ /** Which card the sidebar shows, and the cards to go back to. */
+@@ -143,6 +179,7 @@ export function escapeStep(selection: SidebarSelection, floatingOpen: boolean):
+ export interface SidebarPreference {
+   open: boolean;
+   width: number;
++  chatWidth?: number;
+   floatingWidth?: number;
+ }
+ 
+@@ -165,6 +202,9 @@ export function parseSidebarPreference(raw: unknown): SidebarPreference | null {
+   return {
+     open: typeof parsed.open === "boolean" ? parsed.open : DEFAULT_PREFERENCE.open,
+     width: typeof parsed.width === "number" && Number.isFinite(parsed.width) ? clampWidth(parsed.width) : DEFAULT_PREFERENCE.width,
++    ...(typeof parsed.chatWidth === "number" && Number.isFinite(parsed.chatWidth)
++      ? { chatWidth: clampWidth(parsed.chatWidth, SIDEBAR.chatMax) }
++      : {}),
+     ...(typeof parsed.floatingWidth === "number" && Number.isFinite(parsed.floatingWidth)
+       ? { floatingWidth: tabletSidebarWidth(Number.POSITIVE_INFINITY, parsed.floatingWidth) }
+       : {}),
+diff --git a/client/tasks/board/strings.ts b/client/tasks/board/strings.ts
+index 93a07bc..7df7ed6 100644
+--- a/client/tasks/board/strings.ts
++++ b/client/tasks/board/strings.ts
+@@ -6,39 +6,39 @@ import type { TasksLanguage } from "../i18n";
+ /** The board's own words; Chinese follows the prototype. */
+ const en = {
+   /** The board's name: screen title, sidebar row, settings page. */
+-  name: "Tasks",
++  name: "Bot Chats",
+   /** The Command Center item. */
+-  openBoard: "Open Tasks",
++  openBoard: "Open Bot Chats",
+   lanes: { needs_input: "Waiting", running: "Running", review: "Review", done: "Done", archived: "Archived" } as Record<LaneId, string>,
+   /** The phone's tabs: a quarter of 390 each. */
+   tabs: { needs_input: "Waiting", running: "Running", review: "Review", done: "Done", archived: "Archived" } as Record<LaneId, string>,
+   laneEmpty: {
+-    needs_input: "No tasks waiting for you",
+-    running: "No tasks running",
++    needs_input: "No chats waiting for you",
++    running: "No chats running",
+     review: "Nothing to review",
+-    done: "No finished tasks in this window",
+-    archived: "No archived tasks in this window",
++    done: "No finished chats in this window",
++    archived: "No archived chats in this window",
+   } as Record<LaneId, string>,
+   laneEmptyHint: {
+-    needs_input: "Tasks that need permission or an answer show up here",
+-    running: "Start a task in any workspace and it shows up here",
+-    review: "Finished or failed tasks wait here until you look",
+-    done: "Switch to 7 days or All to see older tasks",
+-    archived: "Archived tasks, and those of archived workspaces, show up here. Switch to 7 days or All to see older ones",
++    needs_input: "Bot chats that need permission or an answer show up here",
++    running: "Send a prompt to a Bot in any feature or from the sidebar and it shows up here",
++    review: "Finished or failed bot chats wait here until you look",
++    done: "Switch to 7 days or All to see older chats",
++    archived: "Archived chats, and those of archived features, show up here. Switch to 7 days or All to see older ones",
+   } as Record<LaneId, string>,
+-  boardEmpty: "No tasks yet",
+-  boardEmptyHint: "Start a task in any workspace and it shows up here by status",
++  boardEmpty: "No bot chats yet",
++  boardEmptyHint: "Start a chat with any Bot in a feature or from the sidebar and it shows up here by status",
+   windows: { "24h": "24h", "7d": "7 days", all: "All" } as Record<DoneWindow, string>,
+-  total: (count: number) => `${count} ${count === 1 ? "task" : "tasks"}`,
++  total: (count: number) => `${count} ${count === 1 ? "chat" : "chats"}`,
+   /** `total` without its number, for a count that rolls on its own. */
+-  totalUnit: (count: number): string => (count === 1 ? "task" : "tasks"),
++  totalUnit: (count: number): string => (count === 1 ? "chat" : "chats"),
+   /** A lane's pill for new tasks out of view; it scrolls to the first. */
+-  newTasks: (count: number) => `${count} new ${count === 1 ? "task" : "tasks"}`,
++  newTasks: (count: number) => `${count} new ${count === 1 ? "chat" : "chats"}`,
+   /** The phone tab's and the collapsed lane's dot. */
+-  newTasksIn: (lane: string) => `New tasks in ${lane}`,
+-  search: "Search tasks",
+-  historyLoading: "Loading older tasks",
+-  historyFailed: "Could not load older tasks",
++  newTasksIn: (lane: string) => `New chats in ${lane}`,
++  search: "Search bot chats",
++  historyLoading: "Loading older chats",
++  historyFailed: "Could not load older chats",
+   cancelSearch: "Stop search",
+   resumeSearch: "Resume search",
+   searchStopped: "Search stopped; results are incomplete",
+@@ -47,7 +47,7 @@ const en = {
+   fullConversationSearch: "Full search",
+   fullConversationShort: "Full",
+   fullConversationHint: (on: boolean): string => on
+-    ? "Turn off full search\nSearch task details and first messages only."
++    ? "Turn off full search\nSearch chat details and first messages only."
+     : "Turn on full search\nSearch messages and reasoning in available conversations. Results appear as content loads.",
+   /** Shown when the switch is pressed, for the mode just entered. */
+   fullConversationToast: (on: boolean): string => on ? "Full search is on" : "Full search is off",
+@@ -73,15 +73,15 @@ const en = {
+   },
+   searchButton: "Search",
+   editSearch: "Edit search",
+-  project: "Project",
+-  workspace: "Workspace",
+-  agent: "Agent",
+-  labels: "Labels",
++  project: "App",
++  workspace: "Feature",
++  agent: "Provider",
++  labels: "Bot",
+   /** The applied filter's chip. */
+-  hideSubtasks: "Hide subtasks",
++  hideSubtasks: "Hide subagents",
+   /** The board's switch: on shows every subtask. */
+-  showSubtasks: "Show subtasks",
+-  showSubtasksHint: "When off, running, waiting and failed subtasks still show, unless their parent's card is in the same lane",
++  showSubtasks: "Show subagents",
++  showSubtasksHint: "When off, running, waiting and failed subagents still show, unless their parent chat is in the same lane",
+   searchContains: "Contains",
+   doneWindowLabel: "Done",
+   clear: "Clear",
+@@ -89,10 +89,10 @@ const en = {
+   /** Several picks of one filter folded into one chip: "2 projects and 1 workspace selected". */
+   selected: (parts: string[]) => `${parts.join(" and ")} selected`,
+   selectedUnits: {
+-    project: (count: number) => `${count} ${count === 1 ? "project" : "projects"}`,
+-    workspace: (count: number) => `${count} ${count === 1 ? "workspace" : "workspaces"}`,
+-    label: (count: number) => `${count} ${count === 1 ? "label" : "labels"}`,
+-    agent: (count: number) => `${count} ${count === 1 ? "Agent" : "Agents"}`,
++    project: (count: number) => `${count} ${count === 1 ? "app" : "apps"}`,
++    workspace: (count: number) => `${count} ${count === 1 ? "feature" : "features"}`,
++    label: (count: number) => `${count} ${count === 1 ? "Bot" : "Bots"}`,
++    agent: (count: number) => `${count} ${count === 1 ? "provider" : "providers"}`,
+   },
+   keys: { move: "Move", lane: "Lane", open: "Open", space: "Space", preview: "Preview", search: "Search" },
+   collapse: "Collapse lane",
+@@ -103,14 +103,14 @@ const en = {
+   shown: (count: number) => `Showing ${count}`,
+   filters: "Filters",
+   more: "More",
+-  refreshTasks: "Refresh tasks",
++  refreshTasks: "Refresh chats",
+   scrollBottom: "Scroll to bottom",
+   /** A lane with more pages to load: the shortcut reaches the loaded cards' end. */
+-  scrollLoadedEnd: "Scroll to the end of loaded tasks",
++  scrollLoadedEnd: "Scroll to the end of loaded chats",
+   view: "View",
+   reset: "Reset",
+   /** The phone sheet folds the workspaces without an active task under this. */
+-  show: (count: number) => `Show ${count} ${count === 1 ? "task" : "tasks"}`,
++  show: (count: number) => `Show ${count} ${count === 1 ? "chat" : "chats"}`,
+   timeRange: "Range",
+   doneRange: "Time range",
+   clearFilters: "Clear filters",
+@@ -121,7 +121,7 @@ const en = {
+   /** The search field atop the project and workspace menus. */
+   menuSearch: { placeholder: "Search", clear: "Clear search", empty: "No matches" },
+   /** The search field atop the phone sheet's workspaces. */
+-  sheetSearch: "Search projects and workspaces",
++  sheetSearch: "Search apps and features",
+   details: "Details",
+   stoppedManually: "Stopped manually",
+   closeMenu: "Close menu",
+@@ -144,32 +144,32 @@ const en = {
+     row: "Show the archived lane",
+     saveFailed: "Couldn't save the archived lane setting",
+     /** A toast when an archived task is asked to open: Paseo would show another tab. */
+-    cannotOpen: "Unarchive this task to open it in Paseo",
++    cannotOpen: "Unarchive this chat to open it in Bots",
+   },
+   emptyGroups: {
+     /** The round switch's name, in the filter bar and the phone and narrow board headers. */
+     row: "Show all",
+     show: "Show empty groups",
+     hide: "Hide empty groups",
+-    sheetLabel: (on: boolean): string => (on ? "Show all" : "Show groups with tasks"),
+-    hint: (on: boolean): string => (on ? "Includes groups with no tasks on the board" : "Hides groups with no tasks on the board"),
++    sheetLabel: (on: boolean): string => (on ? "Show all" : "Show groups with chats"),
++    hint: (on: boolean): string => (on ? "Includes groups with no chats on the board" : "Hides groups with no chats on the board"),
+     saveFailed: "Couldn't save the empty groups setting",
+   },
+   /** The desktop bars' hover tips, shown under a control a pointer rests on. */
+   tips: {
+-    project: "Filter by project",
+-    workspace: "Filter by workspace",
+-    agent: "Filter by Agent",
+-    labels: "Filter by label",
+-    hideSubtasks: "Hide subtasks",
++    project: "Filter by app",
++    workspace: "Filter by feature",
++    agent: "Filter by provider",
++    labels: "Filter by Bot",
++    hideSubtasks: "Hide subagents",
+     doneWindow: "How far back Done and Archived reach",
+     hideArchived: "Hide the archived lane",
+     sort: "Order the cards in each lane",
+   },
+   back: "Back",
+   sortKeys: {
+-    workspace: "Workspace",
+-    project: "Project",
++    workspace: "Feature",
++    project: "App",
+     branch: "Branch",
+     folder: "Folder",
+     title: "Title",
+@@ -185,8 +185,8 @@ const en = {
+     length: { asc: "shortest first", desc: "longest first" },
+   } as Record<"name" | "time" | "amount" | "length", Record<SortDirection, string>>,
+   sortedAmong: (count: number) => `Sorted among the ${count} loaded`,
+-  boardOff: "The Tasks board is off",
+-  boardOffHint: "Turn it on under Tasks board in Better Paseo's settings to see your tasks by status here",
++  boardOff: "The Bot Chats board is off",
++  boardOffHint: "Turn it on under Tasks board in Better Paseo's settings to see your bot chats by status here",
+   openSettings: "Open settings",
+   settings: "Settings",
+   answerFailed: (message: string) => `Could not answer: ${message}`,
+@@ -198,51 +198,51 @@ const en = {
+     close: "Close",
+     sheetGrow: "Expand details",
+     sheetShrink: "Collapse details",
+-    previous: "Previous task",
+-    next: "Next task",
++    previous: "Previous chat",
++    next: "Next chat",
+     back: (title: string) => `Back to ${title}`,
+-    groups: { agent: "Agent", project: "Project", workspace: "Workspace", label: "Labels" } as Record<"agent" | "project" | "workspace" | "label", string>,
++    groups: { agent: "Provider", project: "App", workspace: "Feature", label: "Bot" } as Record<"agent" | "project" | "workspace" | "label", string>,
+     noGroups: "Nothing to group yet",
+-    noLabel: "No labels",
++    noLabel: "No Bot",
+     stopRun: "Stop",
+-    openTab: "Open",
++    openTab: "Open chat",
+     archived: "Archived · removed from the board",
+     hidden: "Hidden by the current filters",
+-    deleted: "Task deleted",
++    deleted: "Chat deleted",
+     searchMatches: "Search matches",
+-    property: { project: "Project", parent: "Parent", branch: "Branch", cwd: "Directory", pr: "PR", labels: "Labels" },
++    property: { project: "App", parent: "Parent", branch: "Branch", cwd: "Directory", pr: "PR", labels: "Bot" },
+   },
+ };
+ 
+ const zh: typeof en = {
+-  name: "任务",
+-  openBoard: "打开任务",
++  name: "机器人对话",
++  openBoard: "打开机器人对话",
+   lanes: { needs_input: "待输入", running: "运行中", review: "待查看", done: "已完成", archived: "已归档" },
+   tabs: { needs_input: "待输入", running: "运行中", review: "待查看", done: "已完成", archived: "已归档" },
+   laneEmpty: {
+-    needs_input: "没有等待你处理的任务",
+-    running: "当前没有运行中的任务",
++    needs_input: "没有等待你处理的对话",
++    running: "当前没有运行中的对话",
+     review: "没有未查看的结果",
+-    done: "这个时间范围内没有已完成的任务",
+-    archived: "这个时间范围内没有已归档的任务",
++    done: "这个时间范围内没有已完成的对话",
++    archived: "这个时间范围内没有已归档的对话",
+   },
+   laneEmptyHint: {
+-    needs_input: "运行中的任务需要权限或回答时会出现在这里",
+-    running: "在任一工作区启动任务后会出现在这里",
+-    review: "跑完或失败的任务会先到这里等你查看",
+-    done: "可以切换到「7 天」或「全部」查看更早的任务",
+-    archived: "已归档的任务和已归档工作区里的任务会出现在这里。切换到「7 天」或「全部」可以看更早的",
++    needs_input: "运行中的对话需要权限或回答时会出现在这里",
++    running: "在任一特性分支或右侧输入栏发起对话后会出现在这里",
++    review: "跑完或失败的对话会先到这里等你查看",
++    done: "可以切换到「7 天」或「全部」查看更早的对话",
++    archived: "已归档的对话和已归档特性分支里的对话会出现在这里。切换到「7 天」或「全部」可以看更早的",
+   },
+-  boardEmpty: "还没有任务",
+-  boardEmptyHint: "在任一工作区启动任务后，它会按状态出现在这里",
++  boardEmpty: "还没有机器人对话",
++  boardEmptyHint: "在任一特性分支或右侧输入栏向机器人发起对话后，它会按状态出现在这里",
+   windows: { "24h": "24 小时", "7d": "7 天", all: "全部" },
+-  total: (count) => `${count} 个任务`,
+-  newTasks: (count) => `${count} 个新任务`,
+-  newTasksIn: (lane) => `${lane}有新任务`,
+-  totalUnit: () => "个任务",
+-  search: "搜索任务",
+-  historyLoading: "正在加载更早的任务",
+-  historyFailed: "加载历史任务失败",
++  total: (count) => `${count} 个对话`,
++  newTasks: (count) => `${count} 个新对话`,
++  newTasksIn: (lane) => `${lane}有新对话`,
++  totalUnit: () => "个对话",
++  search: "搜索机器人对话",
++  historyLoading: "正在加载更早的对话",
++  historyFailed: "加载历史对话失败",
+   cancelSearch: "停止搜索",
+   resumeSearch: "继续搜索",
+   searchStopped: "搜索已停止，结果不完整",
+@@ -251,7 +251,7 @@ const zh: typeof en = {
+   fullConversationSearch: "全文搜索",
+   fullConversationShort: "全文",
+   fullConversationHint: (on) => on
+-    ? "关闭全文搜索\n仅搜索任务信息和首条消息。"
++    ? "关闭全文搜索\n仅搜索对话信息和首条消息。"
+     : "开启全文搜索\n搜索可用会话中的消息和思考内容，结果会随着内容加载逐步显示。",
+   fullConversationToast: (on) => on ? "已开启全文搜索" : "已关闭全文搜索",
+   conversationSearchCoverage: {
+@@ -260,39 +260,39 @@ const zh: typeof en = {
+     title: "会话全文搜索",
+     close: "点空白处关闭",
+     readingHint: "逐页搜索消息和思考内容，找到匹配后实时加入结果。",
+-    tip: (count) => `已加载 ${count} 个任务的完整会话`,
++    tip: (count) => `已加载 ${count} 个对话的完整会话`,
+     started: "正在搜索会话全文",
+-    complete: (loaded) => `搜索完成，已加载 ${loaded} 个任务的完整会话。`,
++    complete: (loaded) => `搜索完成，已加载 ${loaded} 个对话的完整会话。`,
+   },
+   searchCoverage: {
+     loaded: (count) => `已加载 ${count} 个`,
+     retry: "重试",
+     title: "首条消息搜索",
+     close: "点空白处关闭",
+-    readingHint: "读完的任务会实时加入或移出结果。",
+-    tip: (count) => `已加载 ${count} 个任务的首条消息`,
++    readingHint: "读完的对话会实时加入或移出结果。",
++    tip: (count) => `已加载 ${count} 个对话的首条消息`,
+     started: "正在搜索首条消息",
+-    complete: (loaded) => `搜索完成，已加载 ${loaded} 个任务的首条消息。`,
++    complete: (loaded) => `搜索完成，已加载 ${loaded} 个对话的首条消息。`,
+   },
+   searchButton: "搜索",
+   editSearch: "编辑搜索",
+-  project: "项目",
+-  workspace: "工作区",
+-  agent: "Agent",
+-  labels: "标签",
+-  hideSubtasks: "隐藏子任务",
+-  showSubtasks: "显示子任务",
+-  showSubtasksHint: "关闭时，运行中、待输入和失败的子任务仍会显示，父任务在同一泳道时除外",
++  project: "应用",
++  workspace: "特性分支",
++  agent: "模型服务",
++  labels: "机器人",
++  hideSubtasks: "隐藏子代理",
++  showSubtasks: "显示子代理",
++  showSubtasksHint: "关闭时，运行中、待输入和失败的子代理仍会显示，父对话在同一泳道时除外",
+   searchContains: "包含",
+   doneWindowLabel: "已完成",
+   clear: "清除",
+   clearAll: "清除筛选",
+   selected: (parts) => `已选择 ${parts.join("和 ")}`,
+   selectedUnits: {
+-    project: (count) => `${count} 个项目`,
+-    workspace: (count) => `${count} 个工作区`,
+-    label: (count) => `${count} 个标签`,
+-    agent: (count) => `${count} 个 Agent`,
++    project: (count) => `${count} 个应用`,
++    workspace: (count) => `${count} 个特性分支`,
++    label: (count) => `${count} 个机器人`,
++    agent: (count) => `${count} 个模型服务`,
+   },
+   keys: { move: "移动", lane: "换列", open: "打开", space: "空格", preview: "预览", search: "搜索" },
+   collapse: "折叠此列",
+@@ -303,20 +303,20 @@ const zh: typeof en = {
+   shown: (count) => `已显示 ${count}`,
+   filters: "筛选",
+   more: "更多",
+-  refreshTasks: "刷新任务",
++  refreshTasks: "刷新对话",
+   scrollBottom: "滚动到底部",
+-  scrollLoadedEnd: "滚动到已加载任务的末尾",
++  scrollLoadedEnd: "滚动到已加载对话的末尾",
+   view: "视图",
+   reset: "重置",
+-  show: (count) => `显示 ${count} 个任务`,
++  show: (count) => `显示 ${count} 个对话`,
+   timeRange: "范围",
+   doneRange: "时间范围",
+   clearFilters: "清除筛选",
+-  hiddenByFilters: "该任务被当前筛选隐藏",
+-  laneHidden: (count) => `${count} 个任务被筛选隐藏`,
++  hiddenByFilters: "该对话被当前筛选隐藏",
++  laneHidden: (count) => `${count} 个对话被筛选隐藏`,
+   noOptions: "暂无可筛选的项",
+   menuSearch: { placeholder: "搜索", clear: "清空搜索", empty: "没有匹配项" },
+-  sheetSearch: "搜索项目或工作区",
++  sheetSearch: "搜索应用或特性分支",
+   details: "详情",
+   stoppedManually: "已手动停止",
+   closeMenu: "关闭菜单",
+@@ -333,30 +333,30 @@ const zh: typeof en = {
+     hint: "在已完成之后显示已归档泳道",
+     row: "显示已归档泳道",
+     saveFailed: "已归档泳道的设置没有保存成功",
+-    cannotOpen: "已归档的任务需要先取消归档，才能在 Paseo 中打开",
++    cannotOpen: "已归档的对话需要先取消归档，才能在 Bots 中打开",
+   },
+   emptyGroups: {
+     row: "显示全部",
+     show: "显示空分组",
+     hide: "隐藏空分组",
+-    sheetLabel: (on) => (on ? "显示全部" : "仅显示有任务的分组"),
+-    hint: (on) => (on ? "包含看板上没有任务的分组" : "隐藏看板上没有任务的分组"),
++    sheetLabel: (on) => (on ? "显示全部" : "仅显示有对话的分组"),
++    hint: (on) => (on ? "包含看板上没有对话的分组" : "隐藏看板上没有对话的分组"),
+     saveFailed: "数量为 0 的分组设置没有保存成功",
+   },
+   tips: {
+-    project: "按项目筛选",
+-    workspace: "按工作区筛选",
+-    agent: "按 Agent 筛选",
+-    labels: "按标签筛选",
+-    hideSubtasks: "隐藏子任务",
+-    doneWindow: "已完成和已归档泳道显示多久以内的任务",
++    project: "按应用筛选",
++    workspace: "按特性分支筛选",
++    agent: "按模型服务筛选",
++    labels: "按机器人筛选",
++    hideSubtasks: "隐藏子代理",
++    doneWindow: "已完成和已归档泳道显示多久以内的对话",
+     hideArchived: "隐藏已归档泳道",
+     sort: "每列卡片的排列顺序",
+   },
+   back: "返回",
+   sortKeys: {
+-    workspace: "工作区",
+-    project: "项目",
++    workspace: "特性分支",
++    project: "应用",
+     branch: "分支",
+     folder: "文件夹",
+     title: "标题",
+@@ -372,8 +372,8 @@ const zh: typeof en = {
+     length: { asc: "短\u2192长", desc: "长\u2192短" },
+   },
+   sortedAmong: (count) => `仅对已加载的 ${count} 条排序`,
+-  boardOff: "任务看板未启用",
+-  boardOffHint: "在 Better Paseo 设置的「任务看板」中开启后，这里会按状态显示你的任务",
++  boardOff: "机器人对话看板未启用",
++  boardOffHint: "在 Better Paseo 设置的「任务看板」中开启后，这里会按状态显示你的机器人对话",
+   openSettings: "打开设置",
+   settings: "设置",
+   answerFailed: (message) => `回答失败：${message}`,
+@@ -385,19 +385,19 @@ const zh: typeof en = {
+     close: "关闭",
+     sheetGrow: "展开详情",
+     sheetShrink: "收起详情",
+-    previous: "上一个任务",
+-    next: "下一个任务",
++    previous: "上一个对话",
++    next: "下一个对话",
+     back: (title) => `返回 ${title}`,
+-    groups: { agent: "Agent", project: "项目", workspace: "工作区", label: "标签" },
++    groups: { agent: "模型服务", project: "应用", workspace: "特性分支", label: "机器人" },
+     noGroups: "暂无可分组的项",
+-    noLabel: "无标签",
++    noLabel: "无机器人",
+     stopRun: "停止",
+-    openTab: "打开",
++    openTab: "打开对话",
+     archived: "已归档 · 已从看板移除",
+     hidden: "当前筛选已隐藏这张卡",
+-    deleted: "任务已删除",
++    deleted: "对话已删除",
+     searchMatches: "搜索命中",
+-    property: { project: "项目", parent: "父任务", branch: "分支", cwd: "工作目录", pr: "PR", labels: "标签" },
++    property: { project: "应用", parent: "父对话", branch: "分支", cwd: "工作目录", pr: "PR", labels: "机器人" },
+   },
+ };
+ 
+diff --git a/client/tasks/cards/card-menu.tsx b/client/tasks/cards/card-menu.tsx
+index 41e5e84..96c2b8e 100644
+--- a/client/tasks/cards/card-menu.tsx
++++ b/client/tasks/cards/card-menu.tsx
+@@ -72,12 +72,12 @@ export function cardMenuSections(card: TaskCard, strings: ReturnType<typeof card
+   ];
+   const stop = actions.stop;
+   const filters = actions.filters;
+-  // Each row's second line names the value it filters to. Labels are not a
+-  // card filter; the rest stay in FILTER_GROUP_ORDER (Agent, project, workspace).
++  // Each row's second line names the value it filters to, in FILTER_GROUP_ORDER (Bot, feature, app, provider).
+   const filterRows: [CardFilterKind, string, string, string, string | null][] = [
+-    ["agent", strings.filterAgent, "Bot", "G", card.providerLabel || card.provider],
+-    ["project", strings.filterProject, "Box", "P", location.projectName],
+-    ["workspace", strings.filterWorkspace, "Folder", "W", location.workspaceTitle ?? location.workspaceName ?? location.branch],
++    ["label", strings.filterBot, "Bot", "B", card.labels[0]?.name ?? null],
++    ["workspace", strings.filterWorkspace, "GitBranch", "W", location.workspaceTitle ?? location.workspaceName ?? location.branch],
++    ["project", strings.filterProject, "FolderKanban", "P", location.projectName],
++    ["agent", strings.filterAgent, "Cpu", "G", card.providerLabel || card.provider],
+   ];
+   const filterItems = filters
+     ? filterRows.flatMap(([by, label, icon, shortcut, detail]) => {
+diff --git a/client/tasks/cards/strings.ts b/client/tasks/cards/strings.ts
+index 4019832..e540696 100644
+--- a/client/tasks/cards/strings.ts
++++ b/client/tasks/cards/strings.ts
+@@ -14,7 +14,7 @@ const en = {
+     context: "Agent note", contextLoading: "Reading the agent's note", contextError: "Couldn't read the agent's note", contextRetry: "Retry", copyContext: "Copy agent note",
+   },
+   searchHits: {
+-    fields: { title: "Title", prompt: "First message", conversation: "Conversation", pr: "PR", label: "Label", branch: "Branch", folder: "Folder", project: "Project", workspace: "Workspace", path: "Path", model: "Model ID", id: "Task ID" },
++    fields: { title: "Title", prompt: "First message", conversation: "Conversation", pr: "PR", label: "Bot", branch: "Branch", folder: "Folder", project: "App", workspace: "Feature", path: "Path", model: "Model ID", id: "Chat ID" },
+     viewAll: (count: number) => `View all ${count} matches`,
+     more: (count: number) => `+${count} matches`,
+     countOnly: (count: number) => `${count} matches`,
+@@ -22,32 +22,32 @@ const en = {
+     dialog: "Search matches",
+     close: "Close matches",
+     retry: "Retry",
+-    detailHint: "Open task details to see matching sections expanded",
++    detailHint: "Open chat details to see matching sections expanded",
+     loading: "Loading first message",
+     unavailable: "First message unavailable",
+     conversationLoading: "Searching conversation",
+     conversationUnavailable: "Conversation unavailable",
+   },
+-  openInWorkspace: "Open in workspace",
++  openInWorkspace: "Open in feature",
+   awaitingAnswer: "Awaiting answer",
+   awaitingApproval: "Awaiting approval",
+   awaitingReview: "Awaiting review",
+   planRequest: "Plan",
+   viewPlan: "View plan",
+-  openTab: "Open",
++  openTab: "Open chat",
+   stop: "Stop",
+-  stopChildren: "Stop subtasks",
++  stopChildren: "Stop subagents",
+   confirmStop: "Confirm stop",
+   confirmStopAll: "Stop all",
+   stopOptions: "Stop options",
+-  stopOnlyThis: "Stop only this task",
++  stopOnlyThis: "Stop only this chat",
+   archiveOptions: "Archive options",
+-  archiveOnly: "Archive only this task",
+-  archiveWithChildren: "Archive with subtasks",
+-  stopWithChildren: "Stop with subtasks",
++  archiveOnly: "Archive only this chat",
++  archiveWithChildren: "Archive with subagents",
++  stopWithChildren: "Stop with subagents",
+   markRead: "Mark as read",
+   markUnread: "Keep unread",
+-  copySessionId: "Copy session ID",
++  copySessionId: "Copy chat ID",
+   copyTitle: "Copy title",
+   renameTitle: "Edit title",
+   autoTitle: "Automatically update title",
+@@ -63,29 +63,30 @@ const en = {
+   savingTitle: "Saving…",
+   cancelTitle: "Cancel",
+   renameFailed: (error: string) => `Could not update title: ${error}`,
+-  copyWorkspace: "Copy workspace name",
+-  copyProject: "Copy project name",
+-  /** The card menu's Filter: the board shows only cards sharing this card's agent, workspace or project. */
++  copyWorkspace: "Copy feature name",
++  copyProject: "Copy app name",
++  /** The card menu's Filter: the board shows only cards sharing this card's Bot, feature, app or provider. */
+   filter: "Filter",
+-  filterAgent: "Only this Agent",
+-  filterWorkspace: "Only this workspace",
+-  filterProject: "Only this project",
++  filterBot: "Only this Bot",
++  filterAgent: "Only this provider",
++  filterWorkspace: "Only this feature",
++  filterProject: "Only this app",
+   archived: "Archived",
+-  workspaceArchived: "Workspace archived",
++  workspaceArchived: "Feature archived",
+   parentHistory: "History",
+   parentHistoryHint: (archive: string | null, archived: boolean | null) => `${archive ? `Parent: ${archive}` : archived === false ? "Parent is not currently archived" : "Parent archive status unknown"}\nThe former relationship is inferred from archive timing and may be incorrect`,
+-  parentUnknown: "Parent task",
+-  revealParent: "Show parent task",
++  parentUnknown: "Parent chat",
++  revealParent: "Show parent chat",
+   /** A subtask's card menu: brings the parent's card into view on the board. */
+-  revealParentCard: "Show parent task card",
++  revealParentCard: "Show parent chat card",
+   /** Beside Open on a subtask's card: the parent task's tab. */
+-  openParent: "Open parent",
++  openParent: "Open parent chat",
+   /** A provider subagent's row: it has no card or tab, so it opens its parent's. */
+-  openParentTab: "Open in the parent's tab",
++  openParentTab: "Open in parent chat",
+   subagentLabel: "In session",
+-  subagent: "A subtask inside this task's session, with no tab of its own",
++  subagent: "A subagent inside this chat's session, with no tab of its own",
+   /** A provider subagent's own card: read-only, opening its parent's tab. */
+-  subagentCard: "A subtask inside its parent's session: read-only, with no tab of its own, so it opens its parent's",
++  subagentCard: "A subagent inside its parent chat's session: read-only, with no tab of its own, so it opens its parent chat",
+   more: (count: number) => `${count} more`,
+   showFewer: "Show fewer",
+   context: "Context",
+@@ -95,7 +96,7 @@ const en = {
+   sessionCost: (cost: string) => `Session cost ${cost}`,
+   starting: "Starting",
+   todoHint: (label: string, expanded: boolean) => `${label} · ${expanded ? "Click to collapse" : "Click to expand list"}`,
+-  subtasks: (total: number, parts: string) => `${total} ${total === 1 ? "subtask" : "subtasks"}: ${parts}`,
++  subtasks: (total: number, parts: string) => `${total} ${total === 1 ? "subagent" : "subagents"}: ${parts}`,
+   status: {
+     needs_input: "needs input",
+     running: "running",
+@@ -107,8 +108,8 @@ const en = {
+   /** Hover hints on a desktop card: what each mark on it means. */
+   hint: {
+     pair: (name: string, value: string) => `${name}: ${value}`,
+-    project: "Project",
+-    workspace: "Workspace",
++    project: "App",
++    workspace: "Feature",
+     status: "Status",
+     stopped: "stopped manually",
+     model: "Model",
+@@ -118,13 +119,13 @@ const en = {
+     behind: (count: number) => `${count} ${count === 1 ? "commit" : "commits"} behind`,
+     path: "Directory",
+     folder: "Folder",
+-    label: "Label",
++    label: "Bot",
+     moreLabels: "More labels",
+     pr: "Pull request",
+     turnStarted: "This turn started",
+     turnRunning: "This turn has run",
+-    subtasksStarted: "Subtasks started",
+-    subtasksRunning: "Subtasks have run",
++    subtasksStarted: "Subagents started",
++    subtasksRunning: "Subagents have run",
+     waitingSince: "Waiting for input since",
+     waitStarted: "Waiting since",
+     lastTurn: "Last turn took",
+@@ -137,14 +138,14 @@ const en = {
+     directory: "directory",
+   } as Record<WorkspaceKind, string>,
+   details: {
+-    project: "Project",
+-    workspace: "Workspace",
++    project: "App",
++    workspace: "Feature",
+     branch: "Branch",
+     notGit: "Not a git directory",
+     folder: "Folder",
+     cwd: "Directory",
+     pr: "PR",
+-    labels: "Labels",
++    labels: "Bot",
+     created: "Created",
+     mode: "Mode",
+     input: "Input tokens",
+@@ -284,7 +285,7 @@ const zh: CardStrings = {
+     context: "Agent 说明", contextLoading: "正在读取 Agent 说明", contextError: "没能读取 Agent 说明", contextRetry: "重试", copyContext: "复制 Agent 说明",
+   },
+   searchHits: {
+-    fields: { title: "标题", prompt: "首条消息", conversation: "会话内容", pr: "PR", label: "标签", branch: "分支", folder: "文件夹", project: "项目", workspace: "工作区", path: "路径", model: "模型 ID", id: "任务 ID" },
++    fields: { title: "标题", prompt: "首条消息", conversation: "会话内容", pr: "PR", label: "机器人", branch: "分支", folder: "文件夹", project: "应用", workspace: "特性分支", path: "路径", model: "模型 ID", id: "对话 ID" },
+     viewAll: (count) => `查看全部 ${count} 处命中`,
+     more: (count) => `+${count} 处命中`,
+     countOnly: (count) => `${count} 处命中`,
+@@ -298,26 +299,26 @@ const zh: CardStrings = {
+     conversationLoading: "正在搜索会话",
+     conversationUnavailable: "会话内容无法读取",
+   },
+-  openInWorkspace: "在工作区中打开",
++  openInWorkspace: "在特性分支中打开",
+   awaitingAnswer: "待回答",
+   awaitingApproval: "待授权",
+   awaitingReview: "待确认",
+   planRequest: "计划",
+   viewPlan: "查看计划",
+-  openTab: "打开",
++  openTab: "打开对话",
+   stop: "停止",
+-  stopChildren: "停止子任务",
++  stopChildren: "停止子代理",
+   confirmStop: "确认停止",
+   confirmStopAll: "确认停止全部",
+   stopOptions: "停止选项",
+-  stopOnlyThis: "仅停止此任务",
++  stopOnlyThis: "仅停止此对话",
+   archiveOptions: "归档选项",
+   archiveOnly: "仅归档当前卡片",
+-  archiveWithChildren: "同时归档所有子任务",
+-  stopWithChildren: "连同子任务一起停止",
++  archiveWithChildren: "同时归档所有子代理",
++  stopWithChildren: "连同子代理一起停止",
+   markRead: "标为已读",
+   markUnread: "保持未读",
+-  copySessionId: "复制会话 ID",
++  copySessionId: "复制对话 ID",
+   copyTitle: "复制标题",
+   renameTitle: "修改标题",
+   autoTitle: "自动更新标题",
+@@ -333,24 +334,25 @@ const zh: CardStrings = {
+   savingTitle: "保存中…",
+   cancelTitle: "取消",
+   renameFailed: (error) => `修改标题失败：${error}`,
+-  copyWorkspace: "复制工作区名称",
+-  copyProject: "复制项目名称",
++  copyWorkspace: "复制特性分支名称",
++  copyProject: "复制应用名称",
+   filter: "筛选",
+-  filterAgent: "只看此 Agent",
+-  filterWorkspace: "只看此工作区",
+-  filterProject: "只看此项目",
++  filterBot: "只看此机器人",
++  filterAgent: "只看此模型服务",
++  filterWorkspace: "只看此特性分支",
++  filterProject: "只看此应用",
+   archived: "已归档",
+-  workspaceArchived: "工作区已归档",
++  workspaceArchived: "特性分支已归档",
+   parentHistory: "历史关联",
+-  parentHistoryHint: (archive, archived) => `${archive ? `父任务：${archive}` : archived === false ? "父任务当前未归档" : "父任务归档状态未知"}\n历史关联根据归档时间推测，可能有误`,
+-  parentUnknown: "父任务",
+-  revealParent: "定位到父任务",
+-  revealParentCard: "显示父任务卡片",
+-  openParent: "打开父任务",
+-  openParentTab: "在父任务的 tab 中打开",
++  parentHistoryHint: (archive, archived) => `${archive ? `父对话：${archive}` : archived === false ? "父对话当前未归档" : "父对话归档状态未知"}\n历史关联根据归档时间推测，可能有误`,
++  parentUnknown: "父对话",
++  revealParent: "定位到父对话",
++  revealParentCard: "显示父对话卡片",
++  openParent: "打开父对话",
++  openParentTab: "在父对话中打开",
+   subagentLabel: "会话内",
+-  subagent: "本任务会话里的子任务，没有自己的 tab",
+-  subagentCard: "父任务会话里的子任务，只读，没有自己的 tab，打开的是父任务的 tab",
++  subagent: "本对话会话里的子代理，没有独立标签页",
++  subagentCard: "父对话会话里的子代理，只读，没有独立标签页，打开的是父对话",
+   more: (count) => `还有 ${count} 条`,
+   showFewer: "收起",
+   context: "上下文",
+@@ -360,7 +362,7 @@ const zh: CardStrings = {
+   sessionCost: (cost) => `会话费用 ${cost}`,
+   starting: "启动中",
+   todoHint: (label, expanded) => `${label} · ${expanded ? "点按收起" : "点按展开清单"}`,
+-  subtasks: (total, parts) => `${total} 个子任务：${parts}`,
++  subtasks: (total, parts) => `${total} 个子代理：${parts}`,
+   status: {
+     needs_input: "待输入",
+     running: "运行中",
+@@ -371,8 +373,8 @@ const zh: CardStrings = {
+   },
+   hint: {
+     pair: (name, value) => `${name}：${value}`,
+-    project: "项目",
+-    workspace: "工作区",
++    project: "应用",
++    workspace: "特性分支",
+     status: "状态",
+     stopped: "已手动停止",
+     model: "模型",
+@@ -382,13 +384,13 @@ const zh: CardStrings = {
+     behind: (count) => `落后 ${count} 个提交`,
+     path: "工作目录",
+     folder: "文件夹",
+-    label: "标签",
++    label: "机器人",
+     moreLabels: "其余标签",
+     pr: "PR",
+     turnStarted: "本轮开始",
+     turnRunning: "本轮已运行",
+-    subtasksStarted: "子任务开始",
+-    subtasksRunning: "子任务已运行",
++    subtasksStarted: "子代理开始",
++    subtasksRunning: "子代理已运行",
+     waitingSince: "开始等待输入",
+     waitStarted: "开始等待",
+     lastTurn: "上一轮耗时",
+@@ -401,14 +403,14 @@ const zh: CardStrings = {
+     directory: "普通目录",
+   },
+   details: {
+-    project: "项目",
+-    workspace: "工作区",
++    project: "应用",
++    workspace: "特性分支",
+     branch: "分支",
+     notGit: "非 git 目录",
+     folder: "文件夹",
+     cwd: "工作目录",
+     pr: "PR",
+-    labels: "标签",
++    labels: "机器人",
+     created: "创建时间",
+     mode: "模式",
+     input: "Input token",
+@@ -418,7 +420,7 @@ const zh: CardStrings = {
+     context: "上下文",
+     dirty: "有未提交改动",
+     clean: "无未提交改动",
+-    parent: "父任务",
++    parent: "父对话",
+     updated: "更新",
+     cachedHint: (count) => `缓存 ${count}`,
+     createdAgo: (when) => `${when}创建`,
+diff --git a/client/tasks/chunk/entry.ts b/client/tasks/chunk/entry.ts
+index a87419e..94cbcc4 100644
+--- a/client/tasks/chunk/entry.ts
++++ b/client/tasks/chunk/entry.ts
+@@ -1,7 +1,7 @@
+ import type { PluginClientContext } from "@getpaseo/plugin/client";
+ import { lastTurnsRpc } from "../../../shared/turn-usage-rpc";
+-import { tasksLabelsRpc, tasksParentOriginsRpc, tasksProjectIconsRpc, tasksReadsRpc, tasksSessionTokensRpc, tasksSubagentTimelineRpc, tasksSubagentsRpc, tasksUnreadClearRpc, tasksUnreadsRpc } from "../../../shared/tasks-rpc";
+-import { setLabelDefinitionsLoader, setLastTurnLoader, setParentOriginsLoader, setProjectIconsLoader, setReadMarksLoader, setSubagentLoader, setUnreadClearer, setUnreadMarksLoader } from "../data";
++import { tasksBotsRpc, tasksLabelsRpc, tasksParentOriginsRpc, tasksProjectIconsRpc, tasksReadsRpc, tasksSessionTokensRpc, tasksSubagentTimelineRpc, tasksSubagentsRpc, tasksUnreadClearRpc, tasksUnreadsRpc } from "../../../shared/tasks-rpc";
++import { setBotDefinitionsLoader, setLabelDefinitionsLoader, setLastTurnLoader, setParentOriginsLoader, setProjectIconsLoader, setReadMarksLoader, setSubagentLoader, setUnreadClearer, setUnreadMarksLoader } from "../data";
+ import { setSessionTokensLoader } from "../data/session-tokens";
+ import { setSubagentTimelineLoader } from "../data/subagent-timeline";
+ import { conversationSearchRpc } from "../../../shared/conversation-search";
+@@ -42,6 +42,8 @@ export function startTasksData(client: PluginClientContext): () => void {
+   setParentOriginsLoader((since) => client.rpc(tasksParentOriginsRpc, since === undefined ? {} : { since }));
+   // Label colors as Paseo's sidebar draws them, for a host whose API lists no label definitions.
+   setLabelDefinitionsLoader(() => client.rpc(tasksLabelsRpc, {}).then((result) => result.labels));
++  // Configured Paseo Bots, so Bot Chat cards and filters show Bot names and colours.
++  setBotDefinitionsLoader(() => client.rpc(tasksBotsRpc, {}).then((result) => result.bots));
+   // Project icons as Paseo's sidebar draws them, for a host whose API has no icon call.
+   setProjectIconsLoader((projectIds) => client.rpc(tasksProjectIconsRpc, { projectIds }).then((result) => result.icons));
+   // A running task's session tokens, read by the server from the provider's session files.
+@@ -58,6 +60,7 @@ export function startTasksData(client: PluginClientContext): () => void {
+     setUnreadClearer(null);
+     setParentOriginsLoader(null);
+     setLabelDefinitionsLoader(null);
++    setBotDefinitionsLoader(null);
+     setProjectIconsLoader(null);
+     setSessionTokensLoader(null);
+     setSubagentTimelineLoader(null);
+diff --git a/client/tasks/data/index.ts b/client/tasks/data/index.ts
+index 83b3c1a..d2bc31a 100644
+--- a/client/tasks/data/index.ts
++++ b/client/tasks/data/index.ts
+@@ -15,7 +15,7 @@ import type {
+ } from "@getpaseo/client";
+ import { doneWindowMs, type DoneWindow } from "../../../shared/tasks-settings";
+ import type { LastTurn } from "../../../shared/turn-usage-rpc";
+-import type { ParentOrigin, ProviderSubagent } from "../../../shared/tasks-rpc";
++import type { ParentOrigin, ProviderSubagent, TasksBotDefinition } from "../../../shared/tasks-rpc";
+ import { footerModel } from "../../state/footer-model";
+ import { MARK_IDS } from "../../components/marks";
+ import { normalizeProvider } from "../../components/provider-logo";
+@@ -393,10 +393,43 @@ const compareText: (left: string, right: string) => number = (() => {
+   return (left, right) => left.localeCompare(right);
+ })();
+ 
+-function taskLabels(workspace: PaseoWorkspace | undefined, colorNames: ReadonlyMap<string, string>): TaskLabel[] {
+-  return [...new Set(workspace?.labels ?? [])]
++const EMPTY_BOT_DEFINITIONS: ReadonlyMap<string, TasksBotDefinition> = new Map();
++
++function defaultBotDisplayName(botId: string): string {
++  if (botId === "vibing-general") return "Codex";
++  if (botId === "vibing-claude") return "Claude";
++  return botId;
++}
++
++function isInternalHelperChat(labels: Readonly<Record<string, string>> | undefined): boolean {
++  if (!labels) return false;
++  return (
++    labels[TITLE_HELPER_LABEL] === TITLE_HELPER_PURPOSE ||
++    labels[TRANSLATION_HELPER_LABEL] === TRANSLATION_HELPER_PURPOSE ||
++    labels["paseo-bots.bot"] === "vibing-chief" ||
++    labels["paseo-bots.context"] === "live-design"
++  );
++}
++
++function taskLabels(
++  agent: PaseoAgent,
++  workspace: PaseoWorkspace | undefined,
++  colorNames: ReadonlyMap<string, string>,
++  botsById: ReadonlyMap<string, TasksBotDefinition> = EMPTY_BOT_DEFINITIONS,
++): TaskLabel[] {
++  const rawBotId = agent.labels?.["paseo-bots.bot"] ?? (workspace && !workspace.background ? "vibing-general" : null);
++  const botLabels: TaskLabel[] = [];
++  if (rawBotId && rawBotId !== "vibing-chief") {
++    const bot = botsById.get(rawBotId);
++    const name = bot?.name ?? defaultBotDisplayName(rawBotId);
++    botLabels.push({ name, color: bot?.color ?? colorNames.get(name) ?? fallbackLabelColor(name) });
++  }
++  const seen = new Set(botLabels.map((label) => label.name));
++  const workspaceLabels = [...new Set(workspace?.labels ?? [])]
++    .filter((name) => !seen.has(name))
+     .sort(compareText)
+     .map((name) => ({ name, color: colorNames.get(name) ?? fallbackLabelColor(name) }));
++  return [...botLabels, ...workspaceLabels];
+ }
+ 
+ /**
+@@ -585,6 +618,15 @@ export function setLabelDefinitionsLoader(next: LabelDefinitionsLoader | null):
+   labelDefinitionsLoader = next;
+ }
+ 
++/** `tasks.bots`: configured Paseo Bots so Bot Chat cards and filters show Bot names and colours. */
++export type BotDefinitionsLoader = () => Promise<TasksBotDefinition[]>;
++
++let botDefinitionsLoader: BotDefinitionsLoader | null = null;
++
++export function setBotDefinitionsLoader(next: BotDefinitionsLoader | null): void {
++  botDefinitionsLoader = next;
++}
++
+ /** `tasks.project-icons`: the projects' icons, for a host whose API has no icon call; null when the server cannot read them. */
+ export type ProjectIconsLoader = (projectIds: string[]) => Promise<Array<{ projectId: string; icon: ProjectIconData | null }> | null>;
+ 
+@@ -887,6 +929,7 @@ function buildBaseCard(
+   colorNames: ReadonlyMap<string, string>,
+   modelCatalog: PaseoProviderModelsResult | undefined,
+   icon: ProjectIconValue | undefined,
++  botsById: ReadonlyMap<string, TasksBotDefinition> = EMPTY_BOT_DEFINITIONS,
+ ): TaskCard {
+   const { agent, placement } = entry;
+   const pendingPermissions = agent.pendingPermissions ?? [];
+@@ -970,7 +1013,7 @@ function buildBaseCard(
+         ? { number: pullRequest.number ?? null, title: pullRequest.title, url: pullRequest.url }
+         : null,
+     },
+-    labels: taskLabels(workspace, colorNames),
++    labels: taskLabels(agent, workspace, colorNames, botsById),
+     timing: {
+       createdAt: agent.createdAt,
+       updatedAt: agent.updatedAt,
+@@ -1125,6 +1168,7 @@ function createStore(api: PaseoApi): TaskStore {
+   const workspaceArchiveTimes = new Map<string, string>();
+   const projects = new Map<string, PaseoProject>();
+   const colorNames = new Map<string, string>();
++  const botsById = new Map<string, TasksBotDefinition>();
+   const modelCatalogs = new Map<string, PaseoProviderModelsResult>();
+   const modelRequests = new Set<string>();
+   const baseCards = new Map<string, TaskCard>();
+@@ -1582,7 +1626,12 @@ function createStore(api: PaseoApi): TaskStore {
+    * daemon decides; an older daemon's snapshot has no flag of its own.
+    */
+   function isBackground(card: TaskCard): boolean {
+-    if (entries.get(card.id)?.agent.background === true) return true;
++    const entry = entries.get(card.id);
++    if (entry?.agent.background === true) return true;
++    const botId = entry?.agent.labels?.["paseo-bots.bot"];
++    if (botId && botId !== "vibing-chief" && entry?.agent.labels?.["paseo-bots.context"] !== "live-design") {
++      return false;
++    }
+     return Boolean(card.location.workspaceId && workspaces.get(card.location.workspaceId)?.background);
+   }
+ 
+@@ -1802,7 +1851,7 @@ function createStore(api: PaseoApi): TaskStore {
+     const projectId = workspace?.projectId ?? project?.projectId ?? null;
+     const catalog = modelCatalogs.get(agent.provider);
+     const icon = projectId ? projectIcons.get(projectId) : undefined;
+-    const base = buildBaseCard({ agent, placement }, workspace, project, colorNames, catalog, icon);
++    const base = buildBaseCard({ agent, placement }, workspace, project, colorNames, catalog, icon, botsById);
+     const oldBase = baseCards.get(agent.id);
+     if (!shallowCardEqual(oldBase, base)) baseCards.set(agent.id, base);
+     else if (!oldBase) baseCards.set(agent.id, base);
+@@ -3017,7 +3066,7 @@ function createStore(api: PaseoApi): TaskStore {
+           const workspace = entry.agent.workspaceId ? workspaces.get(entry.agent.workspaceId) : undefined;
+           const project = projectFor(entry, workspace, projects);
+           const projectId = workspace?.projectId ?? project?.projectId ?? null;
+-          const base = buildBaseCard(entry, workspace, project, colorNames, catalog, projectId ? projectIcons.get(projectId) : undefined);
++          const base = buildBaseCard(entry, workspace, project, colorNames, catalog, projectId ? projectIcons.get(projectId) : undefined, botsById);
+           baseCards.set(id, base);
+           refreshFinalCard(id);
+           for (const child of childrenByParent.get(id) ?? []) refreshFinalCard(child);
+@@ -3180,7 +3229,7 @@ function createStore(api: PaseoApi): TaskStore {
+     for (const [id, entry] of entries) {
+       if (entry.agent.workspaceId !== workspace.id) continue;
+       const project = projects.get(workspace.projectId);
+-      const base = buildBaseCard(entry, workspace, project, colorNames, modelCatalogs.get(entry.agent.provider), projectIcons.get(workspace.projectId));
++      const base = buildBaseCard(entry, workspace, project, colorNames, modelCatalogs.get(entry.agent.provider), projectIcons.get(workspace.projectId), botsById);
+       baseCards.set(id, base);
+       if (refreshWithKin(id)) changed = true;
+     }
+@@ -3235,7 +3284,7 @@ function createStore(api: PaseoApi): TaskStore {
+         if (!entry.agent.workspaceId || next.has(entry.agent.workspaceId)) continue;
+         if (removedIds.has(entry.agent.workspaceId)) {
+           const project = projectFor(entry, undefined, projects);
+-          baseCards.set(id, buildBaseCard(entry, undefined, project, colorNames, modelCatalogs.get(entry.agent.provider), project ? projectIcons.get(project.projectId) : undefined));
++          baseCards.set(id, buildBaseCard(entry, undefined, project, colorNames, modelCatalogs.get(entry.agent.provider), project ? projectIcons.get(project.projectId) : undefined, botsById));
+         }
+         refreshWithKin(id);
+       }
+@@ -3320,7 +3369,7 @@ function createStore(api: PaseoApi): TaskStore {
+           workspaceStamps.set(envelope.payload.id, ++recordClock);
+           for (const [id, entry] of entries) {
+             if (entry.agent.workspaceId !== envelope.payload.id) continue;
+-            const base = buildBaseCard(entry, undefined, projectFor(entry, undefined, projects), colorNames, modelCatalogs.get(entry.agent.provider), undefined);
++            const base = buildBaseCard(entry, undefined, projectFor(entry, undefined, projects), colorNames, modelCatalogs.get(entry.agent.provider), undefined, botsById);
+             baseCards.set(id, base);
+             refreshWithKin(id);
+           }
+@@ -3363,12 +3412,36 @@ function createStore(api: PaseoApi): TaskStore {
+       const workspace = entry.agent.workspaceId ? workspaces.get(entry.agent.workspaceId) : undefined;
+       const project = projectFor(entry, workspace, projects);
+       const projectId = workspace?.projectId ?? project?.projectId ?? null;
+-      baseCards.set(id, buildBaseCard(entry, workspace, project, colorNames, modelCatalogs.get(entry.agent.provider), projectId ? projectIcons.get(projectId) : undefined));
++      baseCards.set(id, buildBaseCard(entry, workspace, project, colorNames, modelCatalogs.get(entry.agent.provider), projectId ? projectIcons.get(projectId) : undefined, botsById));
++      refreshFinalCard(id);
++    }
++    notify();
++  }
++
++  function applyBotDefinitions(bots: TasksBotDefinition[]) {
++    botsById.clear();
++    for (const bot of bots) botsById.set(bot.id, bot);
++    for (const [id, entry] of entries) {
++      const workspace = entry.agent.workspaceId ? workspaces.get(entry.agent.workspaceId) : undefined;
++      const project = projectFor(entry, workspace, projects);
++      const projectId = workspace?.projectId ?? project?.projectId ?? null;
++      baseCards.set(id, buildBaseCard(entry, workspace, project, colorNames, modelCatalogs.get(entry.agent.provider), projectId ? projectIcons.get(projectId) : undefined, botsById));
+       refreshFinalCard(id);
+     }
+     notify();
+   }
+ 
++  async function readBotDefinitions(run: Run) {
++    const loader = botDefinitionsLoader;
++    if (!loader) return;
++    try {
++      const bots = await loader();
++      if (isCurrent(run)) applyBotDefinitions(bots);
++    } catch {
++      // Built-in Bot fallback names stay when the RPC cannot be read.
++    }
++  }
++
+   async function startLabelSubscription(run: Run) {
+     const labelApi = api.workspaces as unknown as OptionalLabelsApi;
+     if (typeof labelApi.listLabels !== "function") {
+@@ -3449,7 +3522,7 @@ function createStore(api: PaseoApi): TaskStore {
+       const workspace = entry.agent.workspaceId ? workspaces.get(entry.agent.workspaceId) : undefined;
+       const projectId = workspace?.projectId ?? projectFor(entry, workspace, projects)?.projectId ?? null;
+       if (projectId !== project.projectId) continue;
+-      baseCards.set(id, buildBaseCard(entry, workspace, project, colorNames, modelCatalogs.get(entry.agent.provider), projectIcons.get(project.projectId)));
++      baseCards.set(id, buildBaseCard(entry, workspace, project, colorNames, modelCatalogs.get(entry.agent.provider), projectIcons.get(project.projectId), botsById));
+       refreshFinalCard(id);
+       for (const childId of childrenByParent.get(id) ?? []) refreshFinalCard(childId);
+     }
+@@ -3467,7 +3540,7 @@ function createStore(api: PaseoApi): TaskStore {
+         const workspace = entry.agent.workspaceId ? workspaces.get(entry.agent.workspaceId) : undefined;
+         const matchesProject = workspace?.projectId === payload.projectId || Boolean(removed?.projectKey && entry.placement?.projectKey === removed.projectKey);
+         if (!matchesProject) continue;
+-        baseCards.set(id, buildBaseCard(entry, workspace, undefined, colorNames, modelCatalogs.get(entry.agent.provider), undefined));
++        baseCards.set(id, buildBaseCard(entry, workspace, undefined, colorNames, modelCatalogs.get(entry.agent.provider), undefined, botsById));
+         refreshFinalCard(id);
+       }
+       notify();
+@@ -3528,7 +3601,7 @@ function createStore(api: PaseoApi): TaskStore {
+       if (entry.agent.workspaceId !== workspaceId) continue;
+       const workspace = workspaces.get(workspaceId);
+       const project = workspace ? projects.get(workspace.projectId) : undefined;
+-      baseCards.set(id, buildBaseCard(entry, workspace, project, colorNames, modelCatalogs.get(entry.agent.provider), project ? projectIcons.get(project.projectId) : undefined));
++      baseCards.set(id, buildBaseCard(entry, workspace, project, colorNames, modelCatalogs.get(entry.agent.provider), project ? projectIcons.get(project.projectId) : undefined, botsById));
+       refreshFinalCard(id);
+       for (const childId of linkedChildrenOf(id)) refreshFinalCard(childId);
+     }
+@@ -3543,6 +3616,7 @@ function createStore(api: PaseoApi): TaskStore {
+     sourceMembers.set(STATUS_KEY, new Set());
+     void openAgentSubscription(STATUS_KEY, activeOptions(STATUS_FILTER), run);
+     void startWorkspaceSubscription({ generation, tier: "workspaces", tierRun: ++workspaceRun });
++    void readBotDefinitions(run);
+     scheduleSubagents(0);
+   }
+ 
+@@ -3556,6 +3630,7 @@ function createStore(api: PaseoApi): TaskStore {
+   function startBoard() {
+     const run: Run = { generation, tier: "board", tierRun: ++boardRun };
+     void startLabelSubscription(run);
++    void readBotDefinitions(run);
+     void startProjects(run);
+     void startProviders(run);
+     for (const entry of entries.values()) {
+@@ -3861,7 +3936,7 @@ function createStore(api: PaseoApi): TaskStore {
+       for (const id of [...entries.keys()]) dropIfUnreferenced(id);
+       for (const [id, entry] of entries) {
+         const workspace = entry.agent.workspaceId ? workspaces.get(entry.agent.workspaceId) : undefined;
+-        baseCards.set(id, buildBaseCard(entry, workspace, undefined, colorNames, modelCatalogs.get(entry.agent.provider), undefined));
++        baseCards.set(id, buildBaseCard(entry, workspace, undefined, colorNames, modelCatalogs.get(entry.agent.provider), undefined, botsById));
+       }
+       for (const id of entries.keys()) refreshFinalCard(id);
+       notify();
+@@ -3888,7 +3963,7 @@ function createStore(api: PaseoApi): TaskStore {
+       for (const id of [...entries.keys()]) dropIfUnreferenced(id);
+       for (const [id, entry] of entries) {
+         const workspace = entry.agent.workspaceId ? workspaces.get(entry.agent.workspaceId) : undefined;
+-        baseCards.set(id, buildBaseCard(entry, workspace, undefined, colorNames, modelCatalogs.get(entry.agent.provider), undefined));
++        baseCards.set(id, buildBaseCard(entry, workspace, undefined, colorNames, modelCatalogs.get(entry.agent.provider), undefined, botsById));
+       }
+       for (const id of entries.keys()) refreshFinalCard(id);
+       notify();
+@@ -3931,6 +4006,7 @@ function createStore(api: PaseoApi): TaskStore {
+     workspaceStamps.clear();
+     projects.clear();
+     colorNames.clear();
++    botsById.clear();
+     modelCatalogs.clear();
+     modelRequests.clear();
+     projectIcons.clear();
+@@ -4031,11 +4107,7 @@ function createStore(api: PaseoApi): TaskStore {
+     const now = Date.now();
+     const filteredCards = [...cards.values()].filter((card) => {
+       const labels = entries.get(card.id)?.agent.labels;
+-      if (
+-        isBackground(card) ||
+-        labels?.[TITLE_HELPER_LABEL] === TITLE_HELPER_PURPOSE ||
+-        labels?.[TRANSLATION_HELPER_LABEL] === TRANSLATION_HELPER_PURPOSE
+-      ) return false;
++      if (isBackground(card) || isInternalHelperChat(labels)) return false;
+       if (!isHistoryLane(card.lane)) return true;
+       if (!options.includeDone || (card.lane === "archived" && !showArchived)) return false;
+       if (cutoff === null) return true;
+@@ -4071,8 +4143,14 @@ function createStore(api: PaseoApi): TaskStore {
+     }
+     // Every enabled provider, then any other a card was run with (one disabled since).
+     const providersById = new Map<string, string>(enabledProviders);
+-    // Every label Paseo defines or a live workspace carries, then any other on a card.
+-    const labelsByName = new Map<string, TaskLabel>([...colorNames].map(([name, color]) => [name, { name, color }]));
++    // Every active Paseo Bot, every label Paseo defines or a live workspace carries, then any other on a card.
++    const labelsByName = new Map<string, TaskLabel>();
++    for (const bot of botsById.values()) {
++      if (!bot.archived) labelsByName.set(bot.name, { name: bot.name, color: bot.color });
++    }
++    for (const [name, color] of colorNames) {
++      if (!labelsByName.has(name)) labelsByName.set(name, { name, color });
++    }
+     for (const workspace of workspaces.values()) {
+       if (workspace.archivingAt || workspace.background) continue;
+       for (const name of workspace.labels ?? []) if (!labelsByName.has(name)) labelsByName.set(name, { name, color: fallbackLabelColor(name) });
+@@ -4139,11 +4217,7 @@ function createStore(api: PaseoApi): TaskStore {
+       };
+       for (const card of cards.values()) {
+         const labels = entries.get(card.id)?.agent.labels;
+-        if (
+-          isBackground(card) ||
+-          labels?.[TITLE_HELPER_LABEL] === TITLE_HELPER_PURPOSE ||
+-          labels?.[TRANSLATION_HELPER_LABEL] === TRANSLATION_HELPER_PURPOSE
+-        ) continue;
++        if (isBackground(card) || isInternalHelperChat(labels)) continue;
+         add(card);
+         // A provider subagent's card counts in its lane, as the board draws it (`withSubagentCards`).
+         if (card.lane !== "archived" && card.children.some((child) => child.kind === "provider")) {
+@@ -4415,7 +4489,7 @@ function createStore(api: PaseoApi): TaskStore {
+         const workspace = entry.agent.workspaceId ? workspaces.get(entry.agent.workspaceId) : undefined;
+         const entryProjectId = workspace?.projectId ?? projectFor(entry, workspace, projects)?.projectId ?? null;
+         if (entryProjectId !== projectId) continue;
+-        baseCards.set(id, buildBaseCard(entry, workspace, projects.get(projectId), colorNames, modelCatalogs.get(entry.agent.provider), value));
++        baseCards.set(id, buildBaseCard(entry, workspace, projects.get(projectId), colorNames, modelCatalogs.get(entry.agent.provider), value, botsById));
+         refreshFinalCard(id);
+       }
+       notify();
+diff --git a/client/tasks/shortcut-model.ts b/client/tasks/shortcut-model.ts
+index a16750b..ab8e17c 100644
+--- a/client/tasks/shortcut-model.ts
++++ b/client/tasks/shortcut-model.ts
+@@ -1,4 +1,4 @@
+-export const DEFAULT_OPEN_TASKS_SHORTCUT = "Mod+Shift+KeyY";
++export const DEFAULT_OPEN_TASKS_SHORTCUT = "Mod+KeyB";
+ const KEY = /^(Key[A-Z]|Digit[0-9]|F(?:[1-9]|1[0-2])|Arrow(?:Up|Down|Left|Right)|Home|End|PageUp|PageDown|Space|Enter|Backspace|Delete|Backquote|BracketLeft|BracketRight|Comma|Period|Slash|Semicolon|Quote|Backslash|Minus|Equal)$/;
+ 
+ type ShortcutInput = Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">;
+diff --git a/client/tools/transform.ts b/client/tools/transform.ts
+index 517d6d2..0385dc2 100644
+--- a/client/tools/transform.ts
++++ b/client/tools/transform.ts
+@@ -25,6 +25,126 @@ function pick(source: Record<string, unknown>, keys: readonly string[]): Record<
+   return Object.fromEntries(keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]));
+ }
+ 
++const BOTS_PROPOSAL_TOOL = /^(?:mcp__)?bots(?:__|\.|_)(?:propose_skill|propose_routine|propose_changes)$/;
++const BOTS_SHOW_CARD_TOOL = /^(?:mcp__)?bots(?:__|\.|_)show_card$/;
++const COMPOSIO_CONNECT_TOOL = /^(?:mcp__)?composio(?:__|\.|_)COMPOSIO_MANAGE_CONNECTIONS$/;
++const BOTS_PROPOSAL_ID = /\bproposal p-[a-z0-9]{10}\b/i;
++const BOTS_INTERACTION_ID = /^i-[a-f0-9]{24}$/;
++const BOTS_INTERACTION_STATUSES = new Set(["pending", "submitting", "answered", "dismissed"]);
++
++function detailOutput(detail: unknown): unknown {
++  return detail && typeof detail === "object" && "output" in detail
++    ? (detail as { output?: unknown }).output
++    : null;
++}
++
++function hasBotsInteractionReceipt(output: unknown): boolean {
++  let visited = 0;
++  const check = (value: unknown, depth = 0): boolean => {
++    if (depth > 5 || ++visited > 32) return false;
++    if (typeof value === "string") {
++      if (value.length > 200_000) return false;
++      try {
++        return check(JSON.parse(value), depth + 1);
++      } catch {
++        return false;
++      }
++    }
++    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
++    const record = value as Record<string, unknown>;
++    if (record.isError === true) return false;
++    if (
++      typeof record.cardId === "string" &&
++      BOTS_INTERACTION_ID.test(record.cardId) &&
++      BOTS_INTERACTION_STATUSES.has(String(record.status))
++    ) {
++      return true;
++    }
++    if (Array.isArray(record.content)) {
++      for (const block of record.content.slice(0, 20)) {
++        if (
++          block &&
++          typeof block === "object" &&
++          (block as { type?: unknown }).type === "text" &&
++          check((block as { text?: unknown }).text, depth + 1)
++        ) {
++          return true;
++        }
++      }
++    }
++    return false;
++  };
++  return check(output);
++}
++
++function isComposioRedirectUrl(value: unknown): boolean {
++  if (typeof value !== "string") return false;
++  try {
++    const url = new URL(value);
++    return (
++      url.protocol === "https:" &&
++      (url.hostname === "composio.dev" || url.hostname.endsWith(".composio.dev"))
++    );
++  } catch {
++    return false;
++  }
++}
++
++function hasComposioSignIn(value: unknown, depth = 0): boolean {
++  if (depth > 4 || value === null || value === undefined) return false;
++  if (typeof value === "string") {
++    try {
++      return hasComposioSignIn(JSON.parse(value), depth + 1);
++    } catch {
++      return false;
++    }
++  }
++  if (typeof value !== "object") return false;
++  if (Array.isArray(value)) return value.some((entry) => hasComposioSignIn(entry, depth + 1));
++  const record = value as Record<string, unknown>;
++  const data = record.data;
++  const results =
++    data && typeof data === "object" && !Array.isArray(data)
++      ? (data as { results?: unknown }).results
++      : undefined;
++  if (results && typeof results === "object" && !Array.isArray(results)) {
++    return Object.values(results).some(
++      (entry) =>
++        Boolean(entry) &&
++        typeof entry === "object" &&
++        isComposioRedirectUrl((entry as { redirect_url?: unknown }).redirect_url),
++    );
++  }
++  return (
++    hasComposioSignIn(record.output, depth + 1) ||
++    hasComposioSignIn(record.text, depth + 1) ||
++    hasComposioSignIn(record.content, depth + 1)
++  );
++}
++
++/**
++ * True when `paseo-bots` renders an interactive proposal, card recovery, or
++ * Composio sign-in card for this completed call. Like `hasUiFence` for `genui`,
++ * leaving these unclaimed prevents Better Paseo's tool row or standard-level
++ * fold from hiding the interactive card when evaluated first.
++ */
++export function isBotsCardToolCall(item: ToolCallTimelineItem): boolean {
++  if (item.status !== "completed") return false;
++  const trimmed = item.name.trim();
++  if (BOTS_PROPOSAL_TOOL.test(trimmed)) {
++    const output = detailOutput(item.detail);
++    const text = typeof output === "string" ? output : JSON.stringify(output ?? null);
++    return BOTS_PROPOSAL_ID.test(text);
++  }
++  if (BOTS_SHOW_CARD_TOOL.test(trimmed)) {
++    return !item.error && hasBotsInteractionReceipt(detailOutput(item.detail));
++  }
++  if (COMPOSIO_CONNECT_TOOL.test(trimmed)) {
++    return hasComposioSignIn(detailOutput(item.detail));
++  }
++  return false;
++}
++
+ /**
+  * Context compaction has no card in the host's style; it is drawn as a row
+  * like a tool call's, which the host replaces in place once it completes.
+@@ -52,7 +172,7 @@ export function transformToolCall({ item, phase }: {
+   item: ToolCallTimelineItem;
+   phase: "streaming" | "complete";
+ }): PluginTimelineTransformResult | undefined {
+-  if (item.type !== "tool_call") return undefined;
++  if (item.type !== "tool_call" || isBotsCardToolCall(item)) return undefined;
+   // The host's provenance when it passes it on; otherwise the notification's own status line.
+   const provenance = item.name === "agent_message"
+     ? (item as { agentMessage?: unknown }).agentMessage ?? agentMessageFromDetail(item.detail) : undefined;
+@@ -103,7 +223,7 @@ export function transformToolCall({ item, phase }: {
+ export function transformToolCallAt(input: { item: ToolCallTimelineItem; phase: "streaming" | "complete" },
+   preferences: Pick<EnhancerPreferences, "chatEnabled" | "timelineLevel" | "assistantMarkdown">,
+ ): PluginTimelineTransformResult | undefined {
+-  if (input.item.type !== "tool_call") return undefined;
++  if (input.item.type !== "tool_call" || isBotsCardToolCall(input.item)) return undefined;
+   if (!showToolAtLevel(input.item, preferences.timelineLevel, standardFoldActive(preferences))) return { items: [] };
+   return transformToolCall(input);
+ }
+diff --git a/server/tasks/provider-subagents.ts b/server/tasks/provider-subagents.ts
+index 2c6e227..b464247 100644
+--- a/server/tasks/provider-subagents.ts
++++ b/server/tasks/provider-subagents.ts
+@@ -31,11 +31,13 @@ export interface SeedDaemon {
+ /** The daemon's own client as the board's server uses it: the seed, metadata updates and attention. */
+ export interface HostDaemon extends SeedDaemon {
+   deleteAgent?(agentId: string): Promise<void>;
++  cancelAgent?(agentId: string): Promise<void>;
++  refreshAgent?(agentId: string): Promise<unknown>;
+   updateAgent(agentId: string, updates: { name: string }): Promise<void>;
+   inspectWorkspaceRecovery?(workspaceId: string): Promise<{ kind: "recoverable"; action: "unarchive" | "restore" } | { kind: "unavailable"; message: string }>;
+   restoreWorkspace?(workspaceId: string): Promise<void>;
+   /** The agent as the daemon lists it, live or from storage; null for an unknown one. */
+-  fetchAgent(agentId: string): Promise<{ agent: { cwd: string; status: string } } | null>;
++  fetchAgent(agentId: string): Promise<{ agent: { cwd: string; status: string; archivedAt?: string | null } } | null>;
+   /** Resolves when the daemon cleared every agent's; it never answers a request naming an unknown agent. */
+   clearAgentAttention(agentId: string | string[]): Promise<void>;
+   /**
+@@ -164,8 +166,14 @@ export type SubagentRegistry = ReturnType<typeof createSubagentRegistry>;
+ 
+ const HOST_MODULES = ["@getpaseo/client/internal/daemon-client", "@getpaseo/server/daemon-control", "ws"] as const;
+ 
++function injectedHostDaemon(): HostDaemon | null {
++  const getter = (globalThis as { __paseoPluginHostDaemon?: () => HostDaemon | null }).__paseoPluginHostDaemon;
++  return typeof getter === "function" ? getter() : null;
++}
++
+ /** Whether `connectHostDaemon` can build a client here: the host's packages resolve from the plugin process. */
+ export function hasHostDaemon(): boolean {
++  if (injectedHostDaemon()) return true;
+   const entry = process.argv[1];
+   if (!entry) return false;
+   try {
+@@ -185,6 +193,8 @@ export function hasHostDaemon(): boolean {
+  * `PASEO_HOME`, as the CLI finds them. Null where any of it is missing.
+  */
+ export async function connectHostDaemon(clientId = "cid_better_paseo_tasks"): Promise<HostDaemon | null> {
++  const injected = injectedHostDaemon();
++  if (injected) return injected;
+   const entry = process.argv[1];
+   if (!entry) return null;
+   try {
+diff --git a/server/tasks/register.ts b/server/tasks/register.ts
+index 8b23812..2f6cce9 100644
+--- a/server/tasks/register.ts
++++ b/server/tasks/register.ts
+@@ -1,7 +1,7 @@
+-import { constants } from "node:fs";
+-import { access, readFile, realpath, stat } from "node:fs/promises";
++import { readFile, realpath, stat } from "node:fs/promises";
+ import { createRequire } from "node:module";
+-import { delimiter, dirname, join } from "node:path";
++import { homedir } from "node:os";
++import { dirname, join } from "node:path";
+ import { execCommand, type PluginServerContext } from "@getpaseo/plugin/server";
+ import type { PaseoApi } from "../paseo-types";
+ import { TASKS_SETTINGS } from "../../shared/tasks-settings";
+@@ -10,7 +10,7 @@ import { connectHostDaemon, createSubagentWatch, hasHostDaemon, type HostDaemon,
+ import { iconThemeColor } from "./icon-color";
+ import { createSessionTokenReader, type SessionTokenReader } from "./session-tokens";
+ import { createParentOriginWatch, type ParentOriginWatch } from "./parent-origins";
+-import { tasksCapabilitiesRpc, tasksChunkRpc, tasksLabelsRpc, tasksParentOriginsRpc, tasksProjectIconsRpc, tasksReadRpc, tasksReadsRpc, tasksRenameRpc, tasksStopRpc, tasksStoppedRpc, tasksSessionTokensRpc, tasksSubagentTimelineRpc, tasksSubagentsRpc, tasksUnarchiveRpc, tasksUnreadClearRpc, tasksUnreadRpc, tasksUnreadsRpc } from "../../shared/tasks-rpc";
++import { tasksBotsRpc, tasksCapabilitiesRpc, tasksChunkRpc, tasksLabelsRpc, tasksParentOriginsRpc, tasksProjectIconsRpc, tasksReadRpc, tasksReadsRpc, tasksRenameRpc, tasksStopRpc, tasksStoppedRpc, tasksSessionTokensRpc, tasksSubagentTimelineRpc, tasksSubagentsRpc, tasksUnarchiveRpc, tasksUnreadClearRpc, tasksUnreadRpc, tasksUnreadsRpc, type TasksBotDefinition } from "../../shared/tasks-rpc";
+ import { TASKS_CHUNK } from "../tasks-chunk";
+ import { registerTitleGeneration } from "./title-generation";
+ import { tasksAvailabilityRpc } from "../../shared/task-availability";
+@@ -40,17 +40,6 @@ interface CliCommand {
+ 
+ let cliPromise: Promise<CliCommand | null> | null = null;
+ 
+-async function isExecutableFile(path: string): Promise<boolean> {
+-  try {
+-    const info = await stat(path);
+-    if (!info.isFile()) return false;
+-    await access(path, constants.X_OK);
+-    return true;
+-  } catch {
+-    return false;
+-  }
+-}
+-
+ async function packageVersion(path: string): Promise<string | null> {
+   try {
+     const version = (JSON.parse(await readFile(path, "utf8")) as { version?: unknown }).version;
+@@ -108,16 +97,8 @@ async function hostCli(entry: string | undefined): Promise<CliCommand | null> {
+   return { command: process.execPath, args: [...quiet, bin] };
+ }
+ 
+-/** `PASEO_CLI` (Paseo desktop sets it), then `paseo` on `PATH`, then the CLI installed with this daemon. */
++/** Only the CLI installed alongside this daemon; never an external `paseo` binary on PATH. */
+ async function findCli(): Promise<CliCommand | null> {
+-  const configured = process.env.PASEO_CLI;
+-  if (configured && (await isExecutableFile(configured))) return { command: configured, args: [] };
+-
+-  for (const entry of (process.env.PATH ?? "").split(delimiter)) {
+-    const candidate = join(entry || process.cwd(), "paseo");
+-    if (await isExecutableFile(candidate)) return { command: candidate, args: [] };
+-  }
+-
+   return await hostCli(process.argv[1]);
+ }
+ 
+@@ -152,7 +133,7 @@ function cliErrorMessage(error: unknown, doing = "stopping", verb = "stop"): str
+   return `Paseo CLI failed to ${verb} the agent.`;
+ }
+ 
+-async function stopAgent(cli: CliCommand, agentId: string, paseo: PaseoApi): Promise<{ ok: boolean; error: string | null }> {
++async function stopAgent(host: HostDaemonAccess, cli: CliCommand | null, agentId: string, paseo: PaseoApi): Promise<{ ok: boolean; error: string | null }> {
+   if (!AGENT_ID_PATTERN.test(agentId)) return { ok: false, error: "Invalid agent ID." };
+ 
+   const agent = paseo.agents.ref(agentId);
+@@ -172,6 +153,34 @@ async function stopAgent(cli: CliCommand, agentId: string, paseo: PaseoApi): Pro
+     return { ok: false, error: error instanceof Error ? error.message : String(error) };
+   }
+ 
++  if (host.available()) {
++    const daemon = await host.connect();
++    if (daemon && typeof daemon.cancelAgent === "function") {
++      let timer: ReturnType<typeof setTimeout> | undefined;
++      try {
++        const timeout = new Promise<never>((_, reject) => {
++          timer = setTimeout(() => reject(new Error("Paseo daemon timed out while stopping the agent.")), STOP_TIMEOUT_MS);
++        });
++        const run = async () => {
++          const fetched = await daemon.fetchAgent(agentId);
++          if (!fetched) return { ok: false, error: "Agent not found." };
++          if (fetched.agent.status !== "running") return { ok: false, error: "Agent is not running and has no pending async questions." };
++          await daemon.cancelAgent!(agentId);
++          return { ok: true, error: null };
++        };
++        return await Promise.race([run(), timeout]);
++      } catch (error) {
++        return { ok: false, error: error instanceof Error ? error.message : String(error) };
++      } finally {
++        clearTimeout(timer);
++        await daemon.close().catch(() => {});
++      }
++    }
++    await daemon?.close().catch(() => {});
++  }
++
++  if (!cli) return { ok: false, error: "Paseo CLI is unavailable." };
++
+   try {
+     const { stdout } = await runCli(cli, ["agent", "stop", agentId, "--json"], STOP_TIMEOUT_MS);
+ 
+@@ -189,9 +198,37 @@ async function stopAgent(cli: CliCommand, agentId: string, paseo: PaseoApi): Pro
+   }
+ }
+ 
+-async function unarchiveAgent(cli: CliCommand, agentId: string): Promise<{ ok: boolean; error: string | null }> {
++async function unarchiveAgent(host: HostDaemonAccess, cli: CliCommand | null, agentId: string): Promise<{ ok: boolean; error: string | null }> {
+   if (!AGENT_ID_PATTERN.test(agentId)) return { ok: false, error: "Invalid agent ID." };
+ 
++  if (host.available()) {
++    const daemon = await host.connect();
++    if (daemon && typeof daemon.refreshAgent === "function") {
++      let timer: ReturnType<typeof setTimeout> | undefined;
++      try {
++        const timeout = new Promise<never>((_, reject) => {
++          timer = setTimeout(() => reject(new Error("Paseo daemon timed out while unarchiving the agent.")), UNARCHIVE_TIMEOUT_MS);
++        });
++        const run = async () => {
++          const fetched = await daemon.fetchAgent(agentId);
++          if (!fetched) return { ok: false, error: "Agent not found." };
++          if (!fetched.agent.archivedAt) return { ok: true, error: null };
++          await daemon.refreshAgent!(agentId);
++          return { ok: true, error: null };
++        };
++        return await Promise.race([run(), timeout]);
++      } catch (error) {
++        return { ok: false, error: error instanceof Error ? error.message : String(error) };
++      } finally {
++        clearTimeout(timer);
++        await daemon.close().catch(() => {});
++      }
++    }
++    await daemon?.close().catch(() => {});
++  }
++
++  if (!cli) return { ok: false, error: "Paseo CLI is unavailable." };
++
+   try {
+     // A reload interrupts a live agent: only an archived one is reloaded.
+     const { stdout } = await runCli(cli, ["agent", "inspect", agentId, "--json"], STOP_TIMEOUT_MS);
+@@ -298,6 +335,52 @@ export async function readSubagentTimeline(
+   }
+ }
+ 
++const BOT_BADGE_COLORS = ["#26b5ce", "#f2994a", "#5e6ad2", "#4cb782", "#bb87fc", "#4ea7fc", "#e879a6", "#f2c94c", "#eb5757", "#a5876b"] as const;
++const DEFAULT_VIBING_BOTS: ReadonlyArray<{ id: string; name: string }> = [
++  { id: "vibing-general", name: "Codex" },
++  { id: "vibing-claude", name: "Claude" },
++];
++
++function assignBotBadgeColor(seed: string, taken: Set<string>): string {
++  let hash = 0;
++  for (const char of seed) hash = (Math.imul(hash, 31) + char.codePointAt(0)!) | 0;
++  const start = (hash >>> 0) % BOT_BADGE_COLORS.length;
++  for (let step = 0; step < BOT_BADGE_COLORS.length; step += 1) {
++    const candidate = BOT_BADGE_COLORS[(start + step) % BOT_BADGE_COLORS.length]!;
++    if (!taken.has(candidate)) {
++      taken.add(candidate);
++      return candidate;
++    }
++  }
++  return BOT_BADGE_COLORS[start]!;
++}
++
++/** Reads configured Paseo Bots from `<PASEO_HOME>/plugin-settings/paseo-bots/bots.json` (excluding internal Chief). */
++async function readConfiguredBots(): Promise<TasksBotDefinition[]> {
++  const home = process.env.PASEO_HOME || join(homedir(), ".paseo");
++  const settingsPath = join(home, "plugin-settings", "paseo-bots", "bots.json");
++  const rawBots: Array<{ id: string; name: string; archived: boolean }> = [];
++  try {
++    const parsed = JSON.parse(await readFile(settingsPath, "utf8")) as { values?: { bots?: unknown } };
++    const entries = Array.isArray(parsed.values?.bots) ? parsed.values.bots : [];
++    for (const item of entries) {
++      if (!item || typeof item !== "object") continue;
++      const record = item as { id?: unknown; name?: unknown; archived?: unknown; archivedAt?: unknown; hostId?: unknown };
++      if (typeof record.id !== "string" || record.id === "vibing-chief" || record.hostId) continue;
++      const name = typeof record.name === "string" ? record.name.trim() : "";
++      if (!name) continue;
++      rawBots.push({ id: record.id, name, archived: Boolean(record.archived || record.archivedAt) });
++    }
++  } catch {
++    // Missing or unreadable settings file falls back to the built-in Vibing bots below.
++  }
++  if (rawBots.length === 0) {
++    for (const fallback of DEFAULT_VIBING_BOTS) rawBots.push({ ...fallback, archived: false });
++  }
++  const taken = new Set<string>();
++  return rawBots.map((bot) => ({ ...bot, color: assignBotBadgeColor(bot.name, taken) }));
++}
++
+ /** The daemon's label definitions; null when it cannot be reached, has no labels API or does not answer in time. */
+ async function readLabels(host: HostDaemonAccess): Promise<Array<{ name: string; color: string }> | null> {
+   const daemon = await host.connect();
+@@ -405,7 +488,8 @@ export function registerTasksServer(
+       await daemon.close();
+     }
+   });
+-  const availability = createTaskAvailability(titleSettings, host.available, async () => (await resolveCli()) !== null, host.connect);
++  const canControlAgents = async () => host.available() || (await resolveCli()) !== null;
++  const availability = createTaskAvailability(titleSettings, host.available, canControlAgents, host.connect);
+   server.handle(tasksAvailabilityRpc, (input, { paseo }) => availability(paseo, input.agentIds));
+   server.handle(conversationSearchRpc, (input, { paseo }) => searchConversationPage(paseo, host, input));
+   // A new turn means a new prompt: the agent is no longer "stopped manually", nor read.
+@@ -439,7 +523,7 @@ export function registerTasksServer(
+   server.handle(tasksSubagentsRpc, async ({ since }, context) => subagents.read(context?.paseo, since));
+   server.handle(tasksSubagentTimelineRpc, (input) => readSubagentTimeline(host, input));
+   server.handle(tasksChunkRpc, ({ id }) => ({ code: TASKS_CHUNK?.id === id ? TASKS_CHUNK.code : null }));
+-  server.handle(tasksCapabilitiesRpc, async () => ({ stop: (await resolveCli()) !== null, read: host.available() }));
++  server.handle(tasksCapabilitiesRpc, async () => ({ stop: await canControlAgents(), read: host.available() }));
+   server.handle(tasksReadRpc, async ({ agentIds }) => {
+     const result = await markRead(host, agentIds);
+     if (result.ok) {
+@@ -469,6 +553,7 @@ export function registerTasksServer(
+     unreads: (await unreads.list()).map(({ agentId, stoppedAt }) => ({ agentId, unreadAt: stoppedAt })),
+   }));
+   server.handle(tasksLabelsRpc, async () => ({ labels: await readLabels(host) }));
++  server.handle(tasksBotsRpc, async () => ({ bots: await readConfiguredBots() }));
+   server.handle(tasksRenameRpc, async ({ agentId, title }, { paseo }) => {
+     const issue = await taskUpdateIssue(await paseo.agents.ref(agentId).refresh(), paseo);
+     if (issue) return { ok: false, error: taskIssueError(issue) };
+@@ -479,16 +564,16 @@ export function registerTasksServer(
+     reads: (await reads.list()).map(({ agentId, stoppedAt }) => ({ agentId, readAt: stoppedAt })),
+   }));
+   server.handle(tasksStopRpc, async ({ agentIds }, { paseo }) => {
+-    const cli = await resolveCli();
++    const cli = host.available() ? null : await resolveCli();
+     const results: Array<{ agentId: string; ok: boolean; error: string | null }> = [];
+ 
+     for (const agentId of agentIds) {
+-      if (!cli) {
++      if (!host.available() && !cli) {
+         results.push({ agentId, ok: false, error: "Paseo CLI is unavailable." });
+         continue;
+       }
+ 
+-      const result = await stopAgent(cli, agentId, paseo);
++      const result = await stopAgent(host, cli, agentId, paseo);
+       if (result.ok) await stops.mark(agentId);
+       results.push({ agentId, ...result });
+     }
+@@ -496,8 +581,8 @@ export function registerTasksServer(
+     return { results };
+   });
+   server.handle(tasksUnarchiveRpc, async ({ agentId }, { paseo }) => {
+-    const cli = await resolveCli();
+-    if (!cli) return { ok: false, error: "Paseo CLI is unavailable." };
++    const cli = host.available() ? null : await resolveCli();
++    if (!host.available() && !cli) return { ok: false, error: "Paseo CLI is unavailable." };
+     if (!AGENT_ID_PATTERN.test(agentId)) return { ok: false, error: "Invalid agent ID." };
+     const source = await paseo.agents.ref(agentId).refresh();
+     const { issue, archivedWorkspaceId } = await taskUpdateState(source, paseo);
+@@ -517,6 +602,6 @@ export function registerTasksServer(
+         await daemon.close().catch(() => {});
+       }
+     }
+-    return await unarchiveAgent(cli, agentId);
++    return await unarchiveAgent(host, cli, agentId);
+   });
+ }
+diff --git a/server/update-check.ts b/server/update-check.ts
+index 96f0f6f..9090d80 100644
+--- a/server/update-check.ts
++++ b/server/update-check.ts
+@@ -105,10 +105,6 @@ export function createUpdateCheck(deps = { fetchVersion: fetch, connect: connect
+     const client = await deps.connect("cid_better_paseo_update_check");
+     if (!client) throw new Error("Could not connect to the host.");
+     try {
+-      stage = "registry";
+-      const response = await deps.fetchVersion(REGISTRY_URL, { signal: AbortSignal.timeout(10_000), cache: "no-store", redirect: "error" });
+-      if (!response.ok) throw new Error("Could not read the plugin directory.");
+-      const latest = registrySchema.parse(await readJson(response)).artifact.commit;
+       stage = "installation";
+       const daemon = client as typeof client & { listPlugins(): Promise<Array<{ id: string; installation?: unknown }>> };
+       const plugin = (await daemon.listPlugins()).find((entry) => entry.id === "better-paseo");
+@@ -125,6 +121,10 @@ export function createUpdateCheck(deps = { fetchVersion: fetch, connect: connect
+         state = { state: "unsupported" };
+         return;
+       }
++      stage = "registry";
++      const response = await deps.fetchVersion(REGISTRY_URL, { signal: AbortSignal.timeout(10_000), cache: "no-store", redirect: "error" });
++      if (!response.ok) throw new Error("Could not read the plugin directory.");
++      const latest = registrySchema.parse(await readJson(response)).artifact.commit;
+       const revision = sha.parse(current.currentRevision);
+       let notes: Notes = { status: "unavailable" };
+       let versions: Versions = { status: "unavailable" };
+diff --git a/shared/preferences-settings.ts b/shared/preferences-settings.ts
+index 5ee7909..f21dc9a 100644
+--- a/shared/preferences-settings.ts
++++ b/shared/preferences-settings.ts
+@@ -162,7 +162,7 @@ export const preferencesSchema = z.preprocess((raw) => migrateHoverDelay(migrate
+   enhancedUserBubble: flag(false),
+   selectionActions: flag(true),
+   assistantMarkdown: flag(true),
+-  liveUiReplies: flag(false),
++  liveUiReplies: flag(true),
+   markdownVariant: z.enum(MARKDOWN_VARIANTS_STORED).catch("document"),
+   rowLabelStyle: z.enum(ROW_LABEL_STYLES).catch("icon"),
+   compactRowSpacing: flag(true),
+diff --git a/shared/tasks-rpc.ts b/shared/tasks-rpc.ts
+index 56de956..8bf69e6 100644
+--- a/shared/tasks-rpc.ts
++++ b/shared/tasks-rpc.ts
+@@ -267,6 +267,24 @@ export const tasksLabelsRpc = defineRpc({
+   output: z.object({ labels: z.array(z.object({ name: z.string(), color: z.string() })).nullable() }),
+ });
+ 
++export const tasksBotDefinitionSchema = z.object({
++  id: z.string(),
++  name: z.string(),
++  color: z.string(),
++  archived: z.boolean(),
++});
++export type TasksBotDefinition = z.output<typeof tasksBotDefinitionSchema>;
++
++/**
++ * Configured Paseo Bots (`paseo-bots` settings) so Bot Chats on the board carry
++ * their owning Bot's display name and badge colour.
++ */
++export const tasksBotsRpc = defineRpc({
++  name: "tasks.bots",
++  input: z.object({}),
++  output: z.object({ bots: z.array(tasksBotDefinitionSchema) }),
++});
++
+ /**
+  * Projects' icons as Paseo's sidebar draws them: the uploaded image, or the
+  * one the daemon found in the repository. `PaseoApi` has no icon call on
+diff --git a/test/unit/tasks-settings-page.test.ts b/test/unit/tasks-settings-page.test.ts
+index ce598f2..223b7e5 100644
+--- a/test/unit/tasks-settings-page.test.ts
++++ b/test/unit/tasks-settings-page.test.ts
+@@ -199,7 +199,7 @@ it("records, cancels, clears and restores the device shortcut without saving hos
+     act(() => r!.unmount());
+     r = undefined;
+     press("KeyJ", { metaKey: true });
+-    expect(deviceTasksStore().snapshot().values?.openShortcut).toBe("Mod+Shift+KeyY");
++    expect(deviceTasksStore().snapshot().values?.openShortcut).toBe("Mod+KeyB");
+   } finally {
+     act(() => r?.unmount());
+     vi.unstubAllGlobals();
+diff --git a/test/unit/tasks-sidebar-model.test.ts b/test/unit/tasks-sidebar-model.test.ts
+index 86f6336..27f7108 100644
+--- a/test/unit/tasks-sidebar-model.test.ts
++++ b/test/unit/tasks-sidebar-model.test.ts
+@@ -14,6 +14,7 @@ import {
+   selectionReducer,
+   sidebarMode,
+   sidebarWidth,
++  uncoverLaneScrollX,
+   writeSidebarPreference,
+   type SidebarSelection,
+   sheetHeight,
+@@ -105,6 +106,23 @@ describe("sidebar width", () => {
+     expect(sidebarWidth(820, 380, "floating")).toBe(380);
+     expect(sidebarWidth(360, 380, "floating")).toBe(336);
+   });
++
++  it("gives the Bot Chat sidebar a wider 680 px default up to 1100 px while leaving one full lane visible", () => {
++    expect(SIDEBAR.chatWidth).toBe(680);
++    expect(sidebarWidth(1240, SIDEBAR.chatWidth, "inline", true)).toBe(680);
++    expect(sidebarWidth(1600, 1200, "inline", true)).toBe(SIDEBAR.chatMax);
++    expect(sidebarWidth(1050, SIDEBAR.chatWidth, "inline", true)).toBe(1050 - SIDEBAR.gap - SIDEBAR.chatLanesMin);
++    expect(sidebarWidth(920, SIDEBAR.chatWidth, "floating", true)).toBe(920 - SIDEBAR.chatLanesMin);
++  });
++
++  it("computes the minimal horizontal scroll target so a selected card is never overlapped by the sidebar", () => {
++    // Lane 4 (996..1316) overlapped on the right when visible width shrinks to 548 px:
++    expect(uncoverLaneScrollX({ laneLeft: 996, laneRight: 1316, edge: 12, visibleWidth: 548, scrollX: 0 })).toBe(780);
++    // Already completely visible inside [scrollX, scrollX + visibleWidth]:
++    expect(uncoverLaneScrollX({ laneLeft: 996, laneRight: 1316, edge: 12, visibleWidth: 548, scrollX: 780 })).toBeNull();
++    // Clipped on the left (scrollX = 500 > laneLeft - 12 = 328): scrolls left minimally to 328, not 104.
++    expect(uncoverLaneScrollX({ laneLeft: 340, laneRight: 660, edge: 12, visibleWidth: 568, scrollX: 500 })).toBe(328);
++  });
+ });
+ 
+ describe("sidebar selection", () => {
+diff --git a/test/unit/tasks-sidebar-tips.test.tsx b/test/unit/tasks-sidebar-tips.test.tsx
+index 5abfcf2..c7856b5 100644
+--- a/test/unit/tasks-sidebar-tips.test.tsx
++++ b/test/unit/tasks-sidebar-tips.test.tsx
+@@ -184,6 +184,90 @@ describe("sidebar action tips", () => {
+     expect(setParams).toHaveBeenCalledOnce();
+     expect(setParams.mock.calls[0]![0]({ ...EMPTY_PARAMS, query: "test", hideSubtasks: true })).toEqual({ ...EMPTY_PARAMS, hideSubtasks: false });
+   });
++  it("switches cleanly between the overview sidebar and the interactive Bot Chat sidebar without hook order errors", async () => {
++    const card = previewSampleCards(NOW).find((item) => item.id === "sample-running")!;
++    const lanes = Object.fromEntries(LANE_ORDER.map((id) => [id, { id, cards: id === card.lane ? [card] : [] }]));
++    const dispatch = vi.fn();
++    const onOpen = vi.fn();
++    const FakeBotChat = ({ agentId }: { agentId: string }) => React.createElement("BotChatSlot", { testID: `bot-chat-${agentId}` });
++    const board = {
++      hostId: "local",
++      paseo: {},
++      visible: true,
++      language: "en",
++      strings: BOARD_STRINGS.en,
++      params: EMPTY_PARAMS,
++      defaults: { doneWindow: "7d", hideSubtasks: true },
++      laneOrder: LANE_ORDER,
++      lanes,
++      showEmptyGroups: true,
++      tasks: { ready: true, lanes, workspaces: [], providers: [], labels: [{ name: "Codex", color: "#a5876b" }] },
++      cardById: (id: string) => (id === card.id ? card : undefined),
++      setParams: () => {},
++      callbacks: { onOpen },
++      stop: { phase: () => "idle" },
++      read: { available: false },
++      unarchive: { available: false },
++      archive: { pending: () => false },
++      buttonsFor: () => [],
++    } as unknown as BoardController;
++
++    const root = await render(
++      <DetailsSidebar
++        board={board}
++        theme={THEME}
++        selection={{ id: null, tab: "messages", back: [] }}
++        dispatch={dispatch}
++        onLane={() => {}}
++        onReveal={() => {}}
++        touch={false}
++        sidebarBotChat={FakeBotChat}
++      />,
++    );
++    expect(host(root, "sidebar-stats")).toBeTruthy();
++    expect(host(root, "sidebar-group-tabs")).toBeTruthy();
++    expect(root.findAll((node) => typeof node.type === "string" && node.props.testID === "sidebar-bot-chat")).toHaveLength(0);
++
++    await act(async () => {
++      renderer!.update(
++        <DetailsSidebar
++          board={board}
++          theme={THEME}
++          selection={{ id: card.id, tab: "messages", back: [] }}
++          dispatch={dispatch}
++          onLane={() => {}}
++          onReveal={() => {}}
++          touch={false}
++          sidebarBotChat={FakeBotChat}
++        />,
++      );
++    });
++    expect(host(root, "sidebar-bot-chat")).toBeTruthy();
++    expect(host(root, `bot-chat-${card.id}`)).toBeTruthy();
++    expect(root.findAll((node) => typeof node.type === "string" && node.props.testID === "sidebar-stats")).toHaveLength(0);
++
++    await act(async () => host(root, "sidebar-bot-chat-open-workspace").props.onPress());
++    expect(onOpen).toHaveBeenCalledWith(card.id);
++    await act(async () => host(root, "sidebar-bot-chat-close").props.onPress());
++    expect(dispatch).toHaveBeenCalledWith({ type: "clear" });
++
++    await act(async () => {
++      renderer!.update(
++        <DetailsSidebar
++          board={board}
++          theme={THEME}
++          selection={{ id: null, tab: "messages", back: [] }}
++          dispatch={dispatch}
++          onLane={() => {}}
++          onReveal={() => {}}
++          touch={false}
++          sidebarBotChat={FakeBotChat}
++        />,
++      );
++    });
++    expect(host(root, "sidebar-stats")).toBeTruthy();
++    expect(host(root, "sidebar-group-tabs")).toBeTruthy();
++  });
+   it("restarts the countdown if a hovered undo button is unmounted", async () => {
+     vi.useFakeTimers();
+     const child = details("en").card.children[0]!;

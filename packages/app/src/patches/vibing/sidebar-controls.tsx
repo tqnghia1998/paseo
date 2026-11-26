@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { isEmbeddedFocusMode } from "./focus-mode";
+import { isEmbeddedFocusMode, isEmbeddedTasksView } from "./focus-mode";
 
 export function EmbeddedPluginHeader({
   pluginId,
@@ -8,5 +8,8 @@ export function EmbeddedPluginHeader({
   pluginId: string;
   children: ReactNode;
 }) {
-  return isEmbeddedFocusMode && pluginId === "paseo-bots" ? null : children;
+  if (!isEmbeddedFocusMode) return children;
+  if (pluginId === "paseo-bots") return null;
+  if (isEmbeddedTasksView && pluginId === "better-paseo") return null;
+  return children;
 }

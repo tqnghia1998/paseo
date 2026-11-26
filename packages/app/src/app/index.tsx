@@ -1,4 +1,4 @@
-import { Redirect, useLocalSearchParams, usePathname } from "expo-router";
+import { Redirect, useLocalSearchParams, usePathname, type Href } from "expo-router";
 import { StartupSplashScreen } from "@/screens/startup-splash-screen";
 import { useEarliestOnlineHostServerId, useHostRuntimeBootstrapState } from "@/app/_layout";
 import {
@@ -12,12 +12,36 @@ import {
   useLastWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
+import { resolveEmbeddedTasksEntryRoute } from "@/patches/vibing/embedded-tools";
 import { useEmbeddedFolderWorkspace } from "@/patches/vibing/folder-workspace";
-import { isEmbeddedChiefView, isEmbeddedMockPickerView } from "@/patches/vibing/focus-mode";
+import {
+  isEmbeddedChiefView,
+  isEmbeddedMockPickerView,
+  isEmbeddedTasksView,
+} from "@/patches/vibing/focus-mode";
 import { ChiefEmbeddedChat } from "@/patches/vibing/chief-chat";
 import { MockPicker } from "@/patches/vibing/mock-picker";
 
 const isDesktop = shouldUseDesktopDaemon();
+const isSpecialEmbeddedView =
+  isEmbeddedChiefView || isEmbeddedMockPickerView || isEmbeddedTasksView;
+
+function EmbeddedTasksEntry({
+  serverId,
+  bootstrapState,
+}: {
+  serverId: string | null;
+  bootstrapState: ReturnType<typeof useHostRuntimeBootstrapState>;
+}) {
+  const splash = <StartupSplashScreen bootstrapState={isDesktop ? bootstrapState : undefined} />;
+  if (!serverId) return splash;
+  return (
+    <>
+      {splash}
+      <Redirect href={resolveEmbeddedTasksEntryRoute(serverId) as Href} />
+    </>
+  );
+}
 
 export default function Index() {
   const pathname = usePathname();
@@ -36,15 +60,19 @@ export default function Index() {
     workspaceSelectionServerId,
     workspaceSelectionWorkspaceId,
   );
+  const targetServerId = anyOnlineHostServerId || hosts[0]?.serverId || null;
 
   const folderParam = useEmbeddedFolderWorkspace({
-    folder: isEmbeddedChiefView || isEmbeddedMockPickerView ? undefined : params.folder,
+    folder: isSpecialEmbeddedView ? undefined : params.folder,
     embeddedLiveDesignMessaging: params["embedded-live-design"] === "1",
-    targetServerId: anyOnlineHostServerId || hosts[0]?.serverId || null,
+    targetServerId,
   });
 
   if (isEmbeddedChiefView) return <ChiefEmbeddedChat />;
   if (isEmbeddedMockPickerView) return <MockPicker />;
+  if (isEmbeddedTasksView) {
+    return <EmbeddedTasksEntry serverId={targetServerId} bootstrapState={bootstrapState} />;
+  }
 
   const startupRoute = resolveStartupRoute({
     route: { kind: "index", pathname },

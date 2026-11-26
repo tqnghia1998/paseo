@@ -27,11 +27,30 @@ export function shouldUseEmbeddedChiefView(
   return embedded && isFramed && new URLSearchParams(search).get("view") === "chief";
 }
 
+export function shouldUseEmbeddedTasksView(
+  embedded: boolean,
+  isFramed: boolean,
+  search: string,
+  frameName = "",
+): boolean {
+  return (
+    embedded &&
+    isFramed &&
+    (frameName === "paseo-global:tasks" || new URLSearchParams(search).get("view") === "tasks")
+  );
+}
+
 // The compact Chief chat is its own framed entry (`/?view=chief`); a top-level tab never qualifies.
 export const isEmbeddedChiefView = shouldUseEmbeddedChiefView(
   isEmbeddedFocusMode,
   typeof window !== "undefined" && window.parent !== window,
   typeof window !== "undefined" ? window.location.search : "",
+);
+export const isEmbeddedTasksView = shouldUseEmbeddedTasksView(
+  isEmbeddedFocusMode,
+  typeof window !== "undefined" && window.parent !== window,
+  typeof window !== "undefined" ? window.location.search : "",
+  typeof window !== "undefined" && typeof window.name === "string" ? window.name : "",
 );
 export const isEmbeddedMockPickerView =
   isEmbeddedFocusMode &&
@@ -52,6 +71,8 @@ export function isEmbeddedShortcutAllowed(action: string): boolean {
   // Chief navigates nowhere: no command center, settings or theme changes.
   if (isEmbeddedChiefView || isEmbeddedMockPickerView)
     return action === "message-input.action" || action === "agent.interrupt";
+  if (isEmbeddedTasksView)
+    return ["theme.cycle", "settings.toggle", "shortcuts.dialog.toggle"].includes(action);
   return (
     !isEmbeddedFocusMode ||
     [

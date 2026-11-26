@@ -114,23 +114,27 @@ test("Bots stays built-in while ordinary community plugins use native lifecycle 
     roots.push(fixtureRoot);
     const fixtureDirectory = await fixture(fixtureRoot, "lifecycle-fixture");
     for (const directory of [
-      path.join(resolveBuiltinPluginsRoot(), "paseo-chat-polish"),
+      path.join(resolveBuiltinPluginsRoot(), "better-paseo"),
       fixtureDirectory,
     ]) {
       await client.installDirectoryPlugin(directory);
     }
     expect((await client.listPlugins()).map(({ id }) => id).sort()).toEqual([
+      "better-paseo",
       "lifecycle-fixture",
-      "paseo-chat-polish",
     ]);
-    await client.disablePlugin("paseo-chat-polish");
+    await client.disablePlugin("better-paseo");
     expect(await client.listPlugins()).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: "paseo-chat-polish", status: "disabled" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ id: "better-paseo", status: "disabled" })]),
     );
-    await client.enablePlugin("paseo-chat-polish");
+    await client.enablePlugin("better-paseo");
     const installedCatalog = await client.getPluginCatalog();
+    expect(installedCatalog.map(({ id }) => id)).toEqual([
+      "paseo-bots",
+      "space-app-vibing-theme",
+      "better-paseo",
+      "lifecycle-fixture",
+    ]);
     const dataDirectory = path.join(daemon.paseoHome, "plugin-data/lifecycle-fixture");
     await mkdir(dataDirectory, { recursive: true });
     const dataFile = path.join(dataDirectory, "preserved.json");
@@ -138,15 +142,17 @@ test("Bots stays built-in while ordinary community plugins use native lifecycle 
     expect(catalog.find(({ id }) => id === "space-app-vibing-theme")?.clientBundle).toContain(
       "Space App Vibing",
     );
-    expect(installedCatalog.find(({ id }) => id === "paseo-chat-polish")?.clientBundle).toContain(
-      "Open Chat Polish",
+    expect(installedCatalog.find(({ id }) => id === "better-paseo")?.clientBundle).toContain(
+      "SquareKanban",
     );
-    // Chat Polish draws diagrams on the daemon with its inlined Pele dependency.
+    // Better Paseo tokenises code on the daemon with its inlined Shiki dependency.
     expect(
-      await client.invokePluginRpc("paseo-chat-polish", "diagram.render", {
-        source: "flowchart LR\n  A --> B",
+      await client.invokePluginRpc("better-paseo", "highlight.tokens", {
+        code: "const answer = 42;",
+        language: "ts",
+        dark: true,
       }),
-    ).toMatchObject({ svg: expect.stringContaining("<svg"), width: expect.any(Number) });
+    ).toMatchObject({ language: "typescript", lines: expect.any(Array) });
     await client.removePlugin("lifecycle-fixture");
     expect((await stat(dataFile)).isFile()).toBe(true);
   } finally {

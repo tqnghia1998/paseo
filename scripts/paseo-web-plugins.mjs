@@ -13,10 +13,10 @@ import {
 import path from "node:path";
 
 // Prebundled under plugins/ and copied beside the runner as community-plugins/.
-export const communityPluginIds = ["paseo-chat-polish", "shell-yeah", "genui", "reply-followups"];
+export const communityPluginIds = ["better-paseo", "shell-yeah", "genui", "reply-followups"];
 
 // Addons Vibing no longer ships. The copy Vibing installed is dropped once on the next start; a copy
-// installed from elsewhere stays. (Beautiful Chat is retired separately above: it has a replacement.)
+// installed from elsewhere stays. (Chat Polish and Beautiful Chat are retired separately below: they have a replacement.)
 const REMOVED_PLUGINS = [
   "paseo-quick-prompts",
   "paseo-sidechat",
@@ -25,10 +25,10 @@ const REMOVED_PLUGINS = [
   "annotations",
 ];
 
-// Chat Polish replaced Beautiful Chat as the bundled chat restyler. The Beautiful Chat copy Vibing
-// installed is swapped for Chat Polish once, keeping its enabled state; one installed from elsewhere stays.
-const RETIRED_PLUGIN = "beautiful-chat";
-const RETIRED_REPLACEMENT = "paseo-chat-polish";
+// Better Paseo replaced Chat Polish (and earlier Beautiful Chat) as the bundled chat and Tasks board addon.
+// A copy Vibing installed is swapped for Better Paseo once, keeping its enabled state; one installed from elsewhere stays.
+const RETIRED_PLUGINS = ["paseo-chat-polish", "beautiful-chat"];
+const RETIRED_REPLACEMENT = "better-paseo";
 
 // Each Vibing-installed copy records the fingerprint of the bundle it came from, so later starts
 // can tell an untouched copy (safe to update) from one someone edited.
@@ -54,15 +54,40 @@ export function prepareCommunityPlugins({
   const pending = communityPluginIds.filter(
     (id) => !seen.has(id) && existsSync(path.join(sourceRoot, id)),
   );
-  const retiredDirectory = path.join(home, "installed-plugins", RETIRED_PLUGIN);
-  if (!pending.length && !existsSync(retiredDirectory)) return;
+  if (!pending.length && !hasRetiredPluginDirectories(home)) return;
   const config = readPersistedConfig(home, { defaultsIfMissing: true });
   const plugins = { ...config.plugins };
   const retired = existsSync(path.join(sourceRoot, RETIRED_REPLACEMENT))
-    ? retireBundledPlugin(plugins, retiredDirectory)
+    ? retireBundledPlugins(plugins, home)
     : undefined;
-  if (retired && !pending.includes(RETIRED_REPLACEMENT)) pending.unshift(RETIRED_REPLACEMENT);
-  if (!pending.length) return;
+  if (retired?.entry && !pending.includes(RETIRED_REPLACEMENT))
+    pending.unshift(RETIRED_REPLACEMENT);
+  if (!pending.length && !retired?.directories.length) return;
+  if (pending.length || retired?.entry) {
+    installPendingPlugins({
+      pending,
+      seen,
+      plugins,
+      home,
+      sourceRoot,
+      retiredEntry: retired?.entry,
+    });
+    savePersistedConfig(home, {
+      ...config,
+      pluginsEnabled: config.pluginsEnabled ?? true,
+      plugins,
+    });
+    // Rename into place so a crash never leaves a truncated marker.
+    writeFileSync(`${marker}.tmp`, `${JSON.stringify([...seen])}\n`);
+    renameSync(`${marker}.tmp`, marker);
+  }
+  // The config no longer points at them, so a crash here leaves only unused folders.
+  for (const directory of retired?.directories ?? []) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+function installPendingPlugins({ pending, seen, plugins, home, sourceRoot, retiredEntry }) {
   for (const id of pending) {
     seen.add(id);
     if (Object.hasOwn(plugins, id)) continue;
@@ -70,19 +95,10 @@ export function prepareCommunityPlugins({
     if (!existsSync(directory)) installCopy(path.join(sourceRoot, id), directory);
     const manifest = JSON.parse(readFileSync(path.join(directory, "paseo-plugin.json"), "utf8"));
     if (manifest.id !== id) throw new Error(`Unexpected community plugin: ${id}`);
-    const enabled = id === RETIRED_REPLACEMENT && retired ? retired.enabled !== false : true;
+    const enabled =
+      id === RETIRED_REPLACEMENT && retiredEntry ? retiredEntry.enabled !== false : true;
     plugins[id] = { source: "directory", path: directory, enabled };
   }
-  savePersistedConfig(home, {
-    ...config,
-    pluginsEnabled: config.pluginsEnabled ?? true,
-    plugins,
-  });
-  // Rename into place so a crash never leaves a truncated marker.
-  writeFileSync(`${marker}.tmp`, `${JSON.stringify([...seen])}\n`);
-  renameSync(`${marker}.tmp`, marker);
-  // The config no longer points at it, so a crash here leaves only an unused folder.
-  if (retired) rmSync(retiredDirectory, { recursive: true, force: true });
 }
 
 /**
@@ -239,13 +255,48 @@ function removeRetiredPlugins({ home, readPersistedConfig, savePersistedConfig }
   }
 }
 
-/** Removes the Vibing-installed Beautiful Chat entry and returns it, or undefined when there is none. */
-function retireBundledPlugin(plugins, retiredDirectory) {
-  const entry = plugins[RETIRED_PLUGIN];
-  if (entry?.source !== "directory" || typeof entry.path !== "string") return undefined;
-  if (path.resolve(entry.path) !== path.resolve(retiredDirectory)) return undefined;
-  delete plugins[RETIRED_PLUGIN];
-  return entry;
+function isRemovableOrphanedDir(directory) {
+  return existsSync(directory) && !existsSync(path.join(directory, ".git"));
+}
+
+function hasRetiredPluginDirectories(home) {
+  return RETIRED_PLUGINS.some(
+    (id) =>
+      isRemovableOrphanedDir(path.join(home, "installed-plugins", id)) ||
+      existsSync(path.join(home, "plugin-upgrades", id)),
+  );
+}
+
+function isOwnedRetiredPath(targetPath, installedDir, upgradesDir) {
+  const resolved = path.resolve(targetPath);
+  const resolvedInstalled = path.resolve(installedDir);
+  if (resolved === resolvedInstalled) return true;
+  const resolvedUpgrades = path.resolve(upgradesDir);
+  const rel = path.relative(resolvedUpgrades, resolved);
+  return Boolean(rel && !rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+/** Removes Vibing-installed Chat Polish / Beautiful Chat entries and returns the newest entry + folders to drop. */
+function retireBundledPlugins(plugins, home) {
+  let retiredEntry;
+  const directories = [];
+  for (const id of RETIRED_PLUGINS) {
+    const installedDir = path.join(home, "installed-plugins", id);
+    const upgradesDir = path.join(home, "plugin-upgrades", id);
+    const entry = plugins[id];
+    if (!entry) {
+      if (isRemovableOrphanedDir(installedDir)) directories.push(installedDir);
+      if (existsSync(upgradesDir)) directories.push(upgradesDir);
+      continue;
+    }
+    if (entry.source !== "directory" || typeof entry.path !== "string") continue;
+    if (!isOwnedRetiredPath(entry.path, installedDir, upgradesDir)) continue;
+    delete plugins[id];
+    retiredEntry ??= entry;
+    if (existsSync(installedDir)) directories.push(installedDir);
+    if (existsSync(upgradesDir)) directories.push(upgradesDir);
+  }
+  return retiredEntry || directories.length ? { entry: retiredEntry, directories } : undefined;
 }
 
 function readOfferedPlugins(marker, legacyMarker) {
