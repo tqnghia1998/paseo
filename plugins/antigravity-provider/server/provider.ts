@@ -276,7 +276,6 @@ export function createAntigravityProvider(): ProviderRegistration {
     icon: "icon.svg",
     command: baseCommand,
     acpOptions: {
-      perModelThinkingOptions: true,
       loadReplayQuietPeriodMs: 200,
       shareProcess: {
         ignoredEnvKeys: SHARED_PROCESS_IGNORED_ENV_KEYS,

@@ -4021,13 +4021,18 @@ export class Session {
     let title: string | null = null;
     let error: string | null = null;
     try {
-      title = await suggestBotChatTitle(this.agentManager, agentId, () =>
-        ensureAgentLoaded(agentId, {
-          agentManager: this.agentManager,
-          agentStorage: this.agentStorage,
-          logger: this.sessionLogger,
-          purpose: "history",
-        }),
+      title = await suggestBotChatTitle(
+        this.agentManager,
+        agentId,
+        () =>
+          ensureAgentLoaded(agentId, {
+            agentManager: this.agentManager,
+            agentStorage: this.agentStorage,
+            logger: this.sessionLogger,
+            purpose: "history",
+          }),
+        undefined,
+        (provider, cwd) => this.providerSnapshotManager.listModels({ provider, cwd, wait: true }),
       );
     } catch (cause) {
       error = getErrorMessageOr(cause, "Could not generate a chat title.");

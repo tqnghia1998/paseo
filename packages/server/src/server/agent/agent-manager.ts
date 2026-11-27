@@ -60,6 +60,7 @@ import {
   type AgentLaunchContext,
   type AgentSlashCommand,
   type AgentMode,
+  type AgentModelDefinition,
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPermissionResult,
@@ -449,6 +450,10 @@ export interface AgentManagerOptions {
   paseoToolsEnabled?: boolean;
   paseoToolCatalogFactory?: PaseoToolCatalogFactory;
   resolvePaseoToolPolicy?: (provider: AgentProvider) => ProviderPaseoToolsPolicy | undefined;
+  listProviderModels?: (
+    provider: AgentProvider,
+    cwd?: string,
+  ) => Promise<readonly AgentModelDefinition[]>;
   appendSystemPrompt?: string;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
@@ -996,6 +1001,7 @@ export class AgentManager {
   private readonly resolvePaseoToolPolicy: (
     provider: AgentProvider,
   ) => ProviderPaseoToolsPolicy | undefined;
+  private readonly listProviderModels?: AgentManagerOptions["listProviderModels"];
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
@@ -1019,6 +1025,7 @@ export class AgentManager {
     this.mcpAuthToken = options?.mcpAuthToken ?? null;
     this.configurePaseoTools(options);
     this.resolvePaseoToolPolicy = options.resolvePaseoToolPolicy ?? (() => undefined);
+    this.listProviderModels = options.listProviderModels;
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
@@ -1809,31 +1816,7 @@ export class AgentManager {
         providerOptions: { ...config.providerOptions, restrictToConfiguredMcp: true },
       });
     }
-    if (
-      this.pluginLifecycle &&
-      !config.internal &&
-      config.providerOptions?.restrictToConfiguredMcp !== true
-    ) {
-      const sent = exposeFeatureValuesToHook(config);
-
-      const request = await this.pluginLifecycle.before("agent.create.before", {
-        config: sent,
-        env: options.env,
-        metadata: options.metadata ?? {},
-        workspaceId: options.workspaceId ?? null,
-      });
-      // COMPAT(featureValues): added in v0.15.0, remove after 2027-05-01. A plugin written
-      // against the previous SDK edits `config.featureValues`.
-      config = {
-        ...foldHookFeatureValues({
-          returned: request.config,
-          sent,
-          convert: (values) => this.convertLegacyOptions(request.config.provider, values),
-        }),
-        internal: config.internal,
-      };
-      options = { ...options, env: request.env, metadata: request.metadata ?? options.metadata };
-    }
+    ({ config, options } = await this.applyCreateBeforeHook(config, options));
     await this.deleteAgentState(resolvedAgentId);
     const { storedConfig, launchConfig, paseoToolPolicy } = await this.prepareSessionConfig(
       config,
@@ -1884,6 +1867,39 @@ export class AgentManager {
       });
     }
     return agent;
+  }
+
+  private async applyCreateBeforeHook(
+    config: AgentSessionConfig,
+    options: CreateAgentOptions,
+  ): Promise<{ config: AgentSessionConfig; options: CreateAgentOptions }> {
+    if (
+      !this.pluginLifecycle ||
+      config.internal ||
+      config.providerOptions?.restrictToConfiguredMcp === true
+    ) {
+      return { config, options };
+    }
+    const sent = exposeFeatureValuesToHook(config);
+    const request = await this.pluginLifecycle.before("agent.create.before", {
+      config: sent,
+      env: options.env,
+      metadata: options.metadata ?? {},
+      workspaceId: options.workspaceId ?? null,
+    });
+    // COMPAT(featureValues): added in v0.15.0, remove after 2027-05-01. A plugin written
+    // against the previous SDK edits `config.featureValues`.
+    return {
+      config: {
+        ...foldHookFeatureValues({
+          returned: request.config,
+          sent,
+          convert: (values) => this.convertLegacyOptions(request.config.provider, values),
+        }),
+        internal: config.internal,
+      },
+      options: { ...options, env: request.env, metadata: request.metadata ?? options.metadata },
+    };
   }
 
   private buildCreateSessionOptions(options?: {
@@ -5875,7 +5891,13 @@ export class AgentManager {
       if (!canAutoTitleBotChat(agent, items) || !(await registry.claimBotAutoTitle(agent.id)))
         return;
       if (!this.acceptingAgentRegistrations) return;
-      const title = await suggestBotChatTitle(this, agent.id, async () => agent, items);
+      const title = await suggestBotChatTitle(
+        this,
+        agent.id,
+        async () => agent,
+        items,
+        this.listProviderModels,
+      );
       await this.runLifecycleMutation(agent.id, async () => {
         if (!this.acceptingAgentRegistrations) return;
         const saved = await registry.finishBotAutoTitle(agent.id, title);

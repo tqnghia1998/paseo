@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { canAutoTitleBotChat, prepareBotChatTitle, suggestBotChatTitle } from "./bot-chat-title.js";
+import {
+  canAutoTitleBotChat,
+  prepareBotChatTitle,
+  resolveLowestTitleThinkingOption,
+  suggestBotChatTitle,
+  TITLE_MODEL_LOOKUP_TIMEOUT_MS,
+  TITLE_TIMEOUT_MS,
+} from "./bot-chat-title.js";
 
 it("waits for a substantive message and excludes explicitly named or background bots", () => {
   const chat = { labels: { "paseo-bots.bot": "general" } };
@@ -107,6 +114,113 @@ describe("suggestBotChatTitle", () => {
     expect(manager.deleteAgentState).toHaveBeenCalledWith("temporary");
   });
 
+  it("picks the lowest supported thinking option for title generation across models and falls back safely", async () => {
+    const models = [
+      {
+        id: "gemini-4-carbon",
+        thinkingOptions: [
+          { id: "low", label: "Low" },
+          { id: "medium", label: "Medium" },
+          { id: "high", label: "High", isDefault: true },
+        ],
+      },
+      {
+        id: "gemini-4-neon",
+        isDefault: true,
+        thinkingOptions: [
+          { id: "low", label: "Low" },
+          { id: "high", label: "High", isDefault: true },
+          { id: "xhigh", label: "Extra" },
+        ],
+      },
+      {
+        id: "claude-sonnet-5-5",
+        aliases: ["sonnet"],
+        thinkingOptions: [
+          { id: "off", label: "Off" },
+          { id: "low", label: "Low" },
+          { id: "high", label: "High", isDefault: true },
+        ],
+      },
+      {
+        id: "gemini-pro-orchestrator",
+        thinkingOptions: [],
+      },
+    ];
+
+    expect(resolveLowestTitleThinkingOption("antigravity", "gemini-4-carbon", models)).toBe("low");
+    expect(resolveLowestTitleThinkingOption("antigravity", "gemini-4-neon-high", models)).toBe(
+      "low",
+    );
+    expect(resolveLowestTitleThinkingOption("antigravity", "default", models)).toBe("low");
+    expect(resolveLowestTitleThinkingOption("claude", "sonnet", models)).toBe("off");
+    expect(
+      resolveLowestTitleThinkingOption("antigravity", "gemini-pro-orchestrator", models),
+    ).toBeUndefined();
+
+    const manager = setup();
+    manager.getProviderAdapter.mockReturnValue("antigravity");
+    manager.createAgent.mockResolvedValueOnce({
+      id: "temporary-carbon",
+      provider: "antigravity",
+      config: { model: "gemini-4-carbon" },
+      runtimeInfo: { model: "gemini-4-carbon" },
+    });
+    const listModels = vi.fn(async () => models);
+    await expect(
+      suggestBotChatTitle(
+        manager,
+        "chat-carbon",
+        async () => ({
+          provider: "antigravity",
+          cwd: "/workspace",
+          labels: { "paseo-bots.bot": "general" },
+          config: { model: "gemini-4-carbon", thinkingOptionId: "high" },
+          internal: false,
+        }),
+        undefined,
+        listModels,
+      ),
+    ).resolves.toBe("Fix the login flow");
+    expect(listModels).toHaveBeenCalledWith("antigravity", "/workspace");
+    expect(manager.createAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "antigravity",
+        model: "gemini-4-carbon",
+        thinkingOptionId: "low",
+        providerOptions: { restrictToConfiguredMcp: true },
+        mcpServers: {},
+      }),
+      undefined,
+      { persistSession: false, workspaceId: undefined },
+    );
+
+    // Model catalog failure must not block title generation.
+    manager.createAgent.mockResolvedValueOnce({
+      id: "temporary-fallback",
+      provider: "antigravity",
+      config: { model: "gemini-4-carbon" },
+      runtimeInfo: { model: "gemini-4-carbon" },
+    });
+    await expect(
+      suggestBotChatTitle(
+        manager,
+        "chat-catalog-err",
+        async () => ({
+          provider: "antigravity",
+          labels: { "paseo-bots.bot": "general" },
+          config: { model: "gemini-4-carbon" },
+          internal: false,
+        }),
+        undefined,
+        async () => {
+          throw new Error("catalog unavailable");
+        },
+      ),
+    ).resolves.toBe("Fix the login flow");
+    expect(manager.createAgent.mock.calls[1]?.[0].thinkingOptionId).toBeUndefined();
+  });
+
   it("supports Antigravity chats including legacy combined model IDs and default model selection", async () => {
     const manager = setup();
     manager.getProviderAdapter.mockReturnValue("antigravity");
@@ -200,7 +314,7 @@ describe("suggestBotChatTitle", () => {
       const pendingRun = suggestBotChatTitle(manager, "chat-timeout-run", load);
       const assertion = expect(pendingRun).rejects.toThrow(/timed out/);
       await vi.waitFor(() => expect(manager.runAgent).toHaveBeenCalled());
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(TITLE_TIMEOUT_MS);
       await assertion;
       await Promise.resolve();
       expect(manager.closeAgent).toHaveBeenCalledWith("temporary");
@@ -218,7 +332,7 @@ describe("suggestBotChatTitle", () => {
       const pendingCreate = suggestBotChatTitle(manager, "chat-timeout-create", load);
       const createAssertion = expect(pendingCreate).rejects.toThrow(/timed out/);
       await vi.waitFor(() => expect(manager.createAgent).toHaveBeenCalledTimes(2));
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(TITLE_TIMEOUT_MS);
       await createAssertion;
       resolveLateCreate?.({
         id: "late-agent",
@@ -228,6 +342,40 @@ describe("suggestBotChatTitle", () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(manager.closeAgent).toHaveBeenCalledWith("late-agent");
       expect(manager.deleteAgentState).toHaveBeenCalledWith("late-agent");
+      expect(unhandled).toEqual([]);
+
+      // A stalled model catalog lookup must fall back after TITLE_MODEL_LOOKUP_TIMEOUT_MS
+      // instead of consuming the entire TITLE_TIMEOUT_MS budget.
+      const slowListModels = vi.fn(() => new Promise<never>(() => {}));
+      const slowLookupPending = suggestBotChatTitle(
+        manager,
+        "chat-slow-models",
+        load,
+        undefined,
+        slowListModels,
+      );
+      await vi.waitFor(() => expect(slowListModels).toHaveBeenCalledOnce());
+      await vi.advanceTimersByTimeAsync(TITLE_MODEL_LOOKUP_TIMEOUT_MS);
+      await expect(slowLookupPending).resolves.toBe("Fix the login flow");
+      expect(manager.createAgent).toHaveBeenCalledTimes(3);
+      expect(manager.createAgent.mock.calls[2]?.[0].thinkingOptionId).toBeUndefined();
+
+      // If the overall timeout fires before createAgent (e.g. during loadChat), createAgent must not run.
+      let resolveLateLoad: ((chat: Awaited<ReturnType<typeof load>>) => void) | undefined;
+      const lateLoad = vi.fn(
+        () =>
+          new Promise<Awaited<ReturnType<typeof load>>>((resolve) => {
+            resolveLateLoad = resolve;
+          }),
+      );
+      const pendingLoad = suggestBotChatTitle(manager, "chat-timeout-load", lateLoad);
+      const loadAssertion = expect(pendingLoad).rejects.toThrow(/timed out/);
+      await vi.waitFor(() => expect(lateLoad).toHaveBeenCalledOnce());
+      await vi.advanceTimersByTimeAsync(TITLE_TIMEOUT_MS);
+      await loadAssertion;
+      resolveLateLoad?.(await load());
+      await vi.advanceTimersByTimeAsync(0);
+      expect(manager.createAgent).toHaveBeenCalledTimes(3);
       expect(unhandled).toEqual([]);
     } finally {
       process.off("unhandledRejection", onUnhandled);

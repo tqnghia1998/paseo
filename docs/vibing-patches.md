@@ -664,7 +664,12 @@ prompts immediately (`plugins/antigravity-provider/server/provider.test.ts`).
 `AgentManager` admits `antigravity` for tool-free restricted sessions and prevents
 live `providerOptions` updates from mutating `restrictToConfiguredMcp`, while
 `PluginAgentClient` omits `restrictToConfiguredMcp` from composer `settings` and
-retains it across session replay reopens.
+retains it across session replay reopens. `suggestBotChatTitle` resolves the lowest
+supported `thinkingOptionId` from the provider's model catalog (`off`/`none`/`disabled`/
+`minimal`/`low`/..., capped at 5s best-effort so a cold lookup cannot consume the 45s
+title timeout) so high-thinking defaults (such as Antigravity's `gemini-4-carbon`)
+do not time out during title generation, and `restrictedProvider` omits
+`perModelThinkingOptions` since it never serves catalog discovery.
 
 Some fixes need the upstream execution path: active/archived Codex import
 pagination, terminal output event mapping, optional wait/protocol fields, Pi turn

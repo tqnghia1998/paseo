@@ -1490,3 +1490,133 @@ it("reuses one warm agy acp process across Paseo/genui sessions and injects the 
     await connection.close();
   }
 });
+
+it("applies explicit thinkingOption in restricted sessions, overriding legacy combined model effort", async () => {
+  const { directory, launch } = await launchAgent(`
+    const { appendFileSync } = require("node:fs");
+    const { createInterface } = require("node:readline");
+    const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...message }) + "\\n");
+    const configOptions = [
+      { id: "model", name: "Model", category: "model", type: "select", currentValue: "gemini-4-neon",
+        options: [
+          { value: "gemini-4-neon", name: "Gemini 4 Neon" },
+          { value: "gemini-4-carbon", name: "Gemini 4 Carbon" },
+        ] },
+      { id: "thought_level", name: "Thinking Level", category: "thought_level", type: "select", currentValue: "high",
+        options: [
+          { value: "low", name: "Low" },
+          { value: "medium", name: "Medium" },
+          { value: "high", name: "High" },
+        ] },
+      { id: "mode", name: "Mode", category: "mode", type: "select", currentValue: "auto",
+        options: [{ value: "default", name: "Default" }, { value: "auto", name: "Auto" }] },
+    ];
+    let sessionSeq = 0;
+    createInterface({ input: process.stdin }).on("line", (line) => {
+      appendFileSync(process.env.CAPTURE, line + "\\n");
+      const msg = JSON.parse(line);
+      switch (msg.method) {
+        case "initialize":
+          send({
+            id: msg.id,
+            result: {
+              protocolVersion: 1,
+              agentCapabilities: {
+                sessionCapabilities: { close: {} },
+                _meta: { antigravity: { systemPrompt: { append: true } } },
+              },
+            },
+          });
+          break;
+        case "session/new":
+          sessionSeq += 1;
+          send({ id: msg.id, result: { sessionId: "restricted-" + sessionSeq, configOptions } });
+          break;
+        case "session/set_config_option": {
+          const option = configOptions.find((entry) => entry.id === msg.params.configId);
+          if (!option) {
+            send({ id: msg.id, error: { code: -32602, message: "Unknown option " + msg.params.configId } });
+            break;
+          }
+          option.currentValue = msg.params.value;
+          send({ id: msg.id, result: { configOptions } });
+          break;
+        }
+        case "session/close":
+          send({ id: msg.id, result: {} });
+          break;
+      }
+    });
+  `);
+  const provider = createAntigravityProvider();
+  const connection = await provider.connect({
+    launch,
+    versions: [1],
+    capabilities: ["prompt.message", "session.configure", "permission"],
+  });
+  const events: ProviderEvent[] = [];
+  connection.onEvent((event) => events.push(event));
+  try {
+    await connection.send({
+      type: "session.open",
+      requestId: "open-carbon-low",
+      sessionId: "restricted-carbon",
+      history: "skip",
+      config: {
+        cwd: directory,
+        model: "gemini-4-carbon",
+        thinkingOption: "low",
+        systemPrompt: "Title instructions",
+        env: {},
+        mcpServers: {},
+        settings: { restrictToConfiguredMcp: true },
+        providerOptions: { restrictToConfiguredMcp: true },
+        persist: false,
+      },
+    });
+    await expect
+      .poll(() =>
+        events.find(
+          (event) => event.type === "session.ready" && event.sessionId === "restricted-carbon",
+        ),
+      )
+      .toBeDefined();
+    const carbonConfig = events.findLast(
+      (event) => event.type === "session.config" && event.sessionId === "restricted-carbon",
+    );
+    expect(carbonConfig?.config.model).toBe("gemini-4-carbon");
+    expect(carbonConfig?.config.thinkingOption).toBe("low");
+
+    await connection.send({
+      type: "session.open",
+      requestId: "open-legacy-low",
+      sessionId: "restricted-legacy",
+      history: "skip",
+      config: {
+        cwd: directory,
+        model: "gemini-4-neon-high",
+        thinkingOption: "low",
+        systemPrompt: "Title instructions",
+        env: {},
+        mcpServers: {},
+        settings: { restrictToConfiguredMcp: true },
+        providerOptions: { restrictToConfiguredMcp: true },
+        persist: false,
+      },
+    });
+    await expect
+      .poll(() =>
+        events.find(
+          (event) => event.type === "session.ready" && event.sessionId === "restricted-legacy",
+        ),
+      )
+      .toBeDefined();
+    const legacyConfig = events.findLast(
+      (event) => event.type === "session.config" && event.sessionId === "restricted-legacy",
+    );
+    expect(legacyConfig?.config.model).toBe("gemini-4-neon");
+    expect(legacyConfig?.config.thinkingOption).toBe("low");
+  } finally {
+    await connection.close();
+  }
+});

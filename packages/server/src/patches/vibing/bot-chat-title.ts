@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { AgentManager, ManagedAgent } from "../../server/agent/agent-manager.js";
-import type { AgentSessionConfig } from "../../server/agent/agent-sdk-types.js";
+import type {
+  AgentModelDefinition,
+  AgentSessionConfig,
+} from "../../server/agent/agent-sdk-types.js";
 import { getStructuredAgentResponse } from "../../server/agent/agent-response-loop.js";
 
 // Adapted from Arman Khan's MIT-licensed paseo-chat-titles (see bot-chat-title.LICENSE).
@@ -17,7 +20,21 @@ const TitleSchema = z.object({
     .max(72)
     .regex(/^[^\r\n]+$/),
 });
-const TITLE_TIMEOUT_MS = 30_000;
+export const TITLE_TIMEOUT_MS = 45_000;
+export const TITLE_MODEL_LOOKUP_TIMEOUT_MS = 5_000;
+const LOWEST_THINKING_PRIORITY = [
+  "off",
+  "none",
+  "disabled",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+  "ultra",
+  "ultracode",
+] as const;
 const inFlight = new Set<string>();
 
 interface AutoTitleChat {
@@ -60,9 +77,76 @@ export function canAutoTitleBotChat(chat: AutoTitleChat, items: readonly TitleMe
 
 interface TitleChat {
   provider: AgentSessionConfig["provider"];
+  cwd?: string;
   labels?: Record<string, string>;
   runtimeInfo?: { model?: string | null };
   config: Pick<AgentSessionConfig, "model" | "thinkingOptionId">;
+}
+
+type TitleModelOption = Pick<
+  AgentModelDefinition,
+  "id" | "aliases" | "isDefault" | "thinkingOptions"
+>;
+type ListTitleModels = (
+  provider: AgentSessionConfig["provider"],
+  cwd?: string,
+) => Promise<readonly TitleModelOption[]>;
+
+function findModelForTitle(
+  adapter: string,
+  requestedModel: string,
+  models: readonly TitleModelOption[],
+): TitleModelOption | undefined {
+  const exact = models.find(
+    (entry) => entry.id === requestedModel || entry.aliases?.includes(requestedModel),
+  );
+  if (exact) return exact;
+  if (requestedModel.toLowerCase() === "default") {
+    return models.find((entry) => entry.isDefault) ?? models[0];
+  }
+  if (adapter === "antigravity") {
+    const legacy = /^(.*)-(xhigh|high|medium|low|minimal)$/.exec(requestedModel);
+    if (legacy?.[1]) {
+      return models.find((entry) => entry.id === legacy[1]);
+    }
+  }
+  return undefined;
+}
+
+async function listModelsForTitle(
+  listModels: ListTitleModels | undefined,
+  provider: AgentSessionConfig["provider"],
+  cwd: string | undefined,
+): Promise<readonly TitleModelOption[]> {
+  if (!listModels) return [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const lookup = Promise.resolve()
+      .then(() => listModels(provider, cwd))
+      .catch(() => []);
+    const deadline = new Promise<readonly TitleModelOption[]>((resolve) => {
+      timer = setTimeout(() => resolve([]), TITLE_MODEL_LOOKUP_TIMEOUT_MS);
+    });
+    return await Promise.race([lookup, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function resolveLowestTitleThinkingOption(
+  adapter: string,
+  requestedModel: string | undefined,
+  models: readonly TitleModelOption[],
+): string | undefined {
+  if (!requestedModel || models.length === 0) return undefined;
+  const matched = findModelForTitle(adapter, requestedModel, models);
+  const options = matched?.thinkingOptions;
+  if (!options || options.length === 0) return undefined;
+  for (const candidate of LOWEST_THINKING_PRIORITY) {
+    const found = options.find((option) => option.id.toLowerCase() === candidate);
+    if (found) return found.id;
+  }
+  return options[0]?.id;
 }
 
 export function prepareBotChatTitle(chat: TitleChat, items: readonly TitleMessage[], cwd: string) {
@@ -121,6 +205,7 @@ export async function suggestBotChatTitle(
   chatId: string,
   loadChat: () => Promise<TitleChat & Pick<ManagedAgent, "internal">>,
   liveItems?: readonly TitleMessage[],
+  listModels?: ListTitleModels,
 ): Promise<string> {
   if (inFlight.has(chatId)) throw new Error("A title is already being generated for this chat.");
   if (inFlight.size >= 4) throw new Error("Too many title requests. Try again shortly.");
@@ -149,9 +234,20 @@ export async function suggestBotChatTitle(
       ) {
         throw new Error("This provider does not support tool-free title generation.");
       }
+      if (timedOut) {
+        throw new Error("Title generation timed out.");
+      }
       cwd = await mkdtemp(join(tmpdir(), "paseo-chat-title-"));
       const items = liveItems ?? (await manager.getTimelineRows(chatId)).map(({ item }) => item);
       const { agentConfig, prompt } = prepareBotChatTitle(chat, items, cwd);
+      const models = await listModelsForTitle(listModels, chat.provider, chat.cwd);
+      const thinkingOptionId = resolveLowestTitleThinkingOption(adapter, agentConfig.model, models);
+      if (thinkingOptionId) {
+        agentConfig.thinkingOptionId = thinkingOptionId;
+      }
+      if (timedOut) {
+        throw new Error("Title generation timed out.");
+      }
       const agent = await manager.createAgent(agentConfig, undefined, {
         persistSession: false,
         workspaceId: undefined,
